@@ -773,25 +773,15 @@ function SafetyTab({ rows: allRows, period }) {
 // ════════════════════════════════════════════════════════
 // UPLOAD PAGE
 // ════════════════════════════════════════════════════════
-function UploadPage({ profile, activeUploadId, setActiveUploadId, externalData }) {
-  const [parsed, setParsed]     = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [dragging, setDrag]     = useState(false);
-  const [filename, setFilename] = useState('');
-  const [saving, setSaving]     = useState(false);
+function UploadPage({ profile, activeUploadId, setActiveUploadId, parsed, setParsed, filename, setFilename }) {
+  const [loading, setLoading] = useState(false);
+  const [dragging, setDrag]   = useState(false);
+  const [saving, setSaving]   = useState(false);
   const fileRef = useRef();
-
-  // 이력에서 불러온 데이터 적용
-  useEffect(() => {
-    if (externalData) {
-      setParsed(externalData.result);
-      setFilename(externalData.filename);
-    }
-  }, [externalData]);
 
   // 앱 시작 시 최근 업로드 자동 로드
   useEffect(() => {
-    if (activeUploadId && !externalData) loadFromHistory(activeUploadId);
+    if (activeUploadId && !parsed) loadFromHistory(activeUploadId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFromHistory = async (id) => {
@@ -799,15 +789,17 @@ function UploadPage({ profile, activeUploadId, setActiveUploadId, externalData }
     try {
       const { data: rec } = await supabase
         .from('upload_history').select('*').eq('id', id).single();
-      if (!rec) return;
+      if (!rec) { setLoading(false); return; }
       const { data: fileData, error } = await supabase.storage
         .from('uploads').download(rec.storage_path);
       if (error) throw error;
-      const binary = await fileData.arrayBuffer();
-      const result = parseSubul(Buffer.from(binary));
+      const arrayBuf = await fileData.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuf);
+      let str = '';
+      for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+      const result = parseSubul(str);
       setParsed(result);
       setFilename(rec.filename);
-      setActiveUploadId(id);
     } catch(e) {
       toast('파일 로드 실패: ' + e.message, 'err');
     }
@@ -960,7 +952,7 @@ function UploadPage({ profile, activeUploadId, setActiveUploadId, externalData }
 // ════════════════════════════════════════════════════════
 // UPLOAD HISTORY PAGE
 // ════════════════════════════════════════════════════════
-function UploadHistoryPage({ profile, activeUploadId, setActiveUploadId, setPage }) {
+function UploadHistoryPage({ profile, activeUploadId, setActiveUploadId, setPage, setParsed, setFilename }) {
   const [list, setList]       = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -991,38 +983,40 @@ function UploadHistoryPage({ profile, activeUploadId, setActiveUploadId, setPage
     } catch(e) { toast('다운로드 실패: ' + e.message, 'err'); }
   };
 
-  // 이력 삭제 (Storage + DB)
+  // 이력 삭제
   const handleDelete = async (item) => {
     if (!window.confirm(`"${item.filename}" 이력을 삭제하시겠습니까?\n저장된 파일도 함께 삭제됩니다.`)) return;
     try {
       await supabase.storage.from('uploads').remove([item.storage_path]);
       const { error } = await supabase.from('upload_history').delete().eq('id', item.id);
       if (error) throw error;
-      if (activeUploadId === item.id) { setActiveUploadId(null); }
+      if (activeUploadId === item.id) {
+        setActiveUploadId(null);
+        setParsed(null);
+        setFilename('');
+      }
       toast('삭제 완료', 'inf');
       fetchList();
     } catch(e) { toast('삭제 실패: ' + e.message, 'err'); }
   };
 
-  // 이력에서 불러와 안전재고 페이지로 이동
+  // 이력에서 안전재고 화면으로 불러오기
   const handleLoad = async (item) => {
     try {
       const { data, error } = await supabase.storage
         .from('uploads').download(item.storage_path);
       if (error) throw error;
-      const binary = await data.arrayBuffer();
-      // ArrayBuffer → binary string
-      const bytes = new Uint8Array(binary);
+      const arrayBuf = await data.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuf);
       let str = '';
       for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
       const result = parseSubul(str);
+      setParsed(result);
+      setFilename(item.filename);
       setActiveUploadId(item.id);
-      // 부모 상태 업데이트를 위해 localStorage 활용
       localStorage.setItem('gmd_active_id', item.id);
       toast(`"${item.filename}" 불러왔습니다`);
       setPage('upload');
-      // 강제 리로드 없이 상태 전달을 위해 이벤트 발행
-      window.dispatchEvent(new CustomEvent('gmd-load', { detail: { result, id: item.id, filename: item.filename } }));
     } catch(e) { toast('불러오기 실패: ' + e.message, 'err'); }
   };
 
@@ -1162,22 +1156,13 @@ export default function App() {
   const [profile, setProfile]         = useState(null);
   const [authLoading, setAL]          = useState(true);
   const [page, setPage]               = useState('upload');
+
+  // 페이지 이동해도 유지되는 업로드 상태
+  const [parsed, setParsed]           = useState(null);
+  const [filename, setFilename]       = useState('');
   const [activeUploadId, setActiveId] = useState(
     () => { const v = localStorage.getItem('gmd_active_id'); return v ? Number(v) : null; }
   );
-  const [uploadPageData, setUploadPageData] = useState(null); // { result, filename }
-
-  // 이력에서 불러오기 이벤트 수신
-  useEffect(() => {
-    const handler = (e) => {
-      const { result, id, filename } = e.detail;
-      setUploadPageData({ result, filename });
-      setActiveId(id);
-      localStorage.setItem('gmd_active_id', id);
-    };
-    window.addEventListener('gmd-load', handler);
-    return () => window.removeEventListener('gmd-load', handler);
-  }, []);
 
   const setActiveUploadId = (id) => {
     setActiveId(id);
@@ -1231,7 +1216,10 @@ export default function App() {
                 profile={profile}
                 activeUploadId={activeUploadId}
                 setActiveUploadId={setActiveUploadId}
-                externalData={uploadPageData}
+                parsed={parsed}
+                setParsed={setParsed}
+                filename={filename}
+                setFilename={setFilename}
               />
             )}
             {page === 'history' && (
@@ -1240,6 +1228,8 @@ export default function App() {
                 activeUploadId={activeUploadId}
                 setActiveUploadId={setActiveUploadId}
                 setPage={setPage}
+                setParsed={setParsed}
+                setFilename={setFilename}
               />
             )}
             {page === 'admin' && <AdminTab/>}
