@@ -569,8 +569,6 @@ function parseSubul(binary) {
     const code  = String(row[SC.CODE]  || '').trim();
     const name  = String(row[SC.NAME]  || '').trim();
     if (!dept || !code || dept === '합계') continue;
-    // 비품류 제외 (상품코드가 숫자가 아닌 경우 포함, [비품] 포함 상품명 제외)
-    if (name.includes('[비품]')) continue;
     const stock = Number(row[SC.STOCK]) || 0;
     const sales = Number(row[SC.SALES]) || 0;
     rows.push({ dept, store, code, name, stock, sales });
