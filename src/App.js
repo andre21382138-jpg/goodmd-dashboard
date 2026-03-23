@@ -531,72 +531,36 @@ function AdminTab() {
 }
 
 // ════════════════════════════════════════════════════════
-// GOODMD PARSING
+// 상품별점별수불현황 파싱
+// col1:그룹, col2:매장, col3:상품코드, col4:상품명
+// col14:재고수량, col32:매출수량
+// 데이터 시작: 10행 / 기간: 2행
 // ════════════════════════════════════════════════════════
-const C = { DATE: 2, DEPT: 3, STORE: 4, TYPE: 7, CODE: 8, NAME: 9, QTY: 11 };
-const DATA_START_ROW = 8;
-const PERIOD_ROW = 2;
+const SC = { DEPT:1, STORE:2, CODE:3, NAME:4, STOCK:14, SALES:32 };
+const S_DATA_START = 10;
+const S_PERIOD_ROW = 2;
 
-function parseGoodMD(binary) {
-  const wb = XLSX.read(binary, { type: 'binary', cellDates: true });
+function parseSubul(binary) {
+  const wb = XLSX.read(binary, { type: 'binary' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-  const periodStr = String(raw[PERIOD_ROW]?.[0] || '').replace('기간 : ', '').trim();
-  const records = [];
-  for (let i = DATA_START_ROW; i < raw.length; i++) {
+  const periodStr = String(raw[S_PERIOD_ROW]?.[0] || '')
+    .replace('조회기간 :', '').replace('조회기간:', '').trim();
+  const rows = [];
+  for (let i = S_DATA_START; i < raw.length; i++) {
     const row = raw[i];
-    if (!row[C.DATE]) continue;
-    if (String(row[C.TYPE]).trim() !== '정상') continue;
-    const qty = Number(row[C.QTY]);
-    if (!qty || qty <= 0) continue;
-    let date = row[C.DATE] instanceof Date ? new Date(row[C.DATE]) : new Date(String(row[C.DATE]));
-    if (isNaN(date.getTime())) continue;
-    records.push({ date, dept: String(row[C.DEPT]).trim(), store: String(row[C.STORE]).trim(), code: String(row[C.CODE]).trim(), name: String(row[C.NAME]).trim(), qty });
+    const dept  = String(row[SC.DEPT]  || '').trim();
+    const store = String(row[SC.STORE] || '').trim();
+    const code  = String(row[SC.CODE]  || '').trim();
+    const name  = String(row[SC.NAME]  || '').trim();
+    if (!dept || !code || dept === '합계') continue;
+    // 비품류 제외 (상품코드가 숫자가 아닌 경우 포함, [비품] 포함 상품명 제외)
+    if (name.includes('[비품]')) continue;
+    const stock = Number(row[SC.STOCK]) || 0;
+    const sales = Number(row[SC.SALES]) || 0;
+    rows.push({ dept, store, code, name, stock, sales });
   }
-  return { records, periodStr };
-}
-
-// ════════════════════════════════════════════════════════
-// AGGREGATIONS
-// ════════════════════════════════════════════════════════
-function buildSafetyRows(records) {
-  const map = new Map();
-  for (const r of records) {
-    const key = `${r.dept}|||${r.store}|||${r.code}`;
-    if (!map.has(key)) map.set(key, { dept: r.dept, store: r.store, code: r.code, name: r.name, total: 0 });
-    map.get(key).total += r.qty;
-  }
-  return [...map.values()];
-}
-
-function weekMonday(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-function weekSunday(mon) { const d = new Date(mon); d.setDate(d.getDate() + 6); return d; }
-function fmtDate(d) { return `${d.getMonth()+1}/${d.getDate()}`; }
-function fmtWeek(mon) { return `${fmtDate(mon)}~${fmtDate(weekSunday(mon))}`; }
-function isoWeek(date) { return weekMonday(date).toISOString().slice(0, 10); }
-
-function buildWeekPivot(records) {
-  const weekSet = new Set(records.map(r => isoWeek(r.date)));
-  const weeks = [...weekSet].sort();
-  const map = new Map();
-  for (const r of records) {
-    const key = `${r.dept}|||${r.store}|||${r.code}`;
-    if (!map.has(key)) {
-      const wq = {};
-      weeks.forEach(w => { wq[w] = 0; });
-      map.set(key, { dept: r.dept, store: r.store, code: r.code, name: r.name, wq, total: 0 });
-    }
-    const e = map.get(key);
-    e.wq[isoWeek(r.date)] += r.qty;
-    e.total += r.qty;
-  }
-  return { weeks, rows: [...map.values()] };
+  return { rows, periodStr };
 }
 
 // ════════════════════════════════════════════════════════
@@ -607,61 +571,41 @@ async function exportSafety(rows, period) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('안전재고현황');
   ws.columns = [
-    { key: 'dept', width: 14 }, { key: 'store', width: 16 },
-    { key: 'code', width: 18 }, { key: 'name', width: 36 },
-    { key: 'total', width: 14 }, { key: 'safe', width: 12 },
+    { key: 'dept',    width: 14 },
+    { key: 'store',   width: 16 },
+    { key: 'code',    width: 18 },
+    { key: 'name',    width: 36 },
+    { key: 'sales',   width: 16 },
+    { key: 'safe',    width: 14 },
+    { key: 'stock',   width: 14 },
+    { key: 'shortage',width: 14 },
   ];
-  const hr = ws.addRow(['백화점', '매장', '상품코드', '상품명', `기간 판매수량(${period})`, '안전재고']);
-  hr.height = 24;
+  const hr = ws.addRow([
+    '백화점', '매장', '상품코드', '상품명',
+    `매출수량(${period})`, '안전재고', '현재재고', '부족수량'
+  ]);
+  hr.height = 26;
   hr.eachCell(cell => {
     cell.font = { bold: true, name: 'Malgun Gothic', size: 10, color: { argb: 'FF1A1A1A' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD600' } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
   });
   rows.forEach((r, i) => {
-    const row = ws.addRow([r.dept, r.store, r.code, r.name, r.total, r.total]);
+    const shortage = r.sales - r.stock;
+    const row = ws.addRow([r.dept, r.store, r.code, r.name, r.sales, r.sales, r.stock, shortage]);
     row.height = 18;
     row.eachCell((cell, ci) => {
       cell.font = { name: 'Malgun Gothic', size: 10 };
       cell.alignment = { vertical: 'middle', horizontal: ci <= 4 ? 'left' : 'center' };
       if (i % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8E1' } };
-      if (ci >= 5) cell.font = { name: 'Malgun Gothic', size: 10, bold: true, color: { argb: 'FFBF6000' } };
+      if (ci === 6) cell.font = { name: 'Malgun Gothic', size: 10, bold: true, color: { argb: 'FFBF6000' } };
+      if (ci === 8 && shortage > 0) {
+        cell.font = { name: 'Malgun Gothic', size: 10, bold: true, color: { argb: 'FFC62828' } };
+      }
     });
   });
   const buf = await wb.xlsx.writeBuffer();
   dlBlob(buf, `안전재고현황_${period.replace(/\s/g,'')}.xlsx`);
-}
-
-async function exportWeekly(rows, weeks, period) {
-  const ExcelJS = (await import('exceljs')).default;
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('주간발주참고');
-  ws.columns = [
-    { key: 'dept', width: 14 }, { key: 'store', width: 16 },
-    { key: 'code', width: 18 }, { key: 'name', width: 36 },
-    ...weeks.map(() => ({ width: 12 })),
-    { key: 'total', width: 10 },
-  ];
-  const weekLabels = weeks.map((w, i) => `${i+1}주\n${fmtWeek(new Date(w))}`);
-  const hr = ws.addRow(['백화점', '매장', '상품코드', '상품명', ...weekLabels, '합계']);
-  hr.height = 30;
-  hr.eachCell((cell, ci) => {
-    cell.font = { bold: true, name: 'Malgun Gothic', size: 10, color: { argb: 'FF1A1A1A' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ci >= 5 && ci <= 4 + weeks.length ? 'FFFFF3E0' : 'FFFFD600' } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  });
-  rows.forEach((r, i) => {
-    const row = ws.addRow([r.dept, r.store, r.code, r.name, ...weeks.map(w => r.wq[w] || 0), r.total]);
-    row.height = 18;
-    row.eachCell((cell, ci) => {
-      cell.font = { name: 'Malgun Gothic', size: 10 };
-      cell.alignment = { vertical: 'middle', horizontal: ci <= 4 ? 'left' : 'center' };
-      if (i % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8E1' } };
-      if (ci === 5 + weeks.length) cell.font.bold = true;
-    });
-  });
-  const buf = await wb.xlsx.writeBuffer();
-  dlBlob(buf, `주간발주참고_${period.replace(/\s/g,'')}.xlsx`);
 }
 
 function dlBlob(buf, filename) {
@@ -695,119 +639,50 @@ function uniq(arr) { return [...new Set(arr)].filter(Boolean).sort((a,b) => a.lo
 // ════════════════════════════════════════════════════════
 // SAFETY STOCK TAB
 // ════════════════════════════════════════════════════════
-function SafetyTab({ records, period }) {
-  const [fDept, setFDept]   = useState('');
+function SafetyTab({ rows: allRows, period }) {
+  const [fDept,  setFDept]  = useState('');
   const [fStore, setFStore] = useState('');
   const [fSearch, setFS]    = useState('');
+  const [showShortOnly, setShortOnly] = useState(false);
   const [exporting, setEx]  = useState(false);
   const sort = useSort('dept');
 
-  const allRows = useMemo(() => buildSafetyRows(records), [records]);
-  const depts   = useMemo(() => uniq(allRows.map(r => r.dept)), [allRows]);
-  const stores  = useMemo(() => uniq((fDept ? allRows.filter(r => r.dept === fDept) : allRows).map(r => r.store)), [allRows, fDept]);
-
-  const filtered = useMemo(() => {
-    let rows = allRows;
-    if (fDept)   rows = rows.filter(r => r.dept === fDept);
-    if (fStore)  rows = rows.filter(r => r.store === fStore);
-    if (fSearch) { const q = fSearch.toLowerCase(); rows = rows.filter(r => r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)); }
-    return sortRows(rows, sort.key, sort.dir);
-  }, [allRows, fDept, fStore, fSearch, sort.key, sort.dir]);
-
-  const totalQty = useMemo(() => filtered.reduce((s,r) => s + r.total, 0), [filtered]);
-
-  return (
-    <>
-      <div className="fbar">
-        <select className="fsel" value={fDept} onChange={e => { setFDept(e.target.value); setFStore(''); }}>
-          <option value="">전체 백화점</option>
-          {depts.map(d => <option key={d}>{d}</option>)}
-        </select>
-        <select className="fsel" value={fStore} onChange={e => setFStore(e.target.value)}>
-          <option value="">전체 매장</option>
-          {stores.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <input className="finput" placeholder="상품코드 / 상품명 검색" value={fSearch} onChange={e => setFS(e.target.value)} />
-        {(fDept || fStore || fSearch) && <button className="btn-ghost" onClick={() => { setFDept(''); setFStore(''); setFS(''); }}>✕ 초기화</button>}
-        <div className="fbar-right">
-          <span className="fresult"><b>{filtered.length.toLocaleString()}</b>개 · 합계 <b>{totalQty.toLocaleString()}</b>개</span>
-          <button className="btn btn-p" onClick={async () => { setEx(true); try { await exportSafety(filtered, period); toast('안전재고 다운로드 완료'); } catch(e) { toast(e.message,'err'); } setEx(false); }} disabled={exporting || !filtered.length}>
-            {exporting ? <span className="spinner" /> : '⬇ Excel'}
-          </button>
-        </div>
-      </div>
-      <div className="twrap">
-        <table>
-          <thead>
-            <tr>
-              <th className={sort.thClass('dept')}  onClick={() => sort.toggle('dept')}>백화점</th>
-              <th className={sort.thClass('store')} onClick={() => sort.toggle('store')}>매장</th>
-              <th className={sort.thClass('code')}  onClick={() => sort.toggle('code')}>상품코드</th>
-              <th className={sort.thClass('name')}  onClick={() => sort.toggle('name')}>상품명</th>
-              <th className={'r '+sort.thClass('total')} onClick={() => sort.toggle('total')}>기간 판매수량</th>
-              <th className="r">안전재고</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0
-              ? <tr><td colSpan={6} className="empty">조회 결과가 없습니다</td></tr>
-              : filtered.map((r,i) => (
-                <tr key={i}>
-                  <td><span className="badge badge-dept">{r.dept}</span></td>
-                  <td><span className="badge badge-store">{r.store}</span></td>
-                  <td className="mono">{r.code}</td>
-                  <td>{r.name}</td>
-                  <td className="r">{r.total.toLocaleString()}</td>
-                  <td className="r"><span className="safety-num">{r.total.toLocaleString()}</span></td>
-                </tr>
-              ))
-            }
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
-
-// ════════════════════════════════════════════════════════
-// WEEKLY TAB
-// ════════════════════════════════════════════════════════
-function WeeklyTab({ records, period }) {
-  const [fDept, setFDept]   = useState('');
-  const [fStore, setFStore] = useState('');
-  const [fSearch, setFS]    = useState('');
-  const [exporting, setEx]  = useState(false);
-  const sort = useSort('dept');
-
-  const { weeks, rows: allRows } = useMemo(() => buildWeekPivot(records), [records]);
-  const latestWeek = weeks[weeks.length - 1];
   const depts  = useMemo(() => uniq(allRows.map(r => r.dept)), [allRows]);
   const stores = useMemo(() => uniq((fDept ? allRows.filter(r => r.dept === fDept) : allRows).map(r => r.store)), [allRows, fDept]);
 
   const filtered = useMemo(() => {
     let rows = allRows;
-    if (fDept)   rows = rows.filter(r => r.dept === fDept);
-    if (fStore)  rows = rows.filter(r => r.store === fStore);
-    if (fSearch) { const q = fSearch.toLowerCase(); rows = rows.filter(r => r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)); }
-    if (sort.key && sort.key.startsWith('wq_')) {
-      const wk = sort.key.replace('wq_','');
-      return [...rows].sort((a,b) => { const d=(a.wq[wk]||0)-(b.wq[wk]||0); return sort.dir==='asc'?d:-d; });
+    if (fDept)  rows = rows.filter(r => r.dept === fDept);
+    if (fStore) rows = rows.filter(r => r.store === fStore);
+    if (fSearch) {
+      const q = fSearch.toLowerCase();
+      rows = rows.filter(r => r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
     }
+    if (showShortOnly) rows = rows.filter(r => r.stock < r.sales);
     return sortRows(rows, sort.key, sort.dir);
-  }, [allRows, fDept, fStore, fSearch, sort.key, sort.dir]);
+  }, [allRows, fDept, fStore, fSearch, showShortOnly, sort.key, sort.dir]);
 
-  const weekTotals = useMemo(() => { const t={}; weeks.forEach(w => { t[w]=filtered.reduce((s,r)=>s+(r.wq[w]||0),0); }); return t; }, [filtered, weeks]);
-  const grandTotal = useMemo(() => filtered.reduce((s,r)=>s+r.total,0), [filtered]);
+  const shortCount = useMemo(() => allRows.filter(r => r.stock < r.sales).length, [allRows]);
 
   return (
     <>
-      <div className="wtabs">
-        {weeks.map((w,i) => (
-          <div key={w} className={`wtab ${w===latestWeek?'on':''}`}>
-            {w===latestWeek?'★ ':''}{i+1}주차 ({fmtWeek(new Date(w))}) — {(weekTotals[w]||0).toLocaleString()}개
-          </div>
-        ))}
-      </div>
+      {/* 부족 알림 배너 */}
+      {shortCount > 0 && (
+        <div style={{
+          background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 'var(--radius)',
+          padding: '10px 16px', marginBottom: 14, display: 'flex', alignItems: 'center',
+          gap: 10, fontSize: 13, color: '#856404'
+        }}>
+          <span>⚠️</span>
+          <span>재고 부족 항목 <strong>{shortCount}개</strong> — 안전재고 미달입니다.</span>
+          <button className="btn btn-s" style={{ marginLeft: 'auto', fontSize: 11 }}
+            onClick={() => setShortOnly(v => !v)}>
+            {showShortOnly ? '전체 보기' : '부족 항목만 보기'}
+          </button>
+        </div>
+      )}
+
+      {/* 필터 */}
       <div className="fbar">
         <select className="fsel" value={fDept} onChange={e => { setFDept(e.target.value); setFStore(''); }}>
           <option value="">전체 백화점</option>
@@ -818,14 +693,20 @@ function WeeklyTab({ records, period }) {
           {stores.map(s => <option key={s}>{s}</option>)}
         </select>
         <input className="finput" placeholder="상품코드 / 상품명 검색" value={fSearch} onChange={e => setFS(e.target.value)} />
-        {(fDept || fStore || fSearch) && <button className="btn-ghost" onClick={() => { setFDept(''); setFStore(''); setFS(''); }}>✕ 초기화</button>}
+        {(fDept || fStore || fSearch) && (
+          <button className="btn-ghost" onClick={() => { setFDept(''); setFStore(''); setFS(''); }}>✕ 초기화</button>
+        )}
         <div className="fbar-right">
-          <span className="fresult"><b>{filtered.length.toLocaleString()}</b>개 · 합계 <b>{grandTotal.toLocaleString()}</b>개</span>
-          <button className="btn btn-p" onClick={async () => { setEx(true); try { await exportWeekly(filtered,weeks,period); toast('주간발주 다운로드 완료'); } catch(e) { toast(e.message,'err'); } setEx(false); }} disabled={exporting || !filtered.length}>
+          <span className="fresult"><b>{filtered.length.toLocaleString()}</b>개 항목</span>
+          <button className="btn btn-p"
+            onClick={async () => { setEx(true); try { await exportSafety(filtered, period); toast('엑셀 다운로드 완료'); } catch(e) { toast(e.message,'err'); } setEx(false); }}
+            disabled={exporting || !filtered.length}>
             {exporting ? <span className="spinner" /> : '⬇ Excel'}
           </button>
         </div>
       </div>
+
+      {/* 테이블 */}
       <div className="twrap">
         <table>
           <thead>
@@ -834,41 +715,38 @@ function WeeklyTab({ records, period }) {
               <th className={sort.thClass('store')} onClick={() => sort.toggle('store')}>매장</th>
               <th className={sort.thClass('code')}  onClick={() => sort.toggle('code')}>상품코드</th>
               <th className={sort.thClass('name')}  onClick={() => sort.toggle('name')}>상품명</th>
-              {weeks.map((w,i) => {
-                const isLatest = w===latestWeek;
-                const sk = `wq_${w}`;
-                return (
-                  <th key={w} className={`wk-head r ${isLatest?'latest':''} ${sort.thClass(sk)}`} onClick={() => sort.toggle(sk)}>
-                    {isLatest?'★ ':''}{i+1}주<br/><span style={{fontWeight:400,fontSize:9}}>{fmtWeek(new Date(w))}</span>
-                  </th>
-                );
-              })}
-              <th className={'r '+sort.thClass('total')} onClick={() => sort.toggle('total')}>합계</th>
+              <th className={'r '+sort.thClass('sales')}  onClick={() => sort.toggle('sales')}>매출수량 (=안전재고)</th>
+              <th className={'r '+sort.thClass('stock')}  onClick={() => sort.toggle('stock')}>현재재고</th>
+              <th className="r">부족수량</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0
-              ? <tr><td colSpan={5+weeks.length} className="empty">조회 결과가 없습니다</td></tr>
-              : <>
-                  {filtered.map((r,i) => (
-                    <tr key={i}>
+              ? <tr><td colSpan={7} className="empty">조회 결과가 없습니다</td></tr>
+              : filtered.map((r, i) => {
+                  const shortage = r.stock - r.sales;
+                  const isShort  = shortage < 0;
+                  return (
+                    <tr key={i} style={isShort ? { background: '#fff9f9' } : {}}>
                       <td><span className="badge badge-dept">{r.dept}</span></td>
                       <td><span className="badge badge-store">{r.store}</span></td>
                       <td className="mono">{r.code}</td>
                       <td>{r.name}</td>
-                      {weeks.map(w => {
-                        const q = r.wq[w]||0;
-                        return <td key={w} className={`wk-cell ${w===latestWeek?'latest-col':''} ${q===0?'zero':''}`}>{q===0?'–':q.toLocaleString()}</td>;
-                      })}
-                      <td className="r wk-total">{r.total.toLocaleString()}</td>
+                      <td className="r"><span className="safety-num">{r.sales.toLocaleString()}</span></td>
+                      <td className="r">{r.stock.toLocaleString()}</td>
+                      <td className="r">
+                        {isShort
+                          ? <span style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--danger)' }}>
+                              ▼ {Math.abs(shortage).toLocaleString()}
+                            </span>
+                          : <span style={{ fontFamily:'var(--mono)', color:'var(--success)' }}>
+                              +{shortage.toLocaleString()}
+                            </span>
+                        }
+                      </td>
                     </tr>
-                  ))}
-                  <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
-                    <td colSpan={4} style={{fontFamily:'var(--mono)',fontSize:10,color:'var(--text3)',padding:'8px 11px'}}>TOTAL ({filtered.length.toLocaleString()}개 항목)</td>
-                    {weeks.map(w => <td key={w} className={`wk-cell ${w===latestWeek?'latest-col':''}`} style={{fontWeight:600}}>{(weekTotals[w]||0).toLocaleString()}</td>)}
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)'}}>{grandTotal.toLocaleString()}</td>
-                  </tr>
-                </>
+                  );
+                })
             }
           </tbody>
         </table>
@@ -885,7 +763,6 @@ function UploadPage() {
   const [loading, setLoading]   = useState(false);
   const [dragging, setDrag]     = useState(false);
   const [filename, setFilename] = useState('');
-  const [tab, setTab]           = useState('safety');
   const fileRef = useRef();
 
   const handleFile = (file) => {
@@ -895,10 +772,10 @@ function UploadPage() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const result = parseGoodMD(e.target.result);
-        if (!result.records.length) { toast('정상 전표 데이터가 없습니다', 'err'); setLoading(false); return; }
+        const result = parseSubul(e.target.result);
+        if (!result.rows.length) { toast('데이터가 없습니다', 'err'); setLoading(false); return; }
         setParsed(result);
-        toast(`${result.records.length.toLocaleString()}건 파싱 완료 · ${result.periodStr}`);
+        toast(`${result.rows.length.toLocaleString()}개 항목 파싱 완료 · ${result.periodStr}`);
       } catch(err) { toast('파싱 오류: ' + err.message, 'err'); }
       setLoading(false);
     };
@@ -908,61 +785,78 @@ function UploadPage() {
 
   const stats = useMemo(() => {
     if (!parsed) return null;
-    const { records } = parsed;
-    const depts  = new Set(records.map(r => r.dept));
-    const stores = new Set(records.map(r => r.store));
-    const codes  = new Set(records.map(r => r.code));
-    const totalQty = records.reduce((s,r) => s+r.qty, 0);
-    const dates = records.map(r => r.date.getTime());
-    const dayRange = Math.round((Math.max(...dates)-Math.min(...dates))/86400000)+1;
-    return { count: records.length, depts: depts.size, stores: stores.size, codes: codes.size, totalQty, dayRange };
+    const { rows } = parsed;
+    const depts   = new Set(rows.map(r => r.dept));
+    const stores  = new Set(rows.map(r => r.store));
+    const codes   = new Set(rows.map(r => r.code));
+    const totalSales = rows.reduce((s, r) => s + r.sales, 0);
+    const shortCount = rows.filter(r => r.stock < r.sales).length;
+    return { count: rows.length, depts: depts.size, stores: stores.size, codes: codes.size, totalSales, shortCount };
   }, [parsed]);
 
   return (
     <div>
       <div className="card">
-        <div className="card-label">굿MD 매출전표조회 파일 업로드</div>
+        <div className="card-label">굿MD 상품별점별수불현황 파일 업로드</div>
         <div className={`drop ${dragging?'over':''}`}
           onDragOver={e => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
           onDrop={e => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files[0]); }}
           onClick={() => fileRef.current?.click()}
         >
-          <input ref={fileRef} type="file" accept=".xls,.xlsx" onChange={e => { handleFile(e.target.files[0]); e.target.value=''; }} />
+          <input ref={fileRef} type="file" accept=".xls,.xlsx"
+            onChange={e => { handleFile(e.target.files[0]); e.target.value=''; }} />
           {loading
             ? <><div className="drop-icon"><span className="spinner"/></div><div className="drop-main">파싱 중...</div></>
             : parsed
               ? <><div className="drop-icon">✅</div><div className="drop-main">업로드 완료 · <strong>다른 파일</strong>을 올리면 교체됩니다</div><div className="drop-filename">📄 {filename}</div></>
-              : <><div className="drop-icon">📂</div><div className="drop-main"><strong>클릭</strong> 또는 <strong>드래그&드롭</strong></div><div className="drop-sub">굿MD → 매출전표조회 다운로드 파일 (.xls / .xlsx)</div></>
+              : <><div className="drop-icon">📂</div><div className="drop-main"><strong>클릭</strong> 또는 <strong>드래그&드롭</strong></div><div className="drop-sub">굿MD → 상품별점별수불현황 다운로드 파일 (.xls / .xlsx)</div></>
           }
         </div>
       </div>
 
       {stats && (
         <div className="stats">
-          <div className="stat"><div className="stat-l">기간</div><div className="stat-v" style={{fontSize:13}}>{parsed.periodStr}</div><div className="stat-u">{stats.dayRange}일</div></div>
-          <div className="stat"><div className="stat-l">거래건수</div><div className="stat-v">{stats.count.toLocaleString()}</div><div className="stat-u">정상 전표</div></div>
-          <div className="stat"><div className="stat-l">백화점</div><div className="stat-v">{stats.depts}</div><div className="stat-u">개 그룹</div></div>
-          <div className="stat"><div className="stat-l">매장</div><div className="stat-v">{stats.stores}</div><div className="stat-u">개 지점</div></div>
-          <div className="stat"><div className="stat-l">총 판매수량</div><div className="stat-v">{stats.totalQty.toLocaleString()}</div><div className="stat-u">개 ({stats.codes} 상품)</div></div>
+          <div className="stat">
+            <div className="stat-l">기간</div>
+            <div className="stat-v" style={{fontSize:12}}>{parsed.periodStr}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-l">백화점</div>
+            <div className="stat-v">{stats.depts}</div>
+            <div className="stat-u">개 그룹</div>
+          </div>
+          <div className="stat">
+            <div className="stat-l">매장</div>
+            <div className="stat-v">{stats.stores}</div>
+            <div className="stat-u">개 지점</div>
+          </div>
+          <div className="stat">
+            <div className="stat-l">총 매출수량</div>
+            <div className="stat-v">{stats.totalSales.toLocaleString()}</div>
+            <div className="stat-u">개 ({stats.codes} 상품)</div>
+          </div>
+          <div className="stat" style={stats.shortCount > 0 ? {borderColor:'#ffc107'} : {}}>
+            <div className="stat-l">재고 부족</div>
+            <div className="stat-v" style={{color: stats.shortCount > 0 ? 'var(--danger)' : 'var(--success)'}}>
+              {stats.shortCount}
+            </div>
+            <div className="stat-u">개 항목</div>
+          </div>
         </div>
       )}
 
       {parsed && (
-        <>
-          <div className="tabs">
-            <button className={`tab ${tab==='safety'?'on':''}`} onClick={() => setTab('safety')}>안전재고 현황</button>
-            <button className={`tab ${tab==='weekly'?'on':''}`} onClick={() => setTab('weekly')}>주간 판매 · 발주참고</button>
-          </div>
-          <div className="card" style={{padding:'16px 20px'}}>
-            {tab==='safety' && <SafetyTab records={parsed.records} period={parsed.periodStr}/>}
-            {tab==='weekly' && <WeeklyTab records={parsed.records} period={parsed.periodStr}/>}
-          </div>
-        </>
+        <div className="card" style={{padding:'16px 20px'}}>
+          <SafetyTab rows={parsed.rows} period={parsed.periodStr} />
+        </div>
       )}
 
       {!parsed && !loading && (
-        <div className="empty">굿MD에서 <strong>매출전표조회</strong> 파일을 다운로드한 뒤<br/>위 영역에 업로드하면 안전재고 및 주간 발주 현황을 바로 확인할 수 있습니다</div>
+        <div className="empty">
+          굿MD에서 <strong>상품별점별수불현황</strong> 파일을 다운로드한 뒤<br/>
+          위 영역에 업로드하면 안전재고 현황을 바로 확인할 수 있습니다
+        </div>
       )}
     </div>
   );
@@ -972,7 +866,7 @@ function UploadPage() {
 // SIDEBAR
 // ════════════════════════════════════════════════════════
 const MENUS = [
-  { key: 'upload', icon: '📊', label: '매출전표조회 업로드' },
+  { key: 'upload', icon: '📊', label: '안전재고 현황' },
 ];
 const ADMIN_MENUS = [
   { key: 'admin', icon: '👥', label: '사용자 관리' },
@@ -1053,7 +947,7 @@ export default function App() {
     toast('로그아웃 됐습니다', 'inf');
   };
 
-  const PAGE_TITLES = { upload: '매출전표조회 업로드', admin: '사용자 관리' };
+  const PAGE_TITLES = { upload: '안전재고 현황', admin: '사용자 관리' };
 
   if (authLoading) {
     return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh'}}><span className="spinner"/></div>;
