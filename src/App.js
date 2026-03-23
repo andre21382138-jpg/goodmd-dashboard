@@ -730,8 +730,8 @@ function SafetyTab({ rows: allRows, period }) {
               <th className={sort.thClass('store')} onClick={() => sort.toggle('store')}>매장</th>
               <th className={sort.thClass('code')}  onClick={() => sort.toggle('code')}>상품코드</th>
               <th className={sort.thClass('name')}  onClick={() => sort.toggle('name')}>상품명</th>
-              <th className={'r '+sort.thClass('sales')}  onClick={() => sort.toggle('sales')}>매출수량 (=안전재고)</th>
-              <th className={'r '+sort.thClass('stock')}  onClick={() => sort.toggle('stock')}>현재재고</th>
+              <th className={'r '+sort.thClass('sales')}  onClick={() => sort.toggle('sales')} title="해당 기간 동안 판매한 수량">판매수량</th>
+              <th className={'r '+sort.thClass('stock')}  onClick={() => sort.toggle('stock')} title="판매수량을 제외하고 남은 현재 재고">현재재고</th>
               <th className="r">부족수량</th>
             </tr>
           </thead>
@@ -865,8 +865,9 @@ function UploadPage({ profile, activeUploadId, setActiveUploadId, parsed, setPar
     const stores  = new Set(rows.map(r => r.store));
     const codes   = new Set(rows.map(r => r.code));
     const totalSales = rows.reduce((s,r) => s+r.sales, 0);
+    const totalStock = rows.reduce((s,r) => s+r.stock, 0);
     const shortCount = rows.filter(r => r.stock < r.sales).length;
-    return { depts: depts.size, stores: stores.size, codes: codes.size, totalSales, shortCount };
+    return { depts: depts.size, stores: stores.size, codes: codes.size, totalSales, totalStock, shortCount };
   }, [parsed]);
 
   return (
@@ -906,22 +907,22 @@ function UploadPage({ profile, activeUploadId, setActiveUploadId, parsed, setPar
         <div className="stats">
           <div className="stat">
             <div className="stat-l">기간</div>
-            <div className="stat-v" style={{fontSize:12}}>{parsed.periodStr}</div>
+            <div className="stat-v" style={{fontSize:15, lineHeight:1.3}}>{parsed.periodStr}</div>
           </div>
           <div className="stat">
-            <div className="stat-l">백화점</div>
-            <div className="stat-v">{stats.depts}</div>
-            <div className="stat-u">개 그룹</div>
+            <div className="stat-l">백화점 / 매장</div>
+            <div className="stat-v">{stats.depts} <span style={{fontSize:13, fontWeight:400, color:'var(--text2)'}}>그룹</span> · {stats.stores} <span style={{fontSize:13, fontWeight:400, color:'var(--text2)'}}>지점</span></div>
+            <div className="stat-u">{stats.codes}개 상품</div>
           </div>
           <div className="stat">
-            <div className="stat-l">매장</div>
-            <div className="stat-v">{stats.stores}</div>
-            <div className="stat-u">개 지점</div>
-          </div>
-          <div className="stat">
-            <div className="stat-l">총 매출수량</div>
+            <div className="stat-l">총 판매수량</div>
             <div className="stat-v">{stats.totalSales.toLocaleString()}</div>
-            <div className="stat-u">개 ({stats.codes} 상품)</div>
+            <div className="stat-u">개</div>
+          </div>
+          <div className="stat">
+            <div className="stat-l">총 현재재고</div>
+            <div className="stat-v">{stats.totalStock.toLocaleString()}</div>
+            <div className="stat-u">개</div>
           </div>
           <div className="stat" style={stats.shortCount > 0 ? {borderColor:'#ffc107'} : {}}>
             <div className="stat-l">재고 부족</div>
