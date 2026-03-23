@@ -30,9 +30,9 @@ const GLOBAL_CSS = `
     --accent2: #1565C0;
     --danger:  #C62828;
     --success: #2E7D32;
-    --text:    #1a1a1a;
-    --text2:   #555555;
-    --text3:   #999999;
+    --text:    #0a0a0a;
+    --text2:   #333333;
+    --text3:   #666666;
     --radius:  6px;
     --mono:    'IBM Plex Mono', monospace;
     --sans:    'Noto Sans KR', sans-serif;
@@ -79,17 +79,17 @@ const GLOBAL_CSS = `
   .sidebar-logo { padding: 20px 18px 16px; border-bottom: 1px solid rgba(0,0,0,0.1); }
   .sidebar-logo-icon { font-size: 22px; }
   .sidebar-logo-text { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--sidebar-text); letter-spacing: -0.3px; margin-top: 2px; }
-  .sidebar-logo-sub { font-size: 10px; color: rgba(0,0,0,0.45); margin-top: 1px; }
-  .sidebar-section { padding: 12px 10px 4px; font-size: 9px; font-weight: 700; color: rgba(0,0,0,0.4); letter-spacing: 2px; text-transform: uppercase; }
+  .sidebar-logo-sub { font-size: 10px; color: rgba(0,0,0,0.65); margin-top: 1px; }
+  .sidebar-section { padding: 12px 10px 4px; font-size: 9px; font-weight: 700; color: rgba(0,0,0,0.6); letter-spacing: 2px; text-transform: uppercase; }
   .sidebar-menu { flex: 1; padding: 6px 8px; overflow-y: auto; }
-  .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 120ms; margin-bottom: 2px; font-size: 13px; font-weight: 500; color: var(--sidebar-text); border: none; background: none; width: 100%; text-align: left; }
-  .sidebar-item:hover { background: rgba(0,0,0,0.08); }
-  .sidebar-item.on { background: rgba(0,0,0,0.15); font-weight: 600; }
+  .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 120ms; margin-bottom: 2px; font-size: 13px; font-weight: 600; color: #1a1a1a; border: none; background: none; width: 100%; text-align: left; }
+  .sidebar-item:hover { background: rgba(0,0,0,0.12); }
+  .sidebar-item.on { background: rgba(0,0,0,0.18); font-weight: 700; }
   .sidebar-item-icon { font-size: 15px; flex-shrink: 0; }
-  .sidebar-bottom { padding: 12px 8px; border-top: 1px solid rgba(0,0,0,0.1); }
-  .sidebar-user { padding: 8px 10px; font-size: 11px; color: rgba(0,0,0,0.55); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sidebar-logout { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; color: rgba(0,0,0,0.6); background: none; border: none; width: 100%; transition: background 120ms; }
-  .sidebar-logout:hover { background: rgba(0,0,0,0.08); }
+  .sidebar-bottom { padding: 12px 8px; border-top: 1px solid rgba(0,0,0,0.15); }
+  .sidebar-user { padding: 8px 10px; font-size: 11px; color: rgba(0,0,0,0.7); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-logout { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: rgba(0,0,0,0.7); background: none; border: none; width: 100%; transition: background 120ms; }
+  .sidebar-logout:hover { background: rgba(0,0,0,0.12); }
 
   /* ── CONTENT ── */
   .content { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
@@ -110,7 +110,7 @@ const GLOBAL_CSS = `
 
   /* ── CARDS ── */
   .card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 16px; }
-  .card-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .card-label { font-size: 12px; font-weight: 700; color: #333333; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
   .card-label::before { content: ''; display: block; width: 3px; height: 12px; background: var(--sidebar); border-radius: 2px; }
 
   /* ── DROP ZONE ── */
@@ -118,9 +118,9 @@ const GLOBAL_CSS = `
   .drop:hover, .drop.over { border-color: var(--accent); background: #fff8e1; }
   .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
   .drop-icon { font-size: 28px; margin-bottom: 8px; }
-  .drop-main { font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .drop-main { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
   .drop-main strong { color: var(--accent); }
-  .drop-sub { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+  .drop-sub { font-size: 12px; color: #444444; font-family: var(--mono); }
   .drop-filename { display: inline-flex; align-items: center; gap: 8px; background: #fff3e0; border: 1px solid #ffcc80; color: var(--accent); font-family: var(--mono); font-size: 12px; padding: 5px 14px; border-radius: var(--radius); margin-top: 10px; }
 
   /* ── STATS ── */
@@ -279,7 +279,7 @@ function AuthScreen() {
       <div className="auth-box">
         <div className="auth-logo">
           <div className="auth-logo-icon">🏬</div>
-          <div className="auth-logo-text">백화점팀 재고관리</div>
+          <div className="auth-logo-text">재고관리 대시보드</div>
         </div>
         <div className="auth-sub">백화점 매장 판매·재고 관리 시스템</div>
 
