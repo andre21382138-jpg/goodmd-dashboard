@@ -192,6 +192,21 @@ const GLOBAL_CSS = `
   .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── HISTORY ── */
+  .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .history-table th { background: var(--bg3); padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text2); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .history-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .history-table tr:last-child td { border-bottom: none; }
+  .history-table tr:hover td { background: #fffde7; }
+  .active-row td { background: #fff8e1 !important; }
+  .active-badge { display: inline-flex; align-items: center; padding: 2px 8px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 99px; font-size: 10px; font-weight: 600; color: var(--success); gap: 4px; }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid #ef9a9a; border-radius: var(--radius); padding: 5px 10px; font-size: 11px; cursor: pointer; transition: all 120ms; font-family: var(--sans); }
+  .btn-danger:hover { background: #fdecea; }
+  .btn-dl { background: transparent; color: var(--accent2); border: 1px solid #90caf9; border-radius: var(--radius); padding: 5px 10px; font-size: 11px; cursor: pointer; transition: all 120ms; font-family: var(--sans); }
+  .btn-dl:hover { background: #e3f2fd; }
+  .btn-load { background: var(--sidebar); color: #1a1a1a; border: none; border-radius: var(--radius); padding: 5px 10px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 120ms; font-family: var(--sans); }
+  .btn-load:hover { background: var(--sidebar-hover); }
+
   /* ── TOAST ── */
   .toasts { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 6px; }
   .toast { display: flex; align-items: center; gap: 9px; padding: 11px 16px; border-radius: var(--radius); border: 1px solid; font-family: var(--mono); font-size: 11px; min-width: 220px; box-shadow: 0 2px 12px rgba(0,0,0,0.12); animation: tIn 180ms ease; }
@@ -758,29 +773,96 @@ function SafetyTab({ rows: allRows, period }) {
 // ════════════════════════════════════════════════════════
 // UPLOAD PAGE
 // ════════════════════════════════════════════════════════
-function UploadPage() {
+function UploadPage({ profile, activeUploadId, setActiveUploadId, externalData }) {
   const [parsed, setParsed]     = useState(null);
   const [loading, setLoading]   = useState(false);
   const [dragging, setDrag]     = useState(false);
   const [filename, setFilename] = useState('');
+  const [saving, setSaving]     = useState(false);
   const fileRef = useRef();
 
-  const handleFile = (file) => {
+  // 이력에서 불러온 데이터 적용
+  useEffect(() => {
+    if (externalData) {
+      setParsed(externalData.result);
+      setFilename(externalData.filename);
+    }
+  }, [externalData]);
+
+  // 앱 시작 시 최근 업로드 자동 로드
+  useEffect(() => {
+    if (activeUploadId && !externalData) loadFromHistory(activeUploadId);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadFromHistory = async (id) => {
+    setLoading(true);
+    try {
+      const { data: rec } = await supabase
+        .from('upload_history').select('*').eq('id', id).single();
+      if (!rec) return;
+      const { data: fileData, error } = await supabase.storage
+        .from('uploads').download(rec.storage_path);
+      if (error) throw error;
+      const binary = await fileData.arrayBuffer();
+      const result = parseSubul(Buffer.from(binary));
+      setParsed(result);
+      setFilename(rec.filename);
+      setActiveUploadId(id);
+    } catch(e) {
+      toast('파일 로드 실패: ' + e.message, 'err');
+    }
+    setLoading(false);
+  };
+
+  const handleFile = async (file) => {
     if (!file) return;
     if (!file.name.match(/\.(xls|xlsx)$/i)) { toast('xls 또는 xlsx 파일만 지원합니다', 'err'); return; }
     setLoading(true); setFilename(file.name);
+
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        // 1. 파싱
         const result = parseSubul(e.target.result);
         if (!result.rows.length) { toast('데이터가 없습니다', 'err'); setLoading(false); return; }
         setParsed(result);
-        toast(`${result.rows.length.toLocaleString()}개 항목 파싱 완료 · ${result.periodStr}`);
-      } catch(err) { toast('파싱 오류: ' + err.message, 'err'); }
+
+        // 2. Supabase Storage 업로드
+        setSaving(true);
+        const path = `${profile.id}/${Date.now()}_${file.name}`;
+        const { error: upErr } = await supabase.storage
+          .from('uploads').upload(path, file, { upsert: false });
+        if (upErr) throw upErr;
+
+        // 3. 이력 저장
+        const { data: hist, error: histErr } = await supabase
+          .from('upload_history').insert({
+            filename: file.name,
+            storage_path: path,
+            period_str: result.periodStr,
+            row_count: result.rows.length,
+            uploaded_by: profile.id,
+          }).select().single();
+        if (histErr) throw histErr;
+
+        setActiveUploadId(hist.id);
+        toast(`업로드 완료 · ${result.rows.length.toLocaleString()}개 항목 저장됨`);
+      } catch(err) {
+        toast('업로드 오류: ' + err.message, 'err');
+      }
+      setSaving(false);
       setLoading(false);
     };
     reader.onerror = () => { toast('파일 읽기 실패', 'err'); setLoading(false); };
     reader.readAsBinaryString(file);
+  };
+
+  const handleReset = async () => {
+    if (!window.confirm('현재 파일을 초기화하시겠습니까?\n(업로드 이력은 유지됩니다)')) return;
+    setParsed(null);
+    setFilename('');
+    setActiveUploadId(null);
+    toast('초기화됐습니다', 'inf');
   };
 
   const stats = useMemo(() => {
@@ -789,15 +871,21 @@ function UploadPage() {
     const depts   = new Set(rows.map(r => r.dept));
     const stores  = new Set(rows.map(r => r.store));
     const codes   = new Set(rows.map(r => r.code));
-    const totalSales = rows.reduce((s, r) => s + r.sales, 0);
+    const totalSales = rows.reduce((s,r) => s+r.sales, 0);
     const shortCount = rows.filter(r => r.stock < r.sales).length;
-    return { count: rows.length, depts: depts.size, stores: stores.size, codes: codes.size, totalSales, shortCount };
+    return { depts: depts.size, stores: stores.size, codes: codes.size, totalSales, shortCount };
   }, [parsed]);
 
   return (
     <div>
       <div className="card">
-        <div className="card-label">굿MD 상품별점별수불현황 파일 업로드</div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, paddingBottom:10, borderBottom:'1px solid var(--border)' }}>
+          <div className="card-label" style={{ margin:0, padding:0, border:'none' }}>굿MD 상품별점별수불현황 파일 업로드</div>
+          {parsed && (
+            <button className="btn-danger" onClick={handleReset}>✕ 초기화</button>
+          )}
+        </div>
+
         <div className={`drop ${dragging?'over':''}`}
           onDragOver={e => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
@@ -807,11 +895,16 @@ function UploadPage() {
           <input ref={fileRef} type="file" accept=".xls,.xlsx"
             onClick={e => e.stopPropagation()}
             onChange={e => { handleFile(e.target.files[0]); e.target.value=''; }} />
-          {loading
-            ? <><div className="drop-icon"><span className="spinner"/></div><div className="drop-main">파싱 중...</div></>
+          {loading || saving
+            ? <><div className="drop-icon"><span className="spinner"/></div>
+                <div className="drop-main">{saving ? 'Supabase에 저장 중...' : '파싱 중...'}</div></>
             : parsed
-              ? <><div className="drop-icon">✅</div><div className="drop-main">업로드 완료 · <strong>다른 파일</strong>을 올리면 교체됩니다</div><div className="drop-filename">📄 {filename}</div></>
-              : <><div className="drop-icon">📂</div><div className="drop-main"><strong>클릭</strong> 또는 <strong>드래그&드롭</strong></div><div className="drop-sub">굿MD → 상품별점별수불현황 다운로드 파일 (.xls / .xlsx)</div></>
+              ? <><div className="drop-icon">✅</div>
+                  <div className="drop-main"><strong>다른 파일</strong>을 올리면 교체 업로드됩니다</div>
+                  <div className="drop-filename">📄 {filename}</div></>
+              : <><div className="drop-icon">📂</div>
+                  <div className="drop-main"><strong>클릭</strong> 또는 <strong>드래그&드롭</strong></div>
+                  <div className="drop-sub">굿MD → 상품별점별수불현황 (.xls / .xlsx)</div></>
           }
         </div>
       </div>
@@ -856,7 +949,8 @@ function UploadPage() {
       {!parsed && !loading && (
         <div className="empty">
           굿MD에서 <strong>상품별점별수불현황</strong> 파일을 다운로드한 뒤<br/>
-          위 영역에 업로드하면 안전재고 현황을 바로 확인할 수 있습니다
+          위 영역에 업로드하면 안전재고 현황을 바로 확인할 수 있습니다<br/>
+          <span style={{fontSize:11,color:'var(--text3)'}}>업로드한 파일은 자동 저장되어 누적 관리됩니다</span>
         </div>
       )}
     </div>
@@ -864,10 +958,154 @@ function UploadPage() {
 }
 
 // ════════════════════════════════════════════════════════
-// SIDEBAR
+// UPLOAD HISTORY PAGE
 // ════════════════════════════════════════════════════════
+function UploadHistoryPage({ profile, activeUploadId, setActiveUploadId, setPage }) {
+  const [list, setList]       = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchList = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('upload_history')
+      .select('*, uploader:profiles(name, email, job_title, department)')
+      .order('created_at', { ascending: false });
+    if (error) toast(error.message, 'err');
+    else setList(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchList(); }, [fetchList]);
+
+  // 원본 파일 다운로드
+  const handleDownload = async (item) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('uploads').download(item.storage_path);
+      if (error) throw error;
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url; a.download = item.filename; a.click();
+      URL.revokeObjectURL(url);
+      toast('다운로드 완료');
+    } catch(e) { toast('다운로드 실패: ' + e.message, 'err'); }
+  };
+
+  // 이력 삭제 (Storage + DB)
+  const handleDelete = async (item) => {
+    if (!window.confirm(`"${item.filename}" 이력을 삭제하시겠습니까?\n저장된 파일도 함께 삭제됩니다.`)) return;
+    try {
+      await supabase.storage.from('uploads').remove([item.storage_path]);
+      const { error } = await supabase.from('upload_history').delete().eq('id', item.id);
+      if (error) throw error;
+      if (activeUploadId === item.id) { setActiveUploadId(null); }
+      toast('삭제 완료', 'inf');
+      fetchList();
+    } catch(e) { toast('삭제 실패: ' + e.message, 'err'); }
+  };
+
+  // 이력에서 불러와 안전재고 페이지로 이동
+  const handleLoad = async (item) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('uploads').download(item.storage_path);
+      if (error) throw error;
+      const binary = await data.arrayBuffer();
+      // ArrayBuffer → binary string
+      const bytes = new Uint8Array(binary);
+      let str = '';
+      for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+      const result = parseSubul(str);
+      setActiveUploadId(item.id);
+      // 부모 상태 업데이트를 위해 localStorage 활용
+      localStorage.setItem('gmd_active_id', item.id);
+      toast(`"${item.filename}" 불러왔습니다`);
+      setPage('upload');
+      // 강제 리로드 없이 상태 전달을 위해 이벤트 발행
+      window.dispatchEvent(new CustomEvent('gmd-load', { detail: { result, id: item.id, filename: item.filename } }));
+    } catch(e) { toast('불러오기 실패: ' + e.message, 'err'); }
+  };
+
+  const isAdmin = profile?.role === 'admin';
+
+  return (
+    <div>
+      <div className="card">
+        <div className="card-label">업로드 이력</div>
+        {loading ? (
+          <div className="empty"><span className="spinner" /></div>
+        ) : list.length === 0 ? (
+          <div className="empty">업로드 이력이 없습니다</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="history-table">
+              <thead>
+                <tr>
+                  <th>상태</th>
+                  <th>업로드 일시</th>
+                  <th>파일명</th>
+                  <th>기간</th>
+                  <th>항목수</th>
+                  <th>업로드 담당자</th>
+                  <th>직책 / 소속</th>
+                  <th>파일</th>
+                  <th>삭제</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map(item => {
+                  const isActive = item.id === activeUploadId;
+                  const canDelete = isAdmin || item.uploaded_by === profile?.id;
+                  return (
+                    <tr key={item.id} className={isActive ? 'active-row' : ''}>
+                      <td>
+                        {isActive
+                          ? <span className="active-badge">✓ 현재</span>
+                          : <button className="btn-load" onClick={() => handleLoad(item)}>불러오기</button>
+                        }
+                      </td>
+                      <td style={{ fontFamily:'var(--mono)', fontSize:11, whiteSpace:'nowrap' }}>
+                        {new Date(item.created_at).toLocaleString('ko-KR')}
+                      </td>
+                      <td style={{ fontSize:12, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        📄 {item.filename}
+                      </td>
+                      <td style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--text2)', whiteSpace:'nowrap' }}>
+                        {item.period_str || '-'}
+                      </td>
+                      <td style={{ fontFamily:'var(--mono)', fontSize:12, textAlign:'right' }}>
+                        {item.row_count?.toLocaleString() || '-'}
+                      </td>
+                      <td>
+                        <div style={{ fontWeight:600, fontSize:13 }}>{item.uploader?.name || '-'}</div>
+                        <div style={{ fontSize:11, color:'var(--text3)' }}>{item.uploader?.email}</div>
+                      </td>
+                      <td style={{ fontSize:12, color:'var(--text2)' }}>
+                        {item.uploader?.job_title || '-'} / {item.uploader?.department || '-'}
+                      </td>
+                      <td>
+                        <button className="btn-dl" onClick={() => handleDownload(item)}>⬇ 다운로드</button>
+                      </td>
+                      <td>
+                        {canDelete
+                          ? <button className="btn-danger" onClick={() => handleDelete(item)}>삭제</button>
+                          : <span style={{ fontSize:11, color:'var(--text3)' }}>-</span>
+                        }
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 const MENUS = [
-  { key: 'upload', icon: '📊', label: '안전재고 현황' },
+  { key: 'upload',  icon: '📊', label: '안전재고 현황' },
+  { key: 'history', icon: '🗂️', label: '업로드 이력' },
 ];
 const ADMIN_MENUS = [
   { key: 'admin', icon: '👥', label: '사용자 관리' },
@@ -879,7 +1117,7 @@ function Sidebar({ page, setPage, profile, onLogout }) {
     <div className="sidebar">
       <div className="sidebar-logo">
         <div className="sidebar-logo-icon">🏬</div>
-        <div className="sidebar-logo-text">재고관리</div>
+        <div className="sidebar-logo-text">백화점팀 재고관리</div>
         <div className="sidebar-logo-sub">대시보드</div>
       </div>
       <div className="sidebar-menu">
@@ -903,6 +1141,7 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       <div className="sidebar-bottom">
         <div className="sidebar-user">
           {isAdmin && <span className="admin-badge" style={{marginRight:6}}>ADMIN</span>}
+          {profile?.name && <strong style={{marginRight:4}}>{profile.name}</strong>}
           {profile?.email}
         </div>
         <button className="sidebar-logout" onClick={onLogout}>
@@ -919,13 +1158,34 @@ function Sidebar({ page, setPage, profile, onLogout }) {
 export default function App() {
   useStyle(GLOBAL_CSS);
 
-  const [session, setSession]   = useState(null);
-  const [profile, setProfile]   = useState(null);
-  const [authLoading, setAL]    = useState(true);
-  const [page, setPage]         = useState('upload');
+  const [session, setSession]         = useState(null);
+  const [profile, setProfile]         = useState(null);
+  const [authLoading, setAL]          = useState(true);
+  const [page, setPage]               = useState('upload');
+  const [activeUploadId, setActiveId] = useState(
+    () => { const v = localStorage.getItem('gmd_active_id'); return v ? Number(v) : null; }
+  );
+  const [uploadPageData, setUploadPageData] = useState(null); // { result, filename }
+
+  // 이력에서 불러오기 이벤트 수신
+  useEffect(() => {
+    const handler = (e) => {
+      const { result, id, filename } = e.detail;
+      setUploadPageData({ result, filename });
+      setActiveId(id);
+      localStorage.setItem('gmd_active_id', id);
+    };
+    window.addEventListener('gmd-load', handler);
+    return () => window.removeEventListener('gmd-load', handler);
+  }, []);
+
+  const setActiveUploadId = (id) => {
+    setActiveId(id);
+    if (id) localStorage.setItem('gmd_active_id', id);
+    else localStorage.removeItem('gmd_active_id');
+  };
 
   useEffect(() => {
-    // 세션 초기화
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) setAL(false);
@@ -948,14 +1208,12 @@ export default function App() {
     toast('로그아웃 됐습니다', 'inf');
   };
 
-  const PAGE_TITLES = { upload: '안전재고 현황', admin: '사용자 관리' };
+  const PAGE_TITLES = { upload: '안전재고 현황', history: '업로드 이력', admin: '사용자 관리' };
 
   if (authLoading) {
     return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh'}}><span className="spinner"/></div>;
   }
-
   if (!session) return <><Toasts/><AuthScreen/></>;
-
   if (!profile?.approved) return <><Toasts/><PendingScreen email={session.user.email}/></>;
 
   return (
@@ -968,8 +1226,23 @@ export default function App() {
             <div className="content-title">{PAGE_TITLES[page]}</div>
           </div>
           <div className="content-body">
-            {page === 'upload' && <UploadPage/>}
-            {page === 'admin'  && <AdminTab/>}
+            {page === 'upload' && (
+              <UploadPage
+                profile={profile}
+                activeUploadId={activeUploadId}
+                setActiveUploadId={setActiveUploadId}
+                externalData={uploadPageData}
+              />
+            )}
+            {page === 'history' && (
+              <UploadHistoryPage
+                profile={profile}
+                activeUploadId={activeUploadId}
+                setActiveUploadId={setActiveUploadId}
+                setPage={setPage}
+              />
+            )}
+            {page === 'admin' && <AdminTab/>}
           </div>
         </div>
       </div>
