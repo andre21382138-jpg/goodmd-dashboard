@@ -241,14 +241,37 @@ function Toasts() {
 }
 
 // ════════════════════════════════════════════════════════
+// 점포 목록
+// ════════════════════════════════════════════════════════
+const STORE_LIST = [
+  '건대스타시티점','천호점','영등포점','관악점','평택점','수원점','대구점',
+  '센텀시티점','타임월드점','더현대서울점','목동점','중동점','인천점','부산점',
+  '광주점','대전점','울산점','창원점','전주점','포항점','기타',
+];
+
+// ════════════════════════════════════════════════════════
 // AUTH SCREEN
 // ════════════════════════════════════════════════════════
 function AuthScreen() {
-  const [mode, setMode]       = useState('login');
-  const [email, setEmail]     = useState('');
-  const [pw, setPw]           = useState('');
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg]         = useState(null); // {text, type}
+  const [mode, setMode]         = useState('login');
+  const [email, setEmail]       = useState('');
+  const [pw, setPw]             = useState('');
+  const [name, setName]         = useState('');
+  const [jobTitle, setJobTitle] = useState('담당자');
+  const [department, setDept]   = useState('본사');
+  const [loading, setLoading]   = useState(false);
+  const [msg, setMsg]           = useState(null);
+
+  const handleJobTitle = (val) => {
+    setJobTitle(val);
+    setDept(val === '담당자' ? '본사' : STORE_LIST[0]);
+  };
+
+  const resetForm = () => {
+    setEmail(''); setPw(''); setName('');
+    setJobTitle('담당자'); setDept('본사');
+    setMsg(null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -258,11 +281,21 @@ function AuthScreen() {
         const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
         if (error) throw error;
       } else {
+        if (!name.trim()) throw new Error('이름을 입력해주세요');
         if (pw.length < 6) throw new Error('비밀번호는 6자리 이상이어야 합니다');
-        const { error } = await supabase.auth.signUp({ email, password: pw });
+        const { data, error } = await supabase.auth.signUp({ email, password: pw });
         if (error) throw error;
+        // profiles 업데이트 (트리거로 row 생성된 직후)
+        if (data?.user?.id) {
+          await supabase.from('profiles').update({
+            name: name.trim(),
+            job_title: jobTitle,
+            department,
+          }).eq('id', data.user.id);
+        }
         setMsg({ text: '회원가입이 완료됐어요. 관리자 승인 후 로그인 가능합니다.', type: 'ok' });
         setMode('login');
+        resetForm();
       }
     } catch (err) {
       const ko = err.message
@@ -276,7 +309,7 @@ function AuthScreen() {
 
   return (
     <div className="auth-wrap">
-      <div className="auth-box">
+      <div className="auth-box" style={{ width: mode === 'signup' ? 420 : 380 }}>
         <div className="auth-logo">
           <div className="auth-logo-icon">🏬</div>
           <div className="auth-logo-text">재고관리 대시보드</div>
@@ -284,19 +317,73 @@ function AuthScreen() {
         <div className="auth-sub">백화점 매장 판매·재고 관리 시스템</div>
 
         <div className="auth-tabs">
-          <button className={`auth-tab ${mode === 'login' ? 'on' : ''}`} onClick={() => { setMode('login'); setMsg(null); }}>로그인</button>
-          <button className={`auth-tab ${mode === 'signup' ? 'on' : ''}`} onClick={() => { setMode('signup'); setMsg(null); }}>회원가입</button>
+          <button className={`auth-tab ${mode === 'login' ? 'on' : ''}`} onClick={() => { setMode('login'); resetForm(); }}>로그인</button>
+          <button className={`auth-tab ${mode === 'signup' ? 'on' : ''}`} onClick={() => { setMode('signup'); resetForm(); }}>회원가입</button>
         </div>
 
         <form onSubmit={handleSubmit}>
+          {mode === 'signup' && (
+            <>
+              {/* 직책 */}
+              <div className="form-group">
+                <label>직책</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['담당자', '매니저'].map(t => (
+                    <button key={t} type="button"
+                      onClick={() => handleJobTitle(t)}
+                      style={{
+                        flex: 1, height: 38, border: '1px solid',
+                        borderColor: jobTitle === t ? 'var(--accent)' : 'var(--border)',
+                        borderRadius: 'var(--radius)',
+                        background: jobTitle === t ? '#fff3e0' : '#fafafa',
+                        color: jobTitle === t ? 'var(--accent)' : 'var(--text2)',
+                        fontWeight: jobTitle === t ? 700 : 500,
+                        fontSize: 13, cursor: 'pointer', transition: 'all 120ms',
+                      }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 부서/점포 */}
+              <div className="form-group">
+                <label>{jobTitle === '담당자' ? '부서' : '점포명'}</label>
+                {jobTitle === '담당자' ? (
+                  <input className="input" value="본사" readOnly
+                    style={{ background: '#f0f0f0', color: 'var(--text2)' }} />
+                ) : (
+                  <select className="input" value={department} onChange={e => setDept(e.target.value)} required>
+                    {STORE_LIST.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                )}
+              </div>
+
+              {/* 이름 */}
+              <div className="form-group">
+                <label>이름</label>
+                <input className="input" type="text" value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="실명 입력" required />
+              </div>
+            </>
+          )}
+
           <div className="form-group">
             <label>이메일</label>
-            <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="이메일 주소" required />
+            <input className="input" type="email" value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="이메일 주소" required />
           </div>
           <div className="form-group">
-            <label>비밀번호 {mode === 'signup' && <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(6자리 이상)</span>}</label>
-            <input className="input" type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="비밀번호" required minLength={6} />
+            <label>비밀번호
+              {mode === 'signup' && <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 4 }}>(6자리 이상)</span>}
+            </label>
+            <input className="input" type="password" value={pw}
+              onChange={e => setPw(e.target.value)}
+              placeholder="비밀번호" required minLength={6} />
           </div>
+
           <button className="btn-auth" type="submit" disabled={loading}>
             {loading ? '처리 중...' : mode === 'login' ? '로그인' : '회원가입 신청'}
           </button>
@@ -304,7 +391,7 @@ function AuthScreen() {
 
         {msg && <div className={`auth-msg ${msg.type}`}>{msg.text}</div>}
 
-        {mode === 'signup' && (
+        {mode === 'signup' && !msg && (
           <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text3)', marginTop: 14, lineHeight: 1.7 }}>
             회원가입 후 관리자 승인이 필요합니다.<br />
             승인 완료 후 로그인하실 수 있습니다.
@@ -378,11 +465,14 @@ function AdminTab() {
           <div className="card-label" style={{ color: '#E65100' }}>승인 대기 ({pending.length}명)</div>
           <table className="user-table">
             <thead>
-              <tr><th>이메일</th><th>가입일</th><th>상태</th><th>처리</th></tr>
+              <tr><th>이름</th><th>직책</th><th>부서/점포</th><th>이메일</th><th>가입일</th><th>상태</th><th>처리</th></tr>
             </thead>
             <tbody>
               {pending.map(u => (
                 <tr key={u.id}>
+                  <td><strong>{u.name || '-'}</strong></td>
+                  <td>{u.job_title || '-'}</td>
+                  <td>{u.department || '-'}</td>
                   <td>{u.email}</td>
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)' }}>
                     {new Date(u.created_at).toLocaleDateString('ko-KR')}
@@ -403,11 +493,14 @@ function AdminTab() {
         {loading ? <div className="empty"><span className="spinner" /></div> : (
           <table className="user-table">
             <thead>
-              <tr><th>이메일</th><th>권한</th><th>상태</th><th>가입일</th><th>권한 변경</th></tr>
+              <tr><th>이름</th><th>직책</th><th>부서/점포</th><th>이메일</th><th>권한</th><th>상태</th><th>가입일</th><th>권한 변경</th></tr>
             </thead>
             <tbody>
               {users.map(u => (
                 <tr key={u.id}>
+                  <td><strong>{u.name || '-'}</strong></td>
+                  <td>{u.job_title || '-'}</td>
+                  <td>{u.department || '-'}</td>
                   <td>{u.email}</td>
                   <td>
                     {u.role === 'admin'
