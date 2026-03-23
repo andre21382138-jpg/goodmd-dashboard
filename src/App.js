@@ -805,6 +805,7 @@ function UploadPage() {
           onClick={() => fileRef.current?.click()}
         >
           <input ref={fileRef} type="file" accept=".xls,.xlsx"
+            onClick={e => e.stopPropagation()}
             onChange={e => { handleFile(e.target.files[0]); e.target.value=''; }} />
           {loading
             ? <><div className="drop-icon"><span className="spinner"/></div><div className="drop-main">파싱 중...</div></>
