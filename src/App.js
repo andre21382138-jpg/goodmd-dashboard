@@ -821,7 +821,8 @@ function UploadPage({ profile, activeUploadId, setActiveUploadId, parsed, setPar
 
         // 2. Supabase Storage 업로드
         setSaving(true);
-        const path = `${profile.id}/${Date.now()}_${file.name}`;
+        const safeName = file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
+        const path = `${Date.now()}_${safeName}`;
         const { error: upErr } = await supabase.storage
           .from('uploads').upload(path, file, { upsert: false });
         if (upErr) throw upErr;
