@@ -1751,7 +1751,7 @@ function CustomerInputPage({ profile }) {
       created_by: profile.id,
     });
     if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else { toast('고객 입력 완료', 'ok'); setCustName(''); setPhone(''); setManagerName(''); fetchRecent(); }
+    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setManagerName(''); fetchRecent(); }
     setSaving(false);
   };
 
@@ -1768,7 +1768,7 @@ function CustomerInputPage({ profile }) {
   return (
     <div>
       <div className="card">
-        <div className="card-label">고객 입력</div>
+        <div className="card-label">회원 등록</div>
         <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16, fontFamily:'var(--mono)' }}>
           📍 {profile.department} · {profile.branch}
         </div>
@@ -1797,7 +1797,7 @@ function CustomerInputPage({ profile }) {
             </div>
           </div>
           <button className="btn btn-p" type="submit" disabled={saving} style={{ width:'100%', justifyContent:'center', height:40 }}>
-            {saving ? <span className="spinner"/> : '✓ 고객 정보 저장'}
+            {saving ? <span className="spinner"/> : '✓ 회원 정보 저장'}
           </button>
         </form>
       </div>
@@ -2048,7 +2048,7 @@ const MENUS = [
 ];
 const MANAGER_MENUS = [
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
-  { key: 'customer_input', icon: '👤', label: '고객 입력' },
+  { key: 'customer_input', icon: '👤', label: '회원 등록' },
 ];
 const ADMIN_MENUS = [
   { key: 'admin', icon: '👥', label: '사용자 관리' },
@@ -2181,7 +2181,7 @@ export default function App() {
     sales_list:      '판매내역 조회',
     customer_lookup: '회원 조회',
     sales_input:     '판매 입력',
-    customer_input:  '고객 입력',
+    customer_input:  '회원 등록',
     admin:           '사용자 관리',
     brand_mgmt:      '브랜드/상품 관리',
   };
