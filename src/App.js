@@ -2265,6 +2265,146 @@ function IncentivePage() {
   );
 }
 
+// ════════════════════════════════════════════════════════
+// 홈 페이지 (당월 누적 판매매출)
+// ════════════════════════════════════════════════════════
+function HomePage() {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const monthStart = `${year}-${month}-01`;
+  const monthEnd   = `${year}-${month}-31`;
+  const monthLabel = `${year}년 ${month}월`;
+
+  const [summary,    setSummary]    = useState(null);
+  const [storeRows,  setStoreRows]  = useState([]);
+  const [loading,    setLoading]    = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+      setLoading(true);
+      const { data } = await supabase.from('sales')
+        .select('store_name, branch_name, quantity, price, sold_at')
+        .gte('sold_at', monthStart)
+        .lte('sold_at', monthEnd);
+
+      const rows = data || [];
+      const totalAmt   = rows.reduce((s,r) => s + r.price * r.quantity, 0);
+      const totalCount = rows.length;
+      const totalQty   = rows.reduce((s,r) => s + r.quantity, 0);
+
+      // 점포/지점별 집계
+      const map = new Map();
+      for (const r of rows) {
+        const key = `${r.store_name}|||${r.branch_name}`;
+        if (!map.has(key)) map.set(key, { store: r.store_name, branch: r.branch_name, count: 0, qty: 0, amt: 0 });
+        const e = map.get(key);
+        e.count += 1; e.qty += r.quantity; e.amt += r.price * r.quantity;
+      }
+      const stores = [...map.values()].sort((a,b) => b.amt - a.amt);
+
+      setSummary({ totalAmt, totalCount, totalQty, storeCount: map.size });
+      setStoreRows(stores);
+      setLoading(false);
+    };
+    fetch();
+  }, []);
+
+  if (loading) return <div className="empty"><span className="spinner"/></div>;
+
+  return (
+    <div>
+      {/* 월 헤더 */}
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:4 }}>
+          {monthLabel} 누적 판매매출
+        </div>
+        <div style={{ fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+          {monthStart} ~ {new Date().toISOString().slice(0,10)} (오늘까지)
+        </div>
+      </div>
+
+      {/* 상단 요약 카드 */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
+        {[
+          { label:'총 매출금액', value: summary.totalAmt.toLocaleString() + '원', big: true },
+          { label:'판매 건수',   value: summary.totalCount.toLocaleString() + '건' },
+          { label:'판매 수량',   value: summary.totalQty.toLocaleString() + '개' },
+          { label:'활동 점포',   value: summary.storeCount + '개' },
+        ].map(s => (
+          <div key={s.label} style={{
+            background:'#fff', border: s.big ? '2px solid var(--sidebar)' : '1px solid var(--border)',
+            borderRadius:'var(--radius)', padding:'16px 20px',
+            boxShadow: s.big ? '0 2px 12px rgba(255,214,0,0.2)' : 'none',
+          }}>
+            <div style={{ fontSize:11, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>{s.label}</div>
+            <div style={{ fontSize: s.big ? 26 : 22, fontWeight:700, color: s.big ? 'var(--accent)' : 'var(--text)', fontFamily:'var(--mono)', lineHeight:1 }}>
+              {s.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 점포/지점별 테이블 */}
+      <div className="card">
+        <div className="card-label">점포 / 지점별 당월 누적 판매매출</div>
+        {storeRows.length === 0 ? (
+          <div className="empty">이번 달 판매 데이터가 없습니다</div>
+        ) : (
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>점포</th>
+                  <th>지점</th>
+                  <th className="r">판매건수</th>
+                  <th className="r">판매수량</th>
+                  <th className="r">매출금액</th>
+                  <th style={{minWidth:120}}>비중</th>
+                </tr>
+              </thead>
+              <tbody>
+                {storeRows.map((r, i) => {
+                  const pct = summary.totalAmt > 0 ? (r.amt / summary.totalAmt * 100).toFixed(1) : 0;
+                  return (
+                    <tr key={i}>
+                      <td className="mono" style={{ color:'var(--text3)', width:40 }}>{i+1}</td>
+                      <td><span className="badge badge-dept">{r.store}</span></td>
+                      <td><span className="badge badge-store">{r.branch}</span></td>
+                      <td className="r">{r.count.toLocaleString()}건</td>
+                      <td className="r">{r.qty.toLocaleString()}개</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>
+                        {r.amt.toLocaleString()}원
+                      </td>
+                      <td>
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <div style={{ flex:1, height:6, background:'#f0f0f0', borderRadius:3, overflow:'hidden' }}>
+                            <div style={{ width:`${pct}%`, height:'100%', background:'var(--sidebar)', borderRadius:3 }}/>
+                          </div>
+                          <span style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--text2)', minWidth:36 }}>{pct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {/* 합계 */}
+                <tr style={{ background:'var(--bg3)', borderTop:'2px solid var(--border2)' }}>
+                  <td colSpan={3} style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--text3)', padding:'9px 11px', fontWeight:700 }}>합계</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{summary.totalCount.toLocaleString()}건</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{summary.totalQty.toLocaleString()}개</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14 }}>{summary.totalAmt.toLocaleString()}원</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const MENUS = [
   { key: 'upload',          icon: '📊', label: '안전재고 현황' },
   { key: 'history',         icon: '🗂️', label: '업로드 이력' },
@@ -2289,11 +2429,25 @@ function Sidebar({ page, setPage, profile, onLogout }) {
 
   return (
     <div className="sidebar">
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">🏬</div>
-        <div className="sidebar-logo-text">백화점팀 재고관리</div>
-        <div className="sidebar-logo-sub">대시보드</div>
-      </div>
+      {/* 홈 버튼 */}
+      <button
+        onClick={() => setPage('home')}
+        style={{
+          display:'flex', alignItems:'center', gap:10, padding:'16px 18px',
+          background: page==='home' ? 'rgba(0,0,0,0.12)' : 'transparent',
+          border:'none', borderBottom:'1px solid rgba(0,0,0,0.1)',
+          cursor:'pointer', width:'100%', textAlign:'left', transition:'background 120ms',
+        }}
+        onMouseEnter={e => { if(page!=='home') e.currentTarget.style.background='rgba(0,0,0,0.06)'; }}
+        onMouseLeave={e => { if(page!=='home') e.currentTarget.style.background='transparent'; }}
+      >
+        <span style={{ fontSize:22 }}>🏬</span>
+        <div>
+          <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 재고관리</div>
+          <div style={{ fontSize:10, color:'rgba(0,0,0,0.45)', marginTop:2 }}>홈 대시보드</div>
+        </div>
+      </button>
+
       <div className="sidebar-menu">
         {/* 본사/관리자 메뉴 */}
         {canSeeMain && (
@@ -2358,7 +2512,7 @@ export default function App() {
   const [session, setSession]         = useState(null);
   const [profile, setProfile]         = useState(null);
   const [authLoading, setAL]          = useState(true);
-  const [page, setPage]               = useState('upload');
+  const [page, setPage] = useState('home');
 
   // 페이지 이동해도 유지되는 업로드 상태
   const [parsed, setParsed]           = useState(null);
@@ -2402,6 +2556,7 @@ export default function App() {
   const canSeeMain = isAdmin || isHQ;
 
   const PAGE_TITLES = {
+    home:            `${new Date().getFullYear()}년 ${String(new Date().getMonth()+1).padStart(2,'0')}월 대시보드`,
     upload:          '안전재고 현황',
     history:         '업로드 이력',
     sales_list:      '판매내역 조회',
@@ -2429,6 +2584,7 @@ export default function App() {
             <div className="content-title">{PAGE_TITLES[page]}</div>
           </div>
           <div className="content-body">
+            {page === 'home' && <HomePage/>}
             {(page === 'upload' || page === 'history') && !canSeeMain ? (
               <div className="empty">
                 ⛔ 접근 권한이 없습니다.<br/>
