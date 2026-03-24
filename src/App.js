@@ -1180,6 +1180,7 @@ function SalesInputPage({ profile }) {
   // 신규 회원등록
   const [custName,    setCustName]    = useState('');
   const [custPhone,   setCustPhone]   = useState('');
+  const [custBirthday,setCustBirthday]= useState('');
   const [managerName, setManagerName] = useState('');
   const [smsConsent,  setSmsConsent]  = useState(false);
 
@@ -1224,7 +1225,7 @@ function SalesInputPage({ profile }) {
 
   const resetForm = () => {
     setProdId(''); setQty(1); setPrice(''); setMemo(''); setPayment('카드');
-    setCustName(''); setCustPhone(''); setManagerName(''); setSmsConsent(false);
+    setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName(''); setSmsConsent(false);
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
 
@@ -1248,6 +1249,7 @@ function SalesInputPage({ profile }) {
           joined_at: soldAt,
           name: custName.trim(),
           phone: custPhone,
+          birthday: custBirthday || null,
           store_name: profile.department,
           branch_name: profile.branch,
           manager_name: managerName.trim() || null,
@@ -1416,7 +1418,7 @@ function SalesInputPage({ profile }) {
             {/* 신규 회원등록 */}
             {memberMode === 'new' && (
               <div style={{ background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:14 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:12 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12, marginBottom:12 }}>
                   <div>
                     <label style={labelStyle}>고객 이름</label>
                     <input value={custName} onChange={e => setCustName(e.target.value)}
@@ -1426,6 +1428,11 @@ function SalesInputPage({ profile }) {
                     <label style={labelStyle}>연락처</label>
                     <input value={custPhone} onChange={e => setCustPhone(formatPhone(e.target.value))}
                       style={inputStyle} placeholder="010-0000-0000" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>생일 <span style={{color:'var(--text3)',fontWeight:400}}>(선택)</span></label>
+                    <input type="date" value={custBirthday} onChange={e => setCustBirthday(e.target.value)}
+                      style={inputStyle} />
                   </div>
                   <div>
                     <label style={labelStyle}>담당 매니저 이름</label>
@@ -1748,6 +1755,7 @@ function CustomerInputPage({ profile }) {
   const [joinedAt,    setJoinedAt]    = useState(today);
   const [custName,    setCustName]    = useState('');
   const [phone,       setPhone]       = useState('');
+  const [birthday,    setBirthday]    = useState('');
   const [managerName, setManagerName] = useState('');
   const [smsConsent,  setSmsConsent]  = useState(false);
   const [saving,      setSaving]      = useState(false);
@@ -1771,6 +1779,7 @@ function CustomerInputPage({ profile }) {
       joined_at: joinedAt,
       name: custName.trim(),
       phone: phone,
+      birthday: birthday || null,
       store_name: profile.department,
       branch_name: profile.branch,
       manager_name: managerName.trim() || null,
@@ -1779,7 +1788,7 @@ function CustomerInputPage({ profile }) {
       created_by: profile.id,
     });
     if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setManagerName(''); setSmsConsent(false); fetchRecent(); }
+    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); setManagerName(''); setSmsConsent(false); fetchRecent(); }
     setSaving(false);
   };
 
@@ -1823,6 +1832,11 @@ function CustomerInputPage({ profile }) {
               <input value={managerName} onChange={e => setManagerName(e.target.value)}
                 style={inputStyle} placeholder="매니저 이름 입력" />
             </div>
+            <div>
+              <label style={labelStyle}>생일 <span style={{color:'var(--text3)',fontWeight:400}}>(선택)</span></label>
+              <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
+                style={inputStyle} />
+            </div>
           </div>
 
           {/* SMS 수신동의 */}
@@ -1859,7 +1873,7 @@ function CustomerInputPage({ profile }) {
         <div className="twrap">
           <table>
             <thead>
-              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>담당 매니저</th><th>SMS동의</th><th>입력일시</th><th></th></tr>
+              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>생일</th><th>담당 매니저</th><th>SMS동의</th><th>입력일시</th><th></th></tr>
             </thead>
             <tbody>
               {recentList.length === 0
@@ -1869,6 +1883,7 @@ function CustomerInputPage({ profile }) {
                     <td className="mono">{c.joined_at}</td>
                     <td><strong>{c.name}</strong></td>
                     <td className="mono">{c.phone}</td>
+                    <td className="mono" style={{fontSize:11}}>{c.birthday || '-'}</td>
                     <td style={{fontSize:12,color:'var(--accent)',fontWeight:600}}>{c.manager_name || '-'}</td>
                     <td>
                       {c.sms_consent
@@ -3979,6 +3994,7 @@ function JoinPage({ managerId }) {
   const [loadingMgr,  setLoadingMgr]  = useState(true);
   const [name,        setName]        = useState('');
   const [phone,       setPhone]       = useState('');
+  const [birthday,    setBirthday]    = useState('');
   const [smsConsent,  setSmsConsent]  = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [done,        setDone]        = useState(false);
@@ -3999,6 +4015,7 @@ function JoinPage({ managerId }) {
       joined_at: new Date().toISOString().slice(0,10),
       name: name.trim(),
       phone: phone,
+      birthday: birthday || null,
       store_name: manager.department,
       branch_name: manager.branch,
       manager_name: manager.name,
@@ -4061,11 +4078,18 @@ function JoinPage({ managerId }) {
                 style={{width:'100%',height:50,padding:'0 16px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:16,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
                 placeholder="홍길동" required />
             </div>
-            <div style={{marginBottom:24}}>
+            <div style={{marginBottom:18}}>
               <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>연락처</label>
               <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
                 style={{width:'100%',height:50,padding:'0 16px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:16,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
                 placeholder="010-0000-0000" inputMode="numeric" required />
+            </div>
+            <div style={{marginBottom:24}}>
+              <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>
+                생일 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택 — 생일 혜택 제공용)</span>
+              </label>
+              <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
+                style={{width:'100%',height:50,padding:'0 16px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:15,outline:'none',fontFamily:'inherit',boxSizing:'border-box',color: birthday ? '#222' : '#aaa'}}/>
             </div>
 
             {/* SMS 동의 */}
