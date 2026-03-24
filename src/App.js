@@ -1149,21 +1149,26 @@ function formatPhone(val) {
 }
 
 // ════════════════════════════════════════════════════════
-// 판매 입력 페이지
+// 판매 입력 페이지 (고객 동시 등록 포함)
 // ════════════════════════════════════════════════════════
 function SalesInputPage({ profile }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [soldAt,   setSoldAt]   = useState(today);
-  const [brandId,  setBrandId]  = useState('');
-  const [productId,setProdId]   = useState('');
-  const [quantity, setQty]      = useState(1);
-  const [price,    setPrice]    = useState('');
-  const [payment,  setPayment]  = useState('카드');
-  const [memo,     setMemo]     = useState('');
-  const [brands,   setBrands]   = useState([]);
-  const [products, setProducts] = useState([]);
-  const [saving,   setSaving]   = useState(false);
+  const [soldAt,    setSoldAt]   = useState(today);
+  const [brandId,   setBrandId]  = useState('');
+  const [productId, setProdId]   = useState('');
+  const [quantity,  setQty]      = useState(1);
+  const [price,     setPrice]    = useState('');
+  const [payment,   setPayment]  = useState('카드');
+  const [memo,      setMemo]     = useState('');
+  const [brands,    setBrands]   = useState([]);
+  const [products,  setProducts] = useState([]);
+  const [saving,    setSaving]   = useState(false);
   const [recentSales, setRecent] = useState([]);
+
+  // 고객 동시 등록
+  const [withCust,  setWithCust] = useState(false);
+  const [custName,  setCustName] = useState('');
+  const [custPhone, setCustPhone]= useState('');
 
   useEffect(() => {
     supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || []));
@@ -1184,7 +1189,7 @@ function SalesInputPage({ profile }) {
 
   const fetchRecent = useCallback(async () => {
     const { data } = await supabase.from('sales')
-      .select('*, brand:brands(name), product:products(name)')
+      .select('*, brand:brands(name), product:products(name), customer:customers(name,phone)')
       .eq('created_by', profile.id)
       .order('created_at', { ascending: false })
       .limit(10);
@@ -1193,28 +1198,58 @@ function SalesInputPage({ profile }) {
 
   useEffect(() => { fetchRecent(); }, [fetchRecent]);
 
+  const resetForm = () => {
+    setProdId(''); setQty(1); setPrice(''); setMemo(''); setPayment('카드');
+    setCustName(''); setCustPhone(''); setWithCust(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!brandId)   { toast('브랜드를 선택해주세요', 'err'); return; }
     if (!productId) { toast('상품을 선택해주세요', 'err'); return; }
+    if (withCust) {
+      if (!custName.trim()) { toast('고객 이름을 입력해주세요', 'err'); return; }
+      if (custPhone.replace(/\D/g,'').length < 10) { toast('연락처를 올바르게 입력해주세요', 'err'); return; }
+    }
     setSaving(true);
-    const { error } = await supabase.from('sales').insert({
-      sold_at: soldAt,
-      store_name: profile.department,
-      branch_name: profile.branch,
-      brand_id: Number(brandId),
-      product_id: Number(productId),
-      quantity: Number(quantity),
-      price: Number(String(price).replace(/,/g, '')),
-      payment,
-      memo: memo.trim() || null,
-      created_by: profile.id,
-    });
-    if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else {
-      toast('판매 입력 완료', 'ok');
-      setProdId(''); setQty(1); setPrice(''); setMemo(''); setPayment('카드');
+    try {
+      let customerId = null;
+
+      // 1. 고객 동시 등록
+      if (withCust) {
+        const { data: custData, error: custErr } = await supabase.from('customers').insert({
+          joined_at: soldAt,
+          name: custName.trim(),
+          phone: custPhone,
+          store_name: profile.department,
+          branch_name: profile.branch,
+          created_by: profile.id,
+        }).select().single();
+        if (custErr) throw custErr;
+        customerId = custData.id;
+      }
+
+      // 2. 판매 저장 (고객 연결)
+      const { error } = await supabase.from('sales').insert({
+        sold_at: soldAt,
+        store_name: profile.department,
+        branch_name: profile.branch,
+        brand_id: Number(brandId),
+        product_id: Number(productId),
+        quantity: Number(quantity),
+        price: Number(String(price).replace(/,/g, '')),
+        payment,
+        memo: memo.trim() || null,
+        created_by: profile.id,
+        customer_id: customerId,
+      });
+      if (error) throw error;
+
+      toast(withCust ? '판매 + 고객 등록 완료' : '판매 입력 완료', 'ok');
+      resetForm();
       fetchRecent();
+    } catch(err) {
+      toast('저장 실패: ' + err.message, 'err');
     }
     setSaving(false);
   };
@@ -1237,14 +1272,12 @@ function SalesInputPage({ profile }) {
           📍 {profile.department} · {profile.branch}
         </div>
         <form onSubmit={handleSubmit}>
+          {/* 판매 정보 */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:14, marginBottom:14 }}>
-            {/* 판매날짜 */}
             <div>
               <label style={labelStyle}>판매날짜</label>
-              <input type="date" value={soldAt} onChange={e => setSoldAt(e.target.value)}
-                style={inputStyle} required />
+              <input type="date" value={soldAt} onChange={e => setSoldAt(e.target.value)} style={inputStyle} required />
             </div>
-            {/* 브랜드 */}
             <div>
               <label style={labelStyle}>브랜드</label>
               <select value={brandId} onChange={e => setBrandId(e.target.value)} style={inputStyle} required>
@@ -1252,51 +1285,71 @@ function SalesInputPage({ profile }) {
                 {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
-            {/* 상품 */}
             <div>
               <label style={labelStyle}>상품</label>
-              <select value={productId} onChange={e => setProdId(e.target.value)} style={{...inputStyle, background: !brandId ? '#f0f0f0' : '#fff'}} required disabled={!brandId}>
+              <select value={productId} onChange={e => setProdId(e.target.value)}
+                style={{...inputStyle, background: !brandId ? '#f0f0f0' : '#fff'}} required disabled={!brandId}>
                 <option value="">-- 상품 선택 --</option>
                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
-            {/* 수량 */}
             <div>
               <label style={labelStyle}>수량</label>
-              <input type="number" min={1} value={quantity} onChange={e => setQty(e.target.value)}
-                style={inputStyle} required />
+              <input type="number" min={1} value={quantity} onChange={e => setQty(e.target.value)} style={inputStyle} required />
             </div>
-            {/* 판매가 */}
             <div>
               <label style={labelStyle}>판매가 (원)</label>
-              <input type="number" min={0} value={price} onChange={e => setPrice(e.target.value)}
-                style={inputStyle} placeholder="0" required />
+              <input type="number" min={0} value={price} onChange={e => setPrice(e.target.value)} style={inputStyle} placeholder="0" required />
             </div>
-            {/* 결제수단 */}
             <div>
               <label style={labelStyle}>결제수단</label>
               <div style={{ display:'flex', gap:6, height:38, alignItems:'center' }}>
                 {['카드','현금','기타'].map(p => (
                   <button key={p} type="button" onClick={() => setPayment(p)}
-                    style={{
-                      flex:1, height:36, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)',
+                    style={{ flex:1, height:36, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)',
                       borderColor: payment===p ? 'var(--accent)' : 'var(--border)',
                       background: payment===p ? '#fff3e0' : '#fafafa',
                       color: payment===p ? 'var(--accent)' : 'var(--text2)',
-                      fontWeight: payment===p ? 700 : 500, fontSize:12,
-                    }}>{p}</button>
+                      fontWeight: payment===p ? 700 : 500, fontSize:12 }}>{p}</button>
                 ))}
               </div>
             </div>
           </div>
-          {/* 메모 */}
-          <div style={{ marginBottom:16 }}>
+          <div style={{ marginBottom:14 }}>
             <label style={labelStyle}>메모 (선택)</label>
-            <input value={memo} onChange={e => setMemo(e.target.value)}
-              style={inputStyle} placeholder="특이사항 입력..." />
+            <input value={memo} onChange={e => setMemo(e.target.value)} style={inputStyle} placeholder="특이사항 입력..." />
           </div>
-          <button className="btn btn-p" type="submit" disabled={saving} style={{ width:'100%', justifyContent:'center', height:40 }}>
-            {saving ? <span className="spinner"/> : '✓ 판매 입력 저장'}
+
+          {/* 고객 동시 등록 토글 */}
+          <div style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginBottom:14 }}>
+            <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none' }}>
+              <input type="checkbox" checked={withCust} onChange={e => setWithCust(e.target.checked)}
+                style={{ width:16, height:16, accentColor:'var(--accent)' }} />
+              <span style={{ fontSize:13, fontWeight:600, color: withCust ? 'var(--accent)' : 'var(--text2)' }}>
+                🙋 구매 고객 동시 등록
+              </span>
+            </label>
+
+            {withCust && (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:12,
+                background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:14 }}>
+                <div>
+                  <label style={labelStyle}>고객 이름</label>
+                  <input value={custName} onChange={e => setCustName(e.target.value)}
+                    style={inputStyle} placeholder="홍길동" />
+                </div>
+                <div>
+                  <label style={labelStyle}>연락처</label>
+                  <input value={custPhone} onChange={e => setCustPhone(formatPhone(e.target.value))}
+                    style={inputStyle} placeholder="010-0000-0000" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button className="btn btn-p" type="submit" disabled={saving}
+            style={{ width:'100%', justifyContent:'center', height:40 }}>
+            {saving ? <span className="spinner"/> : withCust ? '✓ 판매 + 고객 저장' : '✓ 판매 입력 저장'}
           </button>
         </form>
       </div>
@@ -1310,12 +1363,12 @@ function SalesInputPage({ profile }) {
               <tr>
                 <th>판매일</th><th>브랜드</th><th>상품명</th>
                 <th className="r">수량</th><th className="r">판매가</th>
-                <th>결제</th><th>메모</th><th></th>
+                <th>결제</th><th>고객</th><th>메모</th><th></th>
               </tr>
             </thead>
             <tbody>
               {recentSales.length === 0
-                ? <tr><td colSpan={8} className="empty">입력된 판매 내역이 없습니다</td></tr>
+                ? <tr><td colSpan={9} className="empty">입력된 판매 내역이 없습니다</td></tr>
                 : recentSales.map(s => (
                   <tr key={s.id}>
                     <td className="mono">{s.sold_at}</td>
@@ -1324,6 +1377,7 @@ function SalesInputPage({ profile }) {
                     <td className="r">{s.quantity}</td>
                     <td className="r">{Number(s.price).toLocaleString()}원</td>
                     <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9'}}>{s.payment}</span></td>
+                    <td style={{fontSize:12}}>{s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}</td>
                     <td style={{fontSize:11,color:'var(--text2)'}}>{s.memo || '-'}</td>
                     <td><button className="btn-danger" onClick={() => handleDelete(s.id)}>삭제</button></td>
                   </tr>
@@ -1331,6 +1385,155 @@ function SalesInputPage({ profile }) {
               }
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 고객 조회 페이지 (본사/관리자)
+// ════════════════════════════════════════════════════════
+function CustomerLookupPage() {
+  const [search,    setSearch]   = useState('');
+  const [customers, setCustomers]= useState([]);
+  const [selected,  setSelected] = useState(null);
+  const [purchases, setPurchases]= useState([]);
+  const [loading,   setLoading]  = useState(false);
+  const [loadingP,  setLoadingP] = useState(false);
+
+  const fetchCustomers = useCallback(async () => {
+    if (!search.trim()) return;
+    setLoading(true);
+    const { data } = await supabase.from('customers')
+      .select('*, creator:profiles(name)')
+      .or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setCustomers(data || []);
+    setSelected(null); setPurchases([]);
+    setLoading(false);
+  }, [search]);
+
+  const fetchPurchases = async (customerId) => {
+    setLoadingP(true);
+    const { data } = await supabase.from('sales')
+      .select('*, brand:brands(name), product:products(name)')
+      .eq('customer_id', customerId)
+      .order('sold_at', { ascending: false });
+    setPurchases(data || []);
+    setLoadingP(false);
+  };
+
+  const handleSelect = (c) => {
+    setSelected(c);
+    fetchPurchases(c.id);
+  };
+
+  const totalAmt = useMemo(() => purchases.reduce((s,r) => s + r.price * r.quantity, 0), [purchases]);
+  const totalQty = useMemo(() => purchases.reduce((s,r) => s + r.quantity, 0), [purchases]);
+
+  return (
+    <div>
+      {/* 검색 */}
+      <div className="card">
+        <div className="card-label">고객 조회</div>
+        <div style={{ display:'flex', gap:8 }}>
+          <input className="finput" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="고객 이름 또는 연락처 검색"
+            style={{ flex:1, height:38 }}
+            onKeyDown={e => e.key==='Enter' && fetchCustomers()} />
+          <button className="btn btn-p" onClick={fetchCustomers} disabled={loading}>
+            {loading ? <span className="spinner"/> : '🔍 검색'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'340px 1fr', gap:16 }}>
+        {/* 고객 목록 */}
+        <div className="card" style={{ height:'fit-content' }}>
+          <div className="card-label">검색 결과 ({customers.length}명)</div>
+          {customers.length === 0
+            ? <div className="empty" style={{padding:24}}>검색 결과가 없습니다</div>
+            : customers.map(c => (
+              <div key={c.id} onClick={() => handleSelect(c)}
+                style={{
+                  padding:'10px 12px', borderRadius:'var(--radius)', cursor:'pointer', marginBottom:4,
+                  background: selected?.id===c.id ? '#fff8e1' : 'var(--bg3)',
+                  border: `1px solid ${selected?.id===c.id ? '#ffcc80' : 'transparent'}`,
+                }}>
+                <div style={{ fontWeight:600, fontSize:13 }}>{c.name}</div>
+                <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:2 }}>{c.phone}</div>
+                <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
+                  {c.store_name} · {c.branch_name} · 가입 {c.joined_at}
+                </div>
+                {c.creator && <div style={{ fontSize:10, color:'var(--text3)' }}>담당: {c.creator.name}</div>}
+              </div>
+            ))
+          }
+        </div>
+
+        {/* 구매 이력 */}
+        <div className="card">
+          {!selected ? (
+            <div className="empty">왼쪽에서 고객을 선택하면 구매 이력이 표시됩니다</div>
+          ) : (
+            <>
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:16, fontWeight:700 }}>{selected.name}</div>
+                <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:4 }}>
+                  {selected.phone} · {selected.store_name} {selected.branch_name} · 가입 {selected.joined_at}
+                </div>
+                <div style={{ display:'flex', gap:16, marginTop:10 }}>
+                  <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'8px 16px', textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>총 구매건수</div>
+                    <div style={{ fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>{purchases.length}</div>
+                  </div>
+                  <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'8px 16px', textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>총 구매수량</div>
+                    <div style={{ fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>{totalQty}</div>
+                  </div>
+                  <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'8px 16px', textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>총 구매금액</div>
+                    <div style={{ fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>{totalAmt.toLocaleString()}원</div>
+                  </div>
+                </div>
+              </div>
+              <div className="card-label">구매 이력</div>
+              {loadingP ? <div className="empty"><span className="spinner"/></div> : (
+                <div className="twrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>구매일</th><th>점포</th><th>지점</th>
+                        <th>브랜드</th><th>상품명</th>
+                        <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
+                        <th>결제</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {purchases.length === 0
+                        ? <tr><td colSpan={9} className="empty">구매 이력이 없습니다</td></tr>
+                        : purchases.map(p => (
+                          <tr key={p.id}>
+                            <td className="mono">{p.sold_at}</td>
+                            <td><span className="badge badge-dept">{p.store_name}</span></td>
+                            <td><span className="badge badge-store">{p.branch_name}</span></td>
+                            <td>{p.brand?.name || '-'}</td>
+                            <td>{p.product?.name || '-'}</td>
+                            <td className="r">{p.quantity}</td>
+                            <td className="r">{Number(p.price).toLocaleString()}</td>
+                            <td className="r" style={{fontWeight:600}}>{(p.price*p.quantity).toLocaleString()}</td>
+                            <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>{p.payment}</span></td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1655,9 +1858,10 @@ function BrandMgmtPage() {
 }
 
 const MENUS = [
-  { key: 'upload',  icon: '📊', label: '안전재고 현황' },
-  { key: 'history', icon: '🗂️', label: '업로드 이력' },
-  { key: 'sales_list', icon: '📋', label: '판매내역 조회' },
+  { key: 'upload',          icon: '📊', label: '안전재고 현황' },
+  { key: 'history',         icon: '🗂️', label: '업로드 이력' },
+  { key: 'sales_list',      icon: '📋', label: '판매내역 조회' },
+  { key: 'customer_lookup', icon: '🔍', label: '고객 조회' },
 ];
 const MANAGER_MENUS = [
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
@@ -1789,13 +1993,14 @@ export default function App() {
   const canSeeMain = isAdmin || isHQ;
 
   const PAGE_TITLES = {
-    upload:         '안전재고 현황',
-    history:        '업로드 이력',
-    sales_list:     '판매내역 조회',
-    sales_input:    '판매 입력',
-    customer_input: '고객 입력',
-    admin:          '사용자 관리',
-    brand_mgmt:     '브랜드/상품 관리',
+    upload:          '안전재고 현황',
+    history:         '업로드 이력',
+    sales_list:      '판매내역 조회',
+    customer_lookup: '고객 조회',
+    sales_input:     '판매 입력',
+    customer_input:  '고객 입력',
+    admin:           '사용자 관리',
+    brand_mgmt:      '브랜드/상품 관리',
   };
 
   if (authLoading) {
@@ -1846,6 +2051,7 @@ export default function App() {
             {page === 'sales_input'    && (isManager || isAdmin) && <SalesInputPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin) && <CustomerInputPage profile={profile}/>}
             {page === 'sales_list'     && canSeeMain && <SalesListPage/>}
+            {page === 'customer_lookup'&& canSeeMain && <CustomerLookupPage/>}
           </div>
         </div>
       </div>
