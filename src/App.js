@@ -2851,10 +2851,13 @@ function SafetyCheckPage({ profile }) {
 function ManagerMgmtPage() {
   const [managers,  setManagers]  = useState([]);
   const [loading,   setLoading]   = useState(true);
-  const [editing,   setEditing]   = useState(null); // 수정 중인 매니저 id
+  const [editing,   setEditing]   = useState(null);
   const [editData,  setEditData]  = useState({});
   const [fStore,    setFStore]    = useState('');
   const [fBranch,   setFBranch]   = useState('');
+  const [qrManager, setQrManager] = useState(null); // QR 팝업 대상
+
+  const baseUrl = `${window.location.origin}${window.location.pathname}`;
 
   const fetchManagers = useCallback(async () => {
     setLoading(true);
@@ -2907,10 +2910,10 @@ function ManagerMgmtPage() {
         {loading ? <div className="empty"><span className="spinner"/></div> : (
           <div className="twrap">
             <table>
-              <thead><tr><th>이름</th><th>이메일</th><th>점포명</th><th>지점명</th><th>가입일</th><th>수정</th></tr></thead>
+              <thead><tr><th>이름</th><th>이메일</th><th>점포명</th><th>지점명</th><th>가입일</th><th>QR</th><th>수정</th></tr></thead>
               <tbody>
                 {filtered.length === 0
-                  ? <tr><td colSpan={6} className="empty">매니저가 없습니다</td></tr>
+                  ? <tr><td colSpan={7} className="empty">매니저가 없습니다</td></tr>
                   : filtered.map(m => (
                     <tr key={m.id}>
                       <td>
@@ -2934,6 +2937,11 @@ function ManagerMgmtPage() {
                       </td>
                       <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{new Date(m.created_at).toLocaleDateString('ko-KR')}</td>
                       <td>
+                        <button className="btn btn-s" style={{padding:'4px 10px', fontSize:11}} onClick={() => setQrManager(m)}>
+                          📱 QR
+                        </button>
+                      </td>
+                      <td>
                         {editing===m.id
                           ? <div style={{display:'flex', gap:4}}>
                               <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}} onClick={() => saveEdit(m.id)}>저장</button>
@@ -2948,6 +2956,37 @@ function ManagerMgmtPage() {
               </tbody>
             </table>
           </div>
+
+      {/* QR 팝업 */}
+      {qrManager && (() => {
+        const joinUrl = `${baseUrl}?m=${qrManager.id}`;
+        const qrImg   = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(joinUrl)}&margin=10`;
+        return (
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={() => setQrManager(null)}>
+            <div style={{background:'#fff',borderRadius:16,padding:'32px 36px',maxWidth:340,width:'100%',textAlign:'center',boxShadow:'0 8px 40px rgba(0,0,0,0.18)'}} onClick={e => e.stopPropagation()}>
+              <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>{qrManager.name} 매니저</div>
+              <div style={{fontSize:12,color:'#888',marginBottom:20}}>{qrManager.department} · {qrManager.branch}</div>
+              <img src={qrImg} alt="QR코드" style={{width:220,height:220,borderRadius:8,border:'1px solid #eee'}}/>
+              <div style={{marginTop:16,fontSize:11,color:'#aaa',wordBreak:'break-all',lineHeight:1.6}}>{joinUrl}</div>
+              <div style={{display:'flex',gap:8,marginTop:20}}>
+                <button className="btn btn-p" style={{flex:1,justifyContent:'center'}}
+                  onClick={() => { navigator.clipboard?.writeText(joinUrl); toast('URL 복사됨', 'ok'); }}>
+                  🔗 URL 복사
+                </button>
+                <button className="btn btn-p" style={{flex:1,justifyContent:'center'}}
+                  onClick={() => {
+                    const w = window.open('');
+                    w.document.write(`<html><body style="text-align:center;padding:40px;font-family:sans-serif"><h2>${qrManager.name} 매니저 회원가입 QR</h2><p>${qrManager.department} · ${qrManager.branch}</p><img src="${qrImg}" style="width:300px"/><p style="font-size:12px;color:#999">${joinUrl}</p></body></html>`);
+                    w.print();
+                  }}>
+                  🖨️ 인쇄
+                </button>
+              </div>
+              <button className="btn btn-s" style={{width:'100%',marginTop:8,justifyContent:'center'}} onClick={() => setQrManager(null)}>닫기</button>
+            </div>
+          </div>
+        );
+      })()}
         )}
       </div>
     </div>
@@ -3719,6 +3758,16 @@ function Sidebar({ page, setPage, profile, onLogout }) {
                 <span className="sidebar-item-icon">{m.icon}</span>{m.label}
               </button>
             ))}
+            {isManager && (
+              <button className="sidebar-item" onClick={() => {
+                const url = `${window.location.origin}${window.location.pathname}?m=${profile.id}`;
+                const qr  = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(url)}&margin=10`;
+                const w = window.open('');
+                w.document.write(`<html><head><title>내 QR코드</title></head><body style="text-align:center;padding:40px;font-family:sans-serif"><h2>${profile.name} 매니저 QR코드</h2><p style="color:#888">${profile.department} · ${profile.branch}</p><img src="${qr}" style="width:260px;margin:16px 0"/><p style="font-size:11px;color:#bbb">${url}</p><script>window.onload=()=>window.print()<\/script></body></html>`);
+              }}>
+                <span className="sidebar-item-icon">📱</span>내 QR 코드
+              </button>
+            )}
           </>
         )}
         {/* 관리자 메뉴 */}
@@ -3762,10 +3811,147 @@ function Sidebar({ page, setPage, profile, onLogout }) {
 }
 
 // ════════════════════════════════════════════════════════
+// 공개 회원가입 페이지 (QR 스캔 후 접근, 비로그인)
+// URL: ?m=매니저UUID
+// ════════════════════════════════════════════════════════
+function JoinPage({ managerId }) {
+  const [manager,     setManager]     = useState(null);
+  const [loadingMgr,  setLoadingMgr]  = useState(true);
+  const [name,        setName]        = useState('');
+  const [phone,       setPhone]       = useState('');
+  const [smsConsent,  setSmsConsent]  = useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [done,        setDone]        = useState(false);
+
+  useEffect(() => {
+    supabase.from('profiles').select('id,name,department,branch')
+      .eq('id', managerId).eq('job_title','매니저').eq('approved',true)
+      .single()
+      .then(({ data }) => { setManager(data); setLoadingMgr(false); });
+  }, [managerId]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const cleaned = phone.replace(/\D/g,'');
+    if (cleaned.length < 10) { alert('연락처를 올바르게 입력해주세요'); return; }
+    setSaving(true);
+    const { error } = await supabase.from('customers').insert({
+      joined_at: new Date().toISOString().slice(0,10),
+      name: name.trim(),
+      phone: phone,
+      store_name: manager.department,
+      branch_name: manager.branch,
+      manager_name: manager.name,
+      sms_consent: smsConsent,
+      sms_consent_at: smsConsent ? new Date().toISOString() : null,
+    });
+    if (error) { alert('오류가 발생했습니다. 다시 시도해주세요.'); setSaving(false); return; }
+    setDone(true);
+    setSaving(false);
+  };
+
+  if (loadingMgr) return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#fff9f0'}}>
+      <span className="spinner"/>
+    </div>
+  );
+
+  if (!manager) return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#fff9f0',flexDirection:'column',gap:12}}>
+      <div style={{fontSize:40}}>⚠️</div>
+      <div style={{fontSize:16,fontWeight:700,color:'#333'}}>유효하지 않은 링크입니다</div>
+      <div style={{fontSize:13,color:'#888'}}>담당 매니저에게 문의해주세요</div>
+    </div>
+  );
+
+  if (done) return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#fff9f0',flexDirection:'column',gap:16,padding:24}}>
+      <div style={{fontSize:56}}>🎉</div>
+      <div style={{fontSize:20,fontWeight:700,color:'#333',textAlign:'center'}}>회원가입이 완료됐습니다!</div>
+      <div style={{fontSize:14,color:'#666',textAlign:'center',lineHeight:1.8}}>
+        <strong>{manager.department} {manager.branch}</strong><br/>
+        담당 매니저: <strong>{manager.name}</strong>
+      </div>
+      {smsConsent && (
+        <div style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:10,padding:'10px 18px',fontSize:12,color:'#6d4c41',textAlign:'center'}}>
+          📱 광고성 문자 수신에 동의해주셔서 감사합니다
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{minHeight:'100vh',background:'#fff9f0',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div style={{width:'100%',maxWidth:420,background:'#fff',borderRadius:16,boxShadow:'0 4px 24px rgba(0,0,0,0.10)',overflow:'hidden'}}>
+        {/* 헤더 */}
+        <div style={{background:'var(--sidebar)',padding:'28px 28px 20px',textAlign:'center'}}>
+          <div style={{fontSize:32,marginBottom:8}}>🏬</div>
+          <div style={{fontSize:18,fontWeight:700,color:'var(--sidebar-text)'}}>회원 등록</div>
+          <div style={{fontSize:12,color:'rgba(0,0,0,0.5)',marginTop:6}}>
+            {manager.department} · {manager.branch}
+          </div>
+        </div>
+
+        {/* 폼 */}
+        <div style={{padding:'28px 28px 32px'}}>
+          <form onSubmit={handleSubmit}>
+            <div style={{marginBottom:18}}>
+              <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>이름</label>
+              <input value={name} onChange={e => setName(e.target.value)}
+                style={{width:'100%',height:50,padding:'0 16px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:16,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+                placeholder="홍길동" required />
+            </div>
+            <div style={{marginBottom:24}}>
+              <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>연락처</label>
+              <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
+                style={{width:'100%',height:50,padding:'0 16px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:16,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+                placeholder="010-0000-0000" inputMode="numeric" required />
+            </div>
+
+            {/* SMS 동의 */}
+            <div style={{background:'#f8f9fa',borderRadius:12,padding:'16px',marginBottom:24}}>
+              <label style={{display:'flex',alignItems:'flex-start',gap:12,cursor:'pointer'}}>
+                <input type="checkbox" checked={smsConsent} onChange={e => setSmsConsent(e.target.checked)}
+                  style={{width:20,height:20,marginTop:2,accentColor:'var(--accent)',flexShrink:0}}/>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color: smsConsent?'var(--accent)':'#555',marginBottom:4}}>
+                    광고성 문자 수신 동의 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택)</span>
+                  </div>
+                  <div style={{fontSize:12,color:'#888',lineHeight:1.6}}>
+                    이벤트·프로모션·신상품 안내 등 마케팅 목적의 문자메시지 수신에 동의합니다. 동의는 언제든지 철회하실 수 있습니다.
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <button type="submit" disabled={saving}
+              style={{width:'100%',height:52,background:'var(--accent)',color:'#fff',border:'none',borderRadius:12,fontSize:16,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+              {saving ? <span className="spinner"/> : '✓ 회원 등록 완료'}
+            </button>
+          </form>
+          <div style={{marginTop:14,fontSize:11,color:'#bbb',textAlign:'center',lineHeight:1.7}}>
+            담당 매니저: {manager.name}<br/>
+            입력하신 정보는 회원 관리 목적으로만 사용됩니다
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
 // MAIN APP
 // ════════════════════════════════════════════════════════
 export default function App() {
   useStyle(GLOBAL_CSS);
+
+  // QR 가입 페이지 감지 (?m=매니저ID)
+  const joinManagerId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('m');
+  }, []);
+
+  if (joinManagerId) return <><Toasts/><JoinPage managerId={joinManagerId}/></>;
 
   const [session, setSession]         = useState(null);
   const [profile, setProfile]         = useState(null);
