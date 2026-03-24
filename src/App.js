@@ -86,6 +86,12 @@ const GLOBAL_CSS = `
   .sidebar-item:hover { background: rgba(0,0,0,0.12); }
   .sidebar-item.on { background: rgba(0,0,0,0.18); font-weight: 700; }
   .sidebar-item-icon { font-size: 15px; flex-shrink: 0; }
+  .sidebar-sub { display: flex; align-items: center; gap: 9px; padding: 7px 10px 7px 34px; border-radius: 6px; cursor: pointer; transition: background 120ms; font-size: 12px; font-weight: 500; color: rgba(0,0,0,0.6); border: none; background: none; width: 100%; text-align: left; }
+  .sidebar-sub:hover { background: rgba(0,0,0,0.08); }
+  .sidebar-sub.on { background: rgba(0,0,0,0.12); font-weight: 700; color: rgba(0,0,0,0.85); }
+  .sidebar-sub-icon { font-size: 12px; }
+  .sidebar-chevron { margin-left: auto; font-size: 10px; transition: transform 150ms; color: rgba(0,0,0,0.4); }
+  .sidebar-chevron.open { transform: rotate(180deg); }
   .sidebar-bottom { padding: 12px 8px; border-top: 1px solid rgba(0,0,0,0.15); }
   .sidebar-user { padding: 8px 10px; font-size: 11px; color: rgba(0,0,0,0.7); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sidebar-logout { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: rgba(0,0,0,0.7); background: none; border: none; width: 100%; transition: background 120ms; }
@@ -1927,104 +1933,207 @@ function SalesListPage() {
 }
 
 // ════════════════════════════════════════════════════════
-// 브랜드/상품 관리 (관리자)
+// 상품관리 페이지
 // ════════════════════════════════════════════════════════
-function BrandMgmtPage() {
-  const [brands,    setBrands]   = useState([]);
-  const [products,  setProducts] = useState([]);
-  const [selBrand,  setSelBrand] = useState(null);
-  const [newBrand,  setNewBrand] = useState('');
-  const [newProd,   setNewProd]  = useState('');
-  const [newPrice,  setNewPrice] = useState('');
+function ProductMgmtPage({ subPage }) {
+  // 판매상품 현황
+  const [products, setProducts] = useState([]);
+  const [brands,   setBrands]   = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  // 상품추가 폼
+  const [selBrand,  setSelBrand]  = useState(null);
+  const [newBrand,  setNewBrand]  = useState('');
+  const [newProd,   setNewProd]   = useState('');
+  const [newOption, setNewOption] = useState('');
+  const [newPrice,  setNewPrice]  = useState('');
+  const [dragging,  setDrag]      = useState(false);
+  const fileRef = useRef();
 
-  const fetchBrands = useCallback(async () => {
-    const { data } = await supabase.from('brands').select('*').order('name');
-    setBrands(data || []);
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    const [{ data: br }, { data: pr }] = await Promise.all([
+      supabase.from('brands').select('*').order('name'),
+      supabase.from('products').select('*, brand:brands(name)').order('name'),
+    ]);
+    setBrands(br || []);
+    setProducts(pr || []);
+    setLoading(false);
   }, []);
 
-  const fetchProducts = useCallback(async (brandId) => {
-    if (!brandId) return;
-    const { data } = await supabase.from('products').select('*').eq('brand_id', brandId).order('name');
-    setProducts(data || []);
-  }, []);
-
-  useEffect(() => { fetchBrands(); }, [fetchBrands]);
-  useEffect(() => { if (selBrand) fetchProducts(selBrand.id); }, [selBrand, fetchProducts]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const addBrand = async () => {
     if (!newBrand.trim()) return;
     const { error } = await supabase.from('brands').insert({ name: newBrand.trim() });
     if (error) toast(error.message, 'err');
-    else { toast('브랜드 추가 완료', 'ok'); setNewBrand(''); fetchBrands(); }
-  };
-
-  const deleteBrand = async (id) => {
-    if (!window.confirm('브랜드와 해당 상품이 모두 삭제됩니다. 계속하시겠습니까?')) return;
-    const { error } = await supabase.from('brands').delete().eq('id', id);
-    if (error) toast(error.message, 'err');
-    else { toast('삭제 완료', 'inf'); fetchBrands(); if (selBrand?.id === id) { setSelBrand(null); setProducts([]); } }
+    else { toast('브랜드 추가 완료', 'ok'); setNewBrand(''); fetchAll(); }
   };
 
   const addProduct = async () => {
-    if (!newProd.trim() || !selBrand) return;
-    const { error } = await supabase.from('products').insert({ brand_id: selBrand.id, name: newProd.trim(), price: Number(newPrice) || 0 });
+    if (!selBrand || !newProd.trim()) { toast('브랜드와 상품명을 입력해주세요', 'err'); return; }
+    const { error } = await supabase.from('products').insert({
+      brand_id: selBrand.id, name: newProd.trim(),
+      price: Number(newPrice) || 0,
+    });
     if (error) toast(error.message, 'err');
-    else { toast('상품 추가 완료', 'ok'); setNewProd(''); setNewPrice(''); fetchProducts(selBrand.id); }
+    else { toast('상품 추가 완료', 'ok'); setNewProd(''); setNewOption(''); setNewPrice(''); fetchAll(); }
   };
 
   const deleteProduct = async (id) => {
     if (!window.confirm('상품을 삭제하시겠습니까?')) return;
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) toast(error.message, 'err');
-    else { toast('삭제 완료', 'inf'); fetchProducts(selBrand.id); }
+    else { toast('삭제 완료', 'inf'); fetchAll(); }
+  };
+
+  const deleteBrand = async (id) => {
+    if (!window.confirm('브랜드와 해당 상품이 모두 삭제됩니다. 계속하시겠습니까?')) return;
+    const { error } = await supabase.from('brands').delete().eq('id', id);
+    if (error) toast(error.message, 'err');
+    else { toast('삭제 완료', 'inf'); if (selBrand?.id===id) setSelBrand(null); fetchAll(); }
+  };
+
+  const handleFile = (file) => {
+    if (!file) return;
+    if (!file.name.match(/\.(xls|xlsx)$/i)) { toast('xls, xlsx 파일만 지원합니다', 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        toast(`${rows.length}행 감지됨 — 순차 저장 중...`, 'inf');
+        let cnt = 0;
+        for (const row of rows) {
+          const brandName = String(row['브랜드명'] || row['브랜드'] || '').trim();
+          const prodName  = String(row['상품명'] || '').trim();
+          const price     = Number(row['판매가'] || row['price'] || 0);
+          if (!brandName || !prodName) continue;
+          let { data: br } = await supabase.from('brands').select('id').eq('name', brandName).single();
+          if (!br) {
+            const { data: newBr } = await supabase.from('brands').insert({ name: brandName }).select().single();
+            br = newBr;
+          }
+          if (br) { await supabase.from('products').insert({ brand_id: br.id, name: prodName, price }); cnt++; }
+        }
+        toast(`${cnt}개 상품 업로드 완료`, 'ok'); fetchAll();
+      } catch(err) { toast('파싱 실패: ' + err.message, 'err'); }
+    };
+    reader.readAsBinaryString(file);
   };
 
   const inputStyle = { height:34, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontFamily:'var(--sans)', outline:'none' };
+  const filteredProducts = selBrand ? products.filter(p => p.brand_id === selBrand.id) : products;
 
-  return (
-    <div style={{ display:'grid', gridTemplateColumns:'300px 1fr', gap:16 }}>
-      {/* 브랜드 목록 */}
-      <div className="card" style={{ height:'fit-content' }}>
-        <div className="card-label">브랜드</div>
-        <div style={{ display:'flex', gap:6, marginBottom:14 }}>
-          <input value={newBrand} onChange={e => setNewBrand(e.target.value)}
-            style={{...inputStyle, flex:1}} placeholder="새 브랜드명" onKeyDown={e => e.key==='Enter' && addBrand()} />
-          <button className="btn btn-p" onClick={addBrand}>추가</button>
-        </div>
-        {brands.map(b => (
-          <div key={b.id} onClick={() => setSelBrand(b)}
-            style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 10px', borderRadius:'var(--radius)', cursor:'pointer', background: selBrand?.id===b.id ? '#fff3e0' : 'transparent', marginBottom:2 }}>
-            <span style={{ fontWeight: selBrand?.id===b.id ? 700 : 400, color: selBrand?.id===b.id ? 'var(--accent)' : 'var(--text)' }}>
-              {b.name}
-            </span>
-            <button className="btn-danger" style={{ padding:'2px 8px', fontSize:11 }} onClick={e => { e.stopPropagation(); deleteBrand(b.id); }}>삭제</button>
-          </div>
-        ))}
-        {brands.length === 0 && <div className="empty" style={{padding:20}}>브랜드 없음</div>}
-      </div>
-
-      {/* 상품 목록 */}
-      <div className="card">
-        <div className="card-label">{selBrand ? `${selBrand.name} 상품` : '브랜드를 선택하세요'}</div>
-        {selBrand && (
-          <>
-            <div style={{ display:'flex', gap:6, marginBottom:14 }}>
-              <input value={newProd} onChange={e => setNewProd(e.target.value)}
-                style={{...inputStyle, flex:2}} placeholder="상품명" onKeyDown={e => e.key==='Enter' && addProduct()} />
-              <input value={newPrice} onChange={e => setNewPrice(e.target.value)}
-                style={{...inputStyle, width:120}} placeholder="기본가격" type="number" />
-              <button className="btn btn-p" onClick={addProduct}>추가</button>
+  if (subPage === 'product_add') {
+    return (
+      <div>
+        <div style={{display:'grid', gridTemplateColumns:'280px 1fr', gap:16}}>
+          {/* 브랜드 패널 */}
+          <div className="card" style={{height:'fit-content'}}>
+            <div className="card-label">브랜드</div>
+            <div style={{display:'flex', gap:6, marginBottom:12}}>
+              <input value={newBrand} onChange={e => setNewBrand(e.target.value)}
+                style={{...inputStyle, flex:1}} placeholder="새 브랜드명"
+                onKeyDown={e => e.key==='Enter' && addBrand()} />
+              <button className="btn btn-p" onClick={addBrand}>추가</button>
             </div>
+            {brands.map(b => (
+              <div key={b.id} onClick={() => setSelBrand(b)}
+                style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 10px', borderRadius:'var(--radius)', cursor:'pointer', background: selBrand?.id===b.id ? '#fff3e0' : 'transparent', marginBottom:2}}>
+                <span style={{fontWeight: selBrand?.id===b.id ? 700 : 400, color: selBrand?.id===b.id ? 'var(--accent)' : 'var(--text)'}}>{b.name}</span>
+                <button className="btn-danger" style={{padding:'2px 8px', fontSize:11}} onClick={e => { e.stopPropagation(); deleteBrand(b.id); }}>삭제</button>
+              </div>
+            ))}
+            {brands.length === 0 && <div className="empty" style={{padding:16}}>브랜드 없음</div>}
+          </div>
+
+          <div>
+            {/* 상품 직접 입력 */}
+            <div className="card">
+              <div className="card-label">상품 직접 추가</div>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 120px auto', gap:8, marginBottom:14, alignItems:'end'}}>
+                <div>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>브랜드 선택</label>
+                  <select value={selBrand?.id||''} onChange={e => setSelBrand(brands.find(b=>b.id===Number(e.target.value))||null)}
+                    style={{...inputStyle, width:'100%'}}>
+                    <option value="">-- 선택 --</option>
+                    {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>상품명</label>
+                  <input value={newProd} onChange={e => setNewProd(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="상품명 입력"/>
+                </div>
+                <div>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>판매가</label>
+                  <input type="number" value={newPrice} onChange={e => setNewPrice(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="0"/>
+                </div>
+                <button className="btn btn-p" onClick={addProduct} style={{height:34}}>추가</button>
+              </div>
+            </div>
+
+            {/* 파일 업로드 */}
+            <div className="card">
+              <div className="card-label">파일 업로드로 일괄 추가</div>
+              <div className={`drop ${dragging?'over':''}`}
+                onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
+                onDrop={e=>{e.preventDefault();setDrag(false);handleFile(e.dataTransfer.files[0]);}}
+                onClick={()=>fileRef.current?.click()}>
+                <input ref={fileRef} type="file" accept=".xls,.xlsx" onClick={e=>e.stopPropagation()} onChange={e=>{handleFile(e.target.files[0]);e.target.value='';}}/>
+                <div className="drop-icon">📂</div>
+                <div className="drop-main"><strong>클릭</strong> 또는 <strong>드래그&드롭</strong></div>
+                <div className="drop-sub">컬럼: 브랜드명 / 상품명 / 판매가</div>
+              </div>
+              <div style={{marginTop:12, background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:12}}>
+                <div style={{fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:6}}>📋 파일 양식</div>
+                <table style={{fontSize:11, width:'100%', borderCollapse:'collapse'}}>
+                  <thead><tr><th style={{textAlign:'left', padding:'4px 8px', background:'#f0f0f0'}}>브랜드명</th><th style={{textAlign:'left', padding:'4px 8px', background:'#f0f0f0'}}>상품명</th><th style={{textAlign:'left', padding:'4px 8px', background:'#f0f0f0'}}>판매가</th></tr></thead>
+                  <tbody><tr><td style={{padding:'4px 8px'}}>팔레오</td><td style={{padding:'4px 8px'}}>팔레오_닥터스노트...</td><td style={{padding:'4px 8px'}}>50000</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 기본: 판매상품 현황
+  return (
+    <div>
+      <div style={{display:'grid', gridTemplateColumns:'240px 1fr', gap:16}}>
+        <div className="card" style={{height:'fit-content'}}>
+          <div className="card-label">브랜드</div>
+          <div onClick={() => setSelBrand(null)}
+            style={{padding:'8px 10px', borderRadius:'var(--radius)', cursor:'pointer', background:!selBrand?'#fff3e0':'transparent', fontWeight:!selBrand?700:400, marginBottom:4, fontSize:12}}>
+            전체 ({products.length}개)
+          </div>
+          {brands.map(b => {
+            const cnt = products.filter(p => p.brand_id===b.id).length;
+            return (
+              <div key={b.id} onClick={() => setSelBrand(b)}
+                style={{display:'flex', justifyContent:'space-between', padding:'8px 10px', borderRadius:'var(--radius)', cursor:'pointer', background:selBrand?.id===b.id?'#fff3e0':'transparent', marginBottom:2, fontSize:12}}>
+                <span style={{fontWeight:selBrand?.id===b.id?700:400, color:selBrand?.id===b.id?'var(--accent)':'var(--text)'}}>{b.name}</span>
+                <span style={{fontSize:11, color:'var(--text3)'}}>{cnt}개</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="card">
+          <div className="card-label">{selBrand ? selBrand.name : '전체'} 상품 현황 ({filteredProducts.length}개)</div>
+          {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>상품명</th><th className="r">기본가격</th><th></th></tr></thead>
+                <thead><tr><th>브랜드</th><th>상품명</th><th className="r">판매가</th><th></th></tr></thead>
                 <tbody>
-                  {products.length === 0
-                    ? <tr><td colSpan={3} className="empty">등록된 상품이 없습니다</td></tr>
-                    : products.map(p => (
+                  {filteredProducts.length === 0
+                    ? <tr><td colSpan={4} className="empty">등록된 상품이 없습니다</td></tr>
+                    : filteredProducts.map(p => (
                       <tr key={p.id}>
+                        <td><span className="badge badge-dept">{p.brand?.name}</span></td>
                         <td>{p.name}</td>
-                        <td className="r">{Number(p.price).toLocaleString()}원</td>
+                        <td className="r" style={{fontFamily:'var(--mono)',fontWeight:600,color:'var(--accent)'}}>{Number(p.price).toLocaleString()}원</td>
                         <td><button className="btn-danger" onClick={() => deleteProduct(p.id)}>삭제</button></td>
                       </tr>
                     ))
@@ -2032,9 +2141,285 @@ function BrandMgmtPage() {
                 </tbody>
               </table>
             </div>
-          </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 재고관리 페이지 (인라인 수정)
+// ════════════════════════════════════════════════════════
+function StockMgmtPage() {
+  const [stocks,   setStocks]   = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [editing,  setEditing]  = useState({}); // {id: qty}
+  const [fStore,   setFStore]   = useState('');
+  const [fBranch,  setFBranch]  = useState('');
+  const [tab,      setTab]      = useState('list');
+  // 직접 입력
+  const [brands,   setBrands]   = useState([]);
+  const [products, setProducts] = useState([]);
+  const [fBrand,   setFBrand]   = useState('');
+  const [fProduct, setFProduct] = useState('');
+  const [fSt,      setFSt]      = useState('');
+  const [fBr,      setFBr]      = useState('');
+  const [fQty,     setFQty]     = useState('');
+  const [saving,   setSaving]   = useState(false);
+  const fileRef = useRef();
+
+  const fetchStocks = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('stock_status')
+      .select('*, brand:brands(name), product:products(name)')
+      .order('updated_at', { ascending: false });
+    setStocks(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchStocks(); }, [fetchStocks]);
+  useEffect(() => {
+    supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || []));
+  }, []);
+  useEffect(() => {
+    if (!fBrand) { setProducts([]); setFProduct(''); return; }
+    supabase.from('products').select('*').eq('brand_id', fBrand).order('name').then(({ data }) => setProducts(data || []));
+    setFProduct('');
+  }, [fBrand]);
+
+  const stores  = useMemo(() => uniq(stocks.map(s => s.store_name)), [stocks]);
+  const branches = useMemo(() => {
+    const src = fStore ? stocks.filter(s => s.store_name===fStore) : stocks;
+    return uniq(src.map(s => s.branch_name));
+  }, [stocks, fStore]);
+
+  const filtered = useMemo(() => {
+    let r = stocks;
+    if (fStore)  r = r.filter(s => s.store_name===fStore);
+    if (fBranch) r = r.filter(s => s.branch_name===fBranch);
+    return r;
+  }, [stocks, fStore, fBranch]);
+
+  const saveQty = async (id, qty) => {
+    const { error } = await supabase.from('stock_status').update({ quantity: Number(qty), updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) toast(error.message, 'err');
+    else { toast('수량 저장 완료', 'ok'); setEditing(p => { const n={...p}; delete n[id]; return n; }); fetchStocks(); }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!fBrand || !fProduct || !fSt || !fBr || fQty==='') { toast('모든 항목을 입력해주세요', 'err'); return; }
+    setSaving(true);
+    const { error } = await supabase.from('stock_status').upsert({
+      brand_id: Number(fBrand), product_id: Number(fProduct),
+      store_name: fSt, branch_name: fBr, quantity: Number(fQty),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'brand_id,product_id,store_name,branch_name' });
+    if (error) toast(error.message, 'err');
+    else { toast('재고 저장 완료', 'ok'); setFQty(''); fetchStocks(); setTab('list'); }
+    setSaving(false);
+  };
+
+  const inputStyle = { width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontFamily:'var(--sans)', outline:'none' };
+  const labelStyle = { display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5 };
+
+  return (
+    <div>
+      <div className="tabs">
+        <button className={`tab ${tab==='list'?'on':''}`} onClick={() => setTab('list')}>재고 현황</button>
+        <button className={`tab ${tab==='input'?'on':''}`} onClick={() => setTab('input')}>직접 입력</button>
+      </div>
+
+      {tab === 'list' && (
+        <div className="card" style={{padding:'16px 20px'}}>
+          <div className="fbar">
+            <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
+              <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={!fStore} style={{background:!fStore?'#f0f0f0':'#fff'}}>
+              <option value="">전체 지점</option>{branches.map(b => <option key={b}>{b}</option>)}
+            </select>
+            {(fStore||fBranch) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); }}>✕ 초기화</button>}
+            <div className="fbar-right"><span className="fresult"><b>{filtered.length}</b>개 항목</span></div>
+          </div>
+          {loading ? <div className="empty"><span className="spinner"/></div> : (
+            <div className="twrap">
+              <table>
+                <thead><tr><th>브랜드</th><th>상품명</th><th>점포</th><th>지점</th><th className="r">재고수량</th><th>수정</th><th>최종수정일</th></tr></thead>
+                <tbody>
+                  {filtered.length === 0
+                    ? <tr><td colSpan={7} className="empty">재고 데이터가 없습니다</td></tr>
+                    : filtered.map(s => (
+                      <tr key={s.id}>
+                        <td>{s.brand?.name||'-'}</td>
+                        <td style={{fontSize:12}}>{s.product?.name||'-'}</td>
+                        <td><span className="badge badge-dept">{s.store_name}</span></td>
+                        <td><span className="badge badge-store">{s.branch_name}</span></td>
+                        <td className="r">
+                          {editing[s.id] !== undefined ? (
+                            <input type="number" value={editing[s.id]}
+                              onChange={e => setEditing(p => ({...p, [s.id]: e.target.value}))}
+                              style={{width:80, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:4, fontSize:13, textAlign:'right'}}
+                              autoFocus/>
+                          ) : (
+                            <span style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{s.quantity?.toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td>
+                          {editing[s.id] !== undefined ? (
+                            <div style={{display:'flex', gap:4}}>
+                              <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}} onClick={() => saveQty(s.id, editing[s.id])}>저장</button>
+                              <button className="btn btn-s" style={{padding:'3px 8px', fontSize:11}} onClick={() => setEditing(p => { const n={...p}; delete n[s.id]; return n; })}>취소</button>
+                            </div>
+                          ) : (
+                            <button className="btn btn-s" style={{padding:'3px 8px', fontSize:11}} onClick={() => setEditing(p => ({...p, [s.id]: s.quantity}))}>수정</button>
+                          )}
+                        </td>
+                        <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{s.updated_at ? new Date(s.updated_at).toLocaleDateString('ko-KR') : '-'}</td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'input' && (
+        <div className="card">
+          <div className="card-label">재고 직접 입력</div>
+          <form onSubmit={handleSave}>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px,1fr))', gap:14, marginBottom:14}}>
+              <div><label style={labelStyle}>브랜드</label>
+                <select value={fBrand} onChange={e => setFBrand(e.target.value)} style={inputStyle} required>
+                  <option value="">-- 선택 --</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+              <div><label style={labelStyle}>상품</label>
+                <select value={fProduct} onChange={e => setFProduct(e.target.value)} style={{...inputStyle, background:!fBrand?'#f0f0f0':'#fff'}} required disabled={!fBrand}>
+                  <option value="">-- 선택 --</option>{products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div><label style={labelStyle}>점포명</label><input value={fSt} onChange={e => setFSt(e.target.value)} style={inputStyle} placeholder="롯데백화점" required/></div>
+              <div><label style={labelStyle}>지점명</label><input value={fBr} onChange={e => setFBr(e.target.value)} style={inputStyle} placeholder="건대스타시티점" required/></div>
+              <div><label style={labelStyle}>재고수량</label><input type="number" min={0} value={fQty} onChange={e => setFQty(e.target.value)} style={inputStyle} placeholder="0" required/></div>
+            </div>
+            <button className="btn btn-p" type="submit" disabled={saving} style={{width:'100%', justifyContent:'center', height:40}}>
+              {saving ? <span className="spinner"/> : '✓ 재고 저장'}
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 매니저관리 페이지
+// ════════════════════════════════════════════════════════
+function ManagerMgmtPage() {
+  const [managers,  setManagers]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [editing,   setEditing]   = useState(null); // 수정 중인 매니저 id
+  const [editData,  setEditData]  = useState({});
+  const [fStore,    setFStore]    = useState('');
+  const [fBranch,   setFBranch]   = useState('');
+
+  const fetchManagers = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('profiles')
+      .select('*')
+      .eq('job_title', '매니저')
+      .eq('approved', true)
+      .order('department');
+    setManagers(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchManagers(); }, [fetchManagers]);
+
+  const stores   = useMemo(() => uniq(managers.map(m => m.department)), [managers]);
+  const branches = useMemo(() => uniq((fStore ? managers.filter(m => m.department===fStore) : managers).map(m => m.branch)), [managers, fStore]);
+
+  const filtered = useMemo(() => {
+    let r = managers;
+    if (fStore)  r = r.filter(m => m.department===fStore);
+    if (fBranch) r = r.filter(m => m.branch===fBranch);
+    return r;
+  }, [managers, fStore, fBranch]);
+
+  const startEdit = (m) => { setEditing(m.id); setEditData({ name: m.name, department: m.department, branch: m.branch, email: m.email }); };
+
+  const saveEdit = async (id) => {
+    const { error } = await supabase.from('profiles').update({
+      name: editData.name, department: editData.department, branch: editData.branch,
+    }).eq('id', id);
+    if (error) toast(error.message, 'err');
+    else { toast('정보 수정 완료', 'ok'); setEditing(null); fetchManagers(); }
+  };
+
+  const iStyle = { height:32, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, background:'#fff', outline:'none' };
+
+  return (
+    <div>
+      <div className="card" style={{padding:'16px 20px'}}>
+        <div className="fbar">
+          <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
+            <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={!fStore} style={{background:!fStore?'#f0f0f0':'#fff'}}>
+            <option value="">전체 지점</option>{branches.map(b => <option key={b}>{b}</option>)}
+          </select>
+          {(fStore||fBranch) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); }}>✕ 초기화</button>}
+          <div className="fbar-right"><span className="fresult">매니저 <b>{filtered.length}</b>명</span></div>
+        </div>
+        {loading ? <div className="empty"><span className="spinner"/></div> : (
+          <div className="twrap">
+            <table>
+              <thead><tr><th>이름</th><th>이메일</th><th>점포명</th><th>지점명</th><th>가입일</th><th>수정</th></tr></thead>
+              <tbody>
+                {filtered.length === 0
+                  ? <tr><td colSpan={6} className="empty">매니저가 없습니다</td></tr>
+                  : filtered.map(m => (
+                    <tr key={m.id}>
+                      <td>
+                        {editing===m.id
+                          ? <input value={editData.name} onChange={e => setEditData(p=>({...p, name:e.target.value}))} style={{...iStyle, width:90}}/>
+                          : <strong>{m.name}</strong>
+                        }
+                      </td>
+                      <td className="mono" style={{fontSize:11}}>{m.email}</td>
+                      <td>
+                        {editing===m.id
+                          ? <input value={editData.department} onChange={e => setEditData(p=>({...p, department:e.target.value}))} style={{...iStyle, width:110}}/>
+                          : <span className="badge badge-dept">{m.department}</span>
+                        }
+                      </td>
+                      <td>
+                        {editing===m.id
+                          ? <input value={editData.branch} onChange={e => setEditData(p=>({...p, branch:e.target.value}))} style={{...iStyle, width:110}}/>
+                          : <span className="badge badge-store">{m.branch}</span>
+                        }
+                      </td>
+                      <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{new Date(m.created_at).toLocaleDateString('ko-KR')}</td>
+                      <td>
+                        {editing===m.id
+                          ? <div style={{display:'flex', gap:4}}>
+                              <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}} onClick={() => saveEdit(m.id)}>저장</button>
+                              <button className="btn btn-s" style={{padding:'3px 8px', fontSize:11}} onClick={() => setEditing(null)}>취소</button>
+                            </div>
+                          : <button className="btn btn-s" style={{padding:'4px 10px', fontSize:11}} onClick={() => startEdit(m)}>수정</button>
+                        }
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
         )}
-        {!selBrand && <div className="empty">왼쪽에서 브랜드를 클릭하세요</div>}
       </div>
     </div>
   );
@@ -2696,13 +3081,18 @@ function NoticePage({ profile }) {
   );
 }
 
+// 본사 메뉴 (드롭다운 포함)
 const HQ_MENUS = [
-  { key: 'brand_mgmt',      icon: '🏷️', label: '브랜드/상품 관리' },
-  { key: 'stock_status',    icon: '📦', label: '재고현황' },
-  { key: 'stock_safety',    icon: '🛡️', label: '안전재고 확인' },
-  { key: 'member_mgmt',     icon: '👥', label: '회원(고객)관리' },
-  { key: 'incentive',       icon: '💰', label: '인센티브 조회' },
-  { key: 'sales_view',      icon: '📋', label: '매출조회' },
+  { key: 'product_mgmt', icon: '🛍️', label: '상품관리', sub: [
+    { key: 'product_add', icon: '➕', label: '상품추가' },
+  ]},
+  { key: 'stock_mgmt',   icon: '📦', label: '재고관리' },
+  { key: 'stock_safety', icon: '🛡️', label: '안전재고 확인' },
+  { key: 'manager_mgmt', icon: '👔', label: '매니저관리', sub: [
+    { key: 'incentive', icon: '💰', label: '인센티브 조회' },
+  ]},
+  { key: 'member_mgmt',  icon: '👥', label: '회원(고객)관리' },
+  { key: 'sales_view',   icon: '📋', label: '매출조회' },
 ];
 const MANAGER_MENUS = [
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
@@ -2718,6 +3108,18 @@ function Sidebar({ page, setPage, profile, onLogout }) {
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
   const canSeeMain = isAdmin || isHQ;
+  const [expanded, setExpanded] = useState(() => {
+    // 현재 페이지가 서브메뉴면 부모 자동 펼침
+    const parentMap = { product_add:'product_mgmt', incentive:'manager_mgmt' };
+    return parentMap[page] ? [parentMap[page]] : [];
+  });
+
+  const toggleExpand = (key) => {
+    setExpanded(p => p.includes(key) ? p.filter(k => k!==key) : [...p, key]);
+  };
+
+  const isOn = (key) => page === key;
+  const parentKey = { product_add:'product_mgmt', incentive:'manager_mgmt' };
 
   return (
     <div className="sidebar">
@@ -2745,11 +3147,30 @@ function Sidebar({ page, setPage, profile, onLogout }) {
         {canSeeMain && (
           <>
             <div className="sidebar-section">본사</div>
-            {HQ_MENUS.map(m => (
-              <button key={m.key} className={`sidebar-item ${page===m.key?'on':''}`} onClick={() => setPage(m.key)}>
-                <span className="sidebar-item-icon">{m.icon}</span>{m.label}
-              </button>
-            ))}
+            {HQ_MENUS.map(m => {
+              const hasSub = m.sub && m.sub.length > 0;
+              const isOpen = expanded.includes(m.key);
+              const isActive = isOn(m.key) || (hasSub && m.sub.some(s => isOn(s.key)));
+              return (
+                <div key={m.key}>
+                  <button
+                    className={`sidebar-item ${isActive?'on':''}`}
+                    onClick={() => {
+                      if (hasSub) toggleExpand(m.key);
+                      setPage(m.key);
+                    }}>
+                    <span className="sidebar-item-icon">{m.icon}</span>
+                    {m.label}
+                    {hasSub && <span className={`sidebar-chevron ${isOpen?'open':''}`}>▼</span>}
+                  </button>
+                  {hasSub && isOpen && m.sub.map(s => (
+                    <button key={s.key} className={`sidebar-sub ${isOn(s.key)?'on':''}`} onClick={() => setPage(s.key)}>
+                      <span className="sidebar-sub-icon">{s.icon}</span>{s.label}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
           </>
         )}
         {/* 매장 메뉴 */}
@@ -2774,7 +3195,7 @@ function Sidebar({ page, setPage, profile, onLogout }) {
             ))}
           </>
         )}
-        {/* 공지사항 - 담당자도 열람 가능 */}
+        {/* 공지사항 - 담당자도 열람 */}
         {isHQ && (
           <>
             <div className="sidebar-section" style={{marginTop:8}}>공지</div>
@@ -2857,11 +3278,13 @@ export default function App() {
 
   const PAGE_TITLES = {
     home:           `${new Date().getFullYear()}년 ${String(new Date().getMonth()+1).padStart(2,'0')}월 대시보드`,
-    brand_mgmt:     '브랜드/상품 관리',
-    stock_status:   '재고현황',
+    product_mgmt:   '상품관리',
+    product_add:    '상품추가',
+    stock_mgmt:     '재고관리',
     stock_safety:   '안전재고 확인',
-    member_mgmt:    '회원(고객)관리',
+    manager_mgmt:   '매니저관리',
     incentive:      '인센티브 조회',
+    member_mgmt:    '회원(고객)관리',
     sales_view:     '매출조회',
     sales_input:    '판매 입력',
     customer_input: '회원 등록',
@@ -2886,8 +3309,9 @@ export default function App() {
           </div>
           <div className="content-body">
             {page === 'home'           && <HomePage/>}
-            {page === 'brand_mgmt'     && canSeeMain && <BrandMgmtPage/>}
-            {page === 'stock_status'   && canSeeMain && <StockStatusPage/>}
+            {page === 'product_mgmt'   && canSeeMain && <ProductMgmtPage subPage={null}/>}
+            {page === 'product_add'    && canSeeMain && <ProductMgmtPage subPage="product_add"/>}
+            {page === 'stock_mgmt'     && canSeeMain && <StockMgmtPage/>}
             {page === 'stock_safety'   && canSeeMain && (
               <UploadPage
                 profile={profile}
@@ -2899,8 +3323,9 @@ export default function App() {
                 setFilename={setFilename}
               />
             )}
-            {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage/>}
+            {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage/>}
+            {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage/>}
             {page === 'sales_view'     && canSeeMain && <SalesListPage/>}
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
