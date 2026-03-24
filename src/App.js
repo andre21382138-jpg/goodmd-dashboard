@@ -3951,16 +3951,13 @@ export default function App() {
     return params.get('m');
   }, []);
 
-  if (joinManagerId) return <><Toasts/><JoinPage managerId={joinManagerId}/></>;
-
-  const [session, setSession]         = useState(null);
-  const [profile, setProfile]         = useState(null);
-  const [authLoading, setAL]          = useState(true);
-  const [page, setPage] = useState('home');
-
-  // 페이지 이동해도 유지되는 업로드 상태
-  const [parsed, setParsed]           = useState(null);
-  const [filename, setFilename]       = useState('');
+  // 모든 hooks는 조건부 return 전에 선언해야 함 (Rules of Hooks)
+  const [session, setSession]   = useState(null);
+  const [profile, setProfile]   = useState(null);
+  const [authLoading, setAL]    = useState(true);
+  const [page, setPage]         = useState('home');
+  const [parsed, setParsed]     = useState(null);
+  const [filename, setFilename] = useState('');
   const [activeUploadId, setActiveId] = useState(
     () => { const v = localStorage.getItem('gmd_active_id'); return v ? Number(v) : null; }
   );
@@ -3972,6 +3969,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (joinManagerId) return; // QR 가입 페이지면 인증 불필요
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) setAL(false);
@@ -3981,13 +3979,16 @@ export default function App() {
       if (!session) { setProfile(null); setAL(false); }
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [joinManagerId]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || joinManagerId) return;
     supabase.from('profiles').select('*').eq('id', session.user.id).single()
       .then(({ data }) => { setProfile(data); setAL(false); });
-  }, [session]);
+  }, [session, joinManagerId]);
+
+  // QR 가입 페이지면 여기서 렌더
+  if (joinManagerId) return <><Toasts/><JoinPage managerId={joinManagerId}/></>;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
