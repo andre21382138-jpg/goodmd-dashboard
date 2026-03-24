@@ -1346,7 +1346,7 @@ function SalesInputPage({ profile }) {
                     style={inputStyle} placeholder="010-0000-0000" />
                 </div>
                 <div>
-                  <label style={labelStyle}>담당 매니저 이름 <span style={{color:'var(--text3)',fontWeight:400}}>(인센티브 기준)</span></label>
+                  <label style={labelStyle}>담당 매니저 이름</label>
                   <input value={managerName} onChange={e => setManagerName(e.target.value)}
                     style={inputStyle} placeholder="매니저 이름 입력" />
                 </div>
