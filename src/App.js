@@ -3956,8 +3956,8 @@ function Sidebar({ page, setPage, profile, onLogout }) {
             ))}
           </>
         )}
-        {/* 공지사항 - 담당자도 열람 */}
-        {isHQ && (
+        {/* 공지사항 - 담당자/매니저 열람 */}
+        {(isHQ || isManager) && (
           <>
             <div className="sidebar-section" style={{marginTop:8}}>공지</div>
             <button className={`sidebar-item ${page==='notice'?'on':''}`} onClick={() => setPage('notice')}>
@@ -4234,7 +4234,7 @@ export default function App() {
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'my_members'     && (isManager || isAdmin || isHQ) && <MyMembersPage profile={profile}/>}
             {page === 'admin'          && isAdmin && <AdminTab/>}
-            {page === 'notice'         && (isAdmin || isHQ) && <NoticePage profile={profile}/>}
+            {page === 'notice'         && (isAdmin || isHQ || isManager) && <NoticePage profile={profile}/>}
           </div>
         </div>
       </div>
