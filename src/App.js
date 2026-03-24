@@ -3234,8 +3234,14 @@ function HomePage() {
   const year  = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const monthStart = `${year}-${month}-01`;
+  const toLocalDate = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  };
   const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().slice(0,10);
+  const yesterdayStr = toLocalDate(yesterday);
   const monthLabel = `${year}년 ${month}월`;
 
   const [summary,    setSummary]    = useState(null);
