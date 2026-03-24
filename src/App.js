@@ -2461,7 +2461,7 @@ function Sidebar({ page, setPage, profile, onLogout }) {
           </>
         )}
         {/* 매니저 메뉴 */}
-        {(isManager || isAdmin) && (
+        {(isManager || isAdmin || isHQ) && (
           <>
             <div className="sidebar-section" style={{marginTop: canSeeMain ? 8 : 0}}>매장</div>
             {MANAGER_MENUS.map(m => (
@@ -2472,14 +2472,17 @@ function Sidebar({ page, setPage, profile, onLogout }) {
           </>
         )}
         {/* 관리자 메뉴 */}
-        {isAdmin && (
+        {(isAdmin || isHQ) && (
           <>
             <div className="sidebar-section" style={{marginTop:8}}>관리자</div>
-            {ADMIN_MENUS.map(m => (
-              <button key={m.key} className={`sidebar-item ${page===m.key?'on':''}`} onClick={() => setPage(m.key)}>
-                <span className="sidebar-item-icon">{m.icon}</span>{m.label}
+            {isAdmin && (
+              <button className={`sidebar-item ${page==='admin'?'on':''}`} onClick={() => setPage('admin')}>
+                <span className="sidebar-item-icon">👥</span>사용자 관리
               </button>
-            ))}
+            )}
+            <button className={`sidebar-item ${page==='brand_mgmt'?'on':''}`} onClick={() => setPage('brand_mgmt')}>
+              <span className="sidebar-item-icon">🏷️</span>브랜드/상품 관리
+            </button>
           </>
         )}
         {/* 접근 가능한 메뉴 없음 */}
@@ -2612,10 +2615,10 @@ export default function App() {
                 setFilename={setFilename}
               />
             )}
-            {page === 'admin'          && <AdminTab/>}
-            {page === 'brand_mgmt'     && isAdmin && <BrandMgmtPage/>}
-            {page === 'sales_input'    && (isManager || isAdmin) && <SalesInputPage profile={profile}/>}
-            {page === 'customer_input' && (isManager || isAdmin) && <CustomerInputPage profile={profile}/>}
+            {page === 'admin'          && isAdmin && <AdminTab/>}
+            {page === 'brand_mgmt'     && (isAdmin || isHQ) && <BrandMgmtPage/>}
+            {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
+            {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'sales_list'     && canSeeMain && <SalesListPage/>}
             {page === 'customer_lookup'&& canSeeMain && <CustomerLookupPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage/>}
