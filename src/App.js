@@ -2032,11 +2032,11 @@ function ProductMgmtPage({ subPage }) {
           {/* 브랜드 패널 */}
           <div className="card" style={{height:'fit-content'}}>
             <div className="card-label">브랜드</div>
-            <div style={{display:'flex', gap:6, marginBottom:12}}>
+            <div style={{display:'flex', flexDirection:'column', gap:6, marginBottom:12}}>
               <input value={newBrand} onChange={e => setNewBrand(e.target.value)}
-                style={{...inputStyle, flex:1}} placeholder="새 브랜드명"
+                style={{...inputStyle, width:'100%'}} placeholder="새 브랜드명"
                 onKeyDown={e => e.key==='Enter' && addBrand()} />
-              <button className="btn btn-p" onClick={addBrand}>추가</button>
+              <button className="btn btn-p" onClick={addBrand} style={{width:'100%', justifyContent:'center'}}>+ 브랜드 추가</button>
             </div>
             {brands.map(b => (
               <div key={b.id} onClick={() => setSelBrand(b)}
@@ -2221,6 +2221,43 @@ function StockMgmtPage() {
     setSaving(false);
   };
 
+  const [dragging2, setDrag2] = useState(false);
+  const fileRef2 = useRef();
+
+  const handleStockFile = (file) => {
+    if (!file) return;
+    if (!file.name.match(/\.(xls|xlsx)$/i)) { toast('xls, xlsx 파일만 지원합니다', 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        toast(`${rows.length}행 처리 중...`, 'inf');
+        let cnt = 0;
+        for (const row of rows) {
+          const brandName = String(row['브랜드명']||row['브랜드']||'').trim();
+          const prodName  = String(row['상품명']||'').trim();
+          const store     = String(row['점포명']||row['점포']||'').trim();
+          const branch    = String(row['지점명']||row['지점']||'').trim();
+          const qty       = Number(row['재고수량']||row['수량']||0);
+          if (!brandName || !prodName || !store || !branch) continue;
+          let { data: br } = await supabase.from('brands').select('id').eq('name', brandName).maybeSingle();
+          if (!br) continue;
+          let { data: pr } = await supabase.from('products').select('id').eq('brand_id', br.id).eq('name', prodName).maybeSingle();
+          if (!pr) continue;
+          await supabase.from('stock_status').upsert({
+            brand_id: br.id, product_id: pr.id, store_name: store, branch_name: branch,
+            quantity: qty, updated_at: new Date().toISOString(),
+          }, { onConflict: 'brand_id,product_id,store_name,branch_name' });
+          cnt++;
+        }
+        toast(`${cnt}개 재고 업로드 완료`, 'ok'); fetchStocks();
+      } catch(err) { toast('파싱 실패: ' + err.message, 'err'); }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   const inputStyle = { width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontFamily:'var(--sans)', outline:'none' };
   const labelStyle = { display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5 };
 
@@ -2229,6 +2266,7 @@ function StockMgmtPage() {
       <div className="tabs">
         <button className={`tab ${tab==='list'?'on':''}`} onClick={() => setTab('list')}>재고 현황</button>
         <button className={`tab ${tab==='input'?'on':''}`} onClick={() => setTab('input')}>직접 입력</button>
+        <button className={`tab ${tab==='upload'?'on':''}`} onClick={() => setTab('upload')}>파일 업로드</button>
       </div>
 
       {tab === 'list' && (
@@ -2312,6 +2350,217 @@ function StockMgmtPage() {
           </form>
         </div>
       )}
+
+      {tab === 'upload' && (
+        <div className="card">
+          <div className="card-label">파일 업로드로 재고 일괄 등록</div>
+          <div className={`drop ${dragging2?'over':''}`}
+            onDragOver={e=>{e.preventDefault();setDrag2(true);}} onDragLeave={()=>setDrag2(false)}
+            onDrop={e=>{e.preventDefault();setDrag2(false);handleStockFile(e.dataTransfer.files[0]);}}
+            onClick={()=>fileRef2.current?.click()}>
+            <input ref={fileRef2} type="file" accept=".xls,.xlsx" onClick={e=>e.stopPropagation()} onChange={e=>{handleStockFile(e.target.files[0]);e.target.value='';}}/>
+            <div className="drop-icon">📂</div>
+            <div className="drop-main"><strong>클릭</strong> 또는 <strong>드래그&드롭</strong></div>
+            <div className="drop-sub">컬럼: 브랜드명 / 상품명 / 점포명 / 지점명 / 재고수량</div>
+          </div>
+          <div style={{marginTop:12, background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:12}}>
+            <div style={{fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:6}}>📋 파일 양식</div>
+            <table style={{fontSize:11, width:'100%', borderCollapse:'collapse'}}>
+              <thead><tr>{['브랜드명','상품명','점포명','지점명','재고수량'].map(h=><th key={h} style={{textAlign:'left',padding:'4px 8px',background:'#f0f0f0'}}>{h}</th>)}</tr></thead>
+              <tbody><tr><td style={{padding:'4px 8px'}}>팔레오</td><td style={{padding:'4px 8px'}}>팔레오_닥터스노트...</td><td style={{padding:'4px 8px'}}>롯데백화점</td><td style={{padding:'4px 8px'}}>건대스타시티점</td><td style={{padding:'4px 8px'}}>100</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 안전재고 확인 페이지
+// 최근 1달 판매수량 = 안전재고 기준
+// 현재재고 = stock_status
+// 부족분 발주요청 기능
+// ════════════════════════════════════════════════════════
+function SafetyCheckPage({ profile }) {
+  const [rows,    setRows]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fStore,  setFStore]  = useState('');
+  const [fBranch, setFBranch] = useState('');
+  const [fSearch, setFSearch] = useState('');
+  const [showShort, setShowShort] = useState(false);
+  const [requesting, setRequesting] = useState({});
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const fromDate = oneMonthAgo.toISOString().slice(0,10);
+
+    // 최근 1달 판매수량 집계
+    const { data: salesData } = await supabase.from('sales')
+      .select('store_name, branch_name, brand_id, product_id, quantity, brand:brands(name), product:products(name)')
+      .gte('sold_at', fromDate);
+
+    // 현재 재고
+    const { data: stockData } = await supabase.from('stock_status')
+      .select('store_name, branch_name, brand_id, product_id, quantity');
+
+    // 발주요청 현황
+    const { data: orderData } = await supabase.from('order_requests')
+      .select('store_name, branch_name, product_id, status')
+      .eq('status', 'pending');
+
+    // 판매 집계
+    const salesMap = new Map();
+    for (const s of (salesData||[])) {
+      const key = `${s.store_name}|||${s.branch_name}|||${s.brand_id}|||${s.product_id}`;
+      if (!salesMap.has(key)) salesMap.set(key, { ...s, sales: 0 });
+      salesMap.get(key).sales += s.quantity;
+    }
+
+    // 재고 맵
+    const stockMap = new Map();
+    for (const s of (stockData||[])) {
+      const key = `${s.store_name}|||${s.branch_name}|||${s.brand_id}|||${s.product_id}`;
+      stockMap.set(key, s.quantity);
+    }
+
+    // 발주 중 맵
+    const orderSet = new Set();
+    for (const o of (orderData||[])) {
+      orderSet.add(`${o.store_name}|||${o.branch_name}|||${o.product_id}`);
+    }
+
+    const combined = [...salesMap.values()].map(s => {
+      const key  = `${s.store_name}|||${s.branch_name}|||${s.brand_id}|||${s.product_id}`;
+      const stock = stockMap.get(key) ?? 0;
+      const shortage = s.sales - stock;
+      const orderKey = `${s.store_name}|||${s.branch_name}|||${s.product_id}`;
+      return {
+        store: s.store_name, branch: s.branch_name,
+        brandName: s.brand?.name || '-', productName: s.product?.name || '-',
+        brandId: s.brand_id, productId: s.product_id,
+        safety: s.sales, stock, shortage,
+        isPending: orderSet.has(orderKey),
+      };
+    }).sort((a,b) => b.shortage - a.shortage);
+
+    setRows(combined);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const stores   = useMemo(() => uniq(rows.map(r => r.store)),  [rows]);
+  const branches = useMemo(() => uniq((fStore ? rows.filter(r => r.store===fStore) : rows).map(r => r.branch)), [rows, fStore]);
+
+  const filtered = useMemo(() => {
+    let r = rows;
+    if (fStore)  r = r.filter(x => x.store===fStore);
+    if (fBranch) r = r.filter(x => x.branch===fBranch);
+    if (fSearch) { const q = fSearch.toLowerCase(); r = r.filter(x => x.productName.toLowerCase().includes(q)); }
+    if (showShort) r = r.filter(x => x.shortage > 0);
+    return r;
+  }, [rows, fStore, fBranch, fSearch, showShort]);
+
+  const shortCount = useMemo(() => rows.filter(r => r.shortage > 0).length, [rows]);
+
+  const requestOrder = async (row) => {
+    const key = `${row.store}|||${row.branch}|||${row.productId}`;
+    setRequesting(p => ({...p, [key]: true}));
+    const { error } = await supabase.from('order_requests').insert({
+      store_name: row.store, branch_name: row.branch,
+      brand_id: row.brandId, product_id: row.productId,
+      safety_qty: row.safety, current_qty: row.stock,
+      shortage_qty: row.shortage, status: 'pending',
+      requested_by: profile?.id,
+    });
+    if (error) toast(error.message, 'err');
+    else { toast(`${row.branch} - ${row.productName} 발주요청 완료`, 'ok'); fetchData(); }
+    setRequesting(p => ({...p, [key]: false}));
+  };
+
+  return (
+    <div>
+      {/* 요약 배너 */}
+      {!loading && shortCount > 0 && (
+        <div style={{background:'#fff3cd', border:'1px solid #ffc107', borderRadius:'var(--radius)', padding:'10px 16px', marginBottom:14, display:'flex', alignItems:'center', gap:10, fontSize:13, color:'#856404'}}>
+          <span>⚠️</span>
+          <span>재고 부족 항목 <strong>{shortCount}개</strong> — 안전재고 미달 (최근 1달 판매수량 기준)</span>
+          <button className="btn btn-s" style={{marginLeft:'auto', fontSize:11}} onClick={() => setShowShort(v=>!v)}>
+            {showShort ? '전체 보기' : '부족 항목만 보기'}
+          </button>
+        </div>
+      )}
+
+      <div className="card" style={{padding:'16px 20px'}}>
+        <div className="fbar">
+          <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
+            <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={!fStore} style={{background:!fStore?'#f0f0f0':'#fff'}}>
+            <option value="">전체 지점</option>{branches.map(b => <option key={b}>{b}</option>)}
+          </select>
+          <input className="finput" placeholder="상품명 검색" value={fSearch} onChange={e => setFSearch(e.target.value)}/>
+          {(fStore||fBranch||fSearch) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); setFSearch(''); }}>✕ 초기화</button>}
+          <div className="fbar-right">
+            <span className="fresult"><b>{filtered.length}</b>개 항목</span>
+          </div>
+        </div>
+
+        {loading ? <div className="empty"><span className="spinner"/></div> : (
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>점포</th><th>지점</th><th>브랜드</th><th>상품명</th>
+                  <th className="r">안전재고<br/><span style={{fontWeight:400,fontSize:9}}>(1달 판매수량)</span></th>
+                  <th className="r">현재재고</th>
+                  <th className="r">부족수량</th>
+                  <th>발주요청</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0
+                  ? <tr><td colSpan={8} className="empty">데이터가 없습니다<br/><span style={{fontSize:11}}>판매 입력 및 재고 등록 후 확인하세요</span></td></tr>
+                  : filtered.map((r,i) => {
+                    const isShort = r.shortage > 0;
+                    const orderKey = `${r.store}|||${r.branch}|||${r.productId}`;
+                    return (
+                      <tr key={i} style={isShort ? {background:'#fff9f9'} : {}}>
+                        <td><span className="badge badge-dept">{r.store}</span></td>
+                        <td><span className="badge badge-store">{r.branch}</span></td>
+                        <td style={{fontSize:12}}>{r.brandName}</td>
+                        <td style={{fontSize:12}}>{r.productName}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{r.safety.toLocaleString()}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)'}}>{r.stock.toLocaleString()}</td>
+                        <td className="r">
+                          {isShort
+                            ? <span style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--danger)'}}>▼ {r.shortage.toLocaleString()}</span>
+                            : <span style={{fontFamily:'var(--mono)', color:'var(--success)'}}>+{Math.abs(r.shortage).toLocaleString()}</span>
+                          }
+                        </td>
+                        <td>
+                          {isShort && (
+                            r.isPending
+                              ? <span style={{fontSize:11, color:'var(--text3)', fontWeight:600}}>요청중</span>
+                              : <button className="btn btn-p" style={{padding:'4px 10px', fontSize:11}}
+                                  disabled={requesting[orderKey]}
+                                  onClick={() => requestOrder(r)}>
+                                  {requesting[orderKey] ? <span className="spinner"/> : '발주요청'}
+                                </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                }
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -3312,17 +3561,7 @@ export default function App() {
             {page === 'product_mgmt'   && canSeeMain && <ProductMgmtPage subPage={null}/>}
             {page === 'product_add'    && canSeeMain && <ProductMgmtPage subPage="product_add"/>}
             {page === 'stock_mgmt'     && canSeeMain && <StockMgmtPage/>}
-            {page === 'stock_safety'   && canSeeMain && (
-              <UploadPage
-                profile={profile}
-                activeUploadId={activeUploadId}
-                setActiveUploadId={setActiveUploadId}
-                parsed={parsed}
-                setParsed={setParsed}
-                filename={filename}
-                setFilename={setFilename}
-              />
-            )}
+            {page === 'stock_safety'   && canSeeMain && <SafetyCheckPage profile={profile}/>}
             {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage/>}
