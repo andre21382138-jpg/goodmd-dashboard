@@ -1165,11 +1165,27 @@ function SalesInputPage({ profile }) {
   const [saving,    setSaving]   = useState(false);
   const [recentSales, setRecent] = useState([]);
 
-  // 고객 동시 등록
-  const [withCust,    setWithCust]    = useState(false);
+  // 회원 연결
+  const [memberMode,   setMemberMode]   = useState('none');   // 'none' | 'search' | 'new'
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberResults,setMemberResults]= useState([]);
+  const [selectedMember,setSelMember]  = useState(null);
+  const [searching,    setSearching]    = useState(false);
+  // 신규 회원등록
   const [custName,    setCustName]    = useState('');
   const [custPhone,   setCustPhone]   = useState('');
   const [managerName, setManagerName] = useState('');
+
+  const searchMembers = async () => {
+    if (!memberSearch.trim()) return;
+    setSearching(true);
+    const { data } = await supabase.from('customers')
+      .select('*')
+      .or(`name.ilike.%${memberSearch}%,phone.ilike.%${memberSearch}%`)
+      .limit(10);
+    setMemberResults(data || []);
+    setSearching(false);
+  };
 
   useEffect(() => {
     supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || []));
@@ -1201,14 +1217,16 @@ function SalesInputPage({ profile }) {
 
   const resetForm = () => {
     setProdId(''); setQty(1); setPrice(''); setMemo(''); setPayment('카드');
-    setCustName(''); setCustPhone(''); setManagerName(''); setWithCust(false);
+    setCustName(''); setCustPhone(''); setManagerName('');
+    setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!brandId)   { toast('브랜드를 선택해주세요', 'err'); return; }
     if (!productId) { toast('상품을 선택해주세요', 'err'); return; }
-    if (withCust) {
+    if (memberMode === 'search' && !selectedMember) { toast('회원을 선택해주세요', 'err'); return; }
+    if (memberMode === 'new') {
       if (!custName.trim()) { toast('고객 이름을 입력해주세요', 'err'); return; }
       if (custPhone.replace(/\D/g,'').length < 10) { toast('연락처를 올바르게 입력해주세요', 'err'); return; }
     }
@@ -1216,8 +1234,9 @@ function SalesInputPage({ profile }) {
     try {
       let customerId = null;
 
-      // 1. 고객 동시 등록
-      if (withCust) {
+      if (memberMode === 'search') {
+        customerId = selectedMember.id;
+      } else if (memberMode === 'new') {
         const { data: custData, error: custErr } = await supabase.from('customers').insert({
           joined_at: soldAt,
           name: custName.trim(),
@@ -1231,7 +1250,6 @@ function SalesInputPage({ profile }) {
         customerId = custData.id;
       }
 
-      // 2. 판매 저장 (고객 연결)
       const { error } = await supabase.from('sales').insert({
         sold_at: soldAt,
         store_name: profile.department,
@@ -1247,7 +1265,8 @@ function SalesInputPage({ profile }) {
       });
       if (error) throw error;
 
-      toast(withCust ? '판매 + 고객 등록 완료' : '판매 입력 완료', 'ok');
+      const modeMsg = memberMode === 'search' ? '회원 적립 완료' : memberMode === 'new' ? '판매 + 회원등록 완료' : '판매 입력 완료';
+      toast(modeMsg, 'ok');
       resetForm();
       fetchRecent();
     } catch(err) {
@@ -1322,18 +1341,72 @@ function SalesInputPage({ profile }) {
             <input value={memo} onChange={e => setMemo(e.target.value)} style={inputStyle} placeholder="특이사항 입력..." />
           </div>
 
-          {/* 고객 동시 등록 토글 */}
+          {/* 회원 연결 섹션 */}
           <div style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginBottom:14 }}>
-            <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none' }}>
-              <input type="checkbox" checked={withCust} onChange={e => setWithCust(e.target.checked)}
-                style={{ width:16, height:16, accentColor:'var(--accent)' }} />
-              <span style={{ fontSize:13, fontWeight:600, color: withCust ? 'var(--accent)' : 'var(--text2)' }}>
-                🙋 구매 고객 동시 등록
-              </span>
-            </label>
+            <div style={{ marginBottom:10, fontSize:13, fontWeight:600, color:'var(--text2)' }}>🙋 회원 연결</div>
+            <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+              {[
+                { key:'none',   label:'없음' },
+                { key:'search', label:'기존 회원 검색' },
+                { key:'new',    label:'신규 회원등록' },
+              ].map(opt => (
+                <button key={opt.key} type="button"
+                  onClick={() => { setMemberMode(opt.key); setSelMember(null); setMemberResults([]); setMemberSearch(''); }}
+                  style={{
+                    padding:'7px 16px', border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)',
+                    borderColor: memberMode===opt.key ? 'var(--accent)' : 'var(--border)',
+                    background:  memberMode===opt.key ? '#fff3e0' : '#fafafa',
+                    color:       memberMode===opt.key ? 'var(--accent)' : 'var(--text2)',
+                    fontWeight:  memberMode===opt.key ? 700 : 500, fontSize:12,
+                  }}>{opt.label}</button>
+              ))}
+            </div>
 
-            {withCust && (
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginTop:12,
+            {/* 기존 회원 검색 */}
+            {memberMode === 'search' && (
+              <div style={{ background:'#f0f7ff', border:'1px solid #90caf9', borderRadius:'var(--radius)', padding:14 }}>
+                <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+                  <input value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
+                    onKeyDown={e => e.key==='Enter' && (e.preventDefault(), searchMembers())}
+                    style={{...inputStyle, flex:1}} placeholder="이름 또는 연락처로 검색" />
+                  <button type="button" className="btn btn-s" onClick={searchMembers} disabled={searching}>
+                    {searching ? <span className="spinner"/> : '검색'}
+                  </button>
+                </div>
+                {selectedMember && (
+                  <div style={{ background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:'var(--radius)', padding:'8px 12px', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <div>
+                      <strong style={{color:'var(--success)'}}>{selectedMember.name}</strong>
+                      <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)', marginLeft:10}}>{selectedMember.phone}</span>
+                      {selectedMember.manager_name && <span style={{fontSize:11, color:'var(--text3)', marginLeft:8}}>담당: {selectedMember.manager_name}</span>}
+                    </div>
+                    <button type="button" className="btn-ghost" onClick={() => setSelMember(null)}>✕</button>
+                  </div>
+                )}
+                {memberResults.length > 0 && !selectedMember && (
+                  <div style={{ border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'hidden' }}>
+                    {memberResults.map(m => (
+                      <div key={m.id} onClick={() => { setSelMember(m); setMemberResults([]); }}
+                        style={{ padding:'9px 12px', cursor:'pointer', borderBottom:'1px solid var(--border)', background:'#fff', fontSize:13 }}
+                        onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
+                        onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                        <strong>{m.name}</strong>
+                        <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)', marginLeft:10}}>{m.phone}</span>
+                        <span style={{fontSize:11, color:'var(--text3)', marginLeft:8}}>{m.store_name} · {m.branch_name}</span>
+                        {m.manager_name && <span style={{fontSize:11, color:'var(--accent)', marginLeft:8}}>담당: {m.manager_name}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {memberResults.length === 0 && memberSearch && !searching && !selectedMember && (
+                  <div style={{fontSize:12, color:'var(--text3)'}}>검색 결과가 없습니다</div>
+                )}
+              </div>
+            )}
+
+            {/* 신규 회원등록 */}
+            {memberMode === 'new' && (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12,
                 background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:14 }}>
                 <div>
                   <label style={labelStyle}>고객 이름</label>
@@ -1356,7 +1429,10 @@ function SalesInputPage({ profile }) {
 
           <button className="btn btn-p" type="submit" disabled={saving}
             style={{ width:'100%', justifyContent:'center', height:40 }}>
-            {saving ? <span className="spinner"/> : withCust ? '✓ 판매 + 고객 저장' : '✓ 판매 입력 저장'}
+            {saving ? <span className="spinner"/> :
+              memberMode === 'search' ? '✓ 판매 + 회원 적립' :
+              memberMode === 'new'    ? '✓ 판매 + 신규 회원등록' :
+                                       '✓ 판매 입력 저장'}
           </button>
         </form>
       </div>
