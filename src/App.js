@@ -1147,7 +1147,10 @@ const ADMIN_MENUS = [
 ];
 
 function Sidebar({ page, setPage, profile, onLogout }) {
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin   = profile?.role === 'admin';
+  const isHQ      = profile?.job_title === '담당자'; // 본사 담당자
+  const canSeeMain = isAdmin || isHQ;               // 안전재고·업로드이력 접근 가능
+
   return (
     <div className="sidebar">
       <div className="sidebar-logo">
@@ -1157,11 +1160,17 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       </div>
       <div className="sidebar-menu">
         <div className="sidebar-section">메뉴</div>
-        {MENUS.map(m => (
+        {canSeeMain && MENUS.map(m => (
           <button key={m.key} className={`sidebar-item ${page===m.key?'on':''}`} onClick={() => setPage(m.key)}>
             <span className="sidebar-item-icon">{m.icon}</span>{m.label}
           </button>
         ))}
+        {!canSeeMain && (
+          <div style={{ padding:'12px 10px', fontSize:12, color:'rgba(0,0,0,0.5)', lineHeight:1.7 }}>
+            안녕하세요, {profile?.name || ''}님!<br/>
+            현재 접근 가능한 메뉴가 없습니다.
+          </div>
+        )}
         {isAdmin && (
           <>
             <div className="sidebar-section" style={{marginTop:8}}>관리자</div>
@@ -1234,6 +1243,10 @@ export default function App() {
     toast('로그아웃 됐습니다', 'inf');
   };
 
+  const isAdmin   = profile?.role === 'admin';
+  const isHQ      = profile?.job_title === '담당자';
+  const canSeeMain = isAdmin || isHQ;
+
   const PAGE_TITLES = { upload: '안전재고 현황', history: '업로드 이력', admin: '사용자 관리' };
 
   if (authLoading) {
@@ -1252,7 +1265,13 @@ export default function App() {
             <div className="content-title">{PAGE_TITLES[page]}</div>
           </div>
           <div className="content-body">
-            {page === 'upload' && (
+            {(page === 'upload' || page === 'history') && !canSeeMain ? (
+              <div className="empty">
+                ⛔ 접근 권한이 없습니다.<br/>
+                <span style={{fontSize:11}}>본사 담당자 또는 관리자만 이용할 수 있습니다.</span>
+              </div>
+            ) : null}
+            {page === 'upload' && canSeeMain && (
               <UploadPage
                 profile={profile}
                 activeUploadId={activeUploadId}
@@ -1263,7 +1282,7 @@ export default function App() {
                 setFilename={setFilename}
               />
             )}
-            {page === 'history' && (
+            {page === 'history' && canSeeMain && (
               <UploadHistoryPage
                 profile={profile}
                 activeUploadId={activeUploadId}
