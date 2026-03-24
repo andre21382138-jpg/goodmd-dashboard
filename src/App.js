@@ -256,13 +256,20 @@ function Toasts() {
 }
 
 // ════════════════════════════════════════════════════════
-// 점포 목록
+// 점포/지점 목록
 // ════════════════════════════════════════════════════════
-const STORE_LIST = [
-  '건대스타시티점','천호점','영등포점','관악점','평택점','수원점','대구점',
-  '센텀시티점','타임월드점','더현대서울점','목동점','중동점','인천점','부산점',
-  '광주점','대전점','울산점','창원점','전주점','포항점','기타',
-];
+const STORE_MAP = {
+  '롯데백화점':    ['건대스타시티점','천호점','영등포점','관악점','수원점','대구점','센텀시티점','부산점','강남점','잠실점','노원점','청량리점','본점','인천점','광주점','울산점','창원점','포항점','기타'],
+  '신세계백화점':  ['강남점','본점','마산점','센텀시티점','대전점','광주점','충청점','경기점','하남점','기타'],
+  '현대백화점':    ['더현대서울점','목동점','중동점','무역센터점','천호점','신촌점','압구정본점','판교점','대구점','울산점','기타'],
+  'AK백화점':     ['평택점','수원점','분당점','원주점','홍대점','기타'],
+  '갤러리아백화점': ['명품관','타임월드점','센터시티점','광교점','진주점','기타'],
+  '그린푸드':     ['그린푸드'],
+  '농협_SHOP':   ['농협_SHOP'],
+  '대동백화점':   ['대동백화점'],
+  '특판':        ['특판'],
+};
+const STORE_NAMES = Object.keys(STORE_MAP);
 
 // ════════════════════════════════════════════════════════
 // AUTH SCREEN
@@ -273,18 +280,25 @@ function AuthScreen() {
   const [pw, setPw]             = useState('');
   const [name, setName]         = useState('');
   const [jobTitle, setJobTitle] = useState('담당자');
-  const [department, setDept]   = useState('본사');
+  const [department, setDept]   = useState('');   // 점포명 (백화점 그룹)
+  const [branch, setBranch]     = useState('');   // 지점명
   const [loading, setLoading]   = useState(false);
   const [msg, setMsg]           = useState(null);
 
   const handleJobTitle = (val) => {
     setJobTitle(val);
-    setDept(val === '담당자' ? '본사' : STORE_LIST[0]);
+    setDept('');
+    setBranch('');
+  };
+
+  const handleDeptChange = (val) => {
+    setDept(val);
+    setBranch('');
   };
 
   const resetForm = () => {
     setEmail(''); setPw(''); setName('');
-    setJobTitle('담당자'); setDept('본사');
+    setJobTitle('담당자'); setDept(''); setBranch('');
     setMsg(null);
   };
 
@@ -298,14 +312,18 @@ function AuthScreen() {
       } else {
         if (!name.trim()) throw new Error('이름을 입력해주세요');
         if (pw.length < 6) throw new Error('비밀번호는 6자리 이상이어야 합니다');
+        if (jobTitle === '매니저') {
+          if (!department) throw new Error('점포명을 선택해주세요');
+          if (!branch) throw new Error('지점명을 선택해주세요');
+        }
         const { data, error } = await supabase.auth.signUp({ email, password: pw });
         if (error) throw error;
-        // profiles 업데이트 (트리거로 row 생성된 직후)
         if (data?.user?.id) {
           await supabase.from('profiles').update({
             name: name.trim(),
             job_title: jobTitle,
-            department,
+            department: jobTitle === '담당자' ? '본사' : department,
+            branch: jobTitle === '매니저' ? branch : null,
           }).eq('id', data.user.id);
         }
         setMsg({ text: '회원가입이 완료됐어요. 관리자 승인 후 로그인 가능합니다.', type: 'ok' });
@@ -321,6 +339,8 @@ function AuthScreen() {
     }
     setLoading(false);
   };
+
+  const branchList = department ? (STORE_MAP[department] || []) : [];
 
   return (
     <div className="auth-wrap">
@@ -361,18 +381,36 @@ function AuthScreen() {
                 </div>
               </div>
 
-              {/* 부서/점포 */}
-              <div className="form-group">
-                <label>{jobTitle === '담당자' ? '부서' : '점포명'}</label>
-                {jobTitle === '담당자' ? (
+              {/* 담당자: 본사 고정 */}
+              {jobTitle === '담당자' && (
+                <div className="form-group">
+                  <label>부서</label>
                   <input className="input" value="본사" readOnly
                     style={{ background: '#f0f0f0', color: 'var(--text2)' }} />
-                ) : (
-                  <select className="input" value={department} onChange={e => setDept(e.target.value)} required>
-                    {STORE_LIST.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* 매니저: 점포명 → 지점명 */}
+              {jobTitle === '매니저' && (
+                <>
+                  <div className="form-group">
+                    <label>점포명 <span style={{ color: 'var(--danger)', fontSize: 11 }}>*필수</span></label>
+                    <select className="input" value={department} onChange={e => handleDeptChange(e.target.value)} required>
+                      <option value="">-- 점포명 선택 --</option>
+                      {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>지점명 <span style={{ color: 'var(--danger)', fontSize: 11 }}>*필수</span></label>
+                    <select className="input" value={branch} onChange={e => setBranch(e.target.value)}
+                      required disabled={!department}
+                      style={{ background: !department ? '#f0f0f0' : '#fff' }}>
+                      <option value="">-- 지점명 선택 --</option>
+                      {branchList.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
 
               {/* 이름 */}
               <div className="form-group">
@@ -480,7 +518,7 @@ function AdminTab() {
           <div className="card-label" style={{ color: '#E65100' }}>승인 대기 ({pending.length}명)</div>
           <table className="user-table">
             <thead>
-              <tr><th>이름</th><th>직책</th><th>부서/점포</th><th>이메일</th><th>가입일</th><th>상태</th><th>처리</th></tr>
+              <tr><th>이름</th><th>직책</th><th>점포명</th><th>지점명</th><th>이메일</th><th>가입일</th><th>상태</th><th>처리</th></tr>
             </thead>
             <tbody>
               {pending.map(u => (
@@ -488,6 +526,7 @@ function AdminTab() {
                   <td><strong>{u.name || '-'}</strong></td>
                   <td>{u.job_title || '-'}</td>
                   <td>{u.department || '-'}</td>
+                  <td>{u.branch || '-'}</td>
                   <td>{u.email}</td>
                   <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)' }}>
                     {new Date(u.created_at).toLocaleDateString('ko-KR')}
@@ -508,7 +547,7 @@ function AdminTab() {
         {loading ? <div className="empty"><span className="spinner" /></div> : (
           <table className="user-table">
             <thead>
-              <tr><th>이름</th><th>직책</th><th>부서/점포</th><th>이메일</th><th>권한</th><th>상태</th><th>가입일</th><th>권한 변경</th></tr>
+              <tr><th>이름</th><th>직책</th><th>점포명</th><th>지점명</th><th>이메일</th><th>권한</th><th>상태</th><th>가입일</th><th>권한 변경</th></tr>
             </thead>
             <tbody>
               {users.map(u => (
@@ -516,6 +555,7 @@ function AdminTab() {
                   <td><strong>{u.name || '-'}</strong></td>
                   <td>{u.job_title || '-'}</td>
                   <td>{u.department || '-'}</td>
+                  <td>{u.branch || '-'}</td>
                   <td>{u.email}</td>
                   <td>
                     {u.role === 'admin'
@@ -1076,6 +1116,7 @@ function UploadHistoryPage({ profile, activeUploadId, setActiveUploadId, setPage
                       </td>
                       <td style={{ fontSize:12, color:'var(--text2)' }}>
                         {item.uploader?.job_title || '-'} / {item.uploader?.department || '-'}
+                        {item.uploader?.branch ? ` / ${item.uploader.branch}` : ''}
                       </td>
                       <td>
                         <button className="btn-dl" onClick={() => handleDownload(item)}>⬇ 다운로드</button>
