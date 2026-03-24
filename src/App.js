@@ -1475,28 +1475,56 @@ function SalesInputPage({ profile }) {
 }
 
 // ════════════════════════════════════════════════════════
-// 고객 조회 페이지 (본사/관리자)
+// 회원 조회 페이지 (본사/관리자)
 // ════════════════════════════════════════════════════════
 function CustomerLookupPage() {
   const [search,    setSearch]   = useState('');
+  const [fStore,    setFStore]   = useState('');
+  const [fBranch,   setFBranch]  = useState('');
+  const [fFrom,     setFFrom]    = useState('');
+  const [fTo,       setFTo]      = useState('');
   const [customers, setCustomers]= useState([]);
   const [selected,  setSelected] = useState(null);
   const [purchases, setPurchases]= useState([]);
   const [loading,   setLoading]  = useState(false);
   const [loadingP,  setLoadingP] = useState(false);
+  const [allStores, setAllStores]= useState([]);
+
+  // 점포 목록 로드
+  useEffect(() => {
+    supabase.from('customers').select('store_name, branch_name')
+      .then(({ data }) => {
+        const stores = [...new Set((data||[]).map(d => d.store_name))].filter(Boolean).sort();
+        setAllStores(stores);
+      });
+  }, []);
+
+  const allBranches = useMemo(() => {
+    if (!fStore) return [];
+    const branches = [...new Set(
+      (customers.length ? customers : []).map(c => c.branch_name).filter(Boolean)
+    )].sort();
+    return branches;
+  }, [fStore, customers]);
 
   const fetchCustomers = useCallback(async () => {
-    if (!search.trim()) return;
     setLoading(true);
-    const { data } = await supabase.from('customers')
+    let q = supabase.from('customers')
       .select('*, creator:profiles(name)')
-      .or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
-      .order('created_at', { ascending: false })
-      .limit(50);
+      .order('joined_at', { ascending: false });
+    if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+    if (fStore)  q = q.eq('store_name', fStore);
+    if (fBranch) q = q.eq('branch_name', fBranch);
+    if (fFrom)   q = q.gte('joined_at', fFrom);
+    if (fTo)     q = q.lte('joined_at', fTo);
+    const { data } = await q.limit(200);
     setCustomers(data || []);
     setSelected(null); setPurchases([]);
     setLoading(false);
-  }, [search]);
+  }, [search, fStore, fBranch, fFrom, fTo]);
+
+  // 점포 변경시 지점 초기화
+  const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
 
   const fetchPurchases = async (customerId) => {
     setLoadingP(true);
@@ -1508,126 +1536,181 @@ function CustomerLookupPage() {
     setLoadingP(false);
   };
 
-  const handleSelect = (c) => {
-    setSelected(c);
-    fetchPurchases(c.id);
-  };
+  const handleSelect = (c) => { setSelected(c); fetchPurchases(c.id); };
 
   const totalAmt = useMemo(() => purchases.reduce((s,r) => s + r.price * r.quantity, 0), [purchases]);
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + r.quantity, 0), [purchases]);
 
+  // 지점 목록 (선택된 점포 기준으로 customers에서 추출)
+  const branchList = useMemo(() => {
+    const src = fStore ? customers.filter(c => c.store_name === fStore) : customers;
+    return [...new Set(src.map(c => c.branch_name).filter(Boolean))].sort();
+  }, [customers, fStore]);
+
   return (
     <div>
-      {/* 검색 */}
+      {/* 검색·필터 */}
       <div className="card">
-        <div className="card-label">고객 조회</div>
-        <div style={{ display:'flex', gap:8 }}>
+        <div className="card-label">회원 조회</div>
+        <div className="fbar" style={{ flexWrap:'wrap', gap:8 }}>
           <input className="finput" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="고객 이름 또는 연락처 검색"
-            style={{ flex:1, height:38 }}
+            placeholder="이름 또는 연락처 검색" style={{ height:34 }}
             onKeyDown={e => e.key==='Enter' && fetchCustomers()} />
-          <button className="btn btn-p" onClick={fetchCustomers} disabled={loading}>
-            {loading ? <span className="spinner"/> : '🔍 검색'}
-          </button>
+          <select className="fsel" value={fStore} onChange={e => handleStoreChange(e.target.value)}>
+            <option value="">전체 점포</option>
+            {allStores.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)}
+            disabled={!fStore} style={{ background: !fStore ? '#f0f0f0' : '#fff' }}>
+            <option value="">전체 지점</option>
+            {branchList.map(b => <option key={b}>{b}</option>)}
+          </select>
+          <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="가입일 시작" />
+          <span style={{fontSize:12,color:'var(--text3)'}}>~</span>
+          <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} title="가입일 종료" />
+          {(search||fStore||fBranch||fFrom||fTo) &&
+            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setCustomers([]); setSelected(null); }}>✕ 초기화</button>}
+          <div className="fbar-right">
+            <button className="btn btn-p" onClick={fetchCustomers} disabled={loading}>
+              {loading ? <span className="spinner"/> : '🔍 조회'}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'340px 1fr', gap:16 }}>
-        {/* 고객 목록 */}
-        <div className="card" style={{ height:'fit-content' }}>
-          <div className="card-label">검색 결과 ({customers.length}명)</div>
-          {customers.length === 0
-            ? <div className="empty" style={{padding:24}}>검색 결과가 없습니다</div>
-            : customers.map(c => (
+      {customers.length > 0 && (
+        <div style={{ display:'grid', gridTemplateColumns:'340px 1fr', gap:16 }}>
+          {/* 회원 목록 */}
+          <div className="card" style={{ maxHeight:700, overflowY:'auto' }}>
+            <div className="card-label">조회 결과 ({customers.length}명)</div>
+            {customers.map(c => (
               <div key={c.id} onClick={() => handleSelect(c)}
                 style={{
                   padding:'10px 12px', borderRadius:'var(--radius)', cursor:'pointer', marginBottom:4,
                   background: selected?.id===c.id ? '#fff8e1' : 'var(--bg3)',
                   border: `1px solid ${selected?.id===c.id ? '#ffcc80' : 'transparent'}`,
                 }}>
-                <div style={{ fontWeight:600, fontSize:13 }}>{c.name}</div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ fontWeight:600, fontSize:13 }}>{c.name}</span>
+                  <span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--text3)' }}>{c.joined_at}</span>
+                </div>
                 <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:2 }}>{c.phone}</div>
                 <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
-                  {c.store_name} · {c.branch_name} · 가입 {c.joined_at}
+                  <span className="badge badge-dept" style={{fontSize:10, marginRight:4}}>{c.store_name}</span>
+                  <span className="badge badge-store" style={{fontSize:10}}>{c.branch_name}</span>
                 </div>
-                {c.manager_name && <div style={{ fontSize:11, color:'var(--accent)', fontWeight:600, marginTop:2 }}>담당 매니저: {c.manager_name}</div>}
-                {c.creator && <div style={{ fontSize:10, color:'var(--text3)' }}>입력자: {c.creator.name}</div>}
-              </div>
-            ))
-          }
-        </div>
-
-        {/* 구매 이력 */}
-        <div className="card">
-          {!selected ? (
-            <div className="empty">왼쪽에서 고객을 선택하면 구매 이력이 표시됩니다</div>
-          ) : (
-            <>
-              <div style={{ marginBottom:16 }}>
-                <div style={{ fontSize:16, fontWeight:700 }}>{selected.name}</div>
-                <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:4 }}>
-                  {selected.phone} · {selected.store_name} {selected.branch_name} · 가입 {selected.joined_at}
-                </div>
-                {selected.manager_name && (
-                  <div style={{ marginTop:6, display:'inline-flex', alignItems:'center', gap:6,
-                    background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)',
-                    padding:'4px 12px', fontSize:12 }}>
-                    <span style={{color:'var(--text2)'}}>담당 매니저</span>
-                    <strong style={{color:'var(--accent)'}}>{selected.manager_name}</strong>
+                {c.manager_name && (
+                  <div style={{ fontSize:11, color:'var(--accent)', fontWeight:600, marginTop:3 }}>
+                    담당: {c.manager_name}
                   </div>
                 )}
-                <div style={{ display:'flex', gap:16, marginTop:10 }}>
-                  <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'8px 16px', textAlign:'center' }}>
-                    <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>총 구매건수</div>
-                    <div style={{ fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>{purchases.length}</div>
-                  </div>
-                  <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'8px 16px', textAlign:'center' }}>
-                    <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>총 구매수량</div>
-                    <div style={{ fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>{totalQty}</div>
-                  </div>
-                  <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'8px 16px', textAlign:'center' }}>
-                    <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>총 구매금액</div>
-                    <div style={{ fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>{totalAmt.toLocaleString()}원</div>
-                  </div>
-                </div>
               </div>
-              <div className="card-label">구매 이력</div>
-              {loadingP ? <div className="empty"><span className="spinner"/></div> : (
-                <div className="twrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>구매일</th><th>점포</th><th>지점</th>
-                        <th>브랜드</th><th>상품명</th>
-                        <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
-                        <th>결제</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {purchases.length === 0
-                        ? <tr><td colSpan={9} className="empty">구매 이력이 없습니다</td></tr>
-                        : purchases.map(p => (
-                          <tr key={p.id}>
-                            <td className="mono">{p.sold_at}</td>
-                            <td><span className="badge badge-dept">{p.store_name}</span></td>
-                            <td><span className="badge badge-store">{p.branch_name}</span></td>
-                            <td>{p.brand?.name || '-'}</td>
-                            <td>{p.product?.name || '-'}</td>
-                            <td className="r">{p.quantity}</td>
-                            <td className="r">{Number(p.price).toLocaleString()}</td>
-                            <td className="r" style={{fontWeight:600}}>{(p.price*p.quantity).toLocaleString()}</td>
-                            <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>{p.payment}</span></td>
-                          </tr>
-                        ))
-                      }
-                    </tbody>
-                  </table>
+            ))}
+          </div>
+
+          {/* 구매 이력 */}
+          <div className="card">
+            {!selected ? (
+              <div className="empty">왼쪽에서 회원을 선택하면 구매 이력이 표시됩니다</div>
+            ) : (
+              <>
+                {/* 회원 정보 헤더 */}
+                <div style={{ background:'#fafafa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:16 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
+                    <div style={{ fontSize:17, fontWeight:700 }}>{selected.name}</div>
+                    <div style={{ fontFamily:'var(--mono)', fontSize:13, color:'var(--text2)' }}>{selected.phone}</div>
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:8, fontSize:12 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                      <span style={{color:'var(--text3)'}}>가입일</span>
+                      <strong>{selected.joined_at}</strong>
+                    </div>
+                    <span style={{color:'var(--border2)'}}>|</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                      <span style={{color:'var(--text3)'}}>가입점포</span>
+                      <span className="badge badge-dept">{selected.store_name}</span>
+                      <span className="badge badge-store">{selected.branch_name}</span>
+                    </div>
+                    {selected.manager_name && (
+                      <>
+                        <span style={{color:'var(--border2)'}}>|</span>
+                        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                          <span style={{color:'var(--text3)'}}>담당 매니저</span>
+                          <strong style={{color:'var(--accent)'}}>{selected.manager_name}</strong>
+                        </div>
+                      </>
+                    )}
+                    {selected.creator && (
+                      <>
+                        <span style={{color:'var(--border2)'}}>|</span>
+                        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                          <span style={{color:'var(--text3)'}}>입력자</span>
+                          <span>{selected.creator.name}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {/* 구매 요약 */}
+                  <div style={{ display:'flex', gap:12, marginTop:12 }}>
+                    {[
+                      { label:'총 구매건수', value: purchases.length + '건' },
+                      { label:'총 구매수량', value: totalQty + '개' },
+                      { label:'총 구매금액', value: totalAmt.toLocaleString() + '원' },
+                    ].map(s => (
+                      <div key={s.label} style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'7px 14px', textAlign:'center' }}>
+                        <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>{s.label}</div>
+                        <div style={{ fontSize:16, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              )}
-            </>
-          )}
+
+                {/* 구매 이력 테이블 */}
+                <div className="card-label">구매 이력</div>
+                {loadingP ? <div className="empty"><span className="spinner"/></div> : (
+                  <div className="twrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>구매일</th><th>점포</th><th>지점</th>
+                          <th>브랜드</th><th>상품명</th>
+                          <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
+                          <th>결제</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {purchases.length === 0
+                          ? <tr><td colSpan={9} className="empty">구매 이력이 없습니다</td></tr>
+                          : purchases.map(p => (
+                            <tr key={p.id}>
+                              <td className="mono">{p.sold_at}</td>
+                              <td><span className="badge badge-dept">{p.store_name}</span></td>
+                              <td><span className="badge badge-store">{p.branch_name}</span></td>
+                              <td>{p.brand?.name || '-'}</td>
+                              <td>{p.product?.name || '-'}</td>
+                              <td className="r">{p.quantity}</td>
+                              <td className="r">{Number(p.price).toLocaleString()}</td>
+                              <td className="r" style={{fontWeight:600}}>{(p.price*p.quantity).toLocaleString()}</td>
+                              <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>{p.payment}</span></td>
+                            </tr>
+                          ))
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {customers.length === 0 && !loading && (
+        <div className="empty">
+          조건을 설정하고 <strong>조회</strong> 버튼을 눌러주세요<br/>
+          <span style={{fontSize:11,color:'var(--text3)'}}>이름·연락처 검색, 점포·지점·날짜 필터 사용 가능 · 조건 없이 조회하면 전체 회원 표시</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -1961,7 +2044,7 @@ const MENUS = [
   { key: 'upload',          icon: '📊', label: '안전재고 현황' },
   { key: 'history',         icon: '🗂️', label: '업로드 이력' },
   { key: 'sales_list',      icon: '📋', label: '판매내역 조회' },
-  { key: 'customer_lookup', icon: '🔍', label: '고객 조회' },
+  { key: 'customer_lookup', icon: '🔍', label: '회원 조회' },
 ];
 const MANAGER_MENUS = [
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
@@ -2096,7 +2179,7 @@ export default function App() {
     upload:          '안전재고 현황',
     history:         '업로드 이력',
     sales_list:      '판매내역 조회',
-    customer_lookup: '고객 조회',
+    customer_lookup: '회원 조회',
     sales_input:     '판매 입력',
     customer_input:  '고객 입력',
     admin:           '사용자 관리',
