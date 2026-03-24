@@ -2040,11 +2040,237 @@ function BrandMgmtPage() {
   );
 }
 
+// ════════════════════════════════════════════════════════
+// 인센티브 조회 페이지 (관리자/담당자)
+// ════════════════════════════════════════════════════════
+function IncentivePage() {
+  const [fFrom,   setFFrom]   = useState('');
+  const [fTo,     setFTo]     = useState('');
+  const [rows,    setRows]    = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [expanded,setExpanded]= useState(null); // 펼쳐진 매니저명
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    setRows([]); setExpanded(null);
+
+    // 날짜 범위 내 구매이력이 있는 회원 + 해당 구매내역
+    let salesQ = supabase.from('sales')
+      .select('*, brand:brands(name), product:products(name), customer:customers(id,name,phone,manager_name,store_name,branch_name,joined_at)')
+      .not('customer_id', 'is', null);
+    if (fFrom) salesQ = salesQ.gte('sold_at', fFrom);
+    if (fTo)   salesQ = salesQ.lte('sold_at', fTo);
+    salesQ = salesQ.order('sold_at', { ascending: false });
+
+    const { data: sales, error } = await salesQ;
+    if (error) { toast(error.message, 'err'); setLoading(false); return; }
+
+    // 매니저별 집계
+    const managerMap = new Map();
+    for (const s of (sales || [])) {
+      const managerName = s.customer?.manager_name || '(미지정)';
+      if (!managerMap.has(managerName)) {
+        managerMap.set(managerName, { managerName, members: new Map(), totalCount: 0, totalAmt: 0, sales: [] });
+      }
+      const mg = managerMap.get(managerName);
+      mg.totalCount += 1;
+      mg.totalAmt   += (s.price || 0) * (s.quantity || 0);
+      mg.sales.push(s);
+      // 회원별 집계
+      const custId = s.customer?.id;
+      if (custId) {
+        if (!mg.members.has(custId)) {
+          mg.members.set(custId, { ...s.customer, count: 0, amt: 0 });
+        }
+        mg.members.get(custId).count += 1;
+        mg.members.get(custId).amt   += (s.price || 0) * (s.quantity || 0);
+      }
+    }
+
+    setRows([...managerMap.values()].sort((a,b) => b.totalAmt - a.totalAmt));
+    setLoading(false);
+  }, [fFrom, fTo]);
+
+  return (
+    <div>
+      {/* 필터 */}
+      <div className="card">
+        <div className="card-label">인센티브 조회</div>
+        <div className="fbar">
+          <div style={{ fontSize:12, color:'var(--text2)', marginRight:4 }}>구매일</div>
+          <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
+          <span style={{fontSize:12,color:'var(--text3)'}}>~</span>
+          <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} />
+          {(fFrom||fTo) && <button className="btn-ghost" onClick={() => { setFFrom(''); setFTo(''); }}>✕ 초기화</button>}
+          <div className="fbar-right">
+            <button className="btn btn-p" onClick={fetch} disabled={loading}>
+              {loading ? <span className="spinner"/> : '🔍 조회'}
+            </button>
+          </div>
+        </div>
+        {(!fFrom && !fTo) && (
+          <div style={{ fontSize:11, color:'var(--text3)', marginTop:6 }}>
+            날짜를 선택하지 않으면 전체 기간을 조회합니다
+          </div>
+        )}
+      </div>
+
+      {/* 결과 */}
+      {rows.length > 0 && (
+        <>
+          {/* 매니저 요약 카드 */}
+          <div className="card">
+            <div className="card-label">매니저별 요약</div>
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>담당 매니저</th>
+                    <th className="r">가입 회원수</th>
+                    <th className="r">총 구매횟수</th>
+                    <th className="r">총 결제금액</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(mg => (
+                    <>
+                      <tr key={mg.managerName} style={{ background: expanded===mg.managerName ? '#fffde7' : 'inherit' }}>
+                        <td>
+                          <strong style={{ fontSize:14, color: mg.managerName==='(미지정)' ? 'var(--text3)' : 'var(--text)' }}>
+                            {mg.managerName==='(미지정)' ? '⚠️ 담당 매니저 미지정' : `👤 ${mg.managerName}`}
+                          </strong>
+                        </td>
+                        <td className="r">
+                          <span style={{ fontFamily:'var(--mono)', fontWeight:600 }}>{mg.members.size}명</span>
+                        </td>
+                        <td className="r">
+                          <span style={{ fontFamily:'var(--mono)', fontWeight:600 }}>{mg.totalCount.toLocaleString()}회</span>
+                        </td>
+                        <td className="r">
+                          <span style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14 }}>
+                            {mg.totalAmt.toLocaleString()}원
+                          </span>
+                        </td>
+                        <td>
+                          <button className="btn btn-s" style={{ fontSize:11 }}
+                            onClick={() => setExpanded(expanded===mg.managerName ? null : mg.managerName)}>
+                            {expanded===mg.managerName ? '▲ 닫기' : '▼ 상세'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* 회원별 상세 (펼쳐진 경우) */}
+                      {expanded===mg.managerName && (
+                        <tr key={mg.managerName+'_detail'}>
+                          <td colSpan={5} style={{ padding:0, background:'#fffde7' }}>
+                            <div style={{ padding:'0 16px 16px' }}>
+                              {/* 회원별 집계 */}
+                              <div style={{ marginBottom:12 }}>
+                                <div style={{ fontSize:11, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:1, marginBottom:8, marginTop:12 }}>
+                                  회원별 구매 현황
+                                </div>
+                                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                                  <thead>
+                                    <tr style={{ background:'#fff3e0' }}>
+                                      <th style={{ padding:'7px 10px', textAlign:'left', fontWeight:600, color:'var(--text2)', fontSize:11 }}>회원명</th>
+                                      <th style={{ padding:'7px 10px', textAlign:'left', fontWeight:600, color:'var(--text2)', fontSize:11 }}>연락처</th>
+                                      <th style={{ padding:'7px 10px', textAlign:'left', fontWeight:600, color:'var(--text2)', fontSize:11 }}>가입점포</th>
+                                      <th style={{ padding:'7px 10px', textAlign:'right', fontWeight:600, color:'var(--text2)', fontSize:11 }}>구매횟수</th>
+                                      <th style={{ padding:'7px 10px', textAlign:'right', fontWeight:600, color:'var(--text2)', fontSize:11 }}>결제금액</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {[...mg.members.values()].sort((a,b) => b.amt-a.amt).map(m => (
+                                      <tr key={m.id} style={{ borderBottom:'1px solid #ffcc80' }}>
+                                        <td style={{ padding:'8px 10px', fontWeight:600 }}>{m.name}</td>
+                                        <td style={{ padding:'8px 10px', fontFamily:'var(--mono)', fontSize:11, color:'var(--text2)' }}>{m.phone}</td>
+                                        <td style={{ padding:'8px 10px', fontSize:11 }}>
+                                          <span className="badge badge-dept" style={{marginRight:4}}>{m.store_name}</span>
+                                          <span className="badge badge-store">{m.branch_name}</span>
+                                        </td>
+                                        <td style={{ padding:'8px 10px', textAlign:'right', fontFamily:'var(--mono)' }}>{m.count}회</td>
+                                        <td style={{ padding:'8px 10px', textAlign:'right', fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{m.amt.toLocaleString()}원</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              {/* 구매 상세 내역 */}
+                              <div>
+                                <div style={{ fontSize:11, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>
+                                  구매 상세 내역
+                                </div>
+                                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                                  <thead>
+                                    <tr style={{ background:'#fff3e0' }}>
+                                      {['구매일','회원명','점포','지점','상품명','수량','결제금액','결제'].map(h => (
+                                        <th key={h} style={{ padding:'7px 10px', textAlign: ['수량','결제금액'].includes(h)?'right':'left', fontWeight:600, color:'var(--text2)', fontSize:11 }}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {mg.sales.map((s,i) => (
+                                      <tr key={s.id} style={{ borderBottom:'1px solid #ffcc80', background: i%2===1 ? '#fffde7' : '#fff' }}>
+                                        <td style={{ padding:'8px 10px', fontFamily:'var(--mono)', fontSize:11 }}>{s.sold_at}</td>
+                                        <td style={{ padding:'8px 10px', fontWeight:600 }}>{s.customer?.name || '-'}</td>
+                                        <td style={{ padding:'8px 10px' }}><span className="badge badge-dept">{s.store_name}</span></td>
+                                        <td style={{ padding:'8px 10px' }}><span className="badge badge-store">{s.branch_name}</span></td>
+                                        <td style={{ padding:'8px 10px' }}>{s.product?.name || '-'}</td>
+                                        <td style={{ padding:'8px 10px', textAlign:'right', fontFamily:'var(--mono)' }}>{s.quantity}</td>
+                                        <td style={{ padding:'8px 10px', textAlign:'right', fontFamily:'var(--mono)', fontWeight:700 }}>{(s.price*s.quantity).toLocaleString()}원</td>
+                                        <td style={{ padding:'8px 10px' }}>
+                                          <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:10}}>{s.payment}</span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))}
+                  {/* 전체 합계 행 */}
+                  <tr style={{ background:'var(--bg3)', borderTop:'2px solid var(--border2)' }}>
+                    <td style={{ padding:'10px 11px', fontWeight:700 }}>합계</td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>
+                      {rows.reduce((s,mg) => s + mg.members.size, 0)}명
+                    </td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>
+                      {rows.reduce((s,mg) => s + mg.totalCount, 0).toLocaleString()}회
+                    </td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:15 }}>
+                      {rows.reduce((s,mg) => s + mg.totalAmt, 0).toLocaleString()}원
+                    </td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {rows.length === 0 && !loading && (
+        <div className="empty">
+          날짜를 선택하고 <strong>조회</strong>버튼을 눌러주세요<br/>
+          <span style={{fontSize:11,color:'var(--text3)'}}>날짜 미선택 시 전체 기간 조회</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const MENUS = [
   { key: 'upload',          icon: '📊', label: '안전재고 현황' },
   { key: 'history',         icon: '🗂️', label: '업로드 이력' },
   { key: 'sales_list',      icon: '📋', label: '판매내역 조회' },
   { key: 'customer_lookup', icon: '🔍', label: '회원 조회' },
+  { key: 'incentive',       icon: '💰', label: '인센티브 조회' },
 ];
 const MANAGER_MENUS = [
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
@@ -2180,6 +2406,7 @@ export default function App() {
     history:         '업로드 이력',
     sales_list:      '판매내역 조회',
     customer_lookup: '회원 조회',
+    incentive:       '인센티브 조회',
     sales_input:     '판매 입력',
     customer_input:  '회원 등록',
     admin:           '사용자 관리',
@@ -2235,6 +2462,7 @@ export default function App() {
             {page === 'customer_input' && (isManager || isAdmin) && <CustomerInputPage profile={profile}/>}
             {page === 'sales_list'     && canSeeMain && <SalesListPage/>}
             {page === 'customer_lookup'&& canSeeMain && <CustomerLookupPage/>}
+            {page === 'incentive'      && canSeeMain && <IncentivePage/>}
           </div>
         </div>
       </div>
