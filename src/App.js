@@ -3234,7 +3234,8 @@ function HomePage() {
   const year  = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const monthStart = `${year}-${month}-01`;
-  const monthEnd   = `${year}-${month}-31`;
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0,10);
   const monthLabel = `${year}년 ${month}월`;
 
   const [summary,    setSummary]    = useState(null);
@@ -3247,7 +3248,7 @@ function HomePage() {
       const { data } = await supabase.from('sales')
         .select('store_name, branch_name, quantity, price, sold_at')
         .gte('sold_at', monthStart)
-        .lte('sold_at', monthEnd);
+        .lte('sold_at', yesterdayStr);
 
       const rows = data || [];
       const totalAmt   = rows.reduce((s,r) => s + r.price * r.quantity, 0);
@@ -3281,7 +3282,7 @@ function HomePage() {
           {monthLabel} 누적 판매매출
         </div>
         <div style={{ fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)' }}>
-          {monthStart} ~ {new Date().toISOString().slice(0,10)} (오늘까지)
+          {monthStart} ~ {yesterdayStr} (어제까지)
         </div>
       </div>
 
