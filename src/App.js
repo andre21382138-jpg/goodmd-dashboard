@@ -1603,137 +1603,130 @@ function CustomerLookupPage() {
       </div>
 
       {customers.length > 0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'340px 1fr', gap:16 }}>
-          {/* 회원 목록 */}
-          <div className="card" style={{ maxHeight:700, overflowY:'auto' }}>
-            <div className="card-label">조회 결과 ({customers.length}명)</div>
-            {customers.map(c => (
-              <div key={c.id} onClick={() => handleSelect(c)}
-                style={{
-                  padding:'10px 12px', borderRadius:'var(--radius)', cursor:'pointer', marginBottom:4,
-                  background: selected?.id===c.id ? '#fff8e1' : 'var(--bg3)',
-                  border: `1px solid ${selected?.id===c.id ? '#ffcc80' : 'transparent'}`,
-                }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <span style={{ fontWeight:600, fontSize:13 }}>{c.name}</span>
-                  <span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--text3)' }}>{c.joined_at}</span>
-                </div>
-                <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:2 }}>{c.phone}</div>
-                <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
-                  <span className="badge badge-dept" style={{fontSize:10, marginRight:4}}>{c.store_name}</span>
-                  <span className="badge badge-store" style={{fontSize:10}}>{c.branch_name}</span>
-                </div>
-                {c.manager_name && (
-                  <div style={{ fontSize:11, color:'var(--accent)', fontWeight:600, marginTop:3 }}>
-                    담당: {c.manager_name}
-                  </div>
-                )}
+        <div className="card" style={{padding:'16px 20px'}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
+            <span className="fresult">총 <b>{customers.length}</b>명 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
+          </div>
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>가입일</th>
+                  <th>이름</th>
+                  <th>휴대폰번호</th>
+                  <th>생일</th>
+                  <th>점포</th>
+                  <th>지점</th>
+                  <th>담당매니저</th>
+                  <th style={{textAlign:'center'}}>마케팅동의</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map(c => (
+                  <tr key={c.id} style={{cursor:'pointer'}} onClick={() => handleSelect(c)}>
+                    <td className="mono" style={{fontSize:11}}>{c.joined_at}</td>
+                    <td><strong style={{fontSize:13}}>{c.name}</strong></td>
+                    <td className="mono" style={{fontSize:12}}>{c.phone}</td>
+                    <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{c.birthday || '-'}</td>
+                    <td><span className="badge badge-dept">{c.store_name}</span></td>
+                    <td><span className="badge badge-store">{c.branch_name}</span></td>
+                    <td style={{fontSize:12, color:'var(--accent)', fontWeight:600}}>{c.manager_name || '-'}</td>
+                    <td style={{textAlign:'center'}}>
+                      {c.sms_consent
+                        ? <span style={{color:'var(--success)', fontWeight:700, fontSize:12}}>✅ 동의</span>
+                        : <span style={{color:'var(--text3)', fontSize:12}}>미동의</span>
+                      }
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-s"
+                        style={{fontSize:11, padding:'3px 10px', opacity: c.sms_consent ? 1 : 0.35}}
+                        title={c.sms_consent ? '문자 발송' : 'SMS 미동의 회원'}
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (!c.sms_consent) { toast('SMS 수신 미동의 회원입니다', 'err'); return; }
+                          toast(`${c.name} (${c.phone}) — 문자 발송 기능은 SMS API 연동 후 활성화됩니다`, 'inf');
+                        }}>
+                        📱 문자
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 회원 상세 + 구매이력 패널 */}
+      {selected && (
+        <div className="card">
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14}}>
+            <div style={{display:'flex', alignItems:'center', gap:12}}>
+              <div style={{fontSize:17, fontWeight:700}}>{selected.name}</div>
+              <div style={{fontFamily:'var(--mono)', fontSize:13, color:'var(--text2)'}}>{selected.phone}</div>
+              {selected.birthday && <div style={{fontSize:12, color:'var(--text3)'}}>🎂 {selected.birthday}</div>}
+            </div>
+            <button className="btn btn-s" style={{fontSize:11}} onClick={() => setSelected(null)}>닫기</button>
+          </div>
+          <div style={{display:'flex', flexWrap:'wrap', gap:8, fontSize:12, marginBottom:14, paddingBottom:12, borderBottom:'1px solid var(--border)'}}>
+            <span style={{color:'var(--text3)'}}>가입일</span><strong>{selected.joined_at}</strong>
+            <span style={{color:'var(--border2)'}}>|</span>
+            <span className="badge badge-dept">{selected.store_name}</span>
+            <span className="badge badge-store">{selected.branch_name}</span>
+            {selected.manager_name && (<><span style={{color:'var(--border2)'}}>|</span><span style={{color:'var(--text3)'}}>담당</span><strong style={{color:'var(--accent)'}}>{selected.manager_name}</strong></>)}
+            <span style={{color:'var(--border2)'}}>|</span>
+            {selected.sms_consent
+              ? <span style={{color:'var(--success)', fontWeight:700}}>✅ SMS동의</span>
+              : <span style={{color:'var(--text3)'}}>SMS미동의</span>
+            }
+          </div>
+          <div style={{display:'flex', gap:10, marginBottom:16}}>
+            {[
+              {label:'구매건수', value: purchases.length + '건'},
+              {label:'구매수량', value: totalQty + '개'},
+              {label:'총 결제금액', value: totalAmt.toLocaleString() + '원'},
+            ].map(s => (
+              <div key={s.label} style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'7px 14px', textAlign:'center'}}>
+                <div style={{fontSize:10, fontWeight:600, color:'var(--text2)'}}>{s.label}</div>
+                <div style={{fontSize:15, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', marginTop:2}}>{s.value}</div>
               </div>
             ))}
           </div>
-
-          {/* 구매 이력 */}
-          <div className="card">
-            {!selected ? (
-              <div className="empty">왼쪽에서 회원을 선택하면 구매 이력이 표시됩니다</div>
-            ) : (
-              <>
-                {/* 회원 정보 헤더 */}
-                <div style={{ background:'#fafafa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:16 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
-                    <div style={{ fontSize:17, fontWeight:700 }}>{selected.name}</div>
-                    <div style={{ fontFamily:'var(--mono)', fontSize:13, color:'var(--text2)' }}>{selected.phone}</div>
-                  </div>
-                  <div style={{ display:'flex', flexWrap:'wrap', gap:8, fontSize:12 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                      <span style={{color:'var(--text3)'}}>가입일</span>
-                      <strong>{selected.joined_at}</strong>
-                    </div>
-                    <span style={{color:'var(--border2)'}}>|</span>
-                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                      <span style={{color:'var(--text3)'}}>가입점포</span>
-                      <span className="badge badge-dept">{selected.store_name}</span>
-                      <span className="badge badge-store">{selected.branch_name}</span>
-                    </div>
-                    {selected.manager_name && (
-                      <>
-                        <span style={{color:'var(--border2)'}}>|</span>
-                        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                          <span style={{color:'var(--text3)'}}>담당 매니저</span>
-                          <strong style={{color:'var(--accent)'}}>{selected.manager_name}</strong>
-                        </div>
-                      </>
-                    )}
-                    {selected.creator && (
-                      <>
-                        <span style={{color:'var(--border2)'}}>|</span>
-                        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                          <span style={{color:'var(--text3)'}}>입력자</span>
-                          <span>{selected.creator.name}</span>
-                        </div>
-                      </>
-                    )}
-                    <span style={{color:'var(--border2)'}}>|</span>
-                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                      <span style={{color:'var(--text3)'}}>SMS</span>
-                      {selected.sms_consent
-                        ? <span style={{color:'var(--success)', fontWeight:700, fontSize:11}}>✅ 동의</span>
-                        : <span style={{color:'var(--text3)', fontSize:11}}>미동의</span>
-                      }
-                    </div>
-                  </div>
-                  {/* 구매 요약 */}
-                  <div style={{ display:'flex', gap:12, marginTop:12 }}>
-                    {[
-                      { label:'총 구매건수', value: purchases.length + '건' },
-                      { label:'총 구매수량', value: totalQty + '개' },
-                      { label:'총 구매금액', value: totalAmt.toLocaleString() + '원' },
-                    ].map(s => (
-                      <div key={s.label} style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'7px 14px', textAlign:'center' }}>
-                        <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>{s.label}</div>
-                        <div style={{ fontSize:16, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>{s.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 구매 이력 테이블 */}
-                <div className="card-label">구매 이력</div>
-                {loadingP ? <div className="empty"><span className="spinner"/></div> : (
-                  <div className="twrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>구매일</th><th>점포</th><th>지점</th>
-                          <th>브랜드</th><th>상품명</th>
-                          <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
-                          <th>결제</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {purchases.length === 0
-                          ? <tr><td colSpan={9} className="empty">구매 이력이 없습니다</td></tr>
-                          : purchases.map(p => (
-                            <tr key={p.id}>
-                              <td className="mono">{p.sold_at}</td>
-                              <td><span className="badge badge-dept">{p.store_name}</span></td>
-                              <td><span className="badge badge-store">{p.branch_name}</span></td>
-                              <td>{p.brand?.name || '-'}</td>
-                              <td>{p.product?.name || '-'}</td>
-                              <td className="r">{p.quantity}</td>
-                              <td className="r">{Number(p.price).toLocaleString()}</td>
-                              <td className="r" style={{fontWeight:600}}>{(p.price*p.quantity).toLocaleString()}</td>
-                              <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>{p.payment}</span></td>
-                            </tr>
-                          ))
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          <div className="card-label">구매 이력</div>
+          {loadingP ? <div className="empty"><span className="spinner"/></div> : (
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>구매일</th><th>점포</th><th>지점</th>
+                    <th>브랜드</th><th>상품명</th>
+                    <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
+                    <th>결제</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchases.length === 0
+                    ? <tr><td colSpan={9} className="empty">구매 이력이 없습니다</td></tr>
+                    : purchases.map(p => (
+                      <tr key={p.id}>
+                        <td className="mono">{p.sold_at}</td>
+                        <td><span className="badge badge-dept">{p.store_name}</span></td>
+                        <td><span className="badge badge-store">{p.branch_name}</span></td>
+                        <td>{p.brand?.name||'-'}</td>
+                        <td>{p.product?.name||'-'}</td>
+                        <td className="r">{p.quantity}</td>
+                        <td className="r">{Number(p.price).toLocaleString()}</td>
+                        <td className="r" style={{fontWeight:600}}>{(p.price*p.quantity).toLocaleString()}</td>
+                        <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>{p.payment}</span></td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
