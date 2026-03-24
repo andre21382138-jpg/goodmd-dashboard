@@ -1181,6 +1181,7 @@ function SalesInputPage({ profile }) {
   const [custName,    setCustName]    = useState('');
   const [custPhone,   setCustPhone]   = useState('');
   const [managerName, setManagerName] = useState('');
+  const [smsConsent,  setSmsConsent]  = useState(false);
 
   const searchMembers = async () => {
     if (!memberSearch.trim()) return;
@@ -1223,7 +1224,7 @@ function SalesInputPage({ profile }) {
 
   const resetForm = () => {
     setProdId(''); setQty(1); setPrice(''); setMemo(''); setPayment('카드');
-    setCustName(''); setCustPhone(''); setManagerName('');
+    setCustName(''); setCustPhone(''); setManagerName(''); setSmsConsent(false);
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
 
@@ -1250,6 +1251,8 @@ function SalesInputPage({ profile }) {
           store_name: profile.department,
           branch_name: profile.branch,
           manager_name: managerName.trim() || null,
+          sms_consent: smsConsent,
+          sms_consent_at: smsConsent ? new Date().toISOString() : null,
           created_by: profile.id,
         }).select().single();
         if (custErr) throw custErr;
@@ -1412,23 +1415,31 @@ function SalesInputPage({ profile }) {
 
             {/* 신규 회원등록 */}
             {memberMode === 'new' && (
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12,
-                background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:14 }}>
-                <div>
-                  <label style={labelStyle}>고객 이름</label>
-                  <input value={custName} onChange={e => setCustName(e.target.value)}
-                    style={inputStyle} placeholder="홍길동" />
+              <div style={{ background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:14 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:12 }}>
+                  <div>
+                    <label style={labelStyle}>고객 이름</label>
+                    <input value={custName} onChange={e => setCustName(e.target.value)}
+                      style={inputStyle} placeholder="홍길동" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>연락처</label>
+                    <input value={custPhone} onChange={e => setCustPhone(formatPhone(e.target.value))}
+                      style={inputStyle} placeholder="010-0000-0000" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>담당 매니저 이름</label>
+                    <input value={managerName} onChange={e => setManagerName(e.target.value)}
+                      style={inputStyle} placeholder="매니저 이름 입력" />
+                  </div>
                 </div>
-                <div>
-                  <label style={labelStyle}>연락처</label>
-                  <input value={custPhone} onChange={e => setCustPhone(formatPhone(e.target.value))}
-                    style={inputStyle} placeholder="010-0000-0000" />
-                </div>
-                <div>
-                  <label style={labelStyle}>담당 매니저 이름</label>
-                  <input value={managerName} onChange={e => setManagerName(e.target.value)}
-                    style={inputStyle} placeholder="매니저 이름 입력" />
-                </div>
+                <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none', padding:'8px 0' }}>
+                  <input type="checkbox" checked={smsConsent} onChange={e => setSmsConsent(e.target.checked)}
+                    style={{ width:16, height:16, accentColor:'var(--accent)', flexShrink:0 }} />
+                  <span style={{ fontSize:12, color: smsConsent ? 'var(--accent)' : 'var(--text2)', fontWeight: smsConsent ? 700 : 500 }}>
+                    📱 광고성 문자 수신 동의 (선택)
+                  </span>
+                </label>
               </div>
             )}
           </div>
@@ -1655,6 +1666,14 @@ function CustomerLookupPage() {
                         </div>
                       </>
                     )}
+                    <span style={{color:'var(--border2)'}}>|</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                      <span style={{color:'var(--text3)'}}>SMS</span>
+                      {selected.sms_consent
+                        ? <span style={{color:'var(--success)', fontWeight:700, fontSize:11}}>✅ 동의</span>
+                        : <span style={{color:'var(--text3)', fontSize:11}}>미동의</span>
+                      }
+                    </div>
                   </div>
                   {/* 구매 요약 */}
                   <div style={{ display:'flex', gap:12, marginTop:12 }}>
@@ -1730,6 +1749,7 @@ function CustomerInputPage({ profile }) {
   const [custName,    setCustName]    = useState('');
   const [phone,       setPhone]       = useState('');
   const [managerName, setManagerName] = useState('');
+  const [smsConsent,  setSmsConsent]  = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [recentList,  setRecent]      = useState([]);
 
@@ -1754,10 +1774,12 @@ function CustomerInputPage({ profile }) {
       store_name: profile.department,
       branch_name: profile.branch,
       manager_name: managerName.trim() || null,
+      sms_consent: smsConsent,
+      sms_consent_at: smsConsent ? new Date().toISOString() : null,
       created_by: profile.id,
     });
     if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setManagerName(''); fetchRecent(); }
+    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setManagerName(''); setSmsConsent(false); fetchRecent(); }
     setSaving(false);
   };
 
@@ -1802,6 +1824,30 @@ function CustomerInputPage({ profile }) {
                 style={inputStyle} placeholder="매니저 이름 입력" />
             </div>
           </div>
+
+          {/* SMS 수신동의 */}
+          <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:16 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:'var(--text)', marginBottom:10 }}>📱 광고성 문자 수신 동의</div>
+            <label style={{ display:'flex', alignItems:'flex-start', gap:10, cursor:'pointer', userSelect:'none' }}>
+              <input type="checkbox" checked={smsConsent} onChange={e => setSmsConsent(e.target.checked)}
+                style={{ width:17, height:17, marginTop:2, accentColor:'var(--accent)', flexShrink:0 }} />
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color: smsConsent ? 'var(--accent)' : 'var(--text2)' }}>
+                  광고성 정보 문자 수신에 동의합니다 (선택)
+                </div>
+                <div style={{ fontSize:11, color:'var(--text3)', marginTop:4, lineHeight:1.6 }}>
+                  이벤트, 프로모션, 신상품 안내 등 마케팅 목적의 문자메시지 수신에 동의합니다.<br/>
+                  동의 철회는 매장 담당자에게 요청하실 수 있습니다.
+                </div>
+              </div>
+            </label>
+            {smsConsent && (
+              <div style={{ marginTop:10, background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:6, padding:'8px 12px', fontSize:11, color:'#6d4c41' }}>
+                ✅ 수신동의 일시가 자동으로 기록됩니다 ({new Date().toLocaleDateString('ko-KR')})
+              </div>
+            )}
+          </div>
+
           <button className="btn btn-p" type="submit" disabled={saving} style={{ width:'100%', justifyContent:'center', height:40 }}>
             {saving ? <span className="spinner"/> : '✓ 회원 정보 저장'}
           </button>
@@ -1813,17 +1859,23 @@ function CustomerInputPage({ profile }) {
         <div className="twrap">
           <table>
             <thead>
-              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>담당 매니저</th><th>입력일시</th><th></th></tr>
+              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>담당 매니저</th><th>SMS동의</th><th>입력일시</th><th></th></tr>
             </thead>
             <tbody>
               {recentList.length === 0
-                ? <tr><td colSpan={6} className="empty">입력된 고객이 없습니다</td></tr>
+                ? <tr><td colSpan={7} className="empty">입력된 고객이 없습니다</td></tr>
                 : recentList.map(c => (
                   <tr key={c.id}>
                     <td className="mono">{c.joined_at}</td>
                     <td><strong>{c.name}</strong></td>
                     <td className="mono">{c.phone}</td>
                     <td style={{fontSize:12,color:'var(--accent)',fontWeight:600}}>{c.manager_name || '-'}</td>
+                    <td>
+                      {c.sms_consent
+                        ? <span style={{color:'var(--success)', fontWeight:600, fontSize:12}}>✅ 동의</span>
+                        : <span style={{color:'var(--text3)', fontSize:12}}>미동의</span>
+                      }
+                    </td>
                     <td className="mono" style={{fontSize:11,color:'var(--text2)'}}>{new Date(c.created_at).toLocaleString('ko-KR')}</td>
                     <td><button className="btn-danger" onClick={() => handleDelete(c.id)}>삭제</button></td>
                   </tr>
