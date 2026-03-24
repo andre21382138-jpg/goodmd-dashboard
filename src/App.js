@@ -1166,9 +1166,10 @@ function SalesInputPage({ profile }) {
   const [recentSales, setRecent] = useState([]);
 
   // 고객 동시 등록
-  const [withCust,  setWithCust] = useState(false);
-  const [custName,  setCustName] = useState('');
-  const [custPhone, setCustPhone]= useState('');
+  const [withCust,    setWithCust]    = useState(false);
+  const [custName,    setCustName]    = useState('');
+  const [custPhone,   setCustPhone]   = useState('');
+  const [managerName, setManagerName] = useState('');
 
   useEffect(() => {
     supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || []));
@@ -1200,7 +1201,7 @@ function SalesInputPage({ profile }) {
 
   const resetForm = () => {
     setProdId(''); setQty(1); setPrice(''); setMemo(''); setPayment('카드');
-    setCustName(''); setCustPhone(''); setWithCust(false);
+    setCustName(''); setCustPhone(''); setManagerName(''); setWithCust(false);
   };
 
   const handleSubmit = async (e) => {
@@ -1223,6 +1224,7 @@ function SalesInputPage({ profile }) {
           phone: custPhone,
           store_name: profile.department,
           branch_name: profile.branch,
+          manager_name: managerName.trim() || null,
           created_by: profile.id,
         }).select().single();
         if (custErr) throw custErr;
@@ -1331,7 +1333,7 @@ function SalesInputPage({ profile }) {
             </label>
 
             {withCust && (
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:12,
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginTop:12,
                 background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:14 }}>
                 <div>
                   <label style={labelStyle}>고객 이름</label>
@@ -1342,6 +1344,11 @@ function SalesInputPage({ profile }) {
                   <label style={labelStyle}>연락처</label>
                   <input value={custPhone} onChange={e => setCustPhone(formatPhone(e.target.value))}
                     style={inputStyle} placeholder="010-0000-0000" />
+                </div>
+                <div>
+                  <label style={labelStyle}>담당 매니저 이름 <span style={{color:'var(--text3)',fontWeight:400}}>(인센티브 기준)</span></label>
+                  <input value={managerName} onChange={e => setManagerName(e.target.value)}
+                    style={inputStyle} placeholder="매니저 이름 입력" />
                 </div>
               </div>
             )}
@@ -1467,7 +1474,8 @@ function CustomerLookupPage() {
                 <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
                   {c.store_name} · {c.branch_name} · 가입 {c.joined_at}
                 </div>
-                {c.creator && <div style={{ fontSize:10, color:'var(--text3)' }}>담당: {c.creator.name}</div>}
+                {c.manager_name && <div style={{ fontSize:11, color:'var(--accent)', fontWeight:600, marginTop:2 }}>담당 매니저: {c.manager_name}</div>}
+                {c.creator && <div style={{ fontSize:10, color:'var(--text3)' }}>입력자: {c.creator.name}</div>}
               </div>
             ))
           }
@@ -1484,6 +1492,14 @@ function CustomerLookupPage() {
                 <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:4 }}>
                   {selected.phone} · {selected.store_name} {selected.branch_name} · 가입 {selected.joined_at}
                 </div>
+                {selected.manager_name && (
+                  <div style={{ marginTop:6, display:'inline-flex', alignItems:'center', gap:6,
+                    background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)',
+                    padding:'4px 12px', fontSize:12 }}>
+                    <span style={{color:'var(--text2)'}}>담당 매니저</span>
+                    <strong style={{color:'var(--accent)'}}>{selected.manager_name}</strong>
+                  </div>
+                )}
                 <div style={{ display:'flex', gap:16, marginTop:10 }}>
                   <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'8px 16px', textAlign:'center' }}>
                     <div style={{ fontSize:10, color:'var(--text2)', fontWeight:600 }}>총 구매건수</div>
@@ -1545,11 +1561,12 @@ function CustomerLookupPage() {
 // ════════════════════════════════════════════════════════
 function CustomerInputPage({ profile }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [joinedAt, setJoinedAt] = useState(today);
-  const [custName, setCustName] = useState('');
-  const [phone,    setPhone]    = useState('');
-  const [saving,   setSaving]   = useState(false);
-  const [recentList, setRecent] = useState([]);
+  const [joinedAt,    setJoinedAt]    = useState(today);
+  const [custName,    setCustName]    = useState('');
+  const [phone,       setPhone]       = useState('');
+  const [managerName, setManagerName] = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [recentList,  setRecent]      = useState([]);
 
   const fetchRecent = useCallback(async () => {
     const { data } = await supabase.from('customers')
@@ -1571,10 +1588,11 @@ function CustomerInputPage({ profile }) {
       phone: phone,
       store_name: profile.department,
       branch_name: profile.branch,
+      manager_name: managerName.trim() || null,
       created_by: profile.id,
     });
     if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else { toast('고객 입력 완료', 'ok'); setCustName(''); setPhone(''); fetchRecent(); }
+    else { toast('고객 입력 완료', 'ok'); setCustName(''); setPhone(''); setManagerName(''); fetchRecent(); }
     setSaving(false);
   };
 
@@ -1613,6 +1631,11 @@ function CustomerInputPage({ profile }) {
                 onChange={e => setPhone(formatPhone(e.target.value))}
                 style={inputStyle} placeholder="010-0000-0000" required />
             </div>
+            <div>
+              <label style={labelStyle}>담당 매니저 이름 <span style={{color:'var(--text3)',fontWeight:400}}>(인센티브 기준)</span></label>
+              <input value={managerName} onChange={e => setManagerName(e.target.value)}
+                style={inputStyle} placeholder="매니저 이름 입력" />
+            </div>
           </div>
           <button className="btn btn-p" type="submit" disabled={saving} style={{ width:'100%', justifyContent:'center', height:40 }}>
             {saving ? <span className="spinner"/> : '✓ 고객 정보 저장'}
@@ -1625,16 +1648,17 @@ function CustomerInputPage({ profile }) {
         <div className="twrap">
           <table>
             <thead>
-              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>입력일시</th><th></th></tr>
+              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>담당 매니저</th><th>입력일시</th><th></th></tr>
             </thead>
             <tbody>
               {recentList.length === 0
-                ? <tr><td colSpan={5} className="empty">입력된 고객이 없습니다</td></tr>
+                ? <tr><td colSpan={6} className="empty">입력된 고객이 없습니다</td></tr>
                 : recentList.map(c => (
                   <tr key={c.id}>
                     <td className="mono">{c.joined_at}</td>
                     <td><strong>{c.name}</strong></td>
                     <td className="mono">{c.phone}</td>
+                    <td style={{fontSize:12,color:'var(--accent)',fontWeight:600}}>{c.manager_name || '-'}</td>
                     <td className="mono" style={{fontSize:11,color:'var(--text2)'}}>{new Date(c.created_at).toLocaleString('ko-KR')}</td>
                     <td><button className="btn-danger" onClick={() => handleDelete(c.id)}>삭제</button></td>
                   </tr>
