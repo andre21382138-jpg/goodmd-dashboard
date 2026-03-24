@@ -4058,8 +4058,8 @@ function JoinPage({ managerId }) {
   );
 
   return (
-    <div style={{minHeight:'100vh',background:'#fff9f0',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-      <div style={{width:'100%',maxWidth:420,background:'#fff',borderRadius:16,boxShadow:'0 4px 24px rgba(0,0,0,0.10)',overflow:'hidden'}}>
+    <div style={{minHeight:'100vh',background:'#fff9f0',display:'flex',alignItems:'center',justifyContent:'center',padding:20,overflowX:'hidden'}}>
+      <div style={{width:'100%',maxWidth:420,background:'#fff',borderRadius:16,boxShadow:'0 4px 24px rgba(0,0,0,0.10)',overflow:'hidden',boxSizing:'border-box'}}>
         {/* 헤더 */}
         <div style={{background:'var(--sidebar)',padding:'28px 28px 20px',textAlign:'center'}}>
           <div style={{fontSize:32,marginBottom:8}}>🏬</div>
@@ -4089,7 +4089,7 @@ function JoinPage({ managerId }) {
                 생일 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택 — 생일 혜택 제공용)</span>
               </label>
               <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
-                style={{width:'100%',maxWidth:'100%',height:50,padding:'0 12px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:15,outline:'none',fontFamily:'inherit',boxSizing:'border-box',color: birthday ? '#222' : '#aaa',display:'block'}}/>
+                style={{width:'100%',maxWidth:'100%',height:50,padding:'0 40px 0 12px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:14,outline:'none',fontFamily:'inherit',boxSizing:'border-box',color: birthday ? '#222' : '#aaa',display:'block',WebkitAppearance:'none',appearance:'none'}}/>
             </div>
 
             {/* SMS 동의 */}
