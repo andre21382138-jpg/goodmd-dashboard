@@ -353,9 +353,9 @@ function AuthScreen() {
       <div className="auth-box" style={{ width: mode === 'signup' ? 420 : 380 }}>
         <div className="auth-logo">
           <div className="auth-logo-icon">🏬</div>
-          <div className="auth-logo-text">재고관리 대시보드</div>
+          <div className="auth-logo-text">(주)한국생활건강</div>
         </div>
-        <div className="auth-sub">백화점 매장 판매·재고 관리 시스템</div>
+        <div className="auth-sub">백화점(매장) 관리시스템</div>
 
         <div className="auth-tabs">
           <button className={`auth-tab ${mode === 'login' ? 'on' : ''}`} onClick={() => { setMode('login'); resetForm(); }}>로그인</button>
