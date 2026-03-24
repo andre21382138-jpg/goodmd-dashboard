@@ -4070,7 +4070,7 @@ function JoinPage({ managerId }) {
         </div>
 
         {/* 폼 */}
-        <div style={{padding:'28px 28px 32px'}}>
+        <div style={{padding:'28px 24px 32px', overflowX:'hidden'}}>
           <form onSubmit={handleSubmit}>
             <div style={{marginBottom:18}}>
               <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>이름</label>
@@ -4089,7 +4089,7 @@ function JoinPage({ managerId }) {
                 생일 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택 — 생일 혜택 제공용)</span>
               </label>
               <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
-                style={{width:'100%',height:50,padding:'0 16px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:15,outline:'none',fontFamily:'inherit',boxSizing:'border-box',color: birthday ? '#222' : '#aaa'}}/>
+                style={{width:'100%',maxWidth:'100%',height:50,padding:'0 12px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:15,outline:'none',fontFamily:'inherit',boxSizing:'border-box',color: birthday ? '#222' : '#aaa',display:'block'}}/>
             </div>
 
             {/* SMS 동의 */}
