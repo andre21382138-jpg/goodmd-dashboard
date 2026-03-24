@@ -2956,6 +2956,8 @@ function ManagerMgmtPage() {
               </tbody>
             </table>
           </div>
+        )}
+      </div>
 
       {/* QR 팝업 */}
       {qrManager && (() => {
@@ -2987,8 +2989,6 @@ function ManagerMgmtPage() {
           </div>
         );
       })()}
-        )}
-      </div>
     </div>
   );
 }
