@@ -3888,7 +3888,7 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       >
         <span style={{ fontSize:22 }}>🏬</span>
         <div>
-          <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 재고관리</div>
+          <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 관리시스템</div>
           <div style={{ fontSize:10, color:'rgba(0,0,0,0.45)', marginTop:2 }}>홈 대시보드</div>
         </div>
       </button>
