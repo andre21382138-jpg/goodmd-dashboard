@@ -22,11 +22,11 @@ const GLOBAL_CSS = `
     --bg3:     #f0f0f0;
     --border:  #e0e0e0;
     --border2: #cccccc;
-    --sidebar: #FFD600;
-    --sidebar-hover: #FFC200;
-    --sidebar-active: #FF8F00;
-    --sidebar-text: #1a1a1a;
-    --accent:  #FF8F00;
+    --sidebar: #74c69d;
+    --sidebar-hover: #63b88e;
+    --sidebar-active: #52a87e;
+    --sidebar-text: #1b4332;
+    --accent:  #2d6a4f;
     --accent2: #1565C0;
     --danger:  #C62828;
     --success: #2E7D32;
@@ -45,7 +45,7 @@ const GLOBAL_CSS = `
   .auth-box { width: 380px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 36px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
   .auth-logo { text-align: center; margin-bottom: 6px; }
   .auth-logo-icon { font-size: 36px; }
-  .auth-logo-text { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--sidebar-active); letter-spacing: -0.5px; }
+  .auth-logo-text { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
   .auth-sub { text-align: center; font-size: 12px; color: var(--text3); margin-bottom: 28px; }
   .auth-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 24px; }
   .auth-tab { flex: 1; padding: 8px; background: none; border: none; font-family: var(--sans); font-size: 13px; font-weight: 500; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 120ms; }
@@ -79,23 +79,23 @@ const GLOBAL_CSS = `
   .sidebar-logo { padding: 20px 18px 16px; border-bottom: 1px solid rgba(0,0,0,0.1); }
   .sidebar-logo-icon { font-size: 22px; }
   .sidebar-logo-text { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--sidebar-text); letter-spacing: -0.3px; margin-top: 2px; }
-  .sidebar-logo-sub { font-size: 10px; color: rgba(0,0,0,0.65); margin-top: 1px; }
-  .sidebar-section { padding: 12px 10px 4px; font-size: 9px; font-weight: 700; color: rgba(0,0,0,0.6); letter-spacing: 2px; text-transform: uppercase; }
+  .sidebar-logo-sub { font-size: 10px; color: rgba(0,0,0,0.5); margin-top: 1px; }
+  .sidebar-section { padding: 12px 10px 4px; font-size: 9px; font-weight: 700; color: rgba(0,0,0,0.45); letter-spacing: 2px; text-transform: uppercase; }
   .sidebar-menu { flex: 1; padding: 6px 8px; overflow-y: auto; }
-  .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 120ms; margin-bottom: 2px; font-size: 13px; font-weight: 600; color: #1a1a1a; border: none; background: none; width: 100%; text-align: left; }
-  .sidebar-item:hover { background: rgba(0,0,0,0.12); }
-  .sidebar-item.on { background: rgba(0,0,0,0.18); font-weight: 700; }
+  .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 120ms; margin-bottom: 2px; font-size: 13px; font-weight: 600; color: #1b4332; border: none; background: none; width: 100%; text-align: left; }
+  .sidebar-item:hover { background: rgba(0,0,0,0.1); }
+  .sidebar-item.on { background: rgba(0,0,0,0.15); font-weight: 700; color: #1b4332; }
   .sidebar-item-icon { font-size: 15px; flex-shrink: 0; }
-  .sidebar-sub { display: flex; align-items: center; gap: 9px; padding: 7px 10px 7px 34px; border-radius: 6px; cursor: pointer; transition: background 120ms; font-size: 12px; font-weight: 500; color: rgba(0,0,0,0.6); border: none; background: none; width: 100%; text-align: left; }
+  .sidebar-sub { display: flex; align-items: center; gap: 9px; padding: 7px 10px 7px 34px; border-radius: 6px; cursor: pointer; transition: background 120ms; font-size: 12px; font-weight: 500; color: rgba(27,67,50,0.7); border: none; background: none; width: 100%; text-align: left; }
   .sidebar-sub:hover { background: rgba(0,0,0,0.08); }
-  .sidebar-sub.on { background: rgba(0,0,0,0.12); font-weight: 700; color: rgba(0,0,0,0.85); }
+  .sidebar-sub.on { background: rgba(0,0,0,0.12); font-weight: 700; color: #1b4332; }
   .sidebar-sub-icon { font-size: 12px; }
-  .sidebar-chevron { margin-left: auto; font-size: 10px; transition: transform 150ms; color: rgba(0,0,0,0.4); }
+  .sidebar-chevron { margin-left: auto; font-size: 10px; transition: transform 150ms; color: rgba(0,0,0,0.35); }
   .sidebar-chevron.open { transform: rotate(180deg); }
-  .sidebar-bottom { padding: 12px 8px; border-top: 1px solid rgba(0,0,0,0.15); }
-  .sidebar-user { padding: 8px 10px; font-size: 11px; color: rgba(0,0,0,0.7); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sidebar-logout { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: rgba(0,0,0,0.7); background: none; border: none; width: 100%; transition: background 120ms; }
-  .sidebar-logout:hover { background: rgba(0,0,0,0.12); }
+  .sidebar-bottom { padding: 12px 8px; border-top: 1px solid rgba(0,0,0,0.12); }
+  .sidebar-user { padding: 8px 10px; font-size: 11px; color: rgba(27,67,50,0.7); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-logout { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: rgba(27,67,50,0.75); background: none; border: none; width: 100%; transition: background 120ms; }
+  .sidebar-logout:hover { background: rgba(0,0,0,0.1); color: #1b4332; }
 
   /* ── CONTENT ── */
   .content { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
