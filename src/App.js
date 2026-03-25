@@ -4149,13 +4149,15 @@ function HelpPage({ profile }) {
 
   // ── 섹션 래퍼 ──
   const Sec = ({ icon, title, desc, children }) => (
-    <div style={{marginBottom:32}}>
-      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,paddingBottom:8,borderBottom:'2px solid var(--sidebar)'}}>
-        <span style={{fontSize:18}}>{icon}</span>
-        <span style={{fontSize:14,fontWeight:700}}>{title}</span>
+    <div style={{marginBottom:12, background:'#fff', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
+      <div style={{display:'flex', alignItems:'center', gap:10, padding:'11px 16px', background:'var(--sidebar)', color:'var(--sidebar-text)'}}>
+        <span style={{fontSize:17}}>{icon}</span>
+        <span style={{fontSize:13, fontWeight:700, letterSpacing:'-0.2px'}}>{title}</span>
       </div>
-      {desc && <div style={{fontSize:12,color:'var(--text2)',marginBottom:10,lineHeight:1.7}}>{desc}</div>}
-      {children}
+      <div style={{padding:'14px 16px'}}>
+        {desc && <div style={{fontSize:12, color:'var(--text2)', marginBottom:12, lineHeight:1.7, background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:6, padding:'8px 12px'}}>{desc}</div>}
+        {children}
+      </div>
     </div>
   );
 
@@ -4168,7 +4170,7 @@ function HelpPage({ profile }) {
       </div>
 
       {/* ════ 관리자 ════ */}
-      {tab==='admin' && <div className="card" style={{padding:'24px 28px'}}>
+      {tab==='admin' && <div style={{display:'flex',flexDirection:'column',gap:12}}>
 
         <Sec icon="👥" title="사용자 관리"
           desc="신규 가입 요청이 들어오면 승인하고 권한을 설정합니다.">
@@ -4226,7 +4228,7 @@ function HelpPage({ profile }) {
       </div>}
 
       {/* ════ 담당자 ════ */}
-      {tab==='hq' && <div className="card" style={{padding:'24px 28px'}}>
+      {tab==='hq' && <div style={{display:'flex',flexDirection:'column',gap:12}}>
 
         <Sec icon="🏠" title="홈 대시보드"
           desc="로그인 시 첫 화면. 당월 누적 매출을 한눈에 확인합니다.">
@@ -4333,7 +4335,7 @@ function HelpPage({ profile }) {
       </div>}
 
       {/* ════ 매니저 ════ */}
-      {tab==='manager' && <div className="card" style={{padding:'24px 28px'}}>
+      {tab==='manager' && <div style={{display:'flex',flexDirection:'column',gap:12}}>
 
         <Sec icon="🛒" title="판매 입력"
           desc="매일 판매한 상품을 기록합니다. 회원 적립도 함께 처리합니다.">
