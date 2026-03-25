@@ -3878,10 +3878,11 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       <button
         onClick={() => setPage('home')}
         style={{
-          display:'flex', alignItems:'center', gap:10, padding:'16px 18px',
+          display:'flex', alignItems:'center', gap:10, padding:'0 18px',
           background: page==='home' ? 'rgba(0,0,0,0.12)' : 'transparent',
           border:'none', borderBottom:'1px solid rgba(0,0,0,0.1)',
           cursor:'pointer', width:'100%', textAlign:'left', transition:'background 120ms',
+          height:'52px', flexShrink:0,
         }}
         onMouseEnter={e => { if(page!=='home') e.currentTarget.style.background='rgba(0,0,0,0.06)'; }}
         onMouseLeave={e => { if(page!=='home') e.currentTarget.style.background='transparent'; }}
