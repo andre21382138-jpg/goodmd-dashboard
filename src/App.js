@@ -4394,6 +4394,14 @@ function HelpPage({ profile }) {
             SMS 동의: 고객에게 직접 확인 후 체크 &nbsp;|&nbsp;
             생일 입력 시 추후 생일 혜택 문자 발송에 활용
           </div>
+          <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:'var(--radius)',padding:'12px 14px',marginTop:12}}>
+            <div style={{fontWeight:700,fontSize:12,color:'#856404',marginBottom:6}}>⚠️ 중요사항</div>
+            <div style={{fontSize:12,color:'#856404',lineHeight:1.8}}>
+              앱에서 매니저가 직접 회원을 등록하는 경우, <b>마케팅 수신 동의 체크는 매니저가 대신 입력</b>하게 됩니다.<br/>
+              법적 분쟁을 예방하기 위해 반드시 <b>고객에게 마케팅 수신 동의 서명을 받은 서면 동의서를 별도로 보관</b>하세요.<br/>
+              고객이 QR코드로 직접 가입한 경우에는 서면 동의서가 필요하지 않습니다.
+            </div>
+          </div>
         </Sec>
 
         <Sec icon="📋" title="내 회원 목록"
