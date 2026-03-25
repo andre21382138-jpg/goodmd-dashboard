@@ -4150,7 +4150,7 @@ function HelpPage({ profile }) {
   // ── 섹션 래퍼 ──
   const Sec = ({ icon, title, desc, children }) => (
     <div style={{marginBottom:12, background:'#fff', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
-      <div style={{display:'flex', alignItems:'center', gap:10, padding:'11px 16px', background:'var(--sidebar)', color:'var(--sidebar-text)'}}>
+      <div style={{display:'flex', alignItems:'center', gap:10, padding:'11px 16px', background:'#FFD600', color:'#1a1a1a'}}>
         <span style={{fontSize:17}}>{icon}</span>
         <span style={{fontSize:13, fontWeight:700, letterSpacing:'-0.2px'}}>{title}</span>
       </div>
