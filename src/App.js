@@ -4071,8 +4071,13 @@ function LeavePlanPage({ profile }) {
 
             {/* 선택 날짜 표시 */}
             {selDates.length > 0 && (
-              <div style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:12, fontSize:12}}>
-                선택된 날짜 ({selDates.length}일): {selDates.join(', ')}
+              <div style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:12}}>
+                <div style={{fontSize:11, fontWeight:600, color:'#E65100', marginBottom:6}}>선택된 날짜 ({selDates.length}일)</div>
+                <div style={{display:'flex', flexWrap:'wrap', gap:4}}>
+                  {selDates.map(d => (
+                    <span key={d} style={{background:'var(--accent)', color:'#fff', borderRadius:4, padding:'2px 8px', fontSize:11, fontWeight:600}}>{d}</span>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -4100,7 +4105,7 @@ function LeavePlanPage({ profile }) {
                 {myPlans.map(p => (
                   <tr key={p.id}>
                     <td className="mono" style={{fontWeight:700}}>{p.target_month}</td>
-                    <td style={{fontSize:11, color:'var(--text2)'}}>{(p.dates||[]).join(', ')}</td>
+                    <td style={{fontSize:11, color:'var(--text2)'}}><div style={{display:'flex',flexWrap:'wrap',gap:3}}>{(p.dates||[]).map(d=><span key={d} style={{background:'#fff3e0',color:'var(--accent)',border:'1px solid #ffcc80',borderRadius:3,padding:'1px 6px',fontSize:10,fontWeight:600,whiteSpace:'nowrap'}}>{d}</span>)}</div></td>
                     <td style={{textAlign:'center', fontWeight:700, color:'var(--accent)'}}>{(p.dates||[]).length}일</td>
                     <td style={{fontSize:11, color:'var(--text3)'}}>{p.memo||'-'}</td>
                     <td className="mono" style={{fontSize:11}}>{new Date(p.created_at).toLocaleDateString('ko-KR')}</td>
@@ -4256,7 +4261,7 @@ function AttendanceMgmtPage() {
                         <td><strong>{p.manager_name}</strong></td>
                         <td><span className="badge badge-dept">{p.store_name}</span></td>
                         <td><span className="badge badge-store">{p.branch_name}</span></td>
-                        <td style={{fontSize:11, color:'var(--text2)', maxWidth:200}}>{(p.dates||[]).join(', ')}</td>
+                        <td style={{fontSize:11, color:'var(--text2)', maxWidth:200}}><div style={{display:'flex',flexWrap:'wrap',gap:3}}>{(p.dates||[]).map(d=><span key={d} style={{background:'#fff3e0',color:'var(--accent)',border:'1px solid #ffcc80',borderRadius:3,padding:'1px 6px',fontSize:10,fontWeight:600,whiteSpace:'nowrap'}}>{d}</span>)}</div></td>
                         <td style={{textAlign:'center', fontWeight:700, color:'var(--accent)'}}>{(p.dates||[]).length}일</td>
                         <td style={{fontSize:11, color:'var(--text3)'}}>{p.memo||'-'}</td>
                         <td className="mono" style={{fontSize:11}}>{new Date(p.created_at).toLocaleDateString('ko-KR')}</td>
