@@ -2661,6 +2661,8 @@ function StockMgmtPage() {
       )}
 
       {tab === 'input' && (
+        <div className="card">
+          <div className="card-label">재고 직접 입력</div>
           <form onSubmit={handleSave}>
             <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px,1fr))', gap:14, marginBottom:14}}>
               <div><label style={labelStyle}>브랜드</label>
