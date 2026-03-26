@@ -2651,8 +2651,16 @@ function StockMgmtPage() {
                           else { toast('삭제 완료', 'ok'); fetchStocks(); }
                         }}>삭제</button></td>
                       </tr>
-        <div className="card">
-          <div className="card-label">재고 직접 입력</div>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'input' && (
           <form onSubmit={handleSave}>
             <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px,1fr))', gap:14, marginBottom:14}}>
               <div><label style={labelStyle}>브랜드</label>
