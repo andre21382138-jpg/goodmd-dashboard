@@ -2185,11 +2185,12 @@ function ProductMgmtPage({ subPage }) {
                 <div className="drop-sub">컬럼: 브랜드명 / 상품명 / 판매가</div>
               </div>
               <div style={{marginTop:12, background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:12}}>
-                <div style={{fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:6}}>📋 파일 양식</div>
-                <table style={{fontSize:11, width:'100%', borderCollapse:'collapse'}}>
-                  <thead><tr><th style={{textAlign:'left', padding:'4px 8px', background:'#f0f0f0'}}>브랜드명</th><th style={{textAlign:'left', padding:'4px 8px', background:'#f0f0f0'}}>상품명</th><th style={{textAlign:'left', padding:'4px 8px', background:'#f0f0f0'}}>판매가</th></tr></thead>
-                  <tbody><tr><td style={{padding:'4px 8px'}}>팔레오</td><td style={{padding:'4px 8px'}}>팔레오_닥터스노트...</td><td style={{padding:'4px 8px'}}>50000</td></tr></tbody>
-                </table>
+                <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:6}}>📋 필수 컬럼 안내</div>
+                <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+                  {['브랜드명','상품명','판매가'].map(h => (
+                    <span key={h} style={{background:'#fff', border:'1px solid var(--border)', borderRadius:4, padding:'3px 10px', fontSize:12, fontWeight:600, color:'var(--text)'}}>{h}</span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -2463,11 +2464,12 @@ function CenterStockPage() {
             <div className="drop-sub">컬럼: 브랜드명 / 상품명 / 상품코드 / 수량 / 비고</div>
           </div>
           <div style={{marginTop:12, background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:12}}>
-            <div style={{fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:6}}>📋 파일 양식</div>
-            <table style={{fontSize:11, width:'100%', borderCollapse:'collapse'}}>
-              <thead><tr>{['브랜드명','상품명','상품코드','수량','비고'].map(h=><th key={h} style={{textAlign:'left',padding:'4px 8px',background:'#f0f0f0'}}>{h}</th>)}</tr></thead>
-              <tbody><tr><td style={{padding:'4px 8px'}}>팔레오</td><td style={{padding:'4px 8px'}}>팔레오_닥터스노트...</td><td style={{padding:'4px 8px'}}>8809956530119</td><td style={{padding:'4px 8px'}}>500</td><td style={{padding:'4px 8px'}}>2025-03 입고</td></tr></tbody>
-            </table>
+            <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:6}}>📋 필수 컬럼 안내</div>
+            <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+              {['브랜드명','상품명','상품코드 (선택)','수량','비고 (선택)'].map(h => (
+                <span key={h} style={{background:'#fff', border:'1px solid var(--border)', borderRadius:4, padding:'3px 10px', fontSize:12, fontWeight:600, color:'var(--text)'}}>{h}</span>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -2611,7 +2613,7 @@ function StockMgmtPage() {
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>브랜드</th><th>상품명</th><th>점포</th><th>지점</th><th className="r">재고수량</th><th>수정</th><th>최종수정일</th></tr></thead>
+                <thead><tr><th>브랜드</th><th>상품명</th><th>점포</th><th>지점</th><th className="r">재고수량</th><th>수정</th><th>최종수정일</th><th></th></tr></thead>
                 <tbody>
                   {filtered.length === 0
                     ? <tr><td colSpan={7} className="empty">재고 데이터가 없습니다</td></tr>
@@ -2642,17 +2644,13 @@ function StockMgmtPage() {
                           )}
                         </td>
                         <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{s.updated_at ? new Date(s.updated_at).toLocaleDateString('ko-KR') : '-'}</td>
+                        <td><button className="btn-danger" onClick={async () => {
+                          if (!window.confirm('이 재고 항목을 삭제하시겠습니까?')) return;
+                          const { error } = await supabase.from('stock_status').delete().eq('id', s.id);
+                          if (error) toast(error.message, 'err');
+                          else { toast('삭제 완료', 'ok'); fetchStocks(); }
+                        }}>삭제</button></td>
                       </tr>
-                    ))
-                  }
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'input' && (
         <div className="card">
           <div className="card-label">재고 직접 입력</div>
           <form onSubmit={handleSave}>
@@ -2691,11 +2689,12 @@ function StockMgmtPage() {
             <div className="drop-sub">컬럼: 브랜드명 / 상품명 / 점포명 / 지점명 / 재고수량</div>
           </div>
           <div style={{marginTop:12, background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:12}}>
-            <div style={{fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:6}}>📋 파일 양식</div>
-            <table style={{fontSize:11, width:'100%', borderCollapse:'collapse'}}>
-              <thead><tr>{['브랜드명','상품명','점포명','지점명','재고수량'].map(h=><th key={h} style={{textAlign:'left',padding:'4px 8px',background:'#f0f0f0'}}>{h}</th>)}</tr></thead>
-              <tbody><tr><td style={{padding:'4px 8px'}}>팔레오</td><td style={{padding:'4px 8px'}}>팔레오_닥터스노트...</td><td style={{padding:'4px 8px'}}>롯데백화점</td><td style={{padding:'4px 8px'}}>건대스타시티점</td><td style={{padding:'4px 8px'}}>100</td></tr></tbody>
-            </table>
+            <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:6}}>📋 필수 컬럼 안내</div>
+            <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+              {['브랜드명','상품명','점포명','지점명','재고수량'].map(h => (
+                <span key={h} style={{background:'#fff', border:'1px solid var(--border)', borderRadius:4, padding:'3px 10px', fontSize:12, fontWeight:600, color:'var(--text)'}}>{h}</span>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -2761,13 +2760,17 @@ function SafetyCheckPage({ profile }) {
 
     const combined = [...salesMap.values()].map(s => {
       const key  = `${s.store_name}|||${s.branch_name}|||${s.brand_id}|||${s.product_id}`;
-      const stock = stockMap.get(key) ?? 0;
+      const stockRec = (stockData||[]).find(x =>
+        `${x.store_name}|||${x.branch_name}|||${x.brand_id}|||${x.product_id}` === key
+      );
+      const stock = stockRec?.quantity ?? 0;
       const shortage = s.sales - stock;
       const orderKey = `${s.store_name}|||${s.branch_name}|||${s.product_id}`;
       return {
         store: s.store_name, branch: s.branch_name,
         brandName: s.brand?.name || '-', productName: s.product?.name || '-',
         brandId: s.brand_id, productId: s.product_id,
+        stockId: stockRec?.id || null,
         safety: s.sales, stock, shortage,
         isPending: orderSet.has(orderKey),
       };
@@ -2846,11 +2849,12 @@ function SafetyCheckPage({ profile }) {
                   <th className="r">현재재고</th>
                   <th className="r">부족수량</th>
                   <th>발주요청</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0
-                  ? <tr><td colSpan={8} className="empty">데이터가 없습니다<br/><span style={{fontSize:11}}>판매 입력 및 재고 등록 후 확인하세요</span></td></tr>
+                  ? <tr><td colSpan={9} className="empty">데이터가 없습니다<br/><span style={{fontSize:11}}>판매 입력 및 재고 등록 후 확인하세요</span></td></tr>
                   : filtered.map((r,i) => {
                     const isShort = r.shortage > 0;
                     const orderKey = `${r.store}|||${r.branch}|||${r.productId}`;
@@ -2877,6 +2881,16 @@ function SafetyCheckPage({ profile }) {
                                   onClick={() => requestOrder(r)}>
                                   {requesting[orderKey] ? <span className="spinner"/> : '발주요청'}
                                 </button>
+                          )}
+                        </td>
+                        <td>
+                          {r.stockId && (
+                            <button className="btn-danger" onClick={async () => {
+                              if (!window.confirm(`[${r.store} ${r.branch}] ${r.productName} 재고를 삭제하시겠습니까?`)) return;
+                              const { error } = await supabase.from('stock_status').delete().eq('id', r.stockId);
+                              if (error) toast(error.message, 'err');
+                              else { toast('삭제 완료', 'ok'); fetchData(); }
+                            }}>삭제</button>
                           )}
                         </td>
                       </tr>
