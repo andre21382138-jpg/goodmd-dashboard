@@ -1516,7 +1516,8 @@ function SalesInputPage({ profile }) {
 // ════════════════════════════════════════════════════════
 // 회원 조회 페이지 (본사/관리자)
 // ════════════════════════════════════════════════════════
-function CustomerLookupPage() {
+function CustomerLookupPage({ profile }) {
+  const isManager = profile?.job_title === '매니저';
   const [search,    setSearch]   = useState('');
   const [fStore,    setFStore]   = useState('');
   const [fBranch,   setFBranch]  = useState('');
@@ -1577,6 +1578,18 @@ function CustomerLookupPage() {
 
   const handleSelect = (c) => { setSelected(c); fetchPurchases(c.id); };
 
+  const withdrawCustomer = async (c, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`[${c.name}] 회원을 탈퇴 처리하시겠습니까?\n\n이름: ${c.name}\n연락처: ${c.phone}\n점포: ${c.store_name} ${c.branch_name}\n\n탈퇴 후에는 회원 정보가 삭제됩니다.`)) return;
+    const { error } = await supabase.from('customers').delete().eq('id', c.id);
+    if (error) toast(error.message, 'err');
+    else {
+      toast(`${c.name} 회원 탈퇴 처리 완료`, 'ok');
+      if (selected?.id === c.id) setSelected(null);
+      fetchCustomers();
+    }
+  };
+
   const totalAmt = useMemo(() => purchases.reduce((s,r) => s + r.price * r.quantity, 0), [purchases]);
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + r.quantity, 0), [purchases]);
 
@@ -1635,6 +1648,7 @@ function CustomerLookupPage() {
                   <th>담당매니저</th>
                   <th style={{textAlign:'center'}}>마케팅동의</th>
                   <th></th>
+                  {!isManager && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -1666,6 +1680,14 @@ function CustomerLookupPage() {
                         📱 문자
                       </button>
                     </td>
+                    {!isManager && (
+                      <td>
+                        <button className="btn-danger" style={{padding:'3px 8px', fontSize:11}}
+                          onClick={e => withdrawCustomer(c, e)}>
+                          탈퇴
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -5128,7 +5150,7 @@ export default function App() {
             {page === 'stock_safety'   && canSeeMain && <SafetyCheckPage profile={profile}/>}
             {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage/>}
-            {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage/>}
+            {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sales_view'     && canSeeMain && <SalesListPage/>}
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
