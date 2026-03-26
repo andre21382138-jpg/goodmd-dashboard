@@ -4293,6 +4293,7 @@ function AttendanceMgmtPage() {
 }
 
 
+const HQ_MENUS = [
   { key: 'product_mgmt', icon: '🛍️', label: '상품관리', sub: [
     { key: 'product_add', icon: '➕', label: '상품추가' },
   ]},
