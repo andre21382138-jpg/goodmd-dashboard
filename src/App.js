@@ -485,9 +485,10 @@ function PendingScreen({ email }) {
 // ════════════════════════════════════════════════════════
 // ADMIN — USER MANAGEMENT
 // ════════════════════════════════════════════════════════
-function AdminTab() {
+function AdminTab({ profile }) {
   const [users, setUsers]     = useState([]);
   const [loading, setLoading] = useState(true);
+  const isAdmin = profile?.role === 'admin';
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -514,6 +515,13 @@ function AdminTab() {
     else { toast('권한 변경 완료', 'ok'); fetchUsers(); }
   };
 
+  const withdraw = async (u) => {
+    if (!window.confirm(`${u.name}(${u.email}) 계정을 탈퇴 처리하시겠습니까?\n탈퇴 후에는 로그인이 불가합니다.`)) return;
+    const { error } = await supabase.from('profiles').update({ approved: false }).eq('id', u.id);
+    if (error) toast(error.message, 'err');
+    else { toast(`${u.name} 탈퇴 처리 완료`, 'ok'); fetchUsers(); }
+  };
+
   const pending = users.filter(u => !u.approved);
   const approved = users.filter(u => u.approved);
 
@@ -538,8 +546,9 @@ function AdminTab() {
                     {new Date(u.created_at).toLocaleDateString('ko-KR')}
                   </td>
                   <td><span className="status-badge status-wait">대기 중</span></td>
-                  <td>
+                  <td style={{display:'flex', gap:4}}>
                     <button className="btn btn-success" onClick={() => approve(u.id)}>✓ 승인</button>
+                    <button className="btn-danger" style={{padding:'4px 8px', fontSize:11}} onClick={() => withdraw(u)}>탈퇴</button>
                   </td>
                 </tr>
               ))}
@@ -553,7 +562,7 @@ function AdminTab() {
         {loading ? <div className="empty"><span className="spinner" /></div> : (
           <table className="user-table">
             <thead>
-              <tr><th>이름</th><th>직책</th><th>점포명</th><th>지점명</th><th>이메일</th><th>권한</th><th>상태</th><th>가입일</th><th>권한 변경</th></tr>
+              <tr><th>이름</th><th>직책</th><th>점포명</th><th>지점명</th><th>이메일</th><th>권한</th><th>상태</th><th>가입일</th><th>권한 변경</th><th>탈퇴</th></tr>
             </thead>
             <tbody>
               {users.map(u => (
@@ -579,7 +588,13 @@ function AdminTab() {
                   <td>
                     {u.role !== 'admin'
                       ? <button className="btn btn-s" style={{ fontSize: 11 }} onClick={() => setRole(u.id, 'admin')}>관리자로</button>
-                      : <button className="btn btn-s" style={{ fontSize: 11 }} onClick={() => setRole(u.id, 'user')}>일반으로</button>}
+                      : <button className="btn btn-s" style={{ fontSize: 11 }} onClick={() => setRole(u.id, 'user')}>일반으로</button>
+                    }
+                  </td>
+                  <td>
+                    {u.approved && (
+                      <button className="btn-danger" style={{padding:'3px 8px', fontSize:11}} onClick={() => withdraw(u)}>탈퇴</button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -4452,14 +4467,19 @@ function Sidebar({ page, setPage, profile, onLogout }) {
           </>
         )}
         {/* 관리자 메뉴 */}
-        {isAdmin && (
+        {(isAdmin || isHQ) && (
           <>
             <div className="sidebar-section" style={{marginTop:8}}>관리자</div>
-            {ADMIN_MENUS.map(m => (
+            {isAdmin && ADMIN_MENUS.map(m => (
               <button key={m.key} className={`sidebar-item ${page===m.key?'on':''}`} onClick={() => setPage(m.key)}>
                 <span className="sidebar-item-icon">{m.icon}</span>{m.label}
               </button>
             ))}
+            {!isAdmin && (
+              <button className={`sidebar-item ${page==='admin'?'on':''}`} onClick={() => setPage('admin')}>
+                <span className="sidebar-item-icon">🔐</span>사용자 관리
+              </button>
+            )}
           </>
         )}
         {/* 공지사항 - 담당자/매니저 열람 */}
@@ -5116,7 +5136,7 @@ export default function App() {
             {page === 'clock_inout'    && (isManager || isAdmin || isHQ) && <ClockInOutPage profile={profile}/>}
             {page === 'leave_plan'     && (isManager || isAdmin || isHQ) && <LeavePlanPage profile={profile}/>}
             {page === 'attendance_mgmt'&& canSeeMain && <AttendanceMgmtPage/>}
-            {page === 'admin'          && isAdmin && <AdminTab/>}
+            {page === 'admin'          && (isAdmin || isHQ) && <AdminTab profile={profile}/>}
             {page === 'notice'         && (isAdmin || isHQ || isManager) && <NoticePage profile={profile}/>}
           </div>
         </div>
