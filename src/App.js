@@ -3824,7 +3824,475 @@ function MyMembersPage({ profile }) {
 }
 
 // 본사 메뉴 (드롭다운 포함)
-const HQ_MENUS = [
+// ════════════════════════════════════════════════════════
+// 출근/퇴근 체크 페이지
+// ════════════════════════════════════════════════════════
+function ClockInOutPage({ profile }) {
+  const [today,    setToday]    = useState(null); // 오늘 출퇴근 레코드
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [history,  setHistory]  = useState([]);
+
+  const todayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const { data: todayRec } = await supabase.from('attendance')
+      .select('*').eq('manager_id', profile.id).eq('work_date', todayStr()).maybeSingle();
+    setToday(todayRec);
+    const { data: hist } = await supabase.from('attendance')
+      .select('*').eq('manager_id', profile.id)
+      .order('work_date', { ascending: false }).limit(20);
+    setHistory(hist || []);
+    setLoading(false);
+  }, [profile.id]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleClock = async (type) => {
+    setSaving(true);
+    const now = new Date().toISOString();
+    if (type === 'in') {
+      if (today) { toast('오늘은 이미 출근 처리됐습니다', 'err'); setSaving(false); return; }
+      const { error } = await supabase.from('attendance').insert({
+        manager_id: profile.id, manager_name: profile.name,
+        store_name: profile.department, branch_name: profile.branch,
+        work_date: todayStr(), clock_in: now,
+      });
+      if (error) toast(error.message, 'err');
+      else toast('출근 체크 완료 ✅', 'ok');
+    } else {
+      if (!today) { toast('출근 체크를 먼저 해주세요', 'err'); setSaving(false); return; }
+      if (today.clock_out) { toast('오늘은 이미 퇴근 처리됐습니다', 'err'); setSaving(false); return; }
+      const { error } = await supabase.from('attendance').update({ clock_out: now }).eq('id', today.id);
+      if (error) toast(error.message, 'err');
+      else toast('퇴근 체크 완료 ✅', 'ok');
+    }
+    fetchData();
+    setSaving(false);
+  };
+
+  const fmt = (iso) => {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const duration = (ci, co) => {
+    if (!ci || !co) return '-';
+    const m = Math.round((new Date(co) - new Date(ci)) / 60000);
+    return `${Math.floor(m/60)}시간 ${m%60}분`;
+  };
+
+  if (loading) return <div className="empty"><span className="spinner"/></div>;
+
+  return (
+    <div>
+      {/* 오늘 상태 카드 */}
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{display:'flex', alignItems:'center', gap:12, marginBottom:16}}>
+          <div style={{fontSize:13, fontWeight:700, color:'var(--text)'}}>
+            📍 {profile.department} · {profile.branch}
+          </div>
+          <div style={{marginLeft:'auto', fontFamily:'var(--mono)', fontSize:12, color:'var(--text3)'}}>
+            {todayStr()} (오늘)
+          </div>
+        </div>
+
+        {/* 상태 표시 */}
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:20}}>
+          {[
+            { label:'출근 시각', value: today ? fmt(today.clock_in) : '-', color: today ? 'var(--success)' : 'var(--text3)' },
+            { label:'퇴근 시각', value: today?.clock_out ? fmt(today.clock_out) : '-', color: today?.clock_out ? 'var(--accent)' : 'var(--text3)' },
+            { label:'근무 시간', value: duration(today?.clock_in, today?.clock_out), color: 'var(--text)' },
+          ].map(s => (
+            <div key={s.label} style={{background:'var(--bg3)', borderRadius:'var(--radius)', padding:'14px 16px', textAlign:'center'}}>
+              <div style={{fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:6}}>{s.label}</div>
+              <div style={{fontSize:22, fontWeight:700, fontFamily:'var(--mono)', color:s.color}}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* 버튼 */}
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+          <button
+            onClick={() => handleClock('in')} disabled={saving || !!today}
+            style={{height:56, fontSize:16, fontWeight:700, borderRadius:'var(--radius)', border:'none', cursor: today ? 'not-allowed' : 'pointer',
+              background: today ? '#e0e0e0' : 'var(--success)', color: today ? '#aaa' : '#fff'}}>
+            {saving ? <span className="spinner"/> : today ? '✅ 출근 완료' : '🟢 출근'}
+          </button>
+          <button
+            onClick={() => handleClock('out')} disabled={saving || !today || !!today?.clock_out}
+            style={{height:56, fontSize:16, fontWeight:700, borderRadius:'var(--radius)', border:'none',
+              cursor: (!today || today?.clock_out) ? 'not-allowed' : 'pointer',
+              background: today?.clock_out ? '#e0e0e0' : (today ? 'var(--accent)' : '#e0e0e0'),
+              color: (!today || today?.clock_out) ? '#aaa' : '#fff'}}>
+            {saving ? <span className="spinner"/> : today?.clock_out ? '✅ 퇴근 완료' : '🔴 퇴근'}
+          </button>
+        </div>
+      </div>
+
+      {/* 최근 이력 */}
+      <div className="card">
+        <div className="card-label">최근 출퇴근 이력</div>
+        <div className="twrap">
+          <table>
+            <thead><tr><th>날짜</th><th>출근</th><th>퇴근</th><th>근무시간</th></tr></thead>
+            <tbody>
+              {history.length === 0
+                ? <tr><td colSpan={4} className="empty">이력이 없습니다</td></tr>
+                : history.map(r => (
+                  <tr key={r.id}>
+                    <td className="mono">{r.work_date}</td>
+                    <td style={{color:'var(--success)', fontWeight:600, fontFamily:'var(--mono)'}}>{fmt(r.clock_in)}</td>
+                    <td style={{color:'var(--accent)', fontWeight:600, fontFamily:'var(--mono)'}}>{fmt(r.clock_out)}</td>
+                    <td className="mono" style={{color:'var(--text2)'}}>{duration(r.clock_in, r.clock_out)}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 연차계획 신청 페이지
+// ════════════════════════════════════════════════════════
+function LeavePlanPage({ profile }) {
+  const [saving,   setSaving]   = useState(false);
+  const [myPlans,  setMyPlans]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [selDates, setSelDates] = useState([]);
+  const [memo,     setMemo]     = useState('');
+
+  // 익월 계산
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextYear  = nextMonth.getFullYear();
+  const nextMon   = nextMonth.getMonth(); // 0-based
+  const nextMonStr = `${nextYear}-${String(nextMon + 1).padStart(2,'0')}`;
+  const daysInMonth = new Date(nextYear, nextMon + 1, 0).getDate();
+  const firstDow = new Date(nextYear, nextMon, 1).getDay(); // 0=일
+
+  const fetchPlans = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('leave_plans')
+      .select('*').eq('manager_id', profile.id)
+      .order('created_at', { ascending: false });
+    setMyPlans(data || []);
+    setLoading(false);
+  }, [profile.id]);
+
+  useEffect(() => { fetchPlans(); }, [fetchPlans]);
+
+  // 이미 제출한 익월 계획 있는지
+  const alreadySubmitted = myPlans.some(p => p.target_month === nextMonStr);
+
+  const toggleDate = (dateStr) => {
+    setSelDates(prev =>
+      prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr].sort()
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (selDates.length === 0) { toast('날짜를 하나 이상 선택해주세요', 'err'); return; }
+    if (alreadySubmitted) { toast('이미 해당 월 계획을 제출했습니다', 'err'); return; }
+    setSaving(true);
+    const { error } = await supabase.from('leave_plans').insert({
+      manager_id: profile.id, manager_name: profile.name,
+      store_name: profile.department, branch_name: profile.branch,
+      target_month: nextMonStr, dates: selDates, memo: memo.trim() || null,
+    });
+    if (error) toast(error.message, 'err');
+    else { toast(`${nextMonStr} 연차계획 제출 완료`, 'ok'); setSelDates([]); setMemo(''); fetchPlans(); }
+    setSaving(false);
+  };
+
+  const dayNames = ['일','월','화','수','목','금','토'];
+
+  return (
+    <div>
+      <div className="card">
+        <div className="card-label">
+          {nextYear}년 {nextMon + 1}월 연차계획 신청
+          <span style={{fontSize:11, fontWeight:400, color:'var(--text3)', marginLeft:8}}>
+            (익월 기준)
+          </span>
+        </div>
+
+        {alreadySubmitted ? (
+          <div style={{background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:'var(--radius)', padding:'12px 16px', fontSize:13, color:'var(--success)', fontWeight:600}}>
+            ✅ {nextMonStr} 연차계획을 이미 제출했습니다.
+          </div>
+        ) : (
+          <>
+            {/* 달력 */}
+            <div style={{marginBottom:16}}>
+              <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:4}}>
+                {dayNames.map((d,i) => (
+                  <div key={d} style={{textAlign:'center', fontSize:11, fontWeight:600,
+                    color: i===0?'#c62828':i===6?'#1565C0':'var(--text3)', padding:'4px 0'}}>
+                    {d}
+                  </div>
+                ))}
+              </div>
+              <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2}}>
+                {Array.from({length: firstDow}).map((_, i) => <div key={`e${i}`}/>)}
+                {Array.from({length: daysInMonth}).map((_, i) => {
+                  const day = i + 1;
+                  const dateStr = `${nextYear}-${String(nextMon+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                  const dow = (firstDow + i) % 7;
+                  const isSat = dow === 6;
+                  const isSun = dow === 0;
+                  const isWeekend = isSat || isSun;
+                  const isSel = selDates.includes(dateStr);
+                  return (
+                    <button key={day}
+                      onClick={() => !isWeekend && toggleDate(dateStr)}
+                      style={{
+                        height:38, borderRadius:'var(--radius)', border:'none', fontSize:13, fontWeight: isSel ? 700 : 400,
+                        cursor: isWeekend ? 'default' : 'pointer',
+                        background: isSel ? 'var(--accent)' : isWeekend ? '#f5f5f5' : '#fff',
+                        color: isSel ? '#fff' : isSun ? '#c62828' : isSat ? '#1565C0' : 'var(--text)',
+                        border: isSel ? 'none' : '1px solid var(--border)',
+                        opacity: isWeekend ? 0.4 : 1,
+                      }}>
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 선택 날짜 표시 */}
+            {selDates.length > 0 && (
+              <div style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:12, fontSize:12}}>
+                선택된 날짜 ({selDates.length}일): {selDates.join(', ')}
+              </div>
+            )}
+
+            {/* 메모 */}
+            <textarea value={memo} onChange={e => setMemo(e.target.value)}
+              placeholder="메모 (선택사항)"
+              style={{width:'100%', height:72, padding:'8px 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', resize:'vertical', outline:'none', marginBottom:12}}/>
+
+            <button className="btn btn-p" onClick={handleSubmit} disabled={saving || selDates.length===0}
+              style={{width:'100%', justifyContent:'center', height:40}}>
+              {saving ? <span className="spinner"/> : `✓ ${nextMonStr} 연차계획 제출`}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* 제출 이력 */}
+      {!loading && myPlans.length > 0 && (
+        <div className="card">
+          <div className="card-label">제출 이력</div>
+          <div className="twrap">
+            <table>
+              <thead><tr><th>신청월</th><th>선택 날짜</th><th>일수</th><th>메모</th><th>제출일</th><th>상태</th></tr></thead>
+              <tbody>
+                {myPlans.map(p => (
+                  <tr key={p.id}>
+                    <td className="mono" style={{fontWeight:700}}>{p.target_month}</td>
+                    <td style={{fontSize:11, color:'var(--text2)'}}>{(p.dates||[]).join(', ')}</td>
+                    <td style={{textAlign:'center', fontWeight:700, color:'var(--accent)'}}>{(p.dates||[]).length}일</td>
+                    <td style={{fontSize:11, color:'var(--text3)'}}>{p.memo||'-'}</td>
+                    <td className="mono" style={{fontSize:11}}>{new Date(p.created_at).toLocaleDateString('ko-KR')}</td>
+                    <td>
+                      <span style={{
+                        padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600,
+                        background: p.status==='approved'?'#e8f5e9':p.status==='rejected'?'#ffebee':'#fff3e0',
+                        color: p.status==='approved'?'var(--success)':p.status==='rejected'?'var(--danger)':'#E65100',
+                      }}>
+                        {p.status==='approved'?'승인':p.status==='rejected'?'반려':'대기'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 근태관리 (본사 담당자/관리자용)
+// ════════════════════════════════════════════════════════
+function AttendanceMgmtPage() {
+  const [tab,      setTab]      = useState('attendance');
+  const [records,  setRecords]  = useState([]);
+  const [plans,    setPlans]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [fStore,   setFStore]   = useState('');
+  const [fManager, setFManager] = useState('');
+  const [fFrom,    setFFrom]    = useState('');
+  const [fTo,      setFTo]      = useState('');
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    const { data: att } = await supabase.from('attendance')
+      .select('*').order('work_date', { ascending: false }).limit(200);
+    const { data: lp } = await supabase.from('leave_plans')
+      .select('*').order('created_at', { ascending: false });
+    setRecords(att || []);
+    setPlans(lp || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const fmt = (iso) => {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+  const duration = (ci, co) => {
+    if (!ci || !co) return '-';
+    const m = Math.round((new Date(co) - new Date(ci)) / 60000);
+    return `${Math.floor(m/60)}h ${m%60}m`;
+  };
+
+  const stores = useMemo(() => [...new Set(records.map(r => r.store_name).filter(Boolean))].sort(), [records]);
+  const managers = useMemo(() => [...new Set(records.map(r => r.manager_name).filter(Boolean))].sort(), [records]);
+
+  const filteredAtt = useMemo(() => {
+    let r = records;
+    if (fStore)   r = r.filter(x => x.store_name === fStore);
+    if (fManager) r = r.filter(x => x.manager_name === fManager);
+    if (fFrom)    r = r.filter(x => x.work_date >= fFrom);
+    if (fTo)      r = r.filter(x => x.work_date <= fTo);
+    return r;
+  }, [records, fStore, fManager, fFrom, fTo]);
+
+  const newPlanCount = plans.filter(p => p.status === 'pending').length;
+
+  const updatePlanStatus = async (id, status) => {
+    const { error } = await supabase.from('leave_plans').update({ status }).eq('id', id);
+    if (error) toast(error.message, 'err');
+    else { toast(status === 'approved' ? '승인 완료' : '반려 처리', 'ok'); fetchAll(); }
+  };
+
+  return (
+    <div>
+      <div className="tabs">
+        <button className={`tab ${tab==='attendance'?'on':''}`} onClick={() => setTab('attendance')}>출퇴근 현황</button>
+        <button className={`tab ${tab==='leave'?'on':''}`} onClick={() => setTab('leave')}>
+          연차계획
+          {newPlanCount > 0 && (
+            <span style={{marginLeft:6, background:'var(--danger)', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:10, fontWeight:700}}>
+              NEW {newPlanCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {tab === 'attendance' && (
+        <div className="card" style={{padding:'16px 20px'}}>
+          <div className="fbar" style={{flexWrap:'wrap'}}>
+            <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFManager(''); }}>
+              <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select className="fsel" value={fManager} onChange={e => setFManager(e.target.value)}>
+              <option value="">전체 매니저</option>{managers.map(m => <option key={m}>{m}</option>)}
+            </select>
+            <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)}/>
+            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+            <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)}/>
+            {(fStore||fManager||fFrom||fTo) && (
+              <button className="btn-ghost" onClick={() => { setFStore(''); setFManager(''); setFFrom(''); setFTo(''); }}>✕ 초기화</button>
+            )}
+            <div className="fbar-right"><span className="fresult"><b>{filteredAtt.length}</b>건</span></div>
+          </div>
+
+          {loading ? <div className="empty"><span className="spinner"/></div> : (
+            <div className="twrap">
+              <table>
+                <thead><tr><th>날짜</th><th>매니저</th><th>점포</th><th>지점</th><th>출근</th><th>퇴근</th><th>근무시간</th></tr></thead>
+                <tbody>
+                  {filteredAtt.length === 0
+                    ? <tr><td colSpan={7} className="empty">데이터가 없습니다</td></tr>
+                    : filteredAtt.map(r => (
+                      <tr key={r.id}>
+                        <td className="mono">{r.work_date}</td>
+                        <td><strong>{r.manager_name}</strong></td>
+                        <td><span className="badge badge-dept">{r.store_name}</span></td>
+                        <td><span className="badge badge-store">{r.branch_name}</span></td>
+                        <td style={{fontFamily:'var(--mono)', color:'var(--success)', fontWeight:600}}>{fmt(r.clock_in)}</td>
+                        <td style={{fontFamily:'var(--mono)', color:'var(--accent)', fontWeight:600}}>{fmt(r.clock_out)}</td>
+                        <td className="mono" style={{color:'var(--text2)'}}>{duration(r.clock_in, r.clock_out)}</td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'leave' && (
+        <div className="card" style={{padding:'16px 20px'}}>
+          {loading ? <div className="empty"><span className="spinner"/></div> : (
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr><th>신청월</th><th>매니저</th><th>점포</th><th>지점</th><th>선택날짜</th><th>일수</th><th>메모</th><th>제출일</th><th>상태</th></tr>
+                </thead>
+                <tbody>
+                  {plans.length === 0
+                    ? <tr><td colSpan={9} className="empty">연차계획 신청 내역이 없습니다</td></tr>
+                    : plans.map(p => (
+                      <tr key={p.id}>
+                        <td className="mono" style={{fontWeight:700}}>{p.target_month}</td>
+                        <td><strong>{p.manager_name}</strong></td>
+                        <td><span className="badge badge-dept">{p.store_name}</span></td>
+                        <td><span className="badge badge-store">{p.branch_name}</span></td>
+                        <td style={{fontSize:11, color:'var(--text2)', maxWidth:200}}>{(p.dates||[]).join(', ')}</td>
+                        <td style={{textAlign:'center', fontWeight:700, color:'var(--accent)'}}>{(p.dates||[]).length}일</td>
+                        <td style={{fontSize:11, color:'var(--text3)'}}>{p.memo||'-'}</td>
+                        <td className="mono" style={{fontSize:11}}>{new Date(p.created_at).toLocaleDateString('ko-KR')}</td>
+                        <td>
+                          {p.status === 'pending' ? (
+                            <div style={{display:'flex', gap:4}}>
+                              <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}}
+                                onClick={() => updatePlanStatus(p.id, 'approved')}>승인</button>
+                              <button className="btn-danger" style={{padding:'3px 8px', fontSize:11}}
+                                onClick={() => updatePlanStatus(p.id, 'rejected')}>반려</button>
+                            </div>
+                          ) : (
+                            <span style={{
+                              padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600,
+                              background: p.status==='approved'?'#e8f5e9':'#ffebee',
+                              color: p.status==='approved'?'var(--success)':'var(--danger)',
+                            }}>
+                              {p.status==='approved'?'✅ 승인':'❌ 반려'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
   { key: 'product_mgmt', icon: '🛍️', label: '상품관리', sub: [
     { key: 'product_add', icon: '➕', label: '상품추가' },
   ]},
@@ -3836,6 +4304,7 @@ const HQ_MENUS = [
   { key: 'manager_mgmt', icon: '👔', label: '매니저관리', sub: [
     { key: 'incentive', icon: '💰', label: '인센티브 조회' },
   ]},
+  { key: 'attendance_mgmt', icon: '🗓️', label: '근태관리' },
   { key: 'member_mgmt',  icon: '👥', label: '회원(고객)관리' },
   { key: 'sales_view',   icon: '📋', label: '매출조회' },
 ];
@@ -3843,6 +4312,10 @@ const MANAGER_MENUS = [
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
   { key: 'customer_input', icon: '👤', label: '회원 등록' },
   { key: 'my_members',     icon: '📋', label: '내 회원 목록' },
+  { key: 'attendance', icon: '🗓️', label: '근태관리', sub: [
+    { key: 'clock_inout', icon: '⏱️', label: '출근/퇴근체크' },
+    { key: 'leave_plan',  icon: '📅', label: '연차계획신청' },
+  ]},
 ];
 const ADMIN_MENUS = [
   { key: 'admin',  icon: '🔐', label: '사용자 관리' },
@@ -3854,6 +4327,13 @@ function Sidebar({ page, setPage, profile, onLogout }) {
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
   const canSeeMain = isAdmin || isHQ;
+  const [newPlanCount, setNewPlanCount] = useState(0);
+
+  useEffect(() => {
+    if (!canSeeMain) return;
+    supabase.from('leave_plans').select('id', { count: 'exact' }).eq('status', 'pending')
+      .then(({ count }) => setNewPlanCount(count || 0));
+  }, [canSeeMain]);
   const [expanded, setExpanded] = useState(() => {
     const parentMap = {
       product_add:  'product_mgmt',
@@ -3861,6 +4341,8 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       stock_store:  'stock_mgmt',
       stock_safety: 'stock_mgmt',
       incentive:    'manager_mgmt',
+      clock_inout:  'attendance',
+      leave_plan:   'attendance',
     };
     return parentMap[page] ? [parentMap[page]] : [];
   });
@@ -3913,6 +4395,9 @@ function Sidebar({ page, setPage, profile, onLogout }) {
                     }}>
                     <span className="sidebar-item-icon">{m.icon}</span>
                     {m.label}
+                    {m.key==='attendance_mgmt' && newPlanCount > 0 && (
+                      <span style={{marginLeft:'auto', background:'var(--danger)', color:'#fff', borderRadius:10, padding:'1px 6px', fontSize:9, fontWeight:700}}>NEW</span>
+                    )}
                     {hasSub && <span className={`sidebar-chevron ${isOpen?'open':''}`}>▼</span>}
                   </button>
                   {hasSub && isOpen && m.sub.map(s => (
@@ -3929,11 +4414,26 @@ function Sidebar({ page, setPage, profile, onLogout }) {
         {(isManager || isAdmin || isHQ) && (
           <>
             <div className="sidebar-section" style={{marginTop: canSeeMain ? 8 : 0}}>매장</div>
-            {MANAGER_MENUS.map(m => (
-              <button key={m.key} className={`sidebar-item ${page===m.key?'on':''}`} onClick={() => setPage(m.key)}>
-                <span className="sidebar-item-icon">{m.icon}</span>{m.label}
-              </button>
-            ))}
+            {MANAGER_MENUS.map(m => {
+              const hasSub = m.sub && m.sub.length > 0;
+              const isOpen = expanded.includes(m.key);
+              const isActive = page===m.key || (hasSub && m.sub.some(s => page===s.key));
+              return (
+                <div key={m.key}>
+                  <button className={`sidebar-item ${isActive?'on':''}`}
+                    onClick={() => { if(hasSub) toggleExpand(m.key); else setPage(m.key); }}>
+                    <span className="sidebar-item-icon">{m.icon}</span>
+                    {m.label}
+                    {hasSub && <span className={`sidebar-chevron ${isOpen?'open':''}`}>▼</span>}
+                  </button>
+                  {hasSub && isOpen && m.sub.map(s => (
+                    <button key={s.key} className={`sidebar-sub ${page===s.key?'on':''}`} onClick={() => setPage(s.key)}>
+                      <span className="sidebar-sub-icon">{s.icon}</span>{s.label}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
             {isManager && (
               <button className="sidebar-item" onClick={() => {
                 const url = `${window.location.origin}${window.location.pathname}?m=${profile.id}`;
@@ -4570,7 +5070,9 @@ export default function App() {
     sales_view:     '매출조회',
     sales_input:    '판매 입력',
     customer_input: '회원 등록',
-    my_members:     '내 회원 목록',
+    attendance_mgmt: '근태관리',
+    clock_inout:     '출근/퇴근 체크',
+    leave_plan:      '연차계획 신청',
     admin:          '사용자 관리',
     notice:         '공지사항',
   };
@@ -4606,6 +5108,9 @@ export default function App() {
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'my_members'     && (isManager || isAdmin || isHQ) && <MyMembersPage profile={profile}/>}
+            {page === 'clock_inout'    && (isManager || isAdmin || isHQ) && <ClockInOutPage profile={profile}/>}
+            {page === 'leave_plan'     && (isManager || isAdmin || isHQ) && <LeavePlanPage profile={profile}/>}
+            {page === 'attendance_mgmt'&& canSeeMain && <AttendanceMgmtPage/>}
             {page === 'admin'          && isAdmin && <AdminTab/>}
             {page === 'notice'         && (isAdmin || isHQ || isManager) && <NoticePage profile={profile}/>}
           </div>
