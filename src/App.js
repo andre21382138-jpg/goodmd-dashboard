@@ -2930,11 +2930,27 @@ function ManagerMgmtPage() {
   const startEdit = (m) => { setEditing(m.id); setEditData({ name: m.name, department: m.department, branch: m.branch, email: m.email }); };
 
   const saveEdit = async (id) => {
+    // 기존 이름 가져오기
+    const oldManager = managers.find(m => m.id === id);
+    const oldName = oldManager?.name;
+    const newName = editData.name;
+
     const { error } = await supabase.from('profiles').update({
-      name: editData.name, department: editData.department, branch: editData.branch,
+      name: newName, department: editData.department, branch: editData.branch,
     }).eq('id', id);
-    if (error) toast(error.message, 'err');
-    else { toast('정보 수정 완료', 'ok'); setEditing(null); fetchManagers(); }
+    if (error) { toast(error.message, 'err'); return; }
+
+    // 이름이 변경됐으면 관련 테이블 담당자명 일괄 업데이트
+    if (oldName && oldName !== newName) {
+      await supabase.from('customers').update({ manager_name: newName }).eq('manager_name', oldName);
+      await supabase.from('attendance').update({ manager_name: newName }).eq('manager_name', oldName);
+      await supabase.from('leave_plans').update({ manager_name: newName }).eq('manager_name', oldName);
+      toast(`정보 수정 완료 · 담당 회원/근태 기록 담당자명도 자동 변경됐습니다`, 'ok');
+    } else {
+      toast('정보 수정 완료', 'ok');
+    }
+
+    setEditing(null); fetchManagers();
   };
 
   const iStyle = { height:32, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, background:'#fff', outline:'none' };
