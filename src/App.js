@@ -4054,14 +4054,13 @@ function LeavePlanPage({ profile }) {
                   const isSel = selDates.includes(dateStr);
                   return (
                     <button key={day}
-                      onClick={() => !isWeekend && toggleDate(dateStr)}
+                      onClick={() => toggleDate(dateStr)}
                       style={{
                         height:38, borderRadius:'var(--radius)', border:'none', fontSize:13, fontWeight: isSel ? 700 : 400,
-                        cursor: isWeekend ? 'default' : 'pointer',
-                        background: isSel ? 'var(--accent)' : isWeekend ? '#f5f5f5' : '#fff',
+                        cursor: 'pointer',
+                        background: isSel ? 'var(--accent)' : '#fff',
                         color: isSel ? '#fff' : isSun ? '#c62828' : isSat ? '#1565C0' : 'var(--text)',
                         border: isSel ? 'none' : '1px solid var(--border)',
-                        opacity: isWeekend ? 0.4 : 1,
                       }}>
                       {day}
                     </button>
