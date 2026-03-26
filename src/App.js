@@ -4110,7 +4110,7 @@ function LeavePlanPage({ profile }) {
                         background: p.status==='approved'?'#e8f5e9':p.status==='rejected'?'#ffebee':'#fff3e0',
                         color: p.status==='approved'?'var(--success)':p.status==='rejected'?'var(--danger)':'#E65100',
                       }}>
-                        {p.status==='approved'?'승인':p.status==='rejected'?'반려':'대기'}
+                        {p.status==='approved'?'확인':p.status==='rejected'?'반려':'대기'}
                       </span>
                     </td>
                   </tr>
@@ -4178,7 +4178,7 @@ function AttendanceMgmtPage() {
   const updatePlanStatus = async (id, status) => {
     const { error } = await supabase.from('leave_plans').update({ status }).eq('id', id);
     if (error) toast(error.message, 'err');
-    else { toast(status === 'approved' ? '승인 완료' : '반려 처리', 'ok'); fetchAll(); }
+    else { toast(status === 'approved' ? '확인 완료' : '반려 처리', 'ok'); fetchAll(); }
   };
 
   return (
@@ -4264,7 +4264,7 @@ function AttendanceMgmtPage() {
                           {p.status === 'pending' ? (
                             <div style={{display:'flex', gap:4}}>
                               <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}}
-                                onClick={() => updatePlanStatus(p.id, 'approved')}>승인</button>
+                                onClick={() => updatePlanStatus(p.id, 'approved')}>확인</button>
                               <button className="btn-danger" style={{padding:'3px 8px', fontSize:11}}
                                 onClick={() => updatePlanStatus(p.id, 'rejected')}>반려</button>
                             </div>
@@ -4274,7 +4274,7 @@ function AttendanceMgmtPage() {
                               background: p.status==='approved'?'#e8f5e9':'#ffebee',
                               color: p.status==='approved'?'var(--success)':'var(--danger)',
                             }}>
-                              {p.status==='approved'?'✅ 승인':'❌ 반려'}
+                              {p.status==='approved'?'✅ 확인':'❌ 반려'}
                             </span>
                           )}
                         </td>
