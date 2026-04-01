@@ -1177,19 +1177,19 @@ function formatPhone(val) {
 function SalesInputPage({ profile }) {
   const today = new Date().toISOString().slice(0, 10);
   const [soldAt,    setSoldAt]   = useState(today);
-  const [brandId,   setBrandId]  = useState('');
-  const [productId, setProdId]   = useState('');
-  const [quantity,  setQty]      = useState(1);
-  const [price,     setPrice]    = useState('');
   const [payment,   setPayment]  = useState('카드');
   const [memo,      setMemo]     = useState('');
   const [brands,    setBrands]   = useState([]);
-  const [products,  setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]); // 전체 상품
   const [saving,    setSaving]   = useState(false);
   const [recentSales, setRecent] = useState([]);
 
+  // 상품 라인 (여러 개)
+  const newLine = () => ({ id: Date.now(), brandId:'', productId:'', quantity:1, price:'', products:[] });
+  const [lines, setLines] = useState([newLine()]);
+
   // 회원 연결
-  const [memberMode,   setMemberMode]   = useState('none');   // 'none' | 'search' | 'new'
+  const [memberMode,   setMemberMode]   = useState('none');
   const [memberSearch, setMemberSearch] = useState('');
   const [memberResults,setMemberResults]= useState([]);
   const [selectedMember,setSelMember]  = useState(null);
@@ -1214,20 +1214,8 @@ function SalesInputPage({ profile }) {
 
   useEffect(() => {
     supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || []));
+    supabase.from('products').select('*').order('name').then(({ data }) => setAllProducts(data || []));
   }, []);
-
-  useEffect(() => {
-    if (!brandId) { setProducts([]); setProdId(''); setPrice(''); return; }
-    supabase.from('products').select('*').eq('brand_id', brandId).order('name')
-      .then(({ data }) => setProducts(data || []));
-    setProdId(''); setPrice('');
-  }, [brandId]);
-
-  useEffect(() => {
-    if (!productId) return;
-    const prod = products.find(p => String(p.id) === String(productId));
-    if (prod?.price) setPrice(prod.price);
-  }, [productId, products]);
 
   const fetchRecent = useCallback(async () => {
     const { data } = await supabase.from('sales')
@@ -1240,16 +1228,39 @@ function SalesInputPage({ profile }) {
 
   useEffect(() => { fetchRecent(); }, [fetchRecent]);
 
+  // 라인 업데이트 헬퍼
+  const updateLine = (id, field, value) => {
+    setLines(prev => prev.map(l => {
+      if (l.id !== id) return l;
+      const updated = { ...l, [field]: value };
+      if (field === 'brandId') {
+        updated.productId = '';
+        updated.price = '';
+        updated.products = allProducts.filter(p => String(p.brand_id) === String(value));
+      }
+      if (field === 'productId') {
+        const prod = l.products.find(p => String(p.id) === String(value));
+        if (prod?.price) updated.price = prod.price;
+      }
+      return updated;
+    }));
+  };
+
+  const addLine = () => setLines(prev => [...prev, newLine()]);
+  const removeLine = (id) => setLines(prev => prev.filter(l => l.id !== id));
+
+  const totalAmt = lines.reduce((s, l) => s + (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0), 0);
+
   const resetForm = () => {
-    setProdId(''); setQty(1); setPrice(''); setMemo(''); setPayment('카드');
+    setLines([newLine()]); setMemo(''); setPayment('카드');
     setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName(''); setSmsConsent(false);
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!brandId)   { toast('브랜드를 선택해주세요', 'err'); return; }
-    if (!productId) { toast('상품을 선택해주세요', 'err'); return; }
+    const validLines = lines.filter(l => l.brandId && l.productId);
+    if (validLines.length === 0) { toast('상품을 하나 이상 선택해주세요', 'err'); return; }
     if (memberMode === 'search' && !selectedMember) { toast('회원을 선택해주세요', 'err'); return; }
     if (memberMode === 'new') {
       if (!custName.trim()) { toast('고객 이름을 입력해주세요', 'err'); return; }
@@ -1258,45 +1269,34 @@ function SalesInputPage({ profile }) {
     setSaving(true);
     try {
       let customerId = null;
-
       if (memberMode === 'search') {
         customerId = selectedMember.id;
       } else if (memberMode === 'new') {
         const { data: custData, error: custErr } = await supabase.from('customers').insert({
-          joined_at: soldAt,
-          name: custName.trim(),
-          phone: custPhone,
-          birthday: custBirthday || null,
-          store_name: profile.department,
-          branch_name: profile.branch,
-          manager_name: managerName.trim() || null,
-          sms_consent: smsConsent,
-          sms_consent_at: smsConsent ? new Date().toISOString() : null,
+          joined_at: soldAt, name: custName.trim(), phone: custPhone,
+          birthday: custBirthday || null, store_name: profile.department,
+          branch_name: profile.branch, manager_name: managerName.trim() || null,
+          sms_consent: smsConsent, sms_consent_at: smsConsent ? new Date().toISOString() : null,
           created_by: profile.id,
         }).select().single();
         if (custErr) throw custErr;
         customerId = custData.id;
       }
 
-      const { error } = await supabase.from('sales').insert({
-        sold_at: soldAt,
-        store_name: profile.department,
-        branch_name: profile.branch,
-        brand_id: Number(brandId),
-        product_id: Number(productId),
-        quantity: Number(quantity),
-        price: Number(String(price).replace(/,/g, '')),
-        payment,
-        memo: memo.trim() || null,
-        created_by: profile.id,
-        customer_id: customerId,
-      });
-      if (error) throw error;
+      // 모든 라인 저장
+      for (const l of validLines) {
+        const { error } = await supabase.from('sales').insert({
+          sold_at: soldAt, store_name: profile.department, branch_name: profile.branch,
+          brand_id: Number(l.brandId), product_id: Number(l.productId),
+          quantity: Number(l.quantity), price: Number(String(l.price).replace(/,/g,'')),
+          payment, memo: memo.trim() || null, created_by: profile.id, customer_id: customerId,
+        });
+        if (error) throw error;
+      }
 
-      const modeMsg = memberMode === 'search' ? '회원 적립 완료' : memberMode === 'new' ? '판매 + 회원등록 완료' : '판매 입력 완료';
+      const modeMsg = memberMode === 'search' ? `${validLines.length}건 저장 + 회원 적립 완료` : memberMode === 'new' ? `${validLines.length}건 저장 + 회원등록 완료` : `${validLines.length}건 판매 입력 완료`;
       toast(modeMsg, 'ok');
-      resetForm();
-      fetchRecent();
+      resetForm(); fetchRecent();
     } catch(err) {
       toast('저장 실패: ' + err.message, 'err');
     }
@@ -1321,49 +1321,85 @@ function SalesInputPage({ profile }) {
           📍 {profile.department} · {profile.branch}
         </div>
         <form onSubmit={handleSubmit}>
-          {/* 판매 정보 */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:14, marginBottom:14 }}>
+          {/* 판매날짜 + 결제수단 */}
+          <div style={{ display:'grid', gridTemplateColumns:'200px 1fr', gap:14, marginBottom:14 }}>
             <div>
               <label style={labelStyle}>판매날짜</label>
               <input type="date" value={soldAt} onChange={e => setSoldAt(e.target.value)} style={inputStyle} required />
-            </div>
-            <div>
-              <label style={labelStyle}>브랜드</label>
-              <select value={brandId} onChange={e => setBrandId(e.target.value)} style={inputStyle} required>
-                <option value="">-- 브랜드 선택 --</option>
-                {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>상품</label>
-              <select value={productId} onChange={e => setProdId(e.target.value)}
-                style={{...inputStyle, background: !brandId ? '#f0f0f0' : '#fff'}} required disabled={!brandId}>
-                <option value="">-- 상품 선택 --</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>수량</label>
-              <input type="number" min={1} value={quantity} onChange={e => setQty(e.target.value)} style={inputStyle} required />
-            </div>
-            <div>
-              <label style={labelStyle}>판매가 (원)</label>
-              <input type="number" min={0} value={price} onChange={e => setPrice(e.target.value)} style={inputStyle} placeholder="0" required />
             </div>
             <div>
               <label style={labelStyle}>결제수단</label>
               <div style={{ display:'flex', gap:6, height:38, alignItems:'center' }}>
                 {['카드','현금','기타'].map(p => (
                   <button key={p} type="button" onClick={() => setPayment(p)}
-                    style={{ flex:1, height:36, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)',
+                    style={{ flex:1, height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)',
                       borderColor: payment===p ? 'var(--accent)' : 'var(--border)',
                       background: payment===p ? '#fff3e0' : '#fafafa',
                       color: payment===p ? 'var(--accent)' : 'var(--text2)',
-                      fontWeight: payment===p ? 700 : 500, fontSize:12 }}>{p}</button>
+                      fontWeight: payment===p ? 700 : 500, fontSize:13 }}>{p}</button>
                 ))}
               </div>
             </div>
           </div>
+
+          {/* 상품 라인들 */}
+          <div style={{ marginBottom:8 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+              <label style={{...labelStyle, marginBottom:0}}>상품 목록</label>
+              <button type="button" className="btn btn-s" style={{fontSize:12}} onClick={addLine}>+ 상품 추가</button>
+            </div>
+
+            {lines.map((l, idx) => (
+              <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#fff5f5', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:8, position:'relative' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:'var(--text3)' }}>상품 {idx+1}</span>
+                  {lines.length > 1 && (
+                    <button type="button" onClick={() => removeLine(l.id)}
+                      style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'var(--danger)', fontSize:16, lineHeight:1 }}>✕</button>
+                  )}
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 100px 120px', gap:10 }}>
+                  <div>
+                    <label style={labelStyle}>브랜드</label>
+                    <select value={l.brandId} onChange={e => updateLine(l.id,'brandId',e.target.value)} style={inputStyle} required>
+                      <option value="">-- 브랜드 선택 --</option>
+                      {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>상품</label>
+                    <select value={l.productId} onChange={e => updateLine(l.id,'productId',e.target.value)}
+                      style={{...inputStyle, background:!l.brandId?'#f0f0f0':'#fff'}} required disabled={!l.brandId}>
+                      <option value="">-- 상품 선택 --</option>
+                      {l.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>수량</label>
+                    <input type="number" min={1} value={l.quantity} onChange={e => updateLine(l.id,'quantity',e.target.value)} style={inputStyle} required />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>판매가 (원)</label>
+                    <input type="number" min={0} value={l.price} onChange={e => updateLine(l.id,'price',e.target.value)} style={inputStyle} placeholder="0" required />
+                  </div>
+                </div>
+                {l.brandId && l.productId && l.price && (
+                  <div style={{ marginTop:8, fontSize:12, color:'var(--accent)', fontWeight:700, textAlign:'right', fontFamily:'var(--mono)' }}>
+                    소계: {(Number(l.quantity) * Number(String(l.price).replace(/,/g,''))).toLocaleString()}원
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* 합계 */}
+            {lines.length > 1 && (
+              <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', textAlign:'right', fontSize:14, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)' }}>
+                총 합계: {totalAmt.toLocaleString()}원 ({lines.filter(l=>l.brandId&&l.productId).length}개 상품)
+              </div>
+            )}
+          </div>
+
+          {/* 메모 */}
           <div style={{ marginBottom:14 }}>
             <label style={labelStyle}>메모 (선택)</label>
             <input value={memo} onChange={e => setMemo(e.target.value)} style={inputStyle} placeholder="특이사항 입력..." />
