@@ -1348,10 +1348,12 @@ function SalesInputPage({ profile }) {
             </div>
           </div>
 
-          {/* 상품 라인들 */}
-          <div style={{ marginBottom:8 }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-              <label style={{...labelStyle, marginBottom:0}}>상품 목록</label>
+          {/* 상품 목록 섹션 */}
+          <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', display:'flex', alignItems:'center', gap:6 }}>
+                🛍️ 상품 목록
+              </div>
               <button type="button" className="btn btn-s" style={{fontSize:12}} onClick={addLine}>+ 상품 추가</button>
             </div>
 
@@ -1371,7 +1373,7 @@ function SalesInputPage({ profile }) {
                   )}
                 </div>
                 {/* 1행: 브랜드 + 상품검색 */}
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'160px 1fr', gap:10, marginBottom:10 }}>
                   <div>
                     <label style={labelStyle}>브랜드</label>
                     <select value={l.brandId} onChange={e => updateLine(l.id,'brandId',e.target.value)} style={inputStyle} required>
@@ -1454,15 +1456,17 @@ function SalesInputPage({ profile }) {
             )}
           </div>
 
-          {/* 메모 */}
-          <div style={{ marginBottom:14 }}>
-            <label style={labelStyle}>메모 (선택)</label>
-            <input value={memo} onChange={e => setMemo(e.target.value)} style={inputStyle} placeholder="특이사항 입력..." />
           </div>
 
-          {/* 회원 연결 섹션 */}
-          <div style={{ borderTop:'1px solid var(--border)', paddingTop:14, marginBottom:14 }}>
-            <div style={{ marginBottom:10, fontSize:13, fontWeight:600, color:'var(--text2)' }}>🙋 회원 연결</div>
+          {/* 메모 섹션 */}
+          <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10 }}>📝 메모</div>
+            <input value={memo} onChange={e => setMemo(e.target.value)} style={inputStyle} placeholder="특이사항 입력... (선택)" />
+          </div>
+
+          {/* 회원적립 섹션 */}
+          <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10 }}>🙋 회원 적립</div>
             <div style={{ display:'flex', gap:8, marginBottom:12 }}>
               {[
                 { key:'none',   label:'없음' },
@@ -1557,7 +1561,7 @@ function SalesInputPage({ profile }) {
                 </label>
               </div>
             )}
-          </div>
+          </div>{/* 회원적립 섹션 끝 */}
 
           <button className="btn btn-p" type="submit" disabled={saving}
             style={{ width:'100%', justifyContent:'center', height:40 }}>
