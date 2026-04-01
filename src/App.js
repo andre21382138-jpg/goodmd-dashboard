@@ -4658,14 +4658,102 @@ const MANAGER_MENUS = [
   ]},
   { key: 'my_members',     icon: '📋', label: '내 회원 목록' },
   { key: 'attendance', icon: '🗓️', label: '근태관리', sub: [
-    { key: 'clock_inout', icon: '⏱️', label: '출근/퇴근체크' },
-    { key: 'leave_plan',  icon: '📅', label: '연차계획신청' },
+    { key: 'leave_plan', icon: '📅', label: '연차계획신청' },
   ]},
 ];
 const ADMIN_MENUS = [
   { key: 'admin',  icon: '🔐', label: '사용자 관리' },
   { key: 'notice', icon: '📢', label: '공지사항' },
 ];
+
+// ════════════════════════════════════════════════════════
+// 사이드바 출퇴근 패널 (매니저 전용)
+// ════════════════════════════════════════════════════════
+function SidebarClockPanel({ profile }) {
+  const [today,   setToday]   = useState(null);
+  const [saving,  setSaving]  = useState(false);
+  const [loaded,  setLoaded]  = useState(false);
+
+  const todayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+
+  const dateLabel = () => {
+    const d = new Date();
+    const days = ['일','월','화','수','목','금','토'];
+    return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+  };
+
+  const fmt = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  useEffect(() => {
+    supabase.from('attendance')
+      .select('*').eq('manager_id', profile.id).eq('work_date', todayStr()).maybeSingle()
+      .then(({ data }) => { setToday(data); setLoaded(true); });
+  }, [profile.id]);
+
+  const handleClock = async (type) => {
+    if (saving) return;
+    setSaving(true);
+    const now = new Date().toISOString();
+    if (type === 'in') {
+      if (today) { setSaving(false); return; }
+      const { data, error } = await supabase.from('attendance').insert({
+        manager_id: profile.id, manager_name: profile.name,
+        store_name: profile.department, branch_name: profile.branch,
+        work_date: todayStr(), clock_in: now,
+      }).select().single();
+      if (!error) { setToday(data); toast('출근 체크 완료 ✅', 'ok'); }
+    } else {
+      if (!today || today.clock_out) { setSaving(false); return; }
+      const { data, error } = await supabase.from('attendance')
+        .update({ clock_out: now }).eq('id', today.id).select().single();
+      if (!error) { setToday(data); toast('퇴근 체크 완료 ✅', 'ok'); }
+    }
+    setSaving(false);
+  };
+
+  if (!loaded) return null;
+
+  const btnBase = { height:30, border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer', width:'100%' };
+
+  return (
+    <div style={{ padding:'8px', borderBottom:'1px solid rgba(0,0,0,0.1)' }}>
+      <div style={{ background:'#fff', borderRadius:8, border:'1px solid rgba(0,0,0,0.08)', padding:'10px 10px 8px' }}>
+        <div style={{ fontSize:10, fontWeight:700, color:'#888', textAlign:'center', marginBottom:7 }}>
+          {dateLabel()}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5, marginBottom:5 }}>
+          <button
+            style={{ ...btnBase, background: today ? '#f5f5f5' : '#2E7D32', color: today ? '#aaa' : '#fff', border: today ? '1px solid #e0e0e0' : 'none' }}
+            onClick={() => handleClock('in')}
+            disabled={saving || !!today}>
+            {today ? '✅ 출근' : '출근'}
+          </button>
+          <button
+            style={{ ...btnBase, background: today?.clock_out ? '#f5f5f5' : (!today ? '#f5f5f5' : '#C62828'), color: (today?.clock_out || !today) ? '#aaa' : '#fff', border: (today?.clock_out || !today) ? '1px solid #e0e0e0' : 'none' }}
+            onClick={() => handleClock('out')}
+            disabled={saving || !today || !!today?.clock_out}>
+            {today?.clock_out ? '✅ 퇴근' : '퇴근'}
+          </button>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5 }}>
+          <div style={{ height:18, background: today?.clock_in ? '#e8f5e9' : 'transparent', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontFamily:'var(--mono)', fontWeight:700, color:'#2E7D32' }}>
+            {today?.clock_in ? fmt(today.clock_in) : ''}
+          </div>
+          <div style={{ height:18, background: today?.clock_out ? '#fff3e0' : 'transparent', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>
+            {today?.clock_out ? fmt(today.clock_out) : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Sidebar({ page, setPage, profile, onLogout }) {
   const isAdmin    = profile?.role === 'admin';
@@ -4722,6 +4810,9 @@ function Sidebar({ page, setPage, profile, onLogout }) {
           <div style={{ fontSize:10, color:'rgba(0,0,0,0.45)', marginTop:2 }}>홈 대시보드</div>
         </div>
       </button>
+
+      {/* 출퇴근 카드 (매니저 전용) */}
+      {isManager && <SidebarClockPanel profile={profile}/>}
 
       <div className="sidebar-menu">
         {/* 본사 메뉴 */}
