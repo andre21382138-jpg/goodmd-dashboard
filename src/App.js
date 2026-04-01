@@ -3606,11 +3606,17 @@ function HomePage({ profile, setPage }) {
   useEffect(() => {
     const fetch = async () => {
       setLoading(true);
-      const { data } = await supabase.from('sales')
+      let query = supabase.from('sales')
         .select('store_name, branch_name, quantity, price, sold_at')
         .gte('sold_at', monthStart)
         .lte('sold_at', yesterdayStr);
 
+      // 매니저는 본인 지점만 필터링
+      if (isManager && profile?.department) {
+        query = query.eq('store_name', profile.department).eq('branch_name', profile.branch);
+      }
+
+      const { data } = await query;
       const rows = data || [];
       const totalAmt   = rows.reduce((s,r) => s + r.price * r.quantity, 0);
       const totalCount = rows.length;
@@ -3663,6 +3669,7 @@ function HomePage({ profile, setPage }) {
       <div style={{ marginBottom:16 }}>
         <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:4 }}>
           {monthLabel} 누적 판매매출
+          {isManager && <span style={{ fontSize:13, fontWeight:500, color:'var(--text3)', marginLeft:8 }}>({profile?.branch})</span>}
         </div>
         <div style={{ fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)' }}>
           {monthStart} ~ {yesterdayStr} (어제까지)
@@ -5717,6 +5724,14 @@ export default function App() {
         <div className="content">
           <div className="content-header">
             <div className="content-title">{PAGE_TITLES[page]}</div>
+            {isManager && profile?.department && (
+              <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:20, padding:'5px 12px', flexShrink:0 }}>
+                <div style={{ width:7, height:7, background:'var(--accent)', borderRadius:'50%', flexShrink:0 }}/>
+                <span style={{ fontSize:12, fontWeight:700, color:'#E65100' }}>{profile.department}</span>
+                <div style={{ width:1, height:12, background:'#ffcc80' }}/>
+                <span style={{ fontSize:12, fontWeight:700, color:'#bf360c' }}>{profile.branch}</span>
+              </div>
+            )}
           </div>
           <div className="content-body">
             {page === 'home'           && <HomePage profile={profile} setPage={setPage}/>}
