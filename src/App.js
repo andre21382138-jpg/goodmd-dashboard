@@ -4651,15 +4651,15 @@ const HQ_MENUS = [
   { key: 'sales_view',   icon: '📋', label: '매출조회' },
 ];
 const MANAGER_MENUS = [
-  { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
-  { key: 'customer_reg', icon: '👤', label: '회원 등록', sub: [
-    { key: 'customer_qr',  icon: '📱', label: 'QR코드 가입' },
+  { key: 'sales_input', icon: '🛒', label: '판매 입력' },
+  { key: 'customer_reg', icon: '👤', label: '회원 관리', sub: [
+    { key: 'customer_qr',  icon: '📱', label: 'QR 가입' },
     { key: 'customer_doc', icon: '📝', label: '서류 가입' },
+    { key: 'my_members',   icon: '📋', label: '회원 목록' },
   ]},
-  { key: 'my_members',     icon: '📋', label: '내 회원 목록' },
-  { key: 'attendance', icon: '🗓️', label: '근태관리', sub: [
-    { key: 'my_attendance', icon: '📊', label: '근태현황' },
-    { key: 'leave_plan',    icon: '📅', label: '연차계획신청' },
+  { key: 'attendance', icon: '🗓️', label: '근태 관리', sub: [
+    { key: 'my_attendance', icon: '📊', label: '근무 현황' },
+    { key: 'leave_plan',    icon: '📅', label: '휴무 신청' },
   ]},
 ];
 const ADMIN_MENUS = [
@@ -4882,8 +4882,9 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       clock_inout:    'attendance',
       leave_plan:     'attendance',
       my_attendance:  'attendance',
-      customer_qr:  'customer_reg',
-      customer_doc: 'customer_reg',
+      customer_qr:    'customer_reg',
+      customer_doc:   'customer_reg',
+      my_members:     'customer_reg',
     };
     return parentMap[page] ? [parentMap[page]] : [];
   });
@@ -5609,12 +5610,13 @@ export default function App() {
     sales_view:     '매출조회',
     sales_input:    '판매 입력',
     customer_input: '회원 등록',
-    customer_qr:    'QR코드 가입 안내',
+    customer_qr:    'QR 가입',
     customer_doc:   '서류 가입',
-    my_attendance:  '근태현황',
-    attendance_mgmt: '근태관리',
+    my_members:     '회원 목록',
+    my_attendance:  '근무 현황',
+    attendance_mgmt: '근태 관리',
     clock_inout:     '출근/퇴근 체크',
-    leave_plan:      '연차계획 신청',
+    leave_plan:      '휴무 신청',
     admin:          '사용자 관리',
     notice:         '공지사항',
   };
