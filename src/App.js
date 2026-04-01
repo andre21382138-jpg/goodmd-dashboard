@@ -4978,16 +4978,6 @@ function Sidebar({ page, setPage, profile, onLogout }) {
                 </div>
               );
             })}
-            {isManager && (
-              <button className="sidebar-item" onClick={() => {
-                const url = `${window.location.origin}${window.location.pathname}?m=${profile.id}`;
-                const qr  = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(url)}&margin=10`;
-                const w = window.open('');
-                w.document.write(`<html><head><title>내 QR코드</title></head><body style="text-align:center;padding:40px;font-family:sans-serif"><h2>${profile.name} 매니저 QR코드</h2><p style="color:#888">${profile.department} · ${profile.branch}</p><img src="${qr}" style="width:260px;margin:16px 0"/><p style="font-size:11px;color:#bbb">${url}</p><script>window.onload=()=>window.print()<\/script></body></html>`);
-              }}>
-                <span className="sidebar-item-icon">📱</span>내 QR 코드
-              </button>
-            )}
           </>
         )}
         {/* 관리자 메뉴 */}
