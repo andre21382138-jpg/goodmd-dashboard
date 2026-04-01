@@ -1282,7 +1282,7 @@ function SalesInputPage({ profile }) {
           joined_at: soldAt, name: custName.trim(), phone: custPhone,
           birthday: custBirthday || null, store_name: profile.department,
           branch_name: profile.branch, manager_name: managerName.trim() || null,
-          sms_consent: smsConsent, sms_consent_at: smsConsent ? new Date().toISOString() : null,
+          sms_consent: false, sms_consent_at: null,
           created_by: profile.id,
         }).select().single();
         if (custErr) throw custErr;
@@ -1550,13 +1550,9 @@ function SalesInputPage({ profile }) {
                       style={inputStyle} placeholder="매니저 이름 입력" />
                   </div>
                 </div>
-                <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none', padding:'8px 0' }}>
-                  <input type="checkbox" checked={smsConsent} onChange={e => setSmsConsent(e.target.checked)}
-                    style={{ width:16, height:16, accentColor:'var(--accent)', flexShrink:0 }} />
-                  <span style={{ fontSize:12, color: smsConsent ? 'var(--accent)' : 'var(--text2)', fontWeight: smsConsent ? 700 : 500 }}>
-                    📱 광고성 문자 수신 동의 (선택)
-                  </span>
-                </label>
+                <div style={{fontSize:12, color:'var(--text3)', marginTop:6, padding:'6px 0'}}>
+                  💡 SMS 수신동의는 QR코드 가입으로만 처리됩니다
+                </div>
               </div>
             )}
           </div>{/* 회원적립 섹션 끝 */}
