@@ -1456,8 +1456,6 @@ function SalesInputPage({ profile }) {
             )}
           </div>
 
-          </div>
-
           {/* 메모 섹션 */}
           <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
             <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10 }}>📝 메모</div>
