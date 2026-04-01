@@ -1185,7 +1185,7 @@ function SalesInputPage({ profile }) {
   const [recentSales, setRecent] = useState([]);
 
   // 상품 라인 (여러 개)
-  const newLine = () => ({ id: Date.now(), brandId:'', productId:'', quantity:1, price:'', products:[] });
+  const newLine = () => ({ id: Date.now(), brandId:'', productId:'', productSearch:'', showSuggestions:false, quantity:1, normalPrice:'', discount:'0', price:'', products:[] });
   const [lines, setLines] = useState([newLine()]);
 
   // 회원 연결
@@ -1234,13 +1234,19 @@ function SalesInputPage({ profile }) {
       if (l.id !== id) return l;
       const updated = { ...l, [field]: value };
       if (field === 'brandId') {
-        updated.productId = '';
-        updated.price = '';
+        updated.productId = ''; updated.productSearch = ''; updated.price = ''; updated.normalPrice = ''; updated.discount = '0';
         updated.products = allProducts.filter(p => String(p.brand_id) === String(value));
       }
       if (field === 'productId') {
         const prod = l.products.find(p => String(p.id) === String(value));
-        if (prod?.price) updated.price = prod.price;
+        if (prod?.price) { updated.normalPrice = prod.price; updated.discount = '0'; updated.price = prod.price; }
+        updated.showSuggestions = false;
+      }
+      // 정상가나 할인금액 변경 시 판매가 자동 계산
+      if (field === 'normalPrice' || field === 'discount') {
+        const np = Number(field==='normalPrice' ? value : updated.normalPrice) || 0;
+        const dc = Number(field==='discount'    ? value : updated.discount)    || 0;
+        updated.price = Math.max(0, np - dc);
       }
       return updated;
     }));
@@ -1349,8 +1355,14 @@ function SalesInputPage({ profile }) {
               <button type="button" className="btn btn-s" style={{fontSize:12}} onClick={addLine}>+ 상품 추가</button>
             </div>
 
-            {lines.map((l, idx) => (
-              <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#fff5f5', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:8, position:'relative' }}>
+            {lines.map((l, idx) => {
+              const suggestions = l.productSearch && l.products.length > 0
+                ? l.products.filter(p => p.name.toLowerCase().includes(l.productSearch.toLowerCase())).slice(0, 8)
+                : [];
+              const selectedProd = l.products.find(p => String(p.id) === String(l.productId));
+
+              return (
+              <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:8 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
                   <span style={{ fontSize:12, fontWeight:700, color:'var(--text3)' }}>상품 {idx+1}</span>
                   {lines.length > 1 && (
@@ -1358,7 +1370,8 @@ function SalesInputPage({ profile }) {
                       style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'var(--danger)', fontSize:16, lineHeight:1 }}>✕</button>
                   )}
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 100px 120px', gap:10 }}>
+                {/* 1행: 브랜드 + 상품검색 */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
                   <div>
                     <label style={labelStyle}>브랜드</label>
                     <select value={l.brandId} onChange={e => updateLine(l.id,'brandId',e.target.value)} style={inputStyle} required>
@@ -1366,30 +1379,72 @@ function SalesInputPage({ profile }) {
                       {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label style={labelStyle}>상품</label>
-                    <select value={l.productId} onChange={e => updateLine(l.id,'productId',e.target.value)}
-                      style={{...inputStyle, background:!l.brandId?'#f0f0f0':'#fff'}} required disabled={!l.brandId}>
-                      <option value="">-- 상품 선택 --</option>
-                      {l.products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                  <div style={{ position:'relative' }}>
+                    <label style={labelStyle}>상품 검색</label>
+                    <input
+                      value={l.productSearch !== undefined ? l.productSearch : (selectedProd?.name || '')}
+                      onChange={e => {
+                        updateLine(l.id,'productSearch',e.target.value);
+                        updateLine(l.id,'productId','');
+                        updateLine(l.id,'showSuggestions',true);
+                      }}
+                      onFocus={() => updateLine(l.id,'showSuggestions',true)}
+                      style={{...inputStyle, background:!l.brandId?'#f0f0f0':'#fff'}}
+                      placeholder={!l.brandId ? '브랜드 먼저 선택' : '상품명 입력 후 선택'}
+                      disabled={!l.brandId}
+                      autoComplete="off"
+                    />
+                    {/* 선택된 상품 표시 */}
+                    {selectedProd && (
+                      <div style={{ marginTop:4, fontSize:12, color:'var(--success)', fontWeight:600 }}>
+                        ✅ {selectedProd.name}
+                      </div>
+                    )}
+                    {/* 자동완성 목록 */}
+                    {l.showSuggestions && suggestions.length > 0 && (
+                      <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100, background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:220, overflowY:'auto' }}>
+                        {suggestions.map(p => (
+                          <div key={p.id}
+                            onMouseDown={e => { e.preventDefault(); updateLine(l.id,'productId',String(p.id)); updateLine(l.id,'productSearch',p.name); }}
+                            style={{ padding:'9px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0' }}
+                            onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
+                            onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                            {p.name}
+                            <span style={{ fontSize:11, color:'var(--text3)', marginLeft:8, fontFamily:'var(--mono)' }}>{Number(p.price).toLocaleString()}원</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                </div>
+                {/* 2행: 수량 + 정상가 + 할인금액 + 판매가 */}
+                <div style={{ display:'grid', gridTemplateColumns:'80px 1fr 1fr 1fr', gap:10 }}>
                   <div>
                     <label style={labelStyle}>수량</label>
                     <input type="number" min={1} value={l.quantity} onChange={e => updateLine(l.id,'quantity',e.target.value)} style={inputStyle} required />
                   </div>
                   <div>
+                    <label style={labelStyle}>정상가 (원)</label>
+                    <input type="number" min={0} value={l.normalPrice} onChange={e => updateLine(l.id,'normalPrice',e.target.value)} style={inputStyle} placeholder="0" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>할인금액 (원)</label>
+                    <input type="number" min={0} value={l.discount} onChange={e => updateLine(l.id,'discount',e.target.value)} style={{...inputStyle, color:'var(--danger)'}} placeholder="0" />
+                  </div>
+                  <div>
                     <label style={labelStyle}>판매가 (원)</label>
-                    <input type="number" min={0} value={l.price} onChange={e => updateLine(l.id,'price',e.target.value)} style={inputStyle} placeholder="0" required />
+                    <input type="number" min={0} value={l.price} onChange={e => updateLine(l.id,'price',e.target.value)} style={{...inputStyle, fontWeight:700, color:'var(--accent)'}} placeholder="0" required />
                   </div>
                 </div>
-                {l.brandId && l.productId && l.price && (
-                  <div style={{ marginTop:8, fontSize:12, color:'var(--accent)', fontWeight:700, textAlign:'right', fontFamily:'var(--mono)' }}>
+                {l.productId && l.price && (
+                  <div style={{ marginTop:8, fontSize:12, fontWeight:700, textAlign:'right', fontFamily:'var(--mono)', color:'var(--accent)' }}>
                     소계: {(Number(l.quantity) * Number(String(l.price).replace(/,/g,''))).toLocaleString()}원
+                    {Number(l.discount) > 0 && <span style={{color:'var(--danger)', marginLeft:8, fontWeight:400, fontSize:11}}>할인 -{(Number(l.quantity)*Number(l.discount)).toLocaleString()}원</span>}
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
 
             {/* 합계 */}
             {lines.length > 1 && (
