@@ -5171,6 +5171,19 @@ function JoinPage({ managerId }) {
     const cleaned = phone.replace(/\D/g,'');
     if (cleaned.length < 10) { alert('연락처를 올바르게 입력해주세요'); return; }
     setSaving(true);
+
+    // IP/UA 수집 (동의한 경우에만)
+    let consentIp = null;
+    let consentUa = null;
+    if (smsConsent) {
+      try {
+        const r = await fetch('/api/get-client-info');
+        const d = await r.json();
+        consentIp = d.ip;
+        consentUa = d.ua;
+      } catch (_) {}
+    }
+
     const { error } = await supabase.from('customers').insert({
       joined_at: new Date().toISOString().slice(0,10),
       name: name.trim(),
@@ -5181,6 +5194,8 @@ function JoinPage({ managerId }) {
       manager_name: manager.name,
       sms_consent: smsConsent,
       sms_consent_at: smsConsent ? new Date().toISOString() : null,
+      consent_ip: consentIp,
+      consent_ua: consentUa,
     });
     if (error) { alert('오류가 발생했습니다. 다시 시도해주세요.'); setSaving(false); return; }
     setDone(true);
