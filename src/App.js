@@ -1750,10 +1750,12 @@ function CustomerDocPage({ profile }) {
                 style={{ width:18, height:18, accentColor:'var(--success)', flexShrink:0 }} />
               <div>
                 <div style={{ fontSize:13, fontWeight:700, color: smsConsent ? 'var(--success)' : 'var(--text)' }}>
-                  📱 광고성 문자 · 카카오 수신동의
+                  📱 마케팅·정보 수신 동의
                 </div>
-                <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
-                  서류에 고객이 직접 서명한 경우에만 체크하세요. 서면 동의서는 별도 보관 필수.
+                <div style={{ fontSize:11, color:'var(--text3)', marginTop:2, lineHeight:1.7 }}>
+                  (주)한국생활건강으로부터 회원 전용 혜택, 할인·이벤트·프로모션·신상품 안내 등 유용한 정보를 문자메시지(SMS/MMS), 카카오톡 등을 통해 수신하는 것에 동의합니다.<br/>
+                  · 동의하지 않으셔도 서비스 이용에 불이익이 없습니다.<br/>
+                  · 동의 후에도 언제든지 철회하실 수 있습니다.
                 </div>
               </div>
             </label>
@@ -5209,7 +5211,7 @@ function JoinPage({ managerId }) {
       </div>
       {smsConsent && (
         <div style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:10,padding:'10px 18px',fontSize:12,color:'#6d4c41',textAlign:'center'}}>
-          📱 광고성 문자 수신에 동의해주셔서 감사합니다
+          📱 마케팅·정보 수신에 동의해주셔서 감사합니다
         </div>
       )}
     </div>
@@ -5221,9 +5223,10 @@ function JoinPage({ managerId }) {
         {/* 헤더 */}
         <div style={{background:'var(--sidebar)',padding:'28px 28px 20px',textAlign:'center'}}>
           <div style={{fontSize:32,marginBottom:8}}>🏬</div>
-          <div style={{fontSize:18,fontWeight:700,color:'var(--sidebar-text)'}}>회원 등록</div>
-          <div style={{fontSize:12,color:'rgba(0,0,0,0.5)',marginTop:6}}>
-            {manager.department} · {manager.branch}
+          <div style={{fontSize:18,fontWeight:700,color:'var(--sidebar-text)'}}>(주)한국생활건강</div>
+          <div style={{fontSize:14,fontWeight:600,color:'rgba(0,0,0,0.6)',marginTop:4}}>회원 가입</div>
+          <div style={{fontSize:11,color:'rgba(0,0,0,0.4)',marginTop:6}}>
+            가입 매장: {manager.department} · {manager.branch}
           </div>
         </div>
 
@@ -5250,17 +5253,21 @@ function JoinPage({ managerId }) {
                 style={{width:'100%',maxWidth:'100%',height:50,padding:'0 40px 0 12px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:14,outline:'none',fontFamily:'inherit',boxSizing:'border-box',color: birthday ? '#222' : '#aaa',display:'block',WebkitAppearance:'none',appearance:'none'}}/>
             </div>
 
-            {/* SMS 동의 */}
-            <div style={{background:'#f8f9fa',borderRadius:12,padding:'16px',marginBottom:24}}>
+            {/* 마케팅 수신동의 */}
+            <div style={{background: smsConsent?'#fff8e1':'#f8f9fa', border:`1.5px solid ${smsConsent?'var(--accent)':'#e0e0e0'}`, borderRadius:12, padding:'16px', marginBottom:24, transition:'all 150ms'}}>
               <label style={{display:'flex',alignItems:'flex-start',gap:12,cursor:'pointer'}}>
                 <input type="checkbox" checked={smsConsent} onChange={e => setSmsConsent(e.target.checked)}
                   style={{width:20,height:20,marginTop:2,accentColor:'var(--accent)',flexShrink:0}}/>
                 <div>
-                  <div style={{fontSize:14,fontWeight:700,color: smsConsent?'var(--accent)':'#555',marginBottom:4}}>
-                    광고성 문자 수신 동의 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택)</span>
+                  <div style={{fontSize:14,fontWeight:700,color: smsConsent?'var(--accent)':'#555',marginBottom:6}}>
+                    마케팅·정보 수신 동의 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택)</span>
                   </div>
-                  <div style={{fontSize:12,color:'#888',lineHeight:1.6}}>
-                    이벤트·프로모션·신상품 안내 등 마케팅 목적의 문자메시지 수신에 동의합니다. 동의는 언제든지 철회하실 수 있습니다.
+                  <div style={{fontSize:12,color:'#666',lineHeight:1.8}}>
+                    (주)한국생활건강으로부터 회원 전용 혜택, 할인·이벤트·프로모션·신상품 안내 등 유용한 정보를 문자메시지(SMS/MMS), 카카오톡 등을 통해 수신하는 것에 동의합니다.
+                  </div>
+                  <div style={{marginTop:8,fontSize:11,color:'#aaa',lineHeight:1.7}}>
+                    · 동의하지 않으셔도 서비스 이용에 불이익이 없습니다.<br/>
+                    · 동의 후에도 언제든지 철회하실 수 있습니다.
                   </div>
                 </div>
               </label>
