@@ -1667,6 +1667,7 @@ function CustomerDocPage({ profile }) {
   const [phone,       setPhone]       = useState('');
   const [birthday,    setBirthday]    = useState('');
   const [managerName, setManagerName] = useState(profile.name || '');
+  const [smsConsent,  setSmsConsent]  = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [recentList,  setRecent]      = useState([]);
 
@@ -1689,11 +1690,12 @@ function CustomerDocPage({ profile }) {
       birthday: birthday || null,
       store_name: profile.department, branch_name: profile.branch,
       manager_name: managerName.trim() || null,
-      sms_consent: false, sms_consent_at: null,
+      sms_consent: smsConsent,
+      sms_consent_at: smsConsent ? new Date().toISOString() : null,
       created_by: profile.id,
     });
     if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); fetchRecent(); }
+    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); setSmsConsent(false); fetchRecent(); }
     setSaving(false);
   };
 
@@ -1712,7 +1714,7 @@ function CustomerDocPage({ profile }) {
       <div className="card">
         <div style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:16, fontSize:12, color:'#6d4c41', lineHeight:1.8}}>
           ⚠️ 고객으로부터 <strong>서면 동의서를 수령한 후</strong> 등록하세요.<br/>
-          SMS 마케팅 발송은 QR 가입 고객에게만 가능합니다.
+          마케팅 수신동의는 서류에 고객이 직접 서명한 경우에만 체크하세요.
         </div>
         <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16, fontFamily:'var(--mono)' }}>
           📍 {profile.department} · {profile.branch}
@@ -1740,6 +1742,23 @@ function CustomerDocPage({ profile }) {
               <input value={managerName} onChange={e => setManagerName(e.target.value)} style={inputStyle} />
             </div>
           </div>
+
+          {/* 마케팅 수신동의 */}
+          <div style={{ background: smsConsent ? '#e8f5e9' : '#f8f8f8', border:`1px solid ${smsConsent ? '#a5d6a7' : 'var(--border)'}`, borderRadius:'var(--radius)', padding:'12px 16px', marginBottom:16 }}>
+            <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
+              <input type="checkbox" checked={smsConsent} onChange={e => setSmsConsent(e.target.checked)}
+                style={{ width:18, height:18, accentColor:'var(--success)', flexShrink:0 }} />
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color: smsConsent ? 'var(--success)' : 'var(--text)' }}>
+                  📱 광고성 문자 · 카카오 수신동의
+                </div>
+                <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
+                  서류에 고객이 직접 서명한 경우에만 체크하세요. 서면 동의서는 별도 보관 필수.
+                </div>
+              </div>
+            </label>
+          </div>
+
           <button className="btn btn-p" type="submit" disabled={saving} style={{ width:'100%', justifyContent:'center', height:40 }}>
             {saving ? <span className="spinner"/> : '✓ 서류 가입 등록'}
           </button>
@@ -1751,11 +1770,11 @@ function CustomerDocPage({ profile }) {
         <div className="twrap">
           <table>
             <thead>
-              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>생일</th><th>담당매니저</th><th>등록일시</th><th></th></tr>
+              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>생일</th><th>담당매니저</th><th style={{textAlign:'center'}}>수신동의</th><th>등록일시</th><th></th></tr>
             </thead>
             <tbody>
               {recentList.length === 0
-                ? <tr><td colSpan={7} className="empty">등록된 회원이 없습니다</td></tr>
+                ? <tr><td colSpan={8} className="empty">등록된 회원이 없습니다</td></tr>
                 : recentList.map(c => (
                   <tr key={c.id}>
                     <td className="mono">{c.joined_at}</td>
@@ -1763,6 +1782,11 @@ function CustomerDocPage({ profile }) {
                     <td className="mono">{c.phone}</td>
                     <td className="mono" style={{fontSize:11}}>{c.birthday || '-'}</td>
                     <td style={{color:'var(--accent)', fontWeight:600}}>{c.manager_name || '-'}</td>
+                    <td style={{textAlign:'center'}}>
+                      {c.sms_consent
+                        ? <span style={{color:'var(--success)', fontWeight:700, fontSize:12}}>✅ 동의</span>
+                        : <span style={{color:'var(--text3)', fontSize:12}}>미동의</span>}
+                    </td>
                     <td className="mono" style={{fontSize:11, color:'var(--text2)'}}>{new Date(c.created_at).toLocaleString('ko-KR')}</td>
                     <td><button className="btn-danger" onClick={() => handleDelete(c.id)}>삭제</button></td>
                   </tr>
