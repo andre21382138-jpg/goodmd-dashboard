@@ -1611,6 +1611,175 @@ function SalesInputPage({ profile }) {
 // ════════════════════════════════════════════════════════
 // 회원 조회 페이지 (본사/관리자)
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// QR코드 가입 안내 페이지
+// ════════════════════════════════════════════════════════
+function CustomerQRPage({ profile }) {
+  const joinUrl = `${window.location.origin}${window.location.pathname}?m=${profile.id}`;
+  const qrImg   = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(joinUrl)}&margin=12`;
+
+  const handlePrint = () => {
+    const w = window.open('');
+    w.document.write(`<html><head><title>회원가입 QR코드</title></head>
+      <body style="text-align:center;padding:40px;font-family:sans-serif">
+        <h2>${profile.name} 매니저 회원가입 QR</h2>
+        <p style="color:#888">${profile.department} · ${profile.branch}</p>
+        <img src="${qrImg}" style="width:280px;margin:16px 0"/>
+        <p style="font-size:11px;color:#bbb">${joinUrl}</p>
+        <script>window.onload=()=>window.print()<\/script>
+      </body></html>`);
+  };
+
+  return (
+    <div>
+      <div className="card" style={{maxWidth:520}}>
+        <div style={{textAlign:'center', padding:'8px 0 20px'}}>
+          <div style={{fontSize:40, marginBottom:12}}>📱</div>
+          <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>고객에게 QR코드를 보여주세요</div>
+          <div style={{fontSize:13, color:'var(--text2)', lineHeight:1.8, marginBottom:20}}>
+            고객이 스마트폰으로 스캔하면<br/>
+            이름·연락처·생일·<strong>SMS 수신동의</strong>를 직접 입력합니다
+          </div>
+          <img src={qrImg} alt="QR코드" style={{width:240, height:240, borderRadius:8, border:'1px solid var(--border)', marginBottom:16}}/>
+          <div style={{fontSize:11, color:'var(--text3)', wordBreak:'break-all', marginBottom:20}}>{joinUrl}</div>
+          <div style={{display:'flex', gap:10, justifyContent:'center'}}>
+            <button className="btn btn-s" style={{gap:6}}
+              onClick={() => { navigator.clipboard?.writeText(joinUrl); }}>
+              🔗 URL 복사
+            </button>
+            <button className="btn btn-p" style={{gap:6}} onClick={handlePrint}>
+              🖨️ QR 인쇄
+            </button>
+          </div>
+        </div>
+        <div style={{background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:'var(--radius)', padding:'10px 14px', fontSize:12, color:'#1b5e20', lineHeight:1.8}}>
+          ✅ QR코드로 가입한 고객은 <strong>SMS 수신동의</strong>를 직접 체크하므로<br/>
+          별도 서면 동의서가 필요 없습니다.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 서류 가입 페이지 (SMS 동의 없음)
+// ════════════════════════════════════════════════════════
+function CustomerDocPage({ profile }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [joinedAt,    setJoinedAt]    = useState(today);
+  const [custName,    setCustName]    = useState('');
+  const [phone,       setPhone]       = useState('');
+  const [birthday,    setBirthday]    = useState('');
+  const [managerName, setManagerName] = useState(profile.name || '');
+  const [saving,      setSaving]      = useState(false);
+  const [recentList,  setRecent]      = useState([]);
+
+  const fetchRecent = useCallback(async () => {
+    const { data } = await supabase.from('customers')
+      .select('*').eq('created_by', profile.id)
+      .order('created_at', { ascending: false }).limit(20);
+    setRecent(data || []);
+  }, [profile.id]);
+
+  useEffect(() => { fetchRecent(); }, [fetchRecent]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length < 10) { toast('연락처를 올바르게 입력해주세요', 'err'); return; }
+    setSaving(true);
+    const { error } = await supabase.from('customers').insert({
+      joined_at: joinedAt, name: custName.trim(), phone,
+      birthday: birthday || null,
+      store_name: profile.department, branch_name: profile.branch,
+      manager_name: managerName.trim() || null,
+      sms_consent: false, sms_consent_at: null,
+      created_by: profile.id,
+    });
+    if (error) { toast('저장 실패: ' + error.message, 'err'); }
+    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); fetchRecent(); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('이 고객 정보를 삭제하시겠습니까?')) return;
+    const { error } = await supabase.from('customers').delete().eq('id', id);
+    if (error) toast(error.message, 'err');
+    else { toast('삭제 완료', 'inf'); fetchRecent(); }
+  };
+
+  const inputStyle = { width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontFamily:'var(--sans)', outline:'none' };
+  const labelStyle = { display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5 };
+
+  return (
+    <div>
+      <div className="card">
+        <div style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:16, fontSize:12, color:'#6d4c41', lineHeight:1.8}}>
+          ⚠️ 고객으로부터 <strong>서면 동의서를 수령한 후</strong> 등록하세요.<br/>
+          SMS 마케팅 발송은 QR 가입 고객에게만 가능합니다.
+        </div>
+        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16, fontFamily:'var(--mono)' }}>
+          📍 {profile.department} · {profile.branch}
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:14, marginBottom:16 }}>
+            <div>
+              <label style={labelStyle}>회원가입일</label>
+              <input type="date" value={joinedAt} onChange={e => setJoinedAt(e.target.value)} style={inputStyle} required />
+            </div>
+            <div>
+              <label style={labelStyle}>고객 이름</label>
+              <input value={custName} onChange={e => setCustName(e.target.value)} style={inputStyle} placeholder="홍길동" required />
+            </div>
+            <div>
+              <label style={labelStyle}>연락처</label>
+              <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))} style={inputStyle} placeholder="010-0000-0000" required />
+            </div>
+            <div>
+              <label style={labelStyle}>생일 <span style={{color:'var(--text3)', fontWeight:400}}>(선택)</span></label>
+              <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>담당 매니저</label>
+              <input value={managerName} onChange={e => setManagerName(e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+          <button className="btn btn-p" type="submit" disabled={saving} style={{ width:'100%', justifyContent:'center', height:40 }}>
+            {saving ? <span className="spinner"/> : '✓ 서류 가입 등록'}
+          </button>
+        </form>
+      </div>
+
+      <div className="card">
+        <div className="card-label">최근 등록 (20건)</div>
+        <div className="twrap">
+          <table>
+            <thead>
+              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>생일</th><th>담당매니저</th><th>등록일시</th><th></th></tr>
+            </thead>
+            <tbody>
+              {recentList.length === 0
+                ? <tr><td colSpan={7} className="empty">등록된 회원이 없습니다</td></tr>
+                : recentList.map(c => (
+                  <tr key={c.id}>
+                    <td className="mono">{c.joined_at}</td>
+                    <td><strong>{c.name}</strong></td>
+                    <td className="mono">{c.phone}</td>
+                    <td className="mono" style={{fontSize:11}}>{c.birthday || '-'}</td>
+                    <td style={{color:'var(--accent)', fontWeight:600}}>{c.manager_name || '-'}</td>
+                    <td className="mono" style={{fontSize:11, color:'var(--text2)'}}>{new Date(c.created_at).toLocaleString('ko-KR')}</td>
+                    <td><button className="btn-danger" onClick={() => handleDelete(c.id)}>삭제</button></td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CustomerLookupPage({ profile }) {
   const isManager = profile?.job_title === '매니저';
   const [search,    setSearch]   = useState('');
@@ -4487,7 +4656,10 @@ const HQ_MENUS = [
 ];
 const MANAGER_MENUS = [
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
-  { key: 'customer_input', icon: '👤', label: '회원 등록' },
+  { key: 'customer_reg', icon: '👤', label: '회원 등록', sub: [
+    { key: 'customer_qr',  icon: '📱', label: 'QR코드 가입' },
+    { key: 'customer_doc', icon: '📝', label: '서류 가입' },
+  ]},
   { key: 'my_members',     icon: '📋', label: '내 회원 목록' },
   { key: 'attendance', icon: '🗓️', label: '근태관리', sub: [
     { key: 'clock_inout', icon: '⏱️', label: '출근/퇴근체크' },
@@ -4520,6 +4692,8 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       incentive:    'manager_mgmt',
       clock_inout:  'attendance',
       leave_plan:   'attendance',
+      customer_qr:  'customer_reg',
+      customer_doc: 'customer_reg',
     };
     return parentMap[page] ? [parentMap[page]] : [];
   });
@@ -5252,6 +5426,8 @@ export default function App() {
     sales_view:     '매출조회',
     sales_input:    '판매 입력',
     customer_input: '회원 등록',
+    customer_qr:    'QR코드 가입 안내',
+    customer_doc:   '서류 가입',
     attendance_mgmt: '근태관리',
     clock_inout:     '출근/퇴근 체크',
     leave_plan:      '연차계획 신청',
@@ -5289,6 +5465,8 @@ export default function App() {
             {page === 'sales_view'     && canSeeMain && <SalesListPage/>}
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
+            {page === 'customer_qr'    && (isManager || isAdmin || isHQ) && <CustomerQRPage profile={profile}/>}
+            {page === 'customer_doc'   && (isManager || isAdmin || isHQ) && <CustomerDocPage profile={profile}/>}
             {page === 'my_members'     && (isManager || isAdmin || isHQ) && <MyMembersPage profile={profile}/>}
             {page === 'clock_inout'    && (isManager || isAdmin || isHQ) && <ClockInOutPage profile={profile}/>}
             {page === 'leave_plan'     && (isManager || isAdmin || isHQ) && <LeavePlanPage profile={profile}/>}
