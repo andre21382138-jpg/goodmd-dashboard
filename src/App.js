@@ -3566,7 +3566,7 @@ function IncentivePage() {
 // ════════════════════════════════════════════════════════
 // 홈 페이지 (당월 누적 판매매출)
 // ════════════════════════════════════════════════════════
-function HomePage() {
+function HomePage({ profile, setPage }) {
   const now   = new Date();
   const year  = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -3584,8 +3584,24 @@ function HomePage() {
   const [summary,    setSummary]    = useState(null);
   const [storeRows,  setStoreRows]  = useState([]);
   const [loading,    setLoading]    = useState(true);
+  const [showBanner, setShowBanner] = useState(false);
+
+  const isManager = profile?.job_title === '매니저';
+  const today = now.getDate();
+  const isReminderPeriod = today >= 20 && today <= 25;
+
+  // 다음달 문자열
+  const nextM = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextMonStr = `${nextM.getFullYear()}-${String(nextM.getMonth()+1).padStart(2,'0')}`;
+  const daysLeft = 25 - today;
 
   useEffect(() => {
+    if (!isManager || !isReminderPeriod) return;
+    supabase.from('leave_plans')
+      .select('id').eq('manager_id', profile.id).eq('target_month', nextMonStr)
+      .maybeSingle()
+      .then(({ data }) => { if (!data) setShowBanner(true); });
+  }, [isManager, isReminderPeriod, profile?.id, nextMonStr]);
     const fetch = async () => {
       setLoading(true);
       const { data } = await supabase.from('sales')
@@ -3619,6 +3635,28 @@ function HomePage() {
 
   return (
     <div>
+      {/* 휴무계획 미제출 알림 배너 */}
+      {showBanner && (
+        <div style={{ display:'flex', alignItems:'center', gap:12, background:'#ffebee', border:'1px solid #ef9a9a', borderRadius:'var(--radius)', padding:'12px 16px', marginBottom:16 }}>
+          <span style={{ fontSize:18, flexShrink:0 }}>🔴</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#c62828', marginBottom:2 }}>
+              {nextMonStr.replace('-','년 ').replace('-','월')} 휴무계획을 아직 제출하지 않았습니다
+            </div>
+            <div style={{ fontSize:12, color:'#b71c1c' }}>
+              제출 마감일: {now.getMonth()+1}월 25일 · 오늘 포함 {daysLeft + 1}일 남았습니다
+            </div>
+          </div>
+          <button
+            onClick={() => { setShowBanner(false); setPage && setPage('leave_plan'); }}
+            style={{ height:32, padding:'0 14px', background:'#c62828', color:'#fff', border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+            지금 제출
+          </button>
+          <button onClick={() => setShowBanner(false)}
+            style={{ background:'none', border:'none', cursor:'pointer', fontSize:16, color:'#ef9a9a', flexShrink:0, lineHeight:1 }}>✕</button>
+        </div>
+      )}
+
       {/* 월 헤더 */}
       <div style={{ marginBottom:16 }}>
         <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:4 }}>
@@ -4693,6 +4731,7 @@ const HQ_MENUS = [
   { key: 'sales_view',   icon: '📋', label: '매출조회' },
 ];
 const MANAGER_MENUS = [
+  { key: 'home',        icon: '🏠', label: '홈 대시보드' },
   { key: 'sales_input', icon: '🛒', label: '판매 입력' },
   { key: 'customer_reg', icon: '👤', label: '회원 관리', sub: [
     { key: 'customer_qr',  icon: '📱', label: 'QR 가입' },
@@ -4956,7 +4995,6 @@ function Sidebar({ page, setPage, profile, onLogout }) {
         <span style={{ fontSize:22 }}>🏬</span>
         <div>
           <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 관리시스템</div>
-          <div style={{ fontSize:10, color:'rgba(0,0,0,0.45)', marginTop:2 }}>홈 대시보드</div>
         </div>
       </button>
 
@@ -5679,7 +5717,7 @@ export default function App() {
             <div className="content-title">{PAGE_TITLES[page]}</div>
           </div>
           <div className="content-body">
-            {page === 'home'           && <HomePage/>}
+            {page === 'home'           && <HomePage profile={profile} setPage={setPage}/>}
             {page === 'help'           && <HelpPage profile={profile}/>}
             {page === 'product_mgmt'   && canSeeMain && <ProductMgmtPage subPage={null}/>}
             {page === 'product_add'    && canSeeMain && <ProductMgmtPage subPage="product_add"/>}
