@@ -3602,6 +3602,8 @@ function HomePage({ profile, setPage }) {
       .maybeSingle()
       .then(({ data }) => { if (!data) setShowBanner(true); });
   }, [isManager, isReminderPeriod, profile?.id, nextMonStr]);
+
+  useEffect(() => {
     const fetch = async () => {
       setLoading(true);
       const { data } = await supabase.from('sales')
