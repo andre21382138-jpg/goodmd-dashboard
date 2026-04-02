@@ -4780,7 +4780,7 @@ const MANAGER_MENUS = [
 ];
 const ADMIN_MENUS = [
   { key: 'admin',  icon: '🔐', label: '사용자 관리' },
-  { key: 'notice', icon: '📢', label: '공지사항' },
+  { key: 'notice', icon: '📢', label: '공지 사항' },
 ];
 
 // ════════════════════════════════════════════════════════
@@ -5753,7 +5753,7 @@ export default function App() {
     clock_inout:     '출근/퇴근 체크',
     leave_plan:      '휴무 신청',
     admin:          '사용자 관리',
-    notice:         '공지사항',
+    notice:         '공지 사항',
   };
 
   if (authLoading) {
