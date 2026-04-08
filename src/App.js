@@ -3094,6 +3094,7 @@ function ManagerMgmtPage() {
   const [loading,   setLoading]   = useState(true);
   const [fStore,    setFStore]    = useState('');
   const [fBranch,   setFBranch]   = useState('');
+  const [fJob,      setFJob]      = useState('');
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
@@ -3113,8 +3114,11 @@ function ManagerMgmtPage() {
     let r = members;
     if (fStore)  r = r.filter(m => m.store?.department===fStore);
     if (fBranch) r = r.filter(m => m.store?.branch===fBranch);
+    if (fJob)    r = r.filter(m => m.job_title===fJob);
     return r;
-  }, [members, fStore, fBranch]);
+  }, [members, fStore, fBranch, fJob]);
+
+  const td = { fontSize:13, color:'var(--text)' };
 
   return (
     <div>
@@ -3126,7 +3130,12 @@ function ManagerMgmtPage() {
           <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={!fStore} style={{background:!fStore?'#f0f0f0':'#fff'}}>
             <option value="">전체 지점</option>{branches.map(b => <option key={b}>{b}</option>)}
           </select>
-          {(fStore||fBranch) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); }}>✕ 초기화</button>}
+          <select className="fsel" value={fJob} onChange={e => setFJob(e.target.value)}>
+            <option value="">전체 직급</option>
+            <option value="매니저">매니저</option>
+            <option value="부매니저">부매니저</option>
+          </select>
+          {(fStore||fBranch||fJob) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); setFJob(''); }}>✕ 초기화</button>}
           <div className="fbar-right"><span className="fresult">근무자 <b>{filtered.length}</b>명</span></div>
         </div>
         {loading ? <div className="empty"><span className="spinner"/></div> : (
@@ -3142,11 +3151,11 @@ function ManagerMgmtPage() {
                     <tr key={m.id}>
                       <td><span className="badge badge-dept">{m.store?.department}</span></td>
                       <td><span className="badge badge-store">{m.store?.branch}</span></td>
-                      <td style={{fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
-                      <td><strong>{m.display_name || m.name}</strong></td>
-                      <td className="mono" style={{fontSize:12}}>{m.phone || '-'}</td>
-                      <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{m.employee_id}</td>
-                      <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{m.hire_date || '-'}</td>
+                      <td style={{...td, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
+                      <td style={{...td, fontWeight:700}}>{m.display_name || m.name}</td>
+                      <td style={td}>{m.phone || '-'}</td>
+                      <td style={td}>{m.employee_id}</td>
+                      <td style={td}>{m.hire_date || '-'}</td>
                     </tr>
                   ))
                 }
