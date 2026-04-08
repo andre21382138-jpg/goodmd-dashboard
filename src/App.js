@@ -3472,8 +3472,8 @@ function SalaryCalcTab() {
         <AttendanceCalendarModal member={calTarget} year={selYear} month={selMonth}
           onClose={() => setCalTarget(null)} />
       )}
-      <div className="card" style={{padding:'14px 18px', marginBottom:0}}>
-        <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+      <div className="card" style={{padding:'16px 20px'}}>
+        <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:16, paddingBottom:14, borderBottom:'1px solid var(--border)'}}>
           <select value={selYear} onChange={e => setSelYear(Number(e.target.value))}
             style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
             {years.map(y => <option key={y} value={y}>{y}년</option>)}
@@ -3491,8 +3491,6 @@ function SalaryCalcTab() {
             <div style={{fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{totalSalary.toLocaleString()}원</div>
           </div>
         </div>
-      </div>
-      <div className="card" style={{padding:'16px 20px'}}>
         {loading ? <div className="empty"><span className="spinner"/></div> : (
           <div className="twrap">
             <table>
@@ -3507,16 +3505,17 @@ function SalaryCalcTab() {
                     <td style={{fontSize:13, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
                     <td style={{fontSize:13, fontWeight:700}}>{m.display_name || m.name}</td>
                     <td><span style={{padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:600, background: m.salary_type==='월급'?'#e3f2fd':'#f3e5f5', color: m.salary_type==='월급'?'#1565C0':'#6a1b9a'}}>{m.salary_type}</span></td>
-                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:600}}>{m.salary_type==='월급' ? '-' : `${m.totalDays}일`}</td>
-                    <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{m.salary_type==='월급' ? '-' : `${m.weekdays}일`}</td>
-                    <td className="r" style={{fontFamily:'var(--mono)', color: m.weekends>0?'var(--success)':'var(--text3)'}}>{m.salary_type==='월급' ? '-' : `${m.weekends}일`}</td>
-                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)'}}>{m.salary.toLocaleString()}원</td>
+                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', fontWeight:600}}>{m.salary_type==='월급' ? '-' : `${m.totalDays}일`}</td>
+                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', color:'var(--text2)'}}>{m.salary_type==='월급' ? '-' : `${m.weekdays}일`}</td>
+                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', color: m.weekends>0?'var(--success)':'var(--text3)'}}>{m.salary_type==='월급' ? '-' : `${m.weekends}일`}</td>
+                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{m.salary.toLocaleString()}원</td>
                     <td><button className="btn btn-s" style={{fontSize:11, padding:'4px 10px', whiteSpace:'nowrap'}} onClick={() => setCalTarget(m)}>상세보기</button></td>
                   </tr>
                 ))}
                 <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
-                  <td colSpan={10} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
+                  <td colSpan={9} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
                   <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)', padding:'10px 11px'}}>{totalSalary.toLocaleString()}원</td>
+                  <td/>
                 </tr>
               </tbody>
             </table>
