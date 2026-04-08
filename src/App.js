@@ -5937,7 +5937,7 @@ export default function App() {
     stock_center:   '센터재고',
     stock_store:    '매장재고',
     stock_safety:   '안전재고',
-    manager_mgmt:   '직원관리',
+    manager_mgmt:   '매니저 현황',
     incentive:      '급여 조회',
     member_mgmt:    '고객관리',
     sales_view:     '매출조회',
