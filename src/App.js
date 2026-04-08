@@ -3331,31 +3331,36 @@ function AttendanceCalendarModal({ member, year, month, onClose }) {
     <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
       onClick={onClose}>
       <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
-      <div style={{position:'relative', background:'#fff', borderRadius:16, padding:'28px 24px', width:'min(760px, 95vw)', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
+      <div style={{position:'relative', background:'#fff', borderRadius:16, padding:'28px 28px', width:'min(940px, 96vw)', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
         onClick={e => e.stopPropagation()}>
+        {/* 헤더 */}
         <div style={{display:'flex', alignItems:'center', marginBottom:20}}>
           <div>
-            <div style={{fontSize:18, fontWeight:700}}>{member.display_name || member.name} 출근표</div>
-            <div style={{fontSize:13, color:'var(--text2)', marginTop:2}}>
+            <div style={{fontSize:20, fontWeight:700}}>{member.display_name || member.name} 출근표</div>
+            <div style={{fontSize:13, color:'var(--text2)', marginTop:3}}>
               {year}년 {month}월 · {member.store?.branch} · {member.salary_type}
               {member.salary_type === '일급' && ` (기본 ${(member.salary||0).toLocaleString()}원${member.extra_pay ? ` / 금토일 +${(member.extra_pay).toLocaleString()}원` : ''})`}
             </div>
           </div>
           <button onClick={onClose}
-            style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999', lineHeight:1}}>✕</button>
+            style={{marginLeft:'auto', background:'none', border:'none', fontSize:24, cursor:'pointer', color:'#999', lineHeight:1}}>✕</button>
         </div>
 
         {loading ? <div className="empty"><span className="spinner"/></div> : (
           <>
-            <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4, marginBottom:4}}>
+            {/* 요일 헤더 */}
+            <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:6, marginBottom:6}}>
               {dayNames.map((d,i) => (
-                <div key={d} style={{textAlign:'center', fontSize:12, fontWeight:700, padding:'6px 0',
+                <div key={d} style={{textAlign:'center', fontSize:13, fontWeight:700, padding:'8px 0',
+                  background:'#f5f5f5', borderRadius:6,
                   color: i===0?'#c62828':i===6?'#1565C0':'var(--text3)'}}>
                   {d}
                 </div>
               ))}
             </div>
-            <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4}}>
+
+            {/* 달력 */}
+            <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:6}}>
               {Array.from({length: firstDow}).map((_,i) => <div key={`e${i}`}/>)}
               {Array.from({length: daysInMonth}).map((_,i) => {
                 const day = i + 1;
@@ -3365,42 +3370,62 @@ function AttendanceCalendarModal({ member, year, month, onClose }) {
                 const rec = recMap[dateStr];
                 const sal = dailySalary(dateStr);
                 const isWeekend = isSun || isSat || isFri;
+
                 return (
                   <div key={day} style={{
-                    borderRadius:8, padding:'6px 5px', minHeight:90,
+                    borderRadius:8, padding:'8px 8px', minHeight:110,
                     background: rec ? (isWeekend ? '#fff3e0' : '#e8f5e9') : '#fafafa',
                     border: `1px solid ${rec ? (isWeekend ? '#ffcc80' : '#a5d6a7') : '#e0e0e0'}`,
                   }}>
-                    <div style={{fontSize:13, fontWeight:700, marginBottom:3,
+                    <div style={{fontSize:14, fontWeight:700, marginBottom:5,
                       color: isSun?'#c62828': isSat?'#1565C0': isFri?'#2e7d32':'var(--text)'}}>
                       {day}
                     </div>
                     {rec ? (
-                      <div style={{fontSize:10, lineHeight:1.7}}>
+                      <div style={{fontSize:11, lineHeight:1.9}}>
                         {rec.clock_in  && <div style={{color:'#2E7D32', fontWeight:600}}>↑ {fmt(rec.clock_in)}</div>}
                         {rec.clock_out && <div style={{color:'#C62828', fontWeight:600}}>↓ {fmt(rec.clock_out)}</div>}
-                        {rec.clock_in && rec.clock_out && <div style={{color:'var(--text2)'}}>{duration(rec.clock_in, rec.clock_out)}</div>}
-                        {sal !== null && <div style={{color:'var(--accent)', fontWeight:700, marginTop:2}}>{sal.toLocaleString()}원</div>}
-                        {member.salary_type === '월급' && <div style={{color:'var(--text3)', fontSize:9}}>월급제</div>}
+                        {rec.clock_in && rec.clock_out && (
+                          <div style={{color:'var(--text2)', fontWeight:600}}>{duration(rec.clock_in, rec.clock_out)}</div>
+                        )}
+                        {sal !== null && (
+                          <div style={{color:'var(--accent)', fontWeight:700, marginTop:3, fontSize:12}}>
+                            {sal.toLocaleString()}원
+                          </div>
+                        )}
+                        {member.salary_type === '월급' && rec && (
+                          <div style={{color:'#1565C0', fontSize:10, marginTop:2}}>월급제</div>
+                        )}
                       </div>
                     ) : (
-                      <div style={{fontSize:10, color:'#ccc', marginTop:4}}>-</div>
+                      <div style={{fontSize:11, color:'#ccc', marginTop:6}}>휴무</div>
                     )}
                   </div>
                 );
               })}
             </div>
-            <div style={{marginTop:16, padding:'12px 16px', background:'#f8f8f8', borderRadius:8, display:'flex', gap:24, flexWrap:'wrap'}}>
-              <div><span style={{fontSize:12, color:'var(--text3)'}}>출근일수 </span><strong>{records.length}일</strong></div>
+
+            {/* 요약 */}
+            <div style={{marginTop:20, padding:'14px 20px', background:'#f8f8f8', borderRadius:10, display:'flex', gap:32, flexWrap:'wrap', alignItems:'center'}}>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontSize:11, color:'var(--text3)', marginBottom:3}}>출근일수</div>
+                <div style={{fontSize:20, fontWeight:700, fontFamily:'var(--mono)'}}>{records.length}일</div>
+              </div>
               {member.salary_type === '일급' && (
                 <>
-                  <div><span style={{fontSize:12, color:'var(--text3)'}}>평일 </span><strong>{records.filter(r => {const d=new Date(r.work_date).getDay(); return d!==0&&d!==5&&d!==6;}).length}일</strong></div>
-                  <div><span style={{fontSize:12, color:'var(--text3)'}}>금·토·일 </span><strong style={{color:'var(--success)'}}>{records.filter(r => {const d=new Date(r.work_date).getDay(); return d===0||d===5||d===6;}).length}일</strong></div>
+                  <div style={{textAlign:'center'}}>
+                    <div style={{fontSize:11, color:'var(--text3)', marginBottom:3}}>평일</div>
+                    <div style={{fontSize:20, fontWeight:700, fontFamily:'var(--mono)'}}>{records.filter(r => {const d=new Date(r.work_date).getDay(); return d!==0&&d!==5&&d!==6;}).length}일</div>
+                  </div>
+                  <div style={{textAlign:'center'}}>
+                    <div style={{fontSize:11, color:'var(--text3)', marginBottom:3}}>금·토·일</div>
+                    <div style={{fontSize:20, fontWeight:700, fontFamily:'var(--mono)', color:'var(--success)'}}>{records.filter(r => {const d=new Date(r.work_date).getDay(); return d===0||d===5||d===6;}).length}일</div>
+                  </div>
                 </>
               )}
-              <div style={{marginLeft:'auto'}}>
-                <span style={{fontSize:12, color:'var(--text3)'}}>이번 달 지급액 </span>
-                <strong style={{fontSize:16, color:'var(--accent)'}}>{member.salary.toLocaleString()}원</strong>
+              <div style={{marginLeft:'auto', textAlign:'right'}}>
+                <div style={{fontSize:11, color:'var(--text3)', marginBottom:3}}>이번 달 지급액</div>
+                <div style={{fontSize:24, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{member.salary.toLocaleString()}원</div>
               </div>
             </div>
           </>
