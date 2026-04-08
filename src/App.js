@@ -3235,7 +3235,7 @@ function IncentivePage() {
     <div>
       {/* 필터 */}
       <div className="card">
-        <div className="card-label">인센티브 조회</div>
+        <div className="card-label">급여 조회</div>
         <div className="fbar">
           <div style={{ fontSize:12, color:'var(--text2)', marginRight:4 }}>구매일</div>
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
@@ -4606,7 +4606,7 @@ const HQ_MENUS = [
     { key: 'stock_safety', icon: '🛡️', label: '안전재고' },
   ]},
   { key: 'manager_mgmt', icon: '👔', label: '직원관리', sub: [
-    { key: 'incentive', icon: '💰', label: '인센티브 조회' },
+    { key: 'incentive', icon: '💰', label: '급여 조회' },
   ]},
   { key: 'attendance_mgmt', icon: '🗓️', label: '근태관리' },
   { key: 'member_mgmt',  icon: '👥', label: '고객관리' },
@@ -5938,7 +5938,7 @@ export default function App() {
     stock_store:    '매장재고',
     stock_safety:   '안전재고',
     manager_mgmt:   '직원관리',
-    incentive:      '인센티브 조회',
+    incentive:      '급여 조회',
     member_mgmt:    '고객관리',
     sales_view:     '매출조회',
     sales_input:    '판매 입력',
