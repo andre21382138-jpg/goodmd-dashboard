@@ -3289,32 +3289,150 @@ function SalaryConditionTab() {
   );
 }
 
+function AttendanceCalendarModal({ member, year, month, onClose }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const from = `${year}-${String(month).padStart(2,'0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const to = `${year}-${String(month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    supabase.from('attendance').select('*')
+      .eq('manager_name', member.name)
+      .gte('work_date', from).lte('work_date', to)
+      .then(({ data }) => { setRecords(data || []); setLoading(false); });
+  }, [member.name, year, month]);
+
+  const recMap = {};
+  records.forEach(r => { recMap[r.work_date] = r; });
+
+  const fmt = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+  const duration = (ci, co) => {
+    if (!ci || !co) return '';
+    const m = Math.round((new Date(co) - new Date(ci)) / 60000);
+    return `${Math.floor(m/60)}h${m%60}m`;
+  };
+  const dailySalary = (dateStr) => {
+    if (member.salary_type === '월급') return null;
+    const dow = new Date(dateStr).getDay();
+    const isFriSatSun = dow === 0 || dow === 5 || dow === 6;
+    return (member.salary || 0) + (isFriSatSun ? (member.extra_pay || 0) : 0);
+  };
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month - 1, 1).getDay();
+  const dayNames = ['일','월','화','수','목','금','토'];
+
+  return (
+    <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
+      onClick={onClose}>
+      <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
+      <div style={{position:'relative', background:'#fff', borderRadius:16, padding:'28px 24px', width:'min(760px, 95vw)', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
+        onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex', alignItems:'center', marginBottom:20}}>
+          <div>
+            <div style={{fontSize:18, fontWeight:700}}>{member.display_name || member.name} 출근표</div>
+            <div style={{fontSize:13, color:'var(--text2)', marginTop:2}}>
+              {year}년 {month}월 · {member.store?.branch} · {member.salary_type}
+              {member.salary_type === '일급' && ` (기본 ${(member.salary||0).toLocaleString()}원${member.extra_pay ? ` / 금토일 +${(member.extra_pay).toLocaleString()}원` : ''})`}
+            </div>
+          </div>
+          <button onClick={onClose}
+            style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999', lineHeight:1}}>✕</button>
+        </div>
+
+        {loading ? <div className="empty"><span className="spinner"/></div> : (
+          <>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4, marginBottom:4}}>
+              {dayNames.map((d,i) => (
+                <div key={d} style={{textAlign:'center', fontSize:12, fontWeight:700, padding:'6px 0',
+                  color: i===0?'#c62828':i===6?'#1565C0':'var(--text3)'}}>
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4}}>
+              {Array.from({length: firstDow}).map((_,i) => <div key={`e${i}`}/>)}
+              {Array.from({length: daysInMonth}).map((_,i) => {
+                const day = i + 1;
+                const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const dow = (firstDow + i) % 7;
+                const isSun = dow === 0, isSat = dow === 6, isFri = dow === 5;
+                const rec = recMap[dateStr];
+                const sal = dailySalary(dateStr);
+                const isWeekend = isSun || isSat || isFri;
+                return (
+                  <div key={day} style={{
+                    borderRadius:8, padding:'6px 5px', minHeight:90,
+                    background: rec ? (isWeekend ? '#fff3e0' : '#e8f5e9') : '#fafafa',
+                    border: `1px solid ${rec ? (isWeekend ? '#ffcc80' : '#a5d6a7') : '#e0e0e0'}`,
+                  }}>
+                    <div style={{fontSize:13, fontWeight:700, marginBottom:3,
+                      color: isSun?'#c62828': isSat?'#1565C0': isFri?'#2e7d32':'var(--text)'}}>
+                      {day}
+                    </div>
+                    {rec ? (
+                      <div style={{fontSize:10, lineHeight:1.7}}>
+                        {rec.clock_in  && <div style={{color:'#2E7D32', fontWeight:600}}>↑ {fmt(rec.clock_in)}</div>}
+                        {rec.clock_out && <div style={{color:'#C62828', fontWeight:600}}>↓ {fmt(rec.clock_out)}</div>}
+                        {rec.clock_in && rec.clock_out && <div style={{color:'var(--text2)'}}>{duration(rec.clock_in, rec.clock_out)}</div>}
+                        {sal !== null && <div style={{color:'var(--accent)', fontWeight:700, marginTop:2}}>{sal.toLocaleString()}원</div>}
+                        {member.salary_type === '월급' && <div style={{color:'var(--text3)', fontSize:9}}>월급제</div>}
+                      </div>
+                    ) : (
+                      <div style={{fontSize:10, color:'#ccc', marginTop:4}}>-</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{marginTop:16, padding:'12px 16px', background:'#f8f8f8', borderRadius:8, display:'flex', gap:24, flexWrap:'wrap'}}>
+              <div><span style={{fontSize:12, color:'var(--text3)'}}>출근일수 </span><strong>{records.length}일</strong></div>
+              {member.salary_type === '일급' && (
+                <>
+                  <div><span style={{fontSize:12, color:'var(--text3)'}}>평일 </span><strong>{records.filter(r => {const d=new Date(r.work_date).getDay(); return d!==0&&d!==5&&d!==6;}).length}일</strong></div>
+                  <div><span style={{fontSize:12, color:'var(--text3)'}}>금·토·일 </span><strong style={{color:'var(--success)'}}>{records.filter(r => {const d=new Date(r.work_date).getDay(); return d===0||d===5||d===6;}).length}일</strong></div>
+                </>
+              )}
+              <div style={{marginLeft:'auto'}}>
+                <span style={{fontSize:12, color:'var(--text3)'}}>이번 달 지급액 </span>
+                <strong style={{fontSize:16, color:'var(--accent)'}}>{member.salary.toLocaleString()}원</strong>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SalaryCalcTab() {
   const now = new Date();
-  // 기본값: 지난달
   const defaultYear  = now.getMonth() === 0 ? now.getFullYear()-1 : now.getFullYear();
   const defaultMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-  const [selYear,  setSelYear]  = useState(defaultYear);
-  const [selMonth, setSelMonth] = useState(defaultMonth);
-  const [rows,     setRows]     = useState([]);
-  const [loading,  setLoading]  = useState(false);
-  const [fStore,   setFStore]   = useState('');
+  const [selYear,   setSelYear]   = useState(defaultYear);
+  const [selMonth,  setSelMonth]  = useState(defaultMonth);
+  const [rows,      setRows]      = useState([]);
+  const [loading,   setLoading]   = useState(false);
+  const [fStore,    setFStore]    = useState('');
+  const [calTarget, setCalTarget] = useState(null);
 
   const calcSalary = useCallback(async () => {
     setLoading(true);
     const from = `${selYear}-${String(selMonth).padStart(2,'0')}-01`;
     const lastDay = new Date(selYear, selMonth, 0).getDate();
-    const to   = `${selYear}-${String(selMonth).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    const to = `${selYear}-${String(selMonth).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
 
-    // 근무자 목록
     const { data: members } = await supabase.from('store_members')
       .select('*, store:profiles!store_account_id(department, branch)');
-
-    // 해당 월 출근 기록
     const { data: att } = await supabase.from('attendance')
       .select('manager_name, work_date').gte('work_date', from).lte('work_date', to);
 
-    const attMap = {}; // manager_name → [work_date, ...]
+    const attMap = {};
     (att || []).forEach(r => {
       if (!attMap[r.manager_name]) attMap[r.manager_name] = [];
       attMap[r.manager_name].push(r.work_date);
@@ -3322,31 +3440,18 @@ function SalaryCalcTab() {
 
     const result = (members || []).map(m => {
       const dates = attMap[m.name] || [];
-      let salary = 0;
-      let weekdays = 0, weekends = 0;
-
+      let salary = 0, weekdays = 0, weekends = 0;
       if (m.salary_type === '월급') {
         salary = m.salary || 0;
       } else {
-        // 일급: 요일별 계산
         dates.forEach(d => {
-          const dow = new Date(d).getDay(); // 0=일, 5=금, 6=토
+          const dow = new Date(d).getDay();
           const isFriSatSun = dow === 0 || dow === 5 || dow === 6;
-          if (isFriSatSun) {
-            salary += (m.salary || 0) + (m.extra_pay || 0);
-            weekends++;
-          } else {
-            salary += (m.salary || 0);
-            weekdays++;
-          }
+          if (isFriSatSun) { salary += (m.salary||0) + (m.extra_pay||0); weekends++; }
+          else             { salary += (m.salary||0); weekdays++; }
         });
       }
-
-      return {
-        ...m,
-        totalDays: dates.length,
-        weekdays, weekends, salary,
-      };
+      return { ...m, totalDays: dates.length, weekdays, weekends, salary };
     });
 
     setRows(result.sort((a,b) => (a.store?.department||'').localeCompare(b.store?.department||'')));
@@ -3358,13 +3463,15 @@ function SalaryCalcTab() {
   const stores = useMemo(() => uniq(rows.map(r => r.store?.department).filter(Boolean)), [rows]);
   const filtered = useMemo(() => fStore ? rows.filter(r => r.store?.department===fStore) : rows, [rows, fStore]);
   const totalSalary = useMemo(() => filtered.reduce((s,r) => s+r.salary, 0), [filtered]);
-
   const years  = Array.from({length:5}, (_,i) => now.getFullYear() - i);
   const months = Array.from({length:12}, (_,i) => i+1);
 
   return (
     <div>
-      {/* 월 선택 */}
+      {calTarget && (
+        <AttendanceCalendarModal member={calTarget} year={selYear} month={selMonth}
+          onClose={() => setCalTarget(null)} />
+      )}
       <div className="card" style={{padding:'14px 18px', marginBottom:0}}>
         <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
           <select value={selYear} onChange={e => setSelYear(Number(e.target.value))}
@@ -3385,20 +3492,12 @@ function SalaryCalcTab() {
           </div>
         </div>
       </div>
-
       <div className="card" style={{padding:'16px 20px'}}>
         {loading ? <div className="empty"><span className="spinner"/></div> : (
           <div className="twrap">
             <table>
               <thead>
-                <tr>
-                  <th>점포</th><th>지점</th><th>직급</th><th>이름</th>
-                  <th>급여방법</th>
-                  <th className="r">출근일수</th>
-                  <th className="r">평일</th>
-                  <th className="r">금·토·일</th>
-                  <th className="r">지급급여</th>
-                </tr>
+                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근일수</th><th className="r">평일</th><th className="r">금·토·일</th><th className="r">지급급여</th><th></th></tr>
               </thead>
               <tbody>
                 {filtered.map(m => (
@@ -3407,32 +3506,18 @@ function SalaryCalcTab() {
                     <td><span className="badge badge-store">{m.store?.branch}</span></td>
                     <td style={{fontSize:13, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
                     <td style={{fontSize:13, fontWeight:700}}>{m.display_name || m.name}</td>
-                    <td>
-                      <span style={{padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:600,
-                        background: m.salary_type==='월급'?'#e3f2fd':'#f3e5f5',
-                        color: m.salary_type==='월급'?'#1565C0':'#6a1b9a'}}>
-                        {m.salary_type}
-                      </span>
-                    </td>
-                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:600}}>
-                      {m.salary_type==='월급' ? '-' : `${m.totalDays}일`}
-                    </td>
-                    <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>
-                      {m.salary_type==='월급' ? '-' : `${m.weekdays}일`}
-                    </td>
-                    <td className="r" style={{fontFamily:'var(--mono)', color: m.weekends>0?'var(--success)':'var(--text3)'}}>
-                      {m.salary_type==='월급' ? '-' : `${m.weekends}일`}
-                    </td>
-                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)'}}>
-                      {m.salary.toLocaleString()}원
-                    </td>
+                    <td><span style={{padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:600, background: m.salary_type==='월급'?'#e3f2fd':'#f3e5f5', color: m.salary_type==='월급'?'#1565C0':'#6a1b9a'}}>{m.salary_type}</span></td>
+                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:600}}>{m.salary_type==='월급' ? '-' : `${m.totalDays}일`}</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{m.salary_type==='월급' ? '-' : `${m.weekdays}일`}</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', color: m.weekends>0?'var(--success)':'var(--text3)'}}>{m.salary_type==='월급' ? '-' : `${m.weekends}일`}</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)'}}>{m.salary.toLocaleString()}원</td>
+                    <td><button className="btn btn-s" style={{fontSize:11, padding:'3px 10px', whiteSpace:'nowrap'}} onClick={() => setCalTarget(m)}>📅 출근표</button></td>
                   </tr>
                 ))}
                 <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
-                  <td colSpan={8} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
-                  <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)', padding:'10px 11px'}}>
-                    {totalSalary.toLocaleString()}원
-                  </td>
+                  <td colSpan={9} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
+                  <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)', padding:'10px 11px'}}>{totalSalary.toLocaleString()}원</td>
+                  <td/>
                 </tr>
               </tbody>
             </table>
