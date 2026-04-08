@@ -3497,7 +3497,7 @@ function SalaryCalcTab() {
           <div className="twrap">
             <table>
               <thead>
-                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근일수</th><th className="r">평일</th><th className="r">금·토·일</th><th className="r">지급급여</th><th></th></tr>
+                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근일수</th><th className="r">평일</th><th className="r">금·토·일</th><th className="r">지급급여</th><th style={{width:70}}></th></tr>
               </thead>
               <tbody>
                 {filtered.map(m => (
@@ -3515,9 +3515,8 @@ function SalaryCalcTab() {
                   </tr>
                 ))}
                 <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
-                  <td colSpan={9} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
+                  <td colSpan={10} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
                   <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)', padding:'10px 11px'}}>{totalSalary.toLocaleString()}원</td>
-                  <td/>
                 </tr>
               </tbody>
             </table>
