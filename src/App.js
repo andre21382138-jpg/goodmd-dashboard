@@ -3497,7 +3497,7 @@ function SalaryCalcTab() {
           <div className="twrap">
             <table>
               <thead>
-                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근일수</th><th className="r">평일</th><th className="r">금·토·일</th><th className="r">지급급여</th><th style={{width:70}}></th></tr>
+                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근일수</th><th className="r">평일</th><th className="r">금·토·일</th><th className="r">지급급여</th><th></th></tr>
               </thead>
               <tbody>
                 {filtered.map(m => (
@@ -3511,7 +3511,7 @@ function SalaryCalcTab() {
                     <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{m.salary_type==='월급' ? '-' : `${m.weekdays}일`}</td>
                     <td className="r" style={{fontFamily:'var(--mono)', color: m.weekends>0?'var(--success)':'var(--text3)'}}>{m.salary_type==='월급' ? '-' : `${m.weekends}일`}</td>
                     <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)'}}>{m.salary.toLocaleString()}원</td>
-                    <td><button className="btn btn-s" style={{fontSize:11, padding:'3px 10px', whiteSpace:'nowrap'}} onClick={() => setCalTarget(m)}>📅 출근표</button></td>
+                    <td><button className="btn btn-s" style={{fontSize:11, padding:'4px 10px', whiteSpace:'nowrap'}} onClick={() => setCalTarget(m)}>상세보기</button></td>
                   </tr>
                 ))}
                 <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
