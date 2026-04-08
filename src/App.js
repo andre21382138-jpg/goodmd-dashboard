@@ -1481,27 +1481,15 @@ function SalesInputPage({ profile }) {
 // QR코드 가입 안내 페이지
 // ════════════════════════════════════════════════════════
 function CustomerQRPage({ profile }) {
-  const [members,   setMembers]   = useState([]);
-  const [selMember, setSelMember] = useState(null);
-
-  useEffect(() => {
-    supabase.from('store_members').select('name, display_name, job_title, phone')
-      .eq('store_account_id', profile.id).order('is_primary', { ascending: false })
-      .then(({ data }) => { setMembers(data || []); if (data?.length === 1) setSelMember(data[0]); });
-  }, [profile.id]);
-
-  const baseUrl = `${window.location.origin}${window.location.pathname}`;
-  const joinUrl = selMember
-    ? `${baseUrl}?m=${profile.id}&mn=${encodeURIComponent(selMember.name)}`
-    : `${baseUrl}?m=${profile.id}`;
-  const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(joinUrl)}&margin=12`;
+  const joinUrl = `${window.location.origin}${window.location.pathname}?m=${profile.id}`;
+  const qrImg   = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(joinUrl)}&margin=12`;
 
   const handlePrint = () => {
     const w = window.open('');
     w.document.write(`<html><head><title>회원가입 QR코드</title></head>
       <body style="text-align:center;padding:40px;font-family:sans-serif">
-        <h2>${selMember ? (selMember.display_name || selMember.name) : profile.name} 담당 회원가입 QR</h2>
-        <p style="color:#888">${profile.department} · ${profile.branch}</p>
+        <h2>${profile.department} ${profile.branch}</h2>
+        <p style="color:#888">(주)한국생활건강 회원가입</p>
         <img src="${qrImg}" style="width:280px;margin:16px 0"/>
         <p style="font-size:11px;color:#bbb">${joinUrl}</p>
         <script>window.onload=()=>window.print()<\/script>
@@ -1510,50 +1498,21 @@ function CustomerQRPage({ profile }) {
 
   return (
     <div>
-      {/* 근무자 선택 */}
-      {members.length > 1 && (
-        <div className="card" style={{padding:'14px 18px', marginBottom:0}}>
-          <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>근무자 선택 <span style={{fontSize:12, fontWeight:400, color:'var(--text3)'}}>(QR코드가 근무자별로 생성됩니다)</span></div>
-          <div style={{display:'flex', gap:8}}>
-            {members.map(m => (
-              <button key={m.name} type="button"
-                onClick={() => setSelMember(selMember?.name===m.name ? null : m)}
-                style={{ flex:1, height:44, border:'2px solid', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
-                  borderColor: selMember?.name===m.name ? 'var(--accent)' : 'var(--border)',
-                  background: selMember?.name===m.name ? '#fff3e0' : '#fafafa',
-                  color: selMember?.name===m.name ? 'var(--accent)' : 'var(--text2)',
-                }}>
-                {m.display_name || m.name}
-                <div style={{fontSize:10, fontWeight:400, marginTop:2}}>{m.job_title}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="card" style={{maxWidth:520}}>
-        {!selMember && members.length > 1 ? (
-          <div style={{textAlign:'center', padding:'24px 0', color:'var(--text3)'}}>
-            <div style={{fontSize:32, marginBottom:12}}>👆</div>
-            <div style={{fontSize:14, fontWeight:600}}>근무자를 먼저 선택해주세요</div>
-          </div>
-        ) : (
         <div style={{textAlign:'center', padding:'8px 0 20px'}}>
           <div style={{fontSize:40, marginBottom:12}}>📱</div>
-          <div style={{fontSize:16, fontWeight:700, marginBottom:4}}>고객에게 QR코드를 보여주세요</div>
-          {selMember && <div style={{fontSize:13, color:'var(--accent)', fontWeight:700, marginBottom:8}}>담당: {selMember.display_name || selMember.name}</div>}
+          <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>매장 QR코드</div>
           <div style={{fontSize:13, color:'var(--text2)', lineHeight:1.8, marginBottom:20}}>
-            고객이 스마트폰으로 스캔하면<br/>
-            이름·연락처·생일·<strong>SMS 수신동의</strong>를 직접 입력합니다
+            카운터에 출력해두세요.<br/>
+            고객이 스캔하면 <strong>담당자를 직접 선택</strong>하고 가입합니다.
           </div>
           <img src={qrImg} alt="QR코드" style={{width:240, height:240, borderRadius:8, border:'1px solid var(--border)', marginBottom:16}}/>
           <div style={{fontSize:11, color:'var(--text3)', wordBreak:'break-all', marginBottom:20}}>{joinUrl}</div>
           <div style={{display:'flex', gap:10, justifyContent:'center'}}>
-            <button className="btn btn-s" onClick={() => { navigator.clipboard?.writeText(joinUrl); }}>🔗 URL 복사</button>
+            <button className="btn btn-s" onClick={() => { navigator.clipboard?.writeText(joinUrl); toast('URL 복사됨', 'ok'); }}>🔗 URL 복사</button>
             <button className="btn btn-p" onClick={handlePrint}>🖨️ QR 인쇄</button>
           </div>
         </div>
-        )}
         <div style={{background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:'var(--radius)', padding:'10px 14px', fontSize:12, color:'#1b5e20', lineHeight:1.8}}>
           ✅ QR코드로 가입한 고객은 <strong>SMS 수신동의</strong>를 직접 체크하므로 별도 서면 동의서가 필요 없습니다.
         </div>
@@ -5383,8 +5342,6 @@ function JoinPage({ managerId }) {
               if (presetMemberName) {
                 const found = (mems || []).find(m => m.name === presetMemberName);
                 if (found) setSelMember(found);
-              } else if (mems?.length === 1) {
-                setSelMember(mems[0]);
               }
             });
         }
