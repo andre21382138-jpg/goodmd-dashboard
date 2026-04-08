@@ -5539,7 +5539,7 @@ function JoinPage({ managerId }) {
             </button>
           </form>
           <div style={{marginTop:14,fontSize:11,color:'#bbb',textAlign:'center',lineHeight:1.7}}>
-            담당 매니저: {manager.name}<br/>
+            {selMember ? `담당: ${selMember.display_name || selMember.name}` : ''}<br/>
             입력하신 정보는 회원 관리 목적으로만 사용됩니다
           </div>
         </div>
