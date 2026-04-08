@@ -5025,12 +5025,76 @@ function MyAttendancePage({ profile }) {
 // ════════════════════════════════════════════════════════
 // 사이드바 출퇴근 패널 (매니저 전용)
 // ════════════════════════════════════════════════════════
+function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
+  const [selMember, setSelMember] = useState(null);
+  const label = type === 'in' ? '출근' : '퇴근';
+  const color = type === 'in' ? '#2E7D32' : '#C62828';
+
+  // 체크 가능한 근무자 필터
+  const available = members.filter(m => {
+    const rec = todayMap[m.name];
+    if (type === 'in') return !rec;              // 출근 기록 없는 사람만
+    return rec && !rec.clock_out;                // 출근했고 퇴근 안 한 사람만
+  });
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}
+      onClick={onClose}>
+      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)' }}/>
+      <div style={{ position:'relative', background:'#fff', borderRadius:16, padding:'28px 24px', width:320, maxWidth:'90vw', boxShadow:'0 8px 40px rgba(0,0,0,0.2)' }}
+        onClick={e => e.stopPropagation()}>
+        {/* 타이틀 */}
+        <div style={{ textAlign:'center', marginBottom:20 }}>
+          <div style={{ fontSize:28, marginBottom:8 }}>{type === 'in' ? '🟢' : '🔴'}</div>
+          <div style={{ fontSize:18, fontWeight:700, color:'#111' }}>{label} 체크</div>
+          <div style={{ fontSize:13, color:'#888', marginTop:4 }}>근무자를 선택하세요</div>
+        </div>
+
+        {/* 근무자 버튼 */}
+        {available.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'16px 0', fontSize:13, color:'#999' }}>
+            {type === 'in' ? '모든 근무자가 이미 출근 체크했습니다' : '퇴근 체크할 근무자가 없습니다'}
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:20 }}>
+            {available.map(m => (
+              <button key={m.name} type="button"
+                onClick={() => setSelMember(selMember?.name === m.name ? null : m)}
+                style={{ height:56, border:'2px solid', borderRadius:10, fontSize:15, fontWeight:700, cursor:'pointer', transition:'all 120ms',
+                  borderColor: selMember?.name === m.name ? color : '#e0e0e0',
+                  background: selMember?.name === m.name ? (type==='in'?'#e8f5e9':'#ffebee') : '#fafafa',
+                  color: selMember?.name === m.name ? color : '#555',
+                }}>
+                {m.display_name || m.name}
+                <div style={{ fontSize:11, fontWeight:400, marginTop:3, color: selMember?.name===m.name ? color : '#999' }}>{m.job_title}</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 확인 / 취소 버튼 */}
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={onClose}
+            style={{ flex:1, height:44, border:'1px solid #e0e0e0', borderRadius:10, background:'#fafafa', fontSize:14, fontWeight:600, color:'#888', cursor:'pointer' }}>
+            취소
+          </button>
+          <button onClick={() => selMember && onConfirm(selMember)}
+            disabled={!selMember}
+            style={{ flex:2, height:44, border:'none', borderRadius:10, background: selMember ? color : '#e0e0e0', fontSize:14, fontWeight:700, color: selMember ? '#fff' : '#bbb', cursor: selMember ? 'pointer' : 'default', transition:'all 120ms' }}>
+            {selMember ? `${selMember.display_name || selMember.name} ${label} 확인` : `${label} 확인`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SidebarClockPanel({ profile }) {
-  const [members,    setMembers]   = useState([]);
-  const [selMember,  setSelMember] = useState(null); // { name, job_title }
-  const [today,      setToday]     = useState(null);
-  const [saving,     setSaving]    = useState(false);
-  const [loaded,     setLoaded]    = useState(false);
+  const [members,  setMembers]  = useState([]);
+  const [loaded,   setLoaded]   = useState(false);
+  const [popup,    setPopup]    = useState(null); // 'in' | 'out'
+  const [saving,   setSaving]   = useState(false);
+  const [todayMap, setTodayMap] = useState({}); // name → attendance record
 
   const todayStr = () => {
     const d = new Date();
@@ -5047,97 +5111,99 @@ function SidebarClockPanel({ profile }) {
     return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   };
 
-  useEffect(() => {
-    supabase.from('store_members')
-      .select('name, display_name, job_title')
-      .eq('store_account_id', profile.id)
-      .order('is_primary', { ascending: false })
-      .then(({ data }) => { setMembers(data || []); setLoaded(true); });
-  }, [profile.id]);
-
-  const fetchTodayRecord = useCallback(async (memberName) => {
+  const fetchToday = useCallback(async () => {
     const { data } = await supabase.from('attendance')
-      .select('*').eq('manager_id', profile.id)
-      .eq('manager_name', memberName).eq('work_date', todayStr()).maybeSingle();
-    setToday(data);
+      .select('*').eq('manager_id', profile.id).eq('work_date', todayStr());
+    const map = {};
+    (data || []).forEach(r => { map[r.manager_name] = r; });
+    setTodayMap(map);
   }, [profile.id]);
 
   useEffect(() => {
-    if (selMember) fetchTodayRecord(selMember.name);
-    else setToday(null);
-  }, [selMember, fetchTodayRecord]);
+    supabase.from('store_members').select('name, display_name, job_title')
+      .eq('store_account_id', profile.id).order('is_primary', { ascending: false })
+      .then(({ data }) => { setMembers(data || []); setLoaded(true); });
+    fetchToday();
+  }, [profile.id, fetchToday]);
 
-  const handleClock = async (type) => {
-    if (!selMember || saving) return;
+  const handleConfirm = async (member) => {
+    if (saving) return;
     setSaving(true);
     const now = new Date().toISOString();
-    if (type === 'in') {
-      if (today) { setSaving(false); return; }
+    const rec = todayMap[member.name];
+    if (popup === 'in') {
       const { data, error } = await supabase.from('attendance').insert({
-        manager_id: profile.id, manager_name: selMember.name,
+        manager_id: profile.id, manager_name: member.name,
         store_name: profile.department, branch_name: profile.branch,
         work_date: todayStr(), clock_in: now,
       }).select().single();
-      if (!error) { setToday(data); toast(`${selMember.display_name || selMember.name} 출근 체크 완료 ✅`, 'ok'); }
+      if (!error) {
+        setTodayMap(prev => ({ ...prev, [member.name]: data }));
+        toast(`${member.display_name || member.name} 출근 체크 완료 ✅`, 'ok');
+      }
     } else {
-      if (!today || today.clock_out) { setSaving(false); return; }
       const { data, error } = await supabase.from('attendance')
-        .update({ clock_out: now }).eq('id', today.id).select().single();
-      if (!error) { setToday(data); toast(`${selMember.display_name || selMember.name} 퇴근 체크 완료 ✅`, 'ok'); }
+        .update({ clock_out: now }).eq('id', rec.id).select().single();
+      if (!error) {
+        setTodayMap(prev => ({ ...prev, [member.name]: data }));
+        toast(`${member.display_name || member.name} 퇴근 체크 완료 ✅`, 'ok');
+      }
     }
     setSaving(false);
+    setPopup(null);
   };
 
   if (!loaded) return null;
 
-  const btnBase = { height:30, border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer', width:'100%' };
+  const anyIn   = members.some(m => todayMap[m.name]);
+  const allIn   = members.length > 0 && members.every(m => todayMap[m.name]);
+  const anyOut  = members.some(m => todayMap[m.name]?.clock_out);
+  const canOut  = members.some(m => todayMap[m.name] && !todayMap[m.name]?.clock_out);
 
   return (
-    <div style={{ padding:'8px', borderBottom:'1px solid rgba(0,0,0,0.1)' }}>
-      <div style={{ background:'#fff', borderRadius:8, border:'1px solid rgba(0,0,0,0.08)', padding:'10px 10px 8px' }}>
-        <div style={{ fontSize:10, fontWeight:700, color:'#888', textAlign:'center', marginBottom:7 }}>
-          {dateLabel()}
-        </div>
-        {/* 근무자 선택 */}
-        <div style={{ display:'flex', gap:4, marginBottom:7 }}>
-          {members.map(m => (
-            <button key={m.name} type="button"
-              onClick={() => setSelMember(selMember?.name === m.name ? null : m)}
-              style={{ flex:1, height:26, border:'1px solid', borderRadius:5, fontSize:11, fontWeight:700, cursor:'pointer',
-                borderColor: selMember?.name === m.name ? 'var(--accent)' : '#ddd',
-                background: selMember?.name === m.name ? '#fff3e0' : '#fafafa',
-                color: selMember?.name === m.name ? 'var(--accent)' : '#888',
-              }}>
-              {m.display_name || m.name}
+    <>
+      {popup && (
+        <ClockModal type={popup} members={members} todayMap={todayMap}
+          onConfirm={handleConfirm} onClose={() => setPopup(null)} />
+      )}
+      <div style={{ padding:'8px', borderBottom:'1px solid rgba(0,0,0,0.1)' }}>
+        <div style={{ background:'#fff', borderRadius:8, border:'1px solid rgba(0,0,0,0.08)', padding:'10px 10px 8px' }}>
+          <div style={{ fontSize:10, fontWeight:700, color:'#888', textAlign:'center', marginBottom:8 }}>
+            {dateLabel()}
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5, marginBottom:6 }}>
+            <button
+              onClick={() => setPopup('in')}
+              disabled={saving || allIn}
+              style={{ height:32, border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor: allIn ? 'default' : 'pointer',
+                background: allIn ? '#f5f5f5' : '#2E7D32', color: allIn ? '#aaa' : '#fff' }}>
+              {allIn ? '✅ 출근' : '출근'}
             </button>
-          ))}
-        </div>
-        {/* 출퇴근 버튼 */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5, marginBottom:5 }}>
-          <button
-            style={{ ...btnBase, background: !selMember ? '#f0f0f0' : today ? '#f5f5f5' : '#2E7D32', color: (!selMember || today) ? '#aaa' : '#fff', border: (!selMember || today) ? '1px solid #e0e0e0' : 'none' }}
-            onClick={() => handleClock('in')}
-            disabled={saving || !selMember || !!today}>
-            {today ? '✅ 출근' : '출근'}
-          </button>
-          <button
-            style={{ ...btnBase, background: !selMember ? '#f0f0f0' : today?.clock_out ? '#f5f5f5' : (!today ? '#f5f5f5' : '#C62828'), color: (!selMember || today?.clock_out || !today) ? '#aaa' : '#fff', border: (!selMember || today?.clock_out || !today) ? '1px solid #e0e0e0' : 'none' }}
-            onClick={() => handleClock('out')}
-            disabled={saving || !selMember || !today || !!today?.clock_out}>
-            {today?.clock_out ? '✅ 퇴근' : '퇴근'}
-          </button>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5 }}>
-          <div style={{ height:18, background: today?.clock_in ? '#e8f5e9' : 'transparent', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontFamily:'var(--mono)', fontWeight:700, color:'#2E7D32' }}>
-            {today?.clock_in ? fmt(today.clock_in) : ''}
+            <button
+              onClick={() => setPopup('out')}
+              disabled={saving || !canOut}
+              style={{ height:32, border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor: !canOut ? 'default' : 'pointer',
+                background: !canOut ? '#f5f5f5' : '#C62828', color: !canOut ? '#aaa' : '#fff' }}>
+              {anyOut && !canOut ? '✅ 퇴근' : '퇴근'}
+            </button>
           </div>
-          <div style={{ height:18, background: today?.clock_out ? '#fff3e0' : 'transparent', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>
-            {today?.clock_out ? fmt(today.clock_out) : ''}
+          {/* 근무자별 현황 */}
+          <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+            {members.map(m => {
+              const rec = todayMap[m.name];
+              return (
+                <div key={m.name} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontFamily:'var(--mono)' }}>
+                  <span style={{ fontWeight:700, color:'#666', minWidth:40 }}>{m.display_name || m.name}</span>
+                  {rec?.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>↑{fmt(rec.clock_in)}</span>}
+                  {rec?.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>↓{fmt(rec.clock_out)}</span>}
+                  {!rec && <span style={{ color:'#ccc' }}>미체크</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
-        {!selMember && <div style={{fontSize:9, color:'#bbb', textAlign:'center', marginTop:4}}>근무자를 선택하세요</div>}
       </div>
-    </div>
+    </>
   );
 }
 
