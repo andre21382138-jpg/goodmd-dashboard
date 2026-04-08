@@ -4605,11 +4605,11 @@ const HQ_MENUS = [
     { key: 'stock_store',  icon: '🏬', label: '매장재고' },
     { key: 'stock_safety', icon: '🛡️', label: '안전재고' },
   ]},
-  { key: 'manager_mgmt', icon: '👔', label: '매니저관리', sub: [
+  { key: 'manager_mgmt', icon: '👔', label: '직원관리', sub: [
     { key: 'incentive', icon: '💰', label: '인센티브 조회' },
   ]},
   { key: 'attendance_mgmt', icon: '🗓️', label: '근태관리' },
-  { key: 'member_mgmt',  icon: '👥', label: '회원(고객)관리' },
+  { key: 'member_mgmt',  icon: '👥', label: '고객관리' },
   { key: 'sales_view',   icon: '📋', label: '매출조회' },
 ];
 const MANAGER_MENUS = [
@@ -5937,9 +5937,9 @@ export default function App() {
     stock_center:   '센터재고',
     stock_store:    '매장재고',
     stock_safety:   '안전재고',
-    manager_mgmt:   '매니저관리',
+    manager_mgmt:   '직원관리',
     incentive:      '인센티브 조회',
-    member_mgmt:    '회원(고객)관리',
+    member_mgmt:    '고객관리',
     sales_view:     '매출조회',
     sales_input:    '판매 입력',
     customer_input: '회원 등록',
