@@ -3095,6 +3095,8 @@ function ManagerMgmtPage() {
   const [fStore,    setFStore]    = useState('');
   const [fBranch,   setFBranch]   = useState('');
   const [fJob,      setFJob]      = useState('');
+  const [fYear,     setFYear]     = useState('');
+  const [sortOld,   setSortOld]   = useState(false);
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
@@ -3109,14 +3111,17 @@ function ManagerMgmtPage() {
 
   const stores   = useMemo(() => uniq(members.map(m => m.store?.department).filter(Boolean)), [members]);
   const branches = useMemo(() => uniq((fStore ? members.filter(m => m.store?.department===fStore) : members).map(m => m.store?.branch).filter(Boolean)), [members, fStore]);
+  const hireYears = useMemo(() => uniq(members.map(m => m.hire_date?.slice(0,4)).filter(Boolean)).sort(), [members]);
 
   const filtered = useMemo(() => {
     let r = members;
     if (fStore)  r = r.filter(m => m.store?.department===fStore);
     if (fBranch) r = r.filter(m => m.store?.branch===fBranch);
     if (fJob)    r = r.filter(m => m.job_title===fJob);
+    if (fYear)   r = r.filter(m => m.hire_date?.startsWith(fYear));
+    if (sortOld) r = [...r].sort((a,b) => (a.hire_date||'').localeCompare(b.hire_date||''));
     return r;
-  }, [members, fStore, fBranch, fJob]);
+  }, [members, fStore, fBranch, fJob, fYear, sortOld]);
 
   const td = { fontSize:13, color:'var(--text)' };
 
@@ -3135,7 +3140,15 @@ function ManagerMgmtPage() {
             <option value="매니저">매니저</option>
             <option value="부매니저">부매니저</option>
           </select>
-          {(fStore||fBranch||fJob) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); setFJob(''); }}>✕ 초기화</button>}
+          <select className="fsel" value={fYear} onChange={e => setFYear(e.target.value)}>
+            <option value="">전체 입사연도</option>
+            {hireYears.map(y => <option key={y} value={y}>{y}년</option>)}
+          </select>
+          <button className="btn btn-s" onClick={() => setSortOld(p => !p)}
+            style={{fontWeight:700, background: sortOld?'var(--accent)':'', color: sortOld?'#fff':'', borderColor: sortOld?'var(--accent)':''}}>
+            {sortOld ? '↑ 오래된순' : '정렬'}
+          </button>
+          {(fStore||fBranch||fJob||fYear) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); setFJob(''); setFYear(''); }}>✕ 초기화</button>}
           <div className="fbar-right"><span className="fresult">근무자 <b>{filtered.length}</b>명</span></div>
         </div>
         {loading ? <div className="empty"><span className="spinner"/></div> : (
