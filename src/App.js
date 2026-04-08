@@ -3472,8 +3472,8 @@ function SalaryCalcTab() {
         <AttendanceCalendarModal member={calTarget} year={selYear} month={selMonth}
           onClose={() => setCalTarget(null)} />
       )}
-      <div className="card" style={{padding:'16px 20px'}}>
-        <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:16, paddingBottom:14, borderBottom:'1px solid var(--border)'}}>
+      <div className="card" style={{padding:0, overflow:'hidden'}}>
+        <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', padding:'14px 20px', borderBottom:'1px solid var(--border)'}}>
           <select value={selYear} onChange={e => setSelYear(Number(e.target.value))}
             style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
             {years.map(y => <option key={y} value={y}>{y}년</option>)}
@@ -3492,7 +3492,7 @@ function SalaryCalcTab() {
           </div>
         </div>
         {loading ? <div className="empty"><span className="spinner"/></div> : (
-          <div className="twrap">
+          <div className="twrap" style={{margin:0}}>
             <table>
               <thead>
                 <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근일수</th><th className="r">평일</th><th className="r">금·토·일</th><th className="r">지급급여</th><th></th></tr>
