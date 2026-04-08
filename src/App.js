@@ -4755,9 +4755,7 @@ const HQ_MENUS = [
     { key: 'stock_store',  icon: '🏬', label: '매장재고' },
     { key: 'stock_safety', icon: '🛡️', label: '안전재고' },
   ]},
-  { key: 'manager_mgmt', icon: '👔', label: '직원관리', sub: [
-    { key: 'incentive', icon: '💰', label: '급여 조회' },
-  ]},
+  { key: 'incentive', icon: '💰', label: '급여관리' },
   { key: 'attendance_mgmt', icon: '🗓️', label: '근태관리' },
   { key: 'member_mgmt',  icon: '👥', label: '고객관리' },
   { key: 'sales_view',   icon: '📋', label: '매출조회' },
@@ -5305,7 +5303,6 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       stock_center: 'stock_mgmt',
       stock_store:  'stock_mgmt',
       stock_safety: 'stock_mgmt',
-      incentive:    'manager_mgmt',
       clock_inout:    'attendance',
       leave_plan:     'attendance',
       my_attendance:  'attendance',
@@ -5321,7 +5318,7 @@ function Sidebar({ page, setPage, profile, onLogout }) {
   };
 
   const isOn = (key) => page === key;
-  const parentKey = { product_add:'product_mgmt', incentive:'manager_mgmt' };
+  const parentKey = { product_add:'product_mgmt' };
 
   return (
     <div className="sidebar">
@@ -6088,7 +6085,7 @@ export default function App() {
     stock_store:    '매장재고',
     stock_safety:   '안전재고',
     manager_mgmt:   '매니저 현황',
-    incentive:      '급여 조회',
+    incentive:      '급여관리',
     member_mgmt:    '고객관리',
     sales_view:     '매출조회',
     sales_input:    '판매 입력',
