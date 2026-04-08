@@ -3090,66 +3090,31 @@ function SafetyCheckPage({ profile }) {
 // 매니저관리 페이지
 // ════════════════════════════════════════════════════════
 function ManagerMgmtPage() {
-  const [managers,  setManagers]  = useState([]);
+  const [members,   setMembers]   = useState([]);
   const [loading,   setLoading]   = useState(true);
-  const [editing,   setEditing]   = useState(null);
-  const [editData,  setEditData]  = useState({});
   const [fStore,    setFStore]    = useState('');
   const [fBranch,   setFBranch]   = useState('');
-  const [qrManager, setQrManager] = useState(null); // QR 팝업 대상
 
-  const baseUrl = `${window.location.origin}${window.location.pathname}`;
-
-  const fetchManagers = useCallback(async () => {
+  const fetchMembers = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('profiles')
-      .select('*')
-      .eq('job_title', '매니저')
-      .eq('approved', true)
-      .order('department');
-    setManagers(data || []);
+    const { data } = await supabase.from('store_members')
+      .select('*, store:profiles!store_account_id(email, department, branch)')
+      .order('store_account_id');
+    setMembers(data || []);
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchManagers(); }, [fetchManagers]);
+  useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
-  const stores   = useMemo(() => uniq(managers.map(m => m.department)), [managers]);
-  const branches = useMemo(() => uniq((fStore ? managers.filter(m => m.department===fStore) : managers).map(m => m.branch)), [managers, fStore]);
+  const stores   = useMemo(() => uniq(members.map(m => m.store?.department).filter(Boolean)), [members]);
+  const branches = useMemo(() => uniq((fStore ? members.filter(m => m.store?.department===fStore) : members).map(m => m.store?.branch).filter(Boolean)), [members, fStore]);
 
   const filtered = useMemo(() => {
-    let r = managers;
-    if (fStore)  r = r.filter(m => m.department===fStore);
-    if (fBranch) r = r.filter(m => m.branch===fBranch);
+    let r = members;
+    if (fStore)  r = r.filter(m => m.store?.department===fStore);
+    if (fBranch) r = r.filter(m => m.store?.branch===fBranch);
     return r;
-  }, [managers, fStore, fBranch]);
-
-  const startEdit = (m) => { setEditing(m.id); setEditData({ name: m.name, department: m.department, branch: m.branch, email: m.email }); };
-
-  const saveEdit = async (id) => {
-    // 기존 이름 가져오기
-    const oldManager = managers.find(m => m.id === id);
-    const oldName = oldManager?.name;
-    const newName = editData.name;
-
-    const { error } = await supabase.from('profiles').update({
-      name: newName, department: editData.department, branch: editData.branch,
-    }).eq('id', id);
-    if (error) { toast(error.message, 'err'); return; }
-
-    // 이름이 변경됐으면 관련 테이블 담당자명 일괄 업데이트
-    if (oldName && oldName !== newName) {
-      await supabase.from('customers').update({ manager_name: newName }).eq('manager_name', oldName);
-      await supabase.from('attendance').update({ manager_name: newName }).eq('manager_name', oldName);
-      await supabase.from('leave_plans').update({ manager_name: newName }).eq('manager_name', oldName);
-      toast(`정보 수정 완료 · 담당 회원/근태 기록 담당자명도 자동 변경됐습니다`, 'ok');
-    } else {
-      toast('정보 수정 완료', 'ok');
-    }
-
-    setEditing(null); fetchManagers();
-  };
-
-  const iStyle = { height:32, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, background:'#fff', outline:'none' };
+  }, [members, fStore, fBranch]);
 
   return (
     <div>
@@ -3162,51 +3127,26 @@ function ManagerMgmtPage() {
             <option value="">전체 지점</option>{branches.map(b => <option key={b}>{b}</option>)}
           </select>
           {(fStore||fBranch) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); }}>✕ 초기화</button>}
-          <div className="fbar-right"><span className="fresult">매니저 <b>{filtered.length}</b>명</span></div>
+          <div className="fbar-right"><span className="fresult">근무자 <b>{filtered.length}</b>명</span></div>
         </div>
         {loading ? <div className="empty"><span className="spinner"/></div> : (
           <div className="twrap">
             <table>
-              <thead><tr><th>이름</th><th>이메일</th><th>점포명</th><th>지점명</th><th>가입일</th><th>QR</th><th>수정</th></tr></thead>
+              <thead>
+                <tr><th>점포명</th><th>지점명</th><th>직급</th><th>이름</th><th>연락처</th><th>아이디</th><th>입사일</th></tr>
+              </thead>
               <tbody>
                 {filtered.length === 0
-                  ? <tr><td colSpan={7} className="empty">매니저가 없습니다</td></tr>
+                  ? <tr><td colSpan={7} className="empty">근무자가 없습니다</td></tr>
                   : filtered.map(m => (
                     <tr key={m.id}>
-                      <td>
-                        {editing===m.id
-                          ? <input value={editData.name} onChange={e => setEditData(p=>({...p, name:e.target.value}))} style={{...iStyle, width:90}}/>
-                          : <strong>{m.name}</strong>
-                        }
-                      </td>
-                      <td className="mono" style={{fontSize:11}}>{m.email}</td>
-                      <td>
-                        {editing===m.id
-                          ? <input value={editData.department} onChange={e => setEditData(p=>({...p, department:e.target.value}))} style={{...iStyle, width:110}}/>
-                          : <span className="badge badge-dept">{m.department}</span>
-                        }
-                      </td>
-                      <td>
-                        {editing===m.id
-                          ? <input value={editData.branch} onChange={e => setEditData(p=>({...p, branch:e.target.value}))} style={{...iStyle, width:110}}/>
-                          : <span className="badge badge-store">{m.branch}</span>
-                        }
-                      </td>
-                      <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{new Date(m.created_at).toLocaleDateString('ko-KR')}</td>
-                      <td>
-                        <button className="btn btn-s" style={{padding:'4px 10px', fontSize:11}} onClick={() => setQrManager(m)}>
-                          📱 QR
-                        </button>
-                      </td>
-                      <td>
-                        {editing===m.id
-                          ? <div style={{display:'flex', gap:4}}>
-                              <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}} onClick={() => saveEdit(m.id)}>저장</button>
-                              <button className="btn btn-s" style={{padding:'3px 8px', fontSize:11}} onClick={() => setEditing(null)}>취소</button>
-                            </div>
-                          : <button className="btn btn-s" style={{padding:'4px 10px', fontSize:11}} onClick={() => startEdit(m)}>수정</button>
-                        }
-                      </td>
+                      <td><span className="badge badge-dept">{m.store?.department}</span></td>
+                      <td><span className="badge badge-store">{m.store?.branch}</span></td>
+                      <td style={{fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
+                      <td><strong>{m.display_name || m.name}</strong></td>
+                      <td className="mono" style={{fontSize:12}}>{m.phone || '-'}</td>
+                      <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{m.employee_id}</td>
+                      <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{m.hire_date || '-'}</td>
                     </tr>
                   ))
                 }
@@ -3215,41 +3155,9 @@ function ManagerMgmtPage() {
           </div>
         )}
       </div>
-
-      {/* QR 팝업 */}
-      {qrManager && (() => {
-        const joinUrl = `${baseUrl}?m=${qrManager.id}`;
-        const qrImg   = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(joinUrl)}&margin=10`;
-        return (
-          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={() => setQrManager(null)}>
-            <div style={{background:'#fff',borderRadius:16,padding:'32px 36px',maxWidth:340,width:'100%',textAlign:'center',boxShadow:'0 8px 40px rgba(0,0,0,0.18)'}} onClick={e => e.stopPropagation()}>
-              <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>{qrManager.name} 매니저</div>
-              <div style={{fontSize:12,color:'#888',marginBottom:20}}>{qrManager.department} · {qrManager.branch}</div>
-              <img src={qrImg} alt="QR코드" style={{width:220,height:220,borderRadius:8,border:'1px solid #eee'}}/>
-              <div style={{marginTop:16,fontSize:11,color:'#aaa',wordBreak:'break-all',lineHeight:1.6}}>{joinUrl}</div>
-              <div style={{display:'flex',gap:8,marginTop:20}}>
-                <button className="btn btn-p" style={{flex:1,justifyContent:'center'}}
-                  onClick={() => { navigator.clipboard?.writeText(joinUrl); toast('URL 복사됨', 'ok'); }}>
-                  🔗 URL 복사
-                </button>
-                <button className="btn btn-p" style={{flex:1,justifyContent:'center'}}
-                  onClick={() => {
-                    const w = window.open('');
-                    w.document.write(`<html><body style="text-align:center;padding:40px;font-family:sans-serif"><h2>${qrManager.name} 매니저 회원가입 QR</h2><p>${qrManager.department} · ${qrManager.branch}</p><img src="${qrImg}" style="width:300px"/><p style="font-size:12px;color:#999">${joinUrl}</p></body></html>`);
-                    w.print();
-                  }}>
-                  🖨️ 인쇄
-                </button>
-              </div>
-              <button className="btn btn-s" style={{width:'100%',marginTop:8,justifyContent:'center'}} onClick={() => setQrManager(null)}>닫기</button>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
-
 // ════════════════════════════════════════════════════════
 // 인센티브 조회 페이지 (관리자/담당자)
 // ════════════════════════════════════════════════════════
