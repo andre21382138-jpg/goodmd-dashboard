@@ -283,181 +283,51 @@ const STORE_NAMES = Object.keys(STORE_MAP);
 // AUTH SCREEN
 // ════════════════════════════════════════════════════════
 function AuthScreen() {
-  const [mode, setMode]         = useState('login');
-  const [email, setEmail]       = useState('');
-  const [pw, setPw]             = useState('');
-  const [name, setName]         = useState('');
-  const [jobTitle, setJobTitle] = useState('담당자');
-  const [department, setDept]   = useState('');   // 점포명 (백화점 그룹)
-  const [branch, setBranch]     = useState('');   // 지점명
-  const [loading, setLoading]   = useState(false);
-  const [msg, setMsg]           = useState(null);
-
-  const handleJobTitle = (val) => {
-    setJobTitle(val);
-    setDept('');
-    setBranch('');
-  };
-
-  const handleDeptChange = (val) => {
-    setDept(val);
-    setBranch('');
-  };
-
-  const resetForm = () => {
-    setEmail(''); setPw(''); setName('');
-    setJobTitle('담당자'); setDept(''); setBranch('');
-    setMsg(null);
-  };
+  const [userId, setUserId] = useState('');
+  const [pw, setPw]         = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg]         = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); setMsg(null);
     try {
-      if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
-        if (error) throw error;
-      } else {
-        if (!name.trim()) throw new Error('이름을 입력해주세요');
-        if (pw.length < 6) throw new Error('비밀번호는 6자리 이상이어야 합니다');
-        if (jobTitle === '매니저') {
-          if (!department) throw new Error('점포명을 선택해주세요');
-          if (!branch) throw new Error('지점명을 선택해주세요');
-        }
-        const { data, error } = await supabase.auth.signUp({ email, password: pw });
-        if (error) throw error;
-        if (data?.user?.id) {
-          await supabase.from('profiles').update({
-            name: name.trim(),
-            job_title: jobTitle,
-            department: jobTitle === '담당자' ? '본사' : department,
-            branch: jobTitle === '매니저' ? branch : null,
-          }).eq('id', data.user.id);
-        }
-        setMsg({ text: '회원가입이 완료됐어요. 관리자 승인 후 로그인 가능합니다.', type: 'ok' });
-        setMode('login');
-        resetForm();
-      }
+      const email = `${userId.trim().toLowerCase()}@kbh.kr`;
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+      if (error) throw error;
     } catch (err) {
-      const ko = err.message
-        .replace('Invalid login credentials', '이메일 또는 비밀번호가 틀렸습니다')
-        .replace('User already registered', '이미 가입된 이메일입니다')
-        .replace('Email not confirmed', '이메일 인증이 필요합니다');
-      setMsg({ text: ko, type: 'err' });
+      setMsg(err.message.replace('Invalid login credentials', '아이디 또는 비밀번호가 틀렸습니다'));
     }
     setLoading(false);
   };
 
-  const branchList = department ? (STORE_MAP[department] || []) : [];
-
   return (
     <div className="auth-wrap">
-      <div className="auth-box" style={{ width: mode === 'signup' ? 420 : 380 }}>
+      <div className="auth-box">
         <div className="auth-logo">
           <div className="auth-logo-icon">🏬</div>
           <div className="auth-logo-text">(주)한국생활건강</div>
         </div>
         <div className="auth-sub">백화점(매장) 관리시스템</div>
 
-        <div className="auth-tabs">
-          <button className={`auth-tab ${mode === 'login' ? 'on' : ''}`} onClick={() => { setMode('login'); resetForm(); }}>로그인</button>
-          <button className={`auth-tab ${mode === 'signup' ? 'on' : ''}`} onClick={() => { setMode('signup'); resetForm(); }}>회원가입</button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          {mode === 'signup' && (
-            <>
-              {/* 직책 */}
-              <div className="form-group">
-                <label>직책</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {['담당자', '매니저'].map(t => (
-                    <button key={t} type="button"
-                      onClick={() => handleJobTitle(t)}
-                      style={{
-                        flex: 1, height: 38, border: '1px solid',
-                        borderColor: jobTitle === t ? 'var(--accent)' : 'var(--border)',
-                        borderRadius: 'var(--radius)',
-                        background: jobTitle === t ? '#fff3e0' : '#fafafa',
-                        color: jobTitle === t ? 'var(--accent)' : 'var(--text2)',
-                        fontWeight: jobTitle === t ? 700 : 500,
-                        fontSize: 13, cursor: 'pointer', transition: 'all 120ms',
-                      }}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 담당자: 본사 고정 */}
-              {jobTitle === '담당자' && (
-                <div className="form-group">
-                  <label>부서</label>
-                  <input className="input" value="본사" readOnly
-                    style={{ background: '#f0f0f0', color: 'var(--text2)' }} />
-                </div>
-              )}
-
-              {/* 매니저: 점포명 → 지점명 */}
-              {jobTitle === '매니저' && (
-                <>
-                  <div className="form-group">
-                    <label>점포명 <span style={{ color: 'var(--danger)', fontSize: 11 }}>*필수</span></label>
-                    <select className="input" value={department} onChange={e => handleDeptChange(e.target.value)} required>
-                      <option value="">-- 점포명 선택 --</option>
-                      {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>지점명 <span style={{ color: 'var(--danger)', fontSize: 11 }}>*필수</span></label>
-                    <select className="input" value={branch} onChange={e => setBranch(e.target.value)}
-                      required disabled={!department}
-                      style={{ background: !department ? '#f0f0f0' : '#fff' }}>
-                      <option value="">-- 지점명 선택 --</option>
-                      {branchList.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
-
-              {/* 이름 */}
-              <div className="form-group">
-                <label>이름</label>
-                <input className="input" type="text" value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="실명 입력" required />
-              </div>
-            </>
-          )}
-
+        <form onSubmit={handleSubmit} style={{marginTop:24}}>
           <div className="form-group">
-            <label>이메일</label>
-            <input className="input" type="email" value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="이메일 주소" required />
+            <label>아이디</label>
+            <input className="input" type="text" value={userId}
+              onChange={e => setUserId(e.target.value)}
+              placeholder="예) KBH0001" required autoCapitalize="none" />
           </div>
           <div className="form-group">
-            <label>비밀번호
-              {mode === 'signup' && <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 4 }}>(6자리 이상)</span>}
-            </label>
+            <label>비밀번호</label>
             <input className="input" type="password" value={pw}
               onChange={e => setPw(e.target.value)}
-              placeholder="비밀번호" required minLength={6} />
+              placeholder="비밀번호" required />
           </div>
-
           <button className="btn-auth" type="submit" disabled={loading}>
-            {loading ? '처리 중...' : mode === 'login' ? '로그인' : '회원가입 신청'}
+            {loading ? '처리 중...' : '로그인'}
           </button>
         </form>
-
-        {msg && <div className={`auth-msg ${msg.type}`}>{msg.text}</div>}
-
-        {mode === 'signup' && !msg && (
-          <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text3)', marginTop: 14, lineHeight: 1.7 }}>
-            회원가입 후 관리자 승인이 필요합니다.<br />
-            승인 완료 후 로그인하실 수 있습니다.
-          </p>
-        )}
+        {msg && <div className="auth-msg err">{msg}</div>}
       </div>
     </div>
   );
@@ -1611,14 +1481,26 @@ function SalesInputPage({ profile }) {
 // QR코드 가입 안내 페이지
 // ════════════════════════════════════════════════════════
 function CustomerQRPage({ profile }) {
-  const joinUrl = `${window.location.origin}${window.location.pathname}?m=${profile.id}`;
-  const qrImg   = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(joinUrl)}&margin=12`;
+  const [members,   setMembers]   = useState([]);
+  const [selMember, setSelMember] = useState(null);
+
+  useEffect(() => {
+    supabase.from('store_members').select('name, display_name, job_title, phone')
+      .eq('store_account_id', profile.id).order('is_primary', { ascending: false })
+      .then(({ data }) => { setMembers(data || []); if (data?.length === 1) setSelMember(data[0]); });
+  }, [profile.id]);
+
+  const baseUrl = `${window.location.origin}${window.location.pathname}`;
+  const joinUrl = selMember
+    ? `${baseUrl}?m=${profile.id}&mn=${encodeURIComponent(selMember.name)}`
+    : `${baseUrl}?m=${profile.id}`;
+  const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(joinUrl)}&margin=12`;
 
   const handlePrint = () => {
     const w = window.open('');
     w.document.write(`<html><head><title>회원가입 QR코드</title></head>
       <body style="text-align:center;padding:40px;font-family:sans-serif">
-        <h2>${profile.name} 매니저 회원가입 QR</h2>
+        <h2>${selMember ? (selMember.display_name || selMember.name) : profile.name} 담당 회원가입 QR</h2>
         <p style="color:#888">${profile.department} · ${profile.branch}</p>
         <img src="${qrImg}" style="width:280px;margin:16px 0"/>
         <p style="font-size:11px;color:#bbb">${joinUrl}</p>
@@ -1628,10 +1510,38 @@ function CustomerQRPage({ profile }) {
 
   return (
     <div>
+      {/* 근무자 선택 */}
+      {members.length > 1 && (
+        <div className="card" style={{padding:'14px 18px', marginBottom:0}}>
+          <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>근무자 선택 <span style={{fontSize:12, fontWeight:400, color:'var(--text3)'}}>(QR코드가 근무자별로 생성됩니다)</span></div>
+          <div style={{display:'flex', gap:8}}>
+            {members.map(m => (
+              <button key={m.name} type="button"
+                onClick={() => setSelMember(selMember?.name===m.name ? null : m)}
+                style={{ flex:1, height:44, border:'2px solid', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+                  borderColor: selMember?.name===m.name ? 'var(--accent)' : 'var(--border)',
+                  background: selMember?.name===m.name ? '#fff3e0' : '#fafafa',
+                  color: selMember?.name===m.name ? 'var(--accent)' : 'var(--text2)',
+                }}>
+                {m.display_name || m.name}
+                <div style={{fontSize:10, fontWeight:400, marginTop:2}}>{m.job_title}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card" style={{maxWidth:520}}>
+        {!selMember && members.length > 1 ? (
+          <div style={{textAlign:'center', padding:'24px 0', color:'var(--text3)'}}>
+            <div style={{fontSize:32, marginBottom:12}}>👆</div>
+            <div style={{fontSize:14, fontWeight:600}}>근무자를 먼저 선택해주세요</div>
+          </div>
+        ) : (
         <div style={{textAlign:'center', padding:'8px 0 20px'}}>
           <div style={{fontSize:40, marginBottom:12}}>📱</div>
-          <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>고객에게 QR코드를 보여주세요</div>
+          <div style={{fontSize:16, fontWeight:700, marginBottom:4}}>고객에게 QR코드를 보여주세요</div>
+          {selMember && <div style={{fontSize:13, color:'var(--accent)', fontWeight:700, marginBottom:8}}>담당: {selMember.display_name || selMember.name}</div>}
           <div style={{fontSize:13, color:'var(--text2)', lineHeight:1.8, marginBottom:20}}>
             고객이 스마트폰으로 스캔하면<br/>
             이름·연락처·생일·<strong>SMS 수신동의</strong>를 직접 입력합니다
@@ -1639,18 +1549,13 @@ function CustomerQRPage({ profile }) {
           <img src={qrImg} alt="QR코드" style={{width:240, height:240, borderRadius:8, border:'1px solid var(--border)', marginBottom:16}}/>
           <div style={{fontSize:11, color:'var(--text3)', wordBreak:'break-all', marginBottom:20}}>{joinUrl}</div>
           <div style={{display:'flex', gap:10, justifyContent:'center'}}>
-            <button className="btn btn-s" style={{gap:6}}
-              onClick={() => { navigator.clipboard?.writeText(joinUrl); }}>
-              🔗 URL 복사
-            </button>
-            <button className="btn btn-p" style={{gap:6}} onClick={handlePrint}>
-              🖨️ QR 인쇄
-            </button>
+            <button className="btn btn-s" onClick={() => { navigator.clipboard?.writeText(joinUrl); }}>🔗 URL 복사</button>
+            <button className="btn btn-p" onClick={handlePrint}>🖨️ QR 인쇄</button>
           </div>
         </div>
+        )}
         <div style={{background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:'var(--radius)', padding:'10px 14px', fontSize:12, color:'#1b5e20', lineHeight:1.8}}>
-          ✅ QR코드로 가입한 고객은 <strong>SMS 수신동의</strong>를 직접 체크하므로<br/>
-          별도 서면 동의서가 필요 없습니다.
+          ✅ QR코드로 가입한 고객은 <strong>SMS 수신동의</strong>를 직접 체크하므로 별도 서면 동의서가 필요 없습니다.
         </div>
       </div>
     </div>
@@ -1666,10 +1571,17 @@ function CustomerDocPage({ profile }) {
   const [custName,    setCustName]    = useState('');
   const [phone,       setPhone]       = useState('');
   const [birthday,    setBirthday]    = useState('');
-  const [managerName, setManagerName] = useState(profile.name || '');
   const [smsConsent,  setSmsConsent]  = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [recentList,  setRecent]      = useState([]);
+  const [members,     setMembers]     = useState([]);
+  const [selMember,   setSelMember]   = useState(null);
+
+  useEffect(() => {
+    supabase.from('store_members').select('name, display_name, job_title')
+      .eq('store_account_id', profile.id).order('is_primary', { ascending: false })
+      .then(({ data }) => { setMembers(data || []); if (data?.length === 1) setSelMember(data[0]); });
+  }, [profile.id]);
 
   const fetchRecent = useCallback(async () => {
     const { data } = await supabase.from('customers')
@@ -1682,6 +1594,7 @@ function CustomerDocPage({ profile }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selMember) { toast('담당 근무자를 선택해주세요', 'err'); return; }
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length < 10) { toast('연락처를 올바르게 입력해주세요', 'err'); return; }
     setSaving(true);
@@ -1689,7 +1602,7 @@ function CustomerDocPage({ profile }) {
       joined_at: joinedAt, name: custName.trim(), phone,
       birthday: birthday || null,
       store_name: profile.department, branch_name: profile.branch,
-      manager_name: managerName.trim() || null,
+      manager_name: selMember.name,
       sms_consent: smsConsent,
       sms_consent_at: smsConsent ? new Date().toISOString() : null,
       created_by: profile.id,
@@ -1711,13 +1624,31 @@ function CustomerDocPage({ profile }) {
 
   return (
     <div>
+      {/* 근무자 선택 */}
+      {members.length > 1 && (
+        <div className="card" style={{padding:'14px 18px', marginBottom:0}}>
+          <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>담당 근무자 선택 <span style={{color:'var(--danger)', fontSize:12}}>*필수</span></div>
+          <div style={{display:'flex', gap:8}}>
+            {members.map(m => (
+              <button key={m.name} type="button" onClick={() => setSelMember(selMember?.name===m.name ? null : m)}
+                style={{ flex:1, height:44, border:'2px solid', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+                  borderColor: selMember?.name===m.name ? 'var(--accent)' : 'var(--border)',
+                  background: selMember?.name===m.name ? '#fff3e0' : '#fafafa',
+                  color: selMember?.name===m.name ? 'var(--accent)' : 'var(--text2)' }}>
+                {m.display_name || m.name}
+                <div style={{fontSize:10, fontWeight:400, marginTop:2}}>{m.job_title}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="card">
         <div style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:16, fontSize:12, color:'#6d4c41', lineHeight:1.8}}>
           ⚠️ 고객으로부터 <strong>서면 동의서를 수령한 후</strong> 등록하세요.<br/>
           마케팅 수신동의는 서류에 고객이 직접 서명한 경우에만 체크하세요.
         </div>
         <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16, fontFamily:'var(--mono)' }}>
-          📍 {profile.department} · {profile.branch}
+          📍 {profile.department} · {profile.branch}{selMember ? ` · ${selMember.display_name || selMember.name}` : ''}
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:14, marginBottom:16 }}>
@@ -1736,10 +1667,6 @@ function CustomerDocPage({ profile }) {
             <div>
               <label style={labelStyle}>생일 <span style={{color:'var(--text3)', fontWeight:400}}>(선택)</span></label>
               <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>담당 매니저</label>
-              <input value={managerName} onChange={e => setManagerName(e.target.value)} style={inputStyle} />
             </div>
           </div>
 
@@ -4380,7 +4307,15 @@ function LeavePlanPage({ profile }) {
   const [loading,   setLoading]   = useState(true);
   const [selDates,  setSelDates]  = useState([]);
   const [memo,      setMemo]      = useState('');
-  const [editingId, setEditingId] = useState(null); // 수정 중인 plan id
+  const [editingId, setEditingId] = useState(null);
+  const [members,   setMembers]   = useState([]);
+  const [selMember, setSelMember] = useState(null);
+
+  useEffect(() => {
+    supabase.from('store_members').select('name, display_name, job_title')
+      .eq('store_account_id', profile.id).order('is_primary', { ascending: false })
+      .then(({ data }) => { setMembers(data || []); if (data?.length === 1) setSelMember(data[0]); });
+  }, [profile.id]);
 
   // 익월 계산
   const now = new Date();
@@ -4392,13 +4327,14 @@ function LeavePlanPage({ profile }) {
   const firstDow = new Date(nextYear, nextMon, 1).getDay();
 
   const fetchPlans = useCallback(async () => {
+    if (!selMember) return;
     setLoading(true);
     const { data } = await supabase.from('leave_plans')
-      .select('*').eq('manager_id', profile.id)
+      .select('*').eq('manager_id', profile.id).eq('manager_name', selMember.name)
       .order('created_at', { ascending: false });
     setMyPlans(data || []);
     setLoading(false);
-  }, [profile.id]);
+  }, [profile.id, selMember]);
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
@@ -4422,20 +4358,19 @@ function LeavePlanPage({ profile }) {
   };
 
   const handleSubmit = async () => {
+    if (!selMember) { toast('근무자를 선택해주세요', 'err'); return; }
     if (selDates.length === 0) { toast('날짜를 하나 이상 선택해주세요', 'err'); return; }
     setSaving(true);
     if (editingId) {
-      // 수정
       const { error } = await supabase.from('leave_plans').update({
         dates: selDates, memo: memo.trim() || null,
       }).eq('id', editingId);
       if (error) toast(error.message, 'err');
       else { toast('휴무계획 수정 완료', 'ok'); cancelEdit(); fetchPlans(); }
     } else {
-      // 신규 제출
       if (pendingNextMonth || confirmedNextMonth) { toast('이미 해당 월 계획을 제출했습니다', 'err'); setSaving(false); return; }
       const { error } = await supabase.from('leave_plans').insert({
-        manager_id: profile.id, manager_name: profile.name,
+        manager_id: profile.id, manager_name: selMember.name,
         store_name: profile.department, branch_name: profile.branch,
         target_month: nextMonStr, dates: selDates, memo: memo.trim() || null,
       });
@@ -4450,10 +4385,30 @@ function LeavePlanPage({ profile }) {
 
   return (
     <div>
+      {/* 근무자 선택 */}
+      <div className="card" style={{padding:'14px 18px', marginBottom:0}}>
+        <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>근무자 선택</div>
+        <div style={{display:'flex', gap:8}}>
+          {members.map(m => (
+            <button key={m.name} type="button"
+              onClick={() => { setSelMember(selMember?.name===m.name ? null : m); setSelDates([]); setMemo(''); setEditingId(null); }}
+              style={{ flex:1, height:40, border:'2px solid', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+                borderColor: selMember?.name===m.name ? 'var(--accent)' : 'var(--border)',
+                background: selMember?.name===m.name ? '#fff3e0' : '#fafafa',
+                color: selMember?.name===m.name ? 'var(--accent)' : 'var(--text2)',
+              }}>
+              {m.display_name || m.name}
+              <div style={{fontSize:10, fontWeight:400, marginTop:2}}>{m.job_title}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selMember && (
       <div className="card">
         <div className="card-label">
           {editingId ? '휴무계획 수정' : `${nextYear}년 ${nextMon + 1}월 휴무계획 신청`}
-          <span style={{fontSize:11, fontWeight:400, color:'var(--text3)', marginLeft:8}}>(익월 기준)</span>
+          <span style={{fontSize:11, fontWeight:400, color:'var(--text3)', marginLeft:8}}>(익월 기준 · {selMember.display_name || selMember.name})</span>
         </div>
 
         {!isFormMode ? (
@@ -4576,6 +4531,7 @@ function LeavePlanPage({ profile }) {
             </table>
           </div>
         </div>
+      )}
       )}
     </div>
   );
@@ -4979,22 +4935,31 @@ function MyAttendancePage({ profile }) {
   const now = new Date();
   const defaultYear  = now.getFullYear();
   const defaultMonth = String(now.getMonth() + 1).padStart(2, '0');
-  const [selMonth, setSelMonth] = useState(`${defaultYear}-${defaultMonth}`);
-  const [records,  setRecords]  = useState([]);
-  const [loading,  setLoading]  = useState(true);
+  const [selMonth,  setSelMonth]  = useState(`${defaultYear}-${defaultMonth}`);
+  const [records,   setRecords]   = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [members,   setMembers]   = useState([]);
+  const [selMember, setSelMember] = useState(null);
+
+  useEffect(() => {
+    supabase.from('store_members').select('name, display_name, job_title')
+      .eq('store_account_id', profile.id).order('is_primary', { ascending: false })
+      .then(({ data }) => { setMembers(data || []); if (data?.length === 1) setSelMember(data[0]); });
+  }, [profile.id]);
 
   const fetchData = useCallback(async () => {
+    if (!selMember) { setRecords([]); setLoading(false); return; }
     setLoading(true);
     const from = `${selMonth}-01`;
     const toD  = new Date(selMonth.split('-')[0], selMonth.split('-')[1], 0);
     const to   = `${selMonth}-${String(toD.getDate()).padStart(2,'0')}`;
     const { data } = await supabase.from('attendance')
-      .select('*').eq('manager_id', profile.id)
+      .select('*').eq('manager_id', profile.id).eq('manager_name', selMember.name)
       .gte('work_date', from).lte('work_date', to)
       .order('work_date', { ascending: true });
     setRecords(data || []);
     setLoading(false);
-  }, [profile.id, selMonth]);
+  }, [profile.id, selMonth, selMember]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -5023,6 +4988,26 @@ function MyAttendancePage({ profile }) {
 
   return (
     <div>
+      {/* 근무자 선택 */}
+      {members.length > 1 && (
+        <div className="card" style={{padding:'14px 18px', marginBottom:0}}>
+          <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>근무자 선택</div>
+          <div style={{display:'flex', gap:8}}>
+            {members.map(m => (
+              <button key={m.name} type="button"
+                onClick={() => setSelMember(selMember?.name===m.name ? null : m)}
+                style={{ flex:1, height:44, border:'2px solid', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+                  borderColor: selMember?.name===m.name ? 'var(--accent)' : 'var(--border)',
+                  background: selMember?.name===m.name ? '#fff3e0' : '#fafafa',
+                  color: selMember?.name===m.name ? 'var(--accent)' : 'var(--text2)' }}>
+                {m.display_name || m.name}
+                <div style={{fontSize:10, fontWeight:400, marginTop:2}}>{m.job_title}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 월 선택 */}
       <div className="card" style={{padding:'14px 18px'}}>
         <div style={{display:'flex', alignItems:'center', gap:12}}>
@@ -5051,7 +5036,7 @@ function MyAttendancePage({ profile }) {
               </thead>
               <tbody>
                 {records.length === 0
-                  ? <tr><td colSpan={5} className="empty">{selMonth} 출퇴근 기록이 없습니다</td></tr>
+                  ? <tr><td colSpan={5} className="empty">{!selMember ? '근무자를 선택해주세요' : `${selMonth} 출퇴근 기록이 없습니다`}</td></tr>
                   : records.map(r => {
                     const day = dayName(r.work_date);
                     const isSun = day === '일';
@@ -5080,21 +5065,21 @@ function MyAttendancePage({ profile }) {
 // 사이드바 출퇴근 패널 (매니저 전용)
 // ════════════════════════════════════════════════════════
 function SidebarClockPanel({ profile }) {
-  const [today,   setToday]   = useState(null);
-  const [saving,  setSaving]  = useState(false);
-  const [loaded,  setLoaded]  = useState(false);
+  const [members,    setMembers]   = useState([]);
+  const [selMember,  setSelMember] = useState(null); // { name, job_title }
+  const [today,      setToday]     = useState(null);
+  const [saving,     setSaving]    = useState(false);
+  const [loaded,     setLoaded]    = useState(false);
 
   const todayStr = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   };
-
   const dateLabel = () => {
     const d = new Date();
     const days = ['일','월','화','수','목','금','토'];
     return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
   };
-
   const fmt = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -5102,28 +5087,42 @@ function SidebarClockPanel({ profile }) {
   };
 
   useEffect(() => {
-    supabase.from('attendance')
-      .select('*').eq('manager_id', profile.id).eq('work_date', todayStr()).maybeSingle()
-      .then(({ data }) => { setToday(data); setLoaded(true); });
+    supabase.from('store_members')
+      .select('name, display_name, job_title')
+      .eq('store_account_id', profile.id)
+      .order('is_primary', { ascending: false })
+      .then(({ data }) => { setMembers(data || []); setLoaded(true); });
   }, [profile.id]);
 
+  const fetchTodayRecord = useCallback(async (memberName) => {
+    const { data } = await supabase.from('attendance')
+      .select('*').eq('manager_id', profile.id)
+      .eq('manager_name', memberName).eq('work_date', todayStr()).maybeSingle();
+    setToday(data);
+  }, [profile.id]);
+
+  useEffect(() => {
+    if (selMember) fetchTodayRecord(selMember.name);
+    else setToday(null);
+  }, [selMember, fetchTodayRecord]);
+
   const handleClock = async (type) => {
-    if (saving) return;
+    if (!selMember || saving) return;
     setSaving(true);
     const now = new Date().toISOString();
     if (type === 'in') {
       if (today) { setSaving(false); return; }
       const { data, error } = await supabase.from('attendance').insert({
-        manager_id: profile.id, manager_name: profile.name,
+        manager_id: profile.id, manager_name: selMember.name,
         store_name: profile.department, branch_name: profile.branch,
         work_date: todayStr(), clock_in: now,
       }).select().single();
-      if (!error) { setToday(data); toast('출근 체크 완료 ✅', 'ok'); }
+      if (!error) { setToday(data); toast(`${selMember.display_name || selMember.name} 출근 체크 완료 ✅`, 'ok'); }
     } else {
       if (!today || today.clock_out) { setSaving(false); return; }
       const { data, error } = await supabase.from('attendance')
         .update({ clock_out: now }).eq('id', today.id).select().single();
-      if (!error) { setToday(data); toast('퇴근 체크 완료 ✅', 'ok'); }
+      if (!error) { setToday(data); toast(`${selMember.display_name || selMember.name} 퇴근 체크 완료 ✅`, 'ok'); }
     }
     setSaving(false);
   };
@@ -5138,17 +5137,32 @@ function SidebarClockPanel({ profile }) {
         <div style={{ fontSize:10, fontWeight:700, color:'#888', textAlign:'center', marginBottom:7 }}>
           {dateLabel()}
         </div>
+        {/* 근무자 선택 */}
+        <div style={{ display:'flex', gap:4, marginBottom:7 }}>
+          {members.map(m => (
+            <button key={m.name} type="button"
+              onClick={() => setSelMember(selMember?.name === m.name ? null : m)}
+              style={{ flex:1, height:26, border:'1px solid', borderRadius:5, fontSize:11, fontWeight:700, cursor:'pointer',
+                borderColor: selMember?.name === m.name ? 'var(--accent)' : '#ddd',
+                background: selMember?.name === m.name ? '#fff3e0' : '#fafafa',
+                color: selMember?.name === m.name ? 'var(--accent)' : '#888',
+              }}>
+              {m.display_name || m.name}
+            </button>
+          ))}
+        </div>
+        {/* 출퇴근 버튼 */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5, marginBottom:5 }}>
           <button
-            style={{ ...btnBase, background: today ? '#f5f5f5' : '#2E7D32', color: today ? '#aaa' : '#fff', border: today ? '1px solid #e0e0e0' : 'none' }}
+            style={{ ...btnBase, background: !selMember ? '#f0f0f0' : today ? '#f5f5f5' : '#2E7D32', color: (!selMember || today) ? '#aaa' : '#fff', border: (!selMember || today) ? '1px solid #e0e0e0' : 'none' }}
             onClick={() => handleClock('in')}
-            disabled={saving || !!today}>
+            disabled={saving || !selMember || !!today}>
             {today ? '✅ 출근' : '출근'}
           </button>
           <button
-            style={{ ...btnBase, background: today?.clock_out ? '#f5f5f5' : (!today ? '#f5f5f5' : '#C62828'), color: (today?.clock_out || !today) ? '#aaa' : '#fff', border: (today?.clock_out || !today) ? '1px solid #e0e0e0' : 'none' }}
+            style={{ ...btnBase, background: !selMember ? '#f0f0f0' : today?.clock_out ? '#f5f5f5' : (!today ? '#f5f5f5' : '#C62828'), color: (!selMember || today?.clock_out || !today) ? '#aaa' : '#fff', border: (!selMember || today?.clock_out || !today) ? '1px solid #e0e0e0' : 'none' }}
             onClick={() => handleClock('out')}
-            disabled={saving || !today || !!today?.clock_out}>
+            disabled={saving || !selMember || !today || !!today?.clock_out}>
             {today?.clock_out ? '✅ 퇴근' : '퇴근'}
           </button>
         </div>
@@ -5160,6 +5174,7 @@ function SidebarClockPanel({ profile }) {
             {today?.clock_out ? fmt(today.clock_out) : ''}
           </div>
         </div>
+        {!selMember && <div style={{fontSize:9, color:'#bbb', textAlign:'center', marginTop:4}}>근무자를 선택하세요</div>}
       </div>
     </div>
   );
@@ -5336,59 +5351,72 @@ function Sidebar({ page, setPage, profile, onLogout }) {
 
 // ════════════════════════════════════════════════════════
 // 공개 회원가입 페이지 (QR 스캔 후 접근, 비로그인)
-// URL: ?m=매니저UUID
+// URL: ?m=매장UUID&mn=근무자이름(선택)
 // ════════════════════════════════════════════════════════
 function JoinPage({ managerId }) {
-  const [manager,     setManager]     = useState(null);
-  const [loadingMgr,  setLoadingMgr]  = useState(true);
-  const [name,        setName]        = useState('');
-  const [phone,       setPhone]       = useState('');
-  const [birthday,    setBirthday]    = useState('');
-  const [smsConsent,  setSmsConsent]  = useState(false);
-  const [saving,      setSaving]      = useState(false);
-  const [done,        setDone]        = useState(false);
+  const urlParams = new URLSearchParams(window.location.search);
+  const presetMemberName = urlParams.get('mn') ? decodeURIComponent(urlParams.get('mn')) : null;
+
+  const [storeProfile, setStoreProfile] = useState(null);
+  const [members,      setMembers]      = useState([]);
+  const [selMember,    setSelMember]    = useState(null);
+  const [loadingMgr,   setLoadingMgr]  = useState(true);
+  const [name,         setName]        = useState('');
+  const [phone,        setPhone]       = useState('');
+  const [birthday,     setBirthday]    = useState('');
+  const [smsConsent,   setSmsConsent]  = useState(false);
+  const [saving,       setSaving]      = useState(false);
+  const [done,         setDone]        = useState(false);
 
   useEffect(() => {
     supabase.from('profiles').select('id,name,department,branch')
-      .eq('id', managerId).eq('job_title','매니저').eq('approved',true)
-      .single()
-      .then(({ data }) => { setManager(data); setLoadingMgr(false); });
-  }, [managerId]);
+      .eq('id', managerId).eq('approved',true).maybeSingle()
+      .then(({ data }) => {
+        setStoreProfile(data);
+        if (data) {
+          supabase.from('store_members').select('name,display_name,job_title')
+            .eq('store_account_id', data.id).order('is_primary', { ascending: false })
+            .then(({ data: mems }) => {
+              setMembers(mems || []);
+              if (presetMemberName) {
+                const found = (mems || []).find(m => m.name === presetMemberName);
+                if (found) setSelMember(found);
+              } else if (mems?.length === 1) {
+                setSelMember(mems[0]);
+              }
+            });
+        }
+        setLoadingMgr(false);
+      });
+  }, [managerId, presetMemberName]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selMember) { alert('담당 매니저를 선택해주세요'); return; }
     const cleaned = phone.replace(/\D/g,'');
     if (cleaned.length < 10) { alert('연락처를 올바르게 입력해주세요'); return; }
     setSaving(true);
 
-    // IP/UA 수집 (동의한 경우에만)
-    let consentIp = null;
-    let consentUa = null;
+    let consentIp = null, consentUa = null;
     if (smsConsent) {
       try {
         const r = await fetch('/api/get-client-info');
         const d = await r.json();
-        consentIp = d.ip;
-        consentUa = d.ua;
+        consentIp = d.ip; consentUa = d.ua;
       } catch (_) {}
     }
 
     const { error } = await supabase.from('customers').insert({
       joined_at: new Date().toISOString().slice(0,10),
-      name: name.trim(),
-      phone: phone,
-      birthday: birthday || null,
-      store_name: manager.department,
-      branch_name: manager.branch,
-      manager_name: manager.name,
+      name: name.trim(), phone, birthday: birthday || null,
+      store_name: storeProfile.department, branch_name: storeProfile.branch,
+      manager_name: selMember.name,
       sms_consent: smsConsent,
       sms_consent_at: smsConsent ? new Date().toISOString() : null,
-      consent_ip: consentIp,
-      consent_ua: consentUa,
+      consent_ip: consentIp, consent_ua: consentUa,
     });
     if (error) { alert('오류가 발생했습니다. 다시 시도해주세요.'); setSaving(false); return; }
-    setDone(true);
-    setSaving(false);
+    setDone(true); setSaving(false);
   };
 
   if (loadingMgr) return (
@@ -5397,7 +5425,7 @@ function JoinPage({ managerId }) {
     </div>
   );
 
-  if (!manager) return (
+  if (!storeProfile) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#fff9f0',flexDirection:'column',gap:12}}>
       <div style={{fontSize:40}}>⚠️</div>
       <div style={{fontSize:16,fontWeight:700,color:'#333'}}>유효하지 않은 링크입니다</div>
@@ -5410,8 +5438,8 @@ function JoinPage({ managerId }) {
       <div style={{fontSize:56}}>🎉</div>
       <div style={{fontSize:20,fontWeight:700,color:'#333',textAlign:'center'}}>회원가입이 완료됐습니다!</div>
       <div style={{fontSize:14,color:'#666',textAlign:'center',lineHeight:1.8}}>
-        <strong>{manager.department} {manager.branch}</strong><br/>
-        담당 매니저: <strong>{manager.name}</strong>
+        <strong>{storeProfile.department} {storeProfile.branch}</strong><br/>
+        담당: <strong>{selMember?.display_name || selMember?.name}</strong>
       </div>
       {smsConsent && (
         <div style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:10,padding:'10px 18px',fontSize:12,color:'#6d4c41',textAlign:'center'}}>
@@ -5430,13 +5458,39 @@ function JoinPage({ managerId }) {
           <div style={{fontSize:18,fontWeight:700,color:'var(--sidebar-text)'}}>(주)한국생활건강</div>
           <div style={{fontSize:14,fontWeight:600,color:'rgba(0,0,0,0.6)',marginTop:4}}>회원 가입</div>
           <div style={{fontSize:11,color:'rgba(0,0,0,0.4)',marginTop:6}}>
-            가입 매장: {manager.department} · {manager.branch}
+            가입 매장: {storeProfile.department} · {storeProfile.branch}
           </div>
         </div>
 
         {/* 폼 */}
         <div style={{padding:'28px 24px 32px', overflowX:'hidden'}}>
           <form onSubmit={handleSubmit}>
+            {/* 담당 매니저 선택 (QR에 mn 파라미터 없을 때) */}
+            {members.length > 1 && !presetMemberName && (
+              <div style={{marginBottom:20}}>
+                <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>
+                  담당 매니저 선택 <span style={{color:'#e53935',fontWeight:400,fontSize:12}}>*필수</span>
+                </label>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+                  {members.map(m => (
+                    <button key={m.name} type="button"
+                      onClick={() => setSelMember(selMember?.name===m.name ? null : m)}
+                      style={{height:52, border:'2px solid', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer',
+                        borderColor: selMember?.name===m.name ? 'var(--accent)' : '#e0e0e0',
+                        background: selMember?.name===m.name ? '#fff8e1' : '#fafafa',
+                        color: selMember?.name===m.name ? 'var(--accent)' : '#555'}}>
+                      {m.display_name || m.name}
+                      <div style={{fontSize:11, fontWeight:400, marginTop:2, color: selMember?.name===m.name ? 'var(--accent)' : '#999'}}>{m.job_title}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {selMember && (
+              <div style={{background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:8, padding:'8px 12px', marginBottom:16, fontSize:13, color:'#2e7d32', fontWeight:600}}>
+                ✅ 담당: {selMember.display_name || selMember.name} ({selMember.job_title})
+              </div>
+            )}
             <div style={{marginBottom:18}}>
               <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>이름</label>
               <input value={name} onChange={e => setName(e.target.value)}
