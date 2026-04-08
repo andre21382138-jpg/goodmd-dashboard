@@ -4405,6 +4405,7 @@ function LeavePlanPage({ profile }) {
       </div>
 
       {selMember && (
+      <>
       <div className="card">
         <div className="card-label">
           {editingId ? '휴무계획 수정' : `${nextYear}년 ${nextMon + 1}월 휴무계획 신청`}
@@ -4532,6 +4533,7 @@ function LeavePlanPage({ profile }) {
           </div>
         </div>
       )}
+      </>
       )}
     </div>
   );
