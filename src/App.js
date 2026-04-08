@@ -3492,28 +3492,32 @@ function SalaryCalcTab() {
           </div>
         </div>
         {loading ? <div className="empty"><span className="spinner"/></div> : (
-          <div className="twrap" style={{margin:0}}>
+          <div className="twrap">
             <table>
               <thead>
-                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근일수</th><th className="r">평일</th><th className="r">금·토·일</th><th className="r">지급급여</th><th></th></tr>
+                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근 (평일/금토일)</th><th className="r">지급급여</th><th style={{width:80, textAlign:'center'}}>상세</th></tr>
               </thead>
               <tbody>
                 {filtered.map(m => (
                   <tr key={m.id}>
-                    <td><span className="badge badge-dept">{m.store?.department}</span></td>
-                    <td><span className="badge badge-store">{m.store?.branch}</span></td>
-                    <td style={{fontSize:13, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
-                    <td style={{fontSize:13, fontWeight:700}}>{m.display_name || m.name}</td>
-                    <td><span style={{padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:600, background: m.salary_type==='월급'?'#e3f2fd':'#f3e5f5', color: m.salary_type==='월급'?'#1565C0':'#6a1b9a'}}>{m.salary_type}</span></td>
-                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', fontWeight:600}}>{m.salary_type==='월급' ? '-' : `${m.totalDays}일`}</td>
-                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', color:'var(--text2)'}}>{m.salary_type==='월급' ? '-' : `${m.weekdays}일`}</td>
-                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', color: m.weekends>0?'var(--success)':'var(--text3)'}}>{m.salary_type==='월급' ? '-' : `${m.weekends}일`}</td>
-                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{m.salary.toLocaleString()}원</td>
-                    <td><button className="btn btn-s" style={{fontSize:11, padding:'4px 10px', whiteSpace:'nowrap'}} onClick={() => setCalTarget(m)}>상세보기</button></td>
+                    <td style={{padding:'12px 12px'}}><span className="badge badge-dept">{m.store?.department}</span></td>
+                    <td style={{padding:'12px 12px'}}><span className="badge badge-store">{m.store?.branch}</span></td>
+                    <td style={{padding:'12px 12px', fontSize:13, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
+                    <td style={{padding:'12px 12px', fontSize:13, fontWeight:700}}>{m.display_name || m.name}</td>
+                    <td style={{padding:'12px 12px'}}><span style={{padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:600, background: m.salary_type==='월급'?'#e3f2fd':'#f3e5f5', color: m.salary_type==='월급'?'#1565C0':'#6a1b9a'}}>{m.salary_type}</span></td>
+                    <td className="r" style={{padding:'12px 12px', fontSize:13, fontFamily:'var(--mono)'}}>
+                      {m.salary_type==='월급' ? '-' : (
+                        <span>{m.totalDays}일 <span style={{fontSize:11, color:'var(--text3)'}}>({m.weekdays}/{m.weekends})</span></span>
+                      )}
+                    </td>
+                    <td className="r" style={{padding:'12px 12px', fontSize:13, fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{m.salary.toLocaleString()}원</td>
+                    <td style={{padding:'12px 6px', textAlign:'center'}}>
+                      <button className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}} onClick={() => setCalTarget(m)}>상세보기</button>
+                    </td>
                   </tr>
                 ))}
                 <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
-                  <td colSpan={9} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
+                  <td colSpan={6} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
                   <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)', padding:'10px 11px'}}>{totalSalary.toLocaleString()}원</td>
                   <td/>
                 </tr>
