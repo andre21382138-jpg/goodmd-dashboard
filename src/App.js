@@ -3184,13 +3184,12 @@ function ManagerMgmtPage() {
 // 인센티브 조회 페이지 (관리자/담당자)
 // ════════════════════════════════════════════════════════
 function IncentivePage() {
-  const [tab, setTab] = useState('condition'); // 'condition' | 'calc'
+  const [tab, setTab] = useState('condition');
 
   return (
     <div>
-      {/* 탭 */}
       <div style={{display:'flex', gap:8, marginBottom:16}}>
-        {[{key:'condition',label:'📋 급여 조건'},{key:'calc',label:'🧮 급여 계산'}].map(t => (
+        {[{key:'condition',label:'📋 급여 조건'},{key:'incentive',label:'🏆 인센티브'},{key:'calc',label:'🧮 급여 계산'}].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{ height:38, padding:'0 20px', border:'2px solid', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer', transition:'all 120ms',
               borderColor: tab===t.key ? 'var(--accent)' : 'var(--border)',
@@ -3200,8 +3199,171 @@ function IncentivePage() {
           </button>
         ))}
       </div>
-      {tab === 'condition' && <SalaryConditionTab/>}
-      {tab === 'calc'      && <SalaryCalcTab/>}
+      {tab === 'condition'  && <SalaryConditionTab/>}
+      {tab === 'incentive'  && <IncentiveTab/>}
+      {tab === 'calc'       && <SalaryCalcTab/>}
+    </div>
+  );
+}
+
+function IncentiveTab() {
+  const now = new Date();
+  // 전월
+  const prevM  = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonStr = `${prevM.getFullYear()}-${String(prevM.getMonth()+1).padStart(2,'0')}`;
+  // 당월 (목표 설정 대상)
+  const curMonStr  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  const [selMonth, setSelMonth]   = useState(curMonStr);
+  const [stores,   setStores]     = useState([]); // profiles (매장 계정)
+  const [sales,    setSales]      = useState({}); // branch_name → 전월매출
+  const [targets,  setTargets]    = useState({}); // branch_name → target_amount
+  const [editing,  setEditing]    = useState({}); // branch_name → 입력 중 금액
+  const [saving,   setSaving]     = useState({});
+  const [loading,  setLoading]    = useState(true);
+
+  // 매장 목록 + 전월 매출 + 목표매출 조회
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+
+      // 매장 계정 목록
+      const { data: profiles } = await supabase.from('profiles')
+        .select('id, department, branch').eq('approved', true)
+        .neq('role','admin').neq('job_title','담당자').order('department');
+      const storeList = (profiles||[]).filter(p => p.branch);
+      setStores(storeList);
+
+      // 전월 매출
+      const prevFrom = `${prevMonStr}-01`;
+      const prevLast = new Date(prevM.getFullYear(), prevM.getMonth()+1, 0).getDate();
+      const prevTo   = `${prevMonStr}-${String(prevLast).padStart(2,'0')}`;
+      const { data: salesData } = await supabase.from('sales')
+        .select('branch_name, price, quantity')
+        .gte('sold_at', prevFrom).lte('sold_at', prevTo);
+      const salesMap = {};
+      (salesData||[]).forEach(s => {
+        if (!salesMap[s.branch_name]) salesMap[s.branch_name] = 0;
+        salesMap[s.branch_name] += (s.price||0) * (s.quantity||0);
+      });
+      setSales(salesMap);
+
+      // 목표매출
+      const { data: tData } = await supabase.from('incentive_targets')
+        .select('branch_name, target_amount').eq('target_month', selMonth);
+      const tMap = {};
+      (tData||[]).forEach(t => { tMap[t.branch_name] = t.target_amount; });
+      setTargets(tMap);
+
+      setLoading(false);
+    };
+    load();
+  }, [selMonth]);
+
+  const handleSave = async (store) => {
+    const branch = store.branch;
+    const amount = Number(String(editing[branch]||'').replace(/,/g,''));
+    if (!amount) return;
+    setSaving(p => ({...p, [branch]: true}));
+    await supabase.from('incentive_targets').upsert({
+      store_name: store.department, branch_name: branch,
+      target_month: selMonth, target_amount: amount,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'branch_name,target_month' });
+    setTargets(p => ({...p, [branch]: amount}));
+    setEditing(p => ({...p, [branch]: ''}));
+    setSaving(p => ({...p, [branch]: false}));
+    toast(`${branch} 목표매출 저장`, 'ok');
+  };
+
+  const months = Array.from({length:6}, (_,i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  });
+
+  const fmtAmt = (v) => v ? Number(v).toLocaleString() + '원' : '-';
+  const achieveRate = (branch) => {
+    const t = targets[branch];
+    const s = sales[branch];
+    if (!t || !s) return null;
+    return Math.round(s / t * 100);
+  };
+
+  return (
+    <div className="card" style={{padding:0, overflow:'hidden'}}>
+      {/* 헤더 */}
+      <div style={{display:'flex', alignItems:'center', gap:10, padding:'14px 20px', borderBottom:'1px solid var(--border)'}}>
+        <span style={{fontSize:13, fontWeight:700, color:'var(--text)'}}>목표 월</span>
+        <select value={selMonth} onChange={e => setSelMonth(e.target.value)}
+          style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
+          {months.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <span style={{fontSize:12, color:'var(--text3)', marginLeft:4}}>전월 매출: {prevMonStr} 기준</span>
+      </div>
+
+      {loading ? <div className="empty"><span className="spinner"/></div> : (
+        <div className="twrap">
+          <table>
+            <thead>
+              <tr>
+                <th>점포</th>
+                <th>지점명</th>
+                <th className="r">전월 매출</th>
+                <th className="r">목표 매출</th>
+                <th className="r">달성률</th>
+                <th style={{width:200}}>목표 설정</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stores.map(s => {
+                const branch  = s.branch;
+                const prevSal = sales[branch] || 0;
+                const target  = targets[branch];
+                const rate    = achieveRate(branch);
+                return (
+                  <tr key={s.id}>
+                    <td style={{fontSize:13}}><span className="badge badge-dept">{s.department}</span></td>
+                    <td style={{fontSize:13}}><span className="badge badge-store">{branch}</span></td>
+                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', fontWeight:600}}>
+                      {prevSal > 0 ? prevSal.toLocaleString()+'원' : '-'}
+                    </td>
+                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', fontWeight:700, color: target?'var(--accent)':'var(--text3)'}}>
+                      {fmtAmt(target)}
+                    </td>
+                    <td className="r">
+                      {rate !== null ? (
+                        <span style={{
+                          padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:700,
+                          background: rate>=100?'#e8f5e9':rate>=80?'#fff3e0':'#ffebee',
+                          color: rate>=100?'var(--success)':rate>=80?'var(--accent)':'var(--danger)'
+                        }}>
+                          {rate}%
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td style={{padding:'8px 12px'}}>
+                      <div style={{display:'flex', gap:6}}>
+                        <input
+                          type="text"
+                          value={editing[branch] ?? (target ? target.toLocaleString() : '')}
+                          onChange={e => setEditing(p => ({...p, [branch]: e.target.value.replace(/[^0-9]/g,'')}))}
+                          placeholder="금액 입력"
+                          style={{flex:1, height:32, padding:'0 8px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:12, fontFamily:'var(--mono)', outline:'none'}}
+                        />
+                        <button className="btn btn-p" style={{height:32, padding:'0 12px', fontSize:12}}
+                          disabled={saving[branch]}
+                          onClick={() => handleSave(s)}>
+                          {saving[branch] ? <span className="spinner"/> : '저장'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
