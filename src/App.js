@@ -3549,8 +3549,7 @@ function SalaryConditionTab({ profile }) {
                             </span>
                           )}
                         </td>
-                        {true {canEdit && ({canEdit && ( (
-                          <td>
+                        <td>
                             {isEditing ? (
                               <div style={{display:'flex', gap:4}}>
                                 <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}} onClick={() => saveEdit(m)} disabled={saving}>
@@ -3565,7 +3564,6 @@ function SalaryConditionTab({ profile }) {
                               </div>
                             )}
                           </td>
-                        )}
                       </tr>
                     );
                   })
