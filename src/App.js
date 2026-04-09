@@ -1042,6 +1042,23 @@ function formatPhone(val) {
 }
 
 // ════════════════════════════════════════════════════════
+// 회원 등급 유틸
+// ════════════════════════════════════════════════════════
+const GRADE_TABLE = [
+  { grade:'VVIP',   min:10000000, rate:0.07, color:'#6a1b9a', bg:'#f3e5f5' },
+  { grade:'VIP',    min:3000000,  rate:0.06, color:'#c62828', bg:'#ffebee' },
+  { grade:'로얄',   min:1000000,  rate:0.05, color:'#1565C0', bg:'#e3f2fd' },
+  { grade:'골드',   min:300000,   rate:0.04, color:'#E65100', bg:'#fff3e0' },
+  { grade:'실버',   min:100000,   rate:0.03, color:'#455a64', bg:'#eceff1' },
+  { grade:'패밀리', min:0,        rate:0.02, color:'#2e7d32', bg:'#e8f5e9' },
+];
+const getGrade = (total) => GRADE_TABLE.find(g => total >= g.min) || GRADE_TABLE[GRADE_TABLE.length-1];
+const GradeBadge = ({ grade }) => {
+  const g = GRADE_TABLE.find(x => x.grade === grade) || GRADE_TABLE[GRADE_TABLE.length-1];
+  return <span style={{padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:700, background:g.bg, color:g.color, whiteSpace:'nowrap'}}>{g.grade}</span>;
+};
+
+// ════════════════════════════════════════════════════════
 // 판매 입력 페이지 (고객 동시 등록 포함)
 // ════════════════════════════════════════════════════════
 function SalesInputPage({ profile }) {
@@ -1145,32 +1162,58 @@ function SalesInputPage({ profile }) {
     setSaving(true);
     try {
       let customerId = null;
+      let customer = null;
       if (memberMode === 'search') {
         customerId = selectedMember.id;
+        customer = selectedMember;
       } else if (memberMode === 'new') {
         const { data: custData, error: custErr } = await supabase.from('customers').insert({
           joined_at: soldAt, name: custName.trim(), phone: custPhone,
           birthday: custBirthday || null, store_name: profile.department,
           branch_name: profile.branch, manager_name: managerName.trim() || null,
-          sms_consent: false, sms_consent_at: null,
-          created_by: profile.id,
+          sms_consent: false, sms_consent_at: null, created_by: profile.id,
+          grade: '패밀리', total_purchase: 0, total_points: 0,
         }).select().single();
         if (custErr) throw custErr;
         customerId = custData.id;
+        customer = custData;
       }
 
-      // 모든 라인 저장
+      // 이번 판매 총액
+      const saleTotal = validLines.reduce((s,l) => s + (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0), 0);
+
+      // 판매 저장
       for (const l of validLines) {
+        const lineAmt = (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0);
+        const linePoints = customerId ? Math.floor(lineAmt * getGrade(customer?.total_purchase||0).rate) : 0;
         const { error } = await supabase.from('sales').insert({
           sold_at: soldAt, store_name: profile.department, branch_name: profile.branch,
           brand_id: Number(l.brandId), product_id: Number(l.productId),
           quantity: Number(l.quantity), price: Number(String(l.price).replace(/,/g,'')),
-          payment, memo: memo.trim() || null, created_by: profile.id, customer_id: customerId,
+          payment, memo: memo.trim() || null, created_by: profile.id,
+          customer_id: customerId, points_earned: linePoints,
         });
         if (error) throw error;
       }
 
-      const modeMsg = memberMode === 'search' ? `${validLines.length}건 저장 + 회원 적립 완료` : memberMode === 'new' ? `${validLines.length}건 저장 + 회원등록 완료` : `${validLines.length}건 판매 입력 완료`;
+      // 회원 누적 구매액/등급/적립금 업데이트
+      if (customerId) {
+        const prevTotal = customer?.total_purchase || 0;
+        const newTotal = prevTotal + saleTotal;
+        const newGrade = getGrade(newTotal);
+        const earnedPoints = Math.floor(saleTotal * newGrade.rate);
+        const newPoints = (customer?.total_points || 0) + earnedPoints;
+        await supabase.from('customers').update({
+          total_purchase: newTotal,
+          grade: newGrade.grade,
+          total_points: newPoints,
+        }).eq('id', customerId);
+      }
+
+      const modeMsg = memberMode === 'search'
+        ? `${validLines.length}건 저장 + 적립금 ${Math.floor(saleTotal * getGrade(customer?.total_purchase||0).rate).toLocaleString()}원 적립 완료`
+        : memberMode === 'new' ? `${validLines.length}건 저장 + 회원등록 완료`
+        : `${validLines.length}건 판매 입력 완료`;
       toast(modeMsg, 'ok');
       resetForm(); fetchRecent();
     } catch(err) {
@@ -1365,13 +1408,25 @@ function SalesInputPage({ profile }) {
                   </button>
                 </div>
                 {selectedMember && (
-                  <div style={{ background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:'var(--radius)', padding:'8px 12px', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                    <div>
-                      <strong style={{color:'var(--success)'}}>{selectedMember.name}</strong>
-                      <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)', marginLeft:10}}>{selectedMember.phone}</span>
-                      {selectedMember.manager_name && <span style={{fontSize:11, color:'var(--text3)', marginLeft:8}}>담당: {selectedMember.manager_name}</span>}
+                  <div style={{ background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:'var(--radius)', padding:'8px 12px', marginBottom:8 }}>
+                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                      <div style={{display:'flex', alignItems:'center', gap:8}}>
+                        <strong style={{color:'var(--success)'}}>{selectedMember.name}</strong>
+                        <GradeBadge grade={selectedMember.grade || '패밀리'}/>
+                        <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)'}}>{selectedMember.phone}</span>
+                        {selectedMember.manager_name && <span style={{fontSize:11, color:'var(--text3)'}}>담당: {selectedMember.manager_name}</span>}
+                      </div>
+                      <button type="button" className="btn-ghost" onClick={() => setSelMember(null)}>✕</button>
                     </div>
-                    <button type="button" className="btn-ghost" onClick={() => setSelMember(null)}>✕</button>
+                    {totalAmt > 0 && (
+                      <div style={{marginTop:6, padding:'6px 10px', background:'#fff', borderRadius:6, fontSize:12, color:'var(--text2)'}}>
+                        💰 이번 구매 적립 예정:&nbsp;
+                        <strong style={{color:'var(--accent)'}}>
+                          {Math.floor(totalAmt * getGrade(selectedMember.total_purchase||0).rate).toLocaleString()}원
+                        </strong>
+                        &nbsp;({(getGrade(selectedMember.total_purchase||0).rate*100)}% · {getGrade(selectedMember.total_purchase||0).grade} 등급)
+                      </div>
+                    )}
                   </div>
                 )}
                 {memberResults.length > 0 && !selectedMember && (
@@ -1381,10 +1436,16 @@ function SalesInputPage({ profile }) {
                         style={{ padding:'9px 12px', cursor:'pointer', borderBottom:'1px solid var(--border)', background:'#fff', fontSize:13 }}
                         onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
                         onMouseLeave={e => e.currentTarget.style.background='#fff'}>
-                        <strong>{m.name}</strong>
-                        <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)', marginLeft:10}}>{m.phone}</span>
-                        <span style={{fontSize:11, color:'var(--text3)', marginLeft:8}}>{m.store_name} · {m.branch_name}</span>
-                        {m.manager_name && <span style={{fontSize:11, color:'var(--accent)', marginLeft:8}}>담당: {m.manager_name}</span>}
+                        <div style={{display:'flex', alignItems:'center', gap:8}}>
+                          <strong>{m.name}</strong>
+                          <GradeBadge grade={m.grade || '패밀리'}/>
+                          <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)'}}>{m.phone}</span>
+                          <span style={{fontSize:11, color:'var(--text3)'}}>{m.store_name} · {m.branch_name}</span>
+                          {m.manager_name && <span style={{fontSize:11, color:'var(--accent)'}}>담당: {m.manager_name}</span>}
+                        </div>
+                        <div style={{fontSize:11, color:'var(--text3)', marginTop:3}}>
+                          누적구매: {(m.total_purchase||0).toLocaleString()}원 · 적립금: {(m.total_points||0).toLocaleString()}원
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1813,6 +1874,7 @@ function CustomerLookupPage({ profile }) {
                 <tr>
                   <th>가입일</th>
                   <th>이름</th>
+                  <th>등급</th>
                   <th>휴대폰번호</th>
                   <th>생일</th>
                   <th>점포</th>
@@ -1828,6 +1890,7 @@ function CustomerLookupPage({ profile }) {
                   <tr key={c.id} style={{cursor:'pointer'}} onClick={() => handleSelect(c)}>
                     <td className="mono" style={{fontSize:11}}>{c.joined_at}</td>
                     <td><strong style={{fontSize:13}}>{c.name}</strong></td>
+                    <td><GradeBadge grade={c.grade || '패밀리'}/></td>
                     <td className="mono" style={{fontSize:12}}>{c.phone}</td>
                     <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{c.birthday || '-'}</td>
                     <td><span className="badge badge-dept">{c.store_name}</span></td>
@@ -1872,8 +1935,9 @@ function CustomerLookupPage({ profile }) {
       {selected && (
         <div className="card">
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14}}>
-            <div style={{display:'flex', alignItems:'center', gap:12}}>
+            <div style={{display:'flex', alignItems:'center', gap:10}}>
               <div style={{fontSize:17, fontWeight:700}}>{selected.name}</div>
+              <GradeBadge grade={selected.grade || '패밀리'}/>
               <div style={{fontFamily:'var(--mono)', fontSize:13, color:'var(--text2)'}}>{selected.phone}</div>
               {selected.birthday && <div style={{fontSize:12, color:'var(--text3)'}}>🎂 {selected.birthday}</div>}
             </div>
@@ -1891,15 +1955,19 @@ function CustomerLookupPage({ profile }) {
               : <span style={{color:'var(--text3)'}}>SMS미동의</span>
             }
           </div>
-          <div style={{display:'flex', gap:10, marginBottom:16}}>
+          <div style={{display:'flex', gap:10, marginBottom:16, flexWrap:'wrap'}}>
             {[
+              {label:'등급', value: selected.grade || '패밀리', accent: false, grade: true},
+              {label:'누적 구매금액', value: (selected.total_purchase||0).toLocaleString() + '원'},
+              {label:'적립금', value: (selected.total_points||0).toLocaleString() + '원'},
               {label:'구매건수', value: purchases.length + '건'},
-              {label:'구매수량', value: totalQty + '개'},
               {label:'총 결제금액', value: totalAmt.toLocaleString() + '원'},
             ].map(s => (
               <div key={s.label} style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'7px 14px', textAlign:'center'}}>
                 <div style={{fontSize:10, fontWeight:600, color:'var(--text2)'}}>{s.label}</div>
-                <div style={{fontSize:15, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', marginTop:2}}>{s.value}</div>
+                <div style={{fontSize:15, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', marginTop:2}}>
+                  {s.grade ? <GradeBadge grade={s.value}/> : s.value}
+                </div>
               </div>
             ))}
           </div>
