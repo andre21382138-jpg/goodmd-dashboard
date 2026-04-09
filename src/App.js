@@ -3971,6 +3971,39 @@ function SalaryCalcTab() {
     const { data: att } = await supabase.from('attendance')
       .select('manager_name, work_date').gte('work_date', from).lte('work_date', to);
 
+    // 회원가입 인센티브 계산
+    const calcIncentive = (amt) => {
+      if (amt >= 200000) return 3000;
+      if (amt >= 100000) return 2000;
+      if (amt >= 20000)  return 1000;
+      return 0;
+    };
+    // 해당 월 신규 가입 + SMS 동의 회원
+    const { data: newCustomers } = await supabase.from('customers')
+      .select('id, manager_name').eq('sms_consent', true)
+      .gte('joined_at', from).lte('joined_at', to);
+    // 해당 회원들의 당월 구매액
+    const custIds = (newCustomers||[]).map(c => c.id);
+    let custSalesMap = {};
+    if (custIds.length > 0) {
+      const { data: custSales } = await supabase.from('sales')
+        .select('customer_id, price, quantity')
+        .in('customer_id', custIds)
+        .gte('sold_at', from).lte('sold_at', to);
+      (custSales||[]).forEach(s => {
+        if (!custSalesMap[s.customer_id]) custSalesMap[s.customer_id] = 0;
+        custSalesMap[s.customer_id] += (s.price||0) * (s.quantity||0);
+      });
+    }
+    // 매니저별 인센티브 합산
+    const managerIncentiveMap = {};
+    (newCustomers||[]).forEach(c => {
+      if (!c.manager_name) return;
+      const inc = calcIncentive(custSalesMap[c.id] || 0);
+      if (!managerIncentiveMap[c.manager_name]) managerIncentiveMap[c.manager_name] = 0;
+      managerIncentiveMap[c.manager_name] += inc;
+    });
+
     const attMap = {};
     (att || []).forEach(r => {
       if (!attMap[r.manager_name]) attMap[r.manager_name] = [];
@@ -3990,7 +4023,8 @@ function SalaryCalcTab() {
           else             { salary += (m.salary||0); weekdays++; }
         });
       }
-      return { ...m, totalDays: dates.length, weekdays, weekends, salary };
+      const memberIncentive = managerIncentiveMap[m.name] || 0;
+      return { ...m, totalDays: dates.length, weekdays, weekends, salary, memberIncentive, totalPay: salary + memberIncentive };
     });
 
     setRows(result.sort((a,b) => (a.store?.department||'').localeCompare(b.store?.department||'')));
@@ -4001,7 +4035,7 @@ function SalaryCalcTab() {
 
   const stores = useMemo(() => uniq(rows.map(r => r.store?.department).filter(Boolean)), [rows]);
   const filtered = useMemo(() => fStore ? rows.filter(r => r.store?.department===fStore) : rows, [rows, fStore]);
-  const totalSalary = useMemo(() => filtered.reduce((s,r) => s+r.salary, 0), [filtered]);
+  const totalSalary = useMemo(() => filtered.reduce((s,r) => s+r.totalPay, 0), [filtered]);
   const years  = Array.from({length:5}, (_,i) => now.getFullYear() - i);
   const months = Array.from({length:12}, (_,i) => i+1);
 
@@ -4034,7 +4068,7 @@ function SalaryCalcTab() {
           <div className="twrap">
             <table>
               <thead>
-                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근 (평일/금토일)</th><th className="r">지급급여</th><th style={{width:80, textAlign:'center'}}>상세</th></tr>
+                <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근 (평일/금토일)</th><th className="r">기본급여</th><th className="r">회원 인센티브</th><th className="r">합계 지급액</th><th style={{width:70, textAlign:'center'}}>상세</th></tr>
               </thead>
               <tbody>
                 {filtered.map(m => (
@@ -4049,7 +4083,11 @@ function SalaryCalcTab() {
                         <span>{m.totalDays}일 <span style={{fontSize:11, color:'var(--text3)'}}>({m.weekdays}/{m.weekends})</span></span>
                       )}
                     </td>
-                    <td className="r" style={{padding:'12px 12px', fontSize:13, fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{m.salary.toLocaleString()}원</td>
+                    <td className="r" style={{padding:'12px 12px', fontSize:13, fontFamily:'var(--mono)', color:'var(--text2)'}}>{m.salary.toLocaleString()}원</td>
+                    <td className="r" style={{padding:'12px 12px', fontSize:13, fontFamily:'var(--mono)', fontWeight: m.memberIncentive>0?700:400, color: m.memberIncentive>0?'var(--success)':'var(--text3)'}}>
+                      {m.memberIncentive>0 ? `+${m.memberIncentive.toLocaleString()}원` : '-'}
+                    </td>
+                    <td className="r" style={{padding:'12px 12px', fontSize:13, fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{m.totalPay.toLocaleString()}원</td>
                     <td style={{padding:'12px 6px', textAlign:'center'}}>
                       <button className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}} onClick={() => setCalTarget(m)}>상세보기</button>
                     </td>
@@ -4057,6 +4095,10 @@ function SalaryCalcTab() {
                 ))}
                 <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
                   <td colSpan={6} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
+                  <td className="r" style={{fontFamily:'var(--mono)', fontWeight:600, padding:'10px 11px', color:'var(--text2)'}}>{filtered.reduce((s,r)=>s+r.salary,0).toLocaleString()}원</td>
+                  <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, padding:'10px 11px', color:'var(--success)'}}>
+                    {filtered.reduce((s,r)=>s+r.memberIncentive,0)>0?`+${filtered.reduce((s,r)=>s+r.memberIncentive,0).toLocaleString()}원`:'-'}
+                  </td>
                   <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)', padding:'10px 11px'}}>{totalSalary.toLocaleString()}원</td>
                   <td/>
                 </tr>
