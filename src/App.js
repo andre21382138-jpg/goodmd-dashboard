@@ -3296,54 +3296,62 @@ function IncentivePage({ profile }) {
 }
 
 function IncentiveTab() {
+  const [subTab, setSubTab] = useState('target');
+  return (
+    <div>
+      <div style={{display:'flex', gap:8, marginBottom:16}}>
+        {[{key:'target',label:'🎯 목표매출 달성 혜택'},{key:'member',label:'👥 회원가입 매출 혜택'}].map(t => (
+          <button key={t.key} onClick={() => setSubTab(t.key)}
+            style={{height:36, padding:'0 18px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer', transition:'all 120ms',
+              borderColor: subTab===t.key ? 'var(--accent)' : 'var(--border)',
+              background: subTab===t.key ? '#fff3e0' : '#fff',
+              color: subTab===t.key ? 'var(--accent)' : 'var(--text2)'}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {subTab === 'target' && <TargetIncentiveTab/>}
+      {subTab === 'member' && <MemberIncentiveTab/>}
+    </div>
+  );
+}
+
+function TargetIncentiveTab() {
   const now = new Date();
-  // 전월
   const prevM  = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevMonStr = `${prevM.getFullYear()}-${String(prevM.getMonth()+1).padStart(2,'0')}`;
-  // 당월 (목표 설정 대상)
   const curMonStr  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const [selMonth, setSelMonth] = useState(curMonStr);
+  const [stores,   setStores]   = useState([]);
+  const [sales,    setSales]    = useState({});
+  const [targets,  setTargets]  = useState({});
+  const [editing,  setEditing]  = useState({});
+  const [saving,   setSaving]   = useState({});
+  const [loading,  setLoading]  = useState(true);
 
-  const [selMonth, setSelMonth]   = useState(curMonStr);
-  const [stores,   setStores]     = useState([]); // profiles (매장 계정)
-  const [sales,    setSales]      = useState({}); // branch_name → 전월매출
-  const [targets,  setTargets]    = useState({}); // branch_name → target_amount
-  const [editing,  setEditing]    = useState({}); // branch_name → 입력 중 금액
-  const [saving,   setSaving]     = useState({});
-  const [loading,  setLoading]    = useState(true);
-
-  // 매장 목록 + 전월 매출 + 목표매출 조회
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-
-      // 매장 계정 목록
       const { data: profiles } = await supabase.from('profiles')
         .select('id, department, branch').eq('approved', true)
         .neq('role','admin').neq('job_title','담당자').order('department');
-      const storeList = (profiles||[]).filter(p => p.branch);
-      setStores(storeList);
-
-      // 전월 매출
+      setStores((profiles||[]).filter(p => p.branch));
       const prevFrom = `${prevMonStr}-01`;
       const prevLast = new Date(prevM.getFullYear(), prevM.getMonth()+1, 0).getDate();
       const prevTo   = `${prevMonStr}-${String(prevLast).padStart(2,'0')}`;
       const { data: salesData } = await supabase.from('sales')
-        .select('branch_name, price, quantity')
-        .gte('sold_at', prevFrom).lte('sold_at', prevTo);
+        .select('branch_name, price, quantity').gte('sold_at', prevFrom).lte('sold_at', prevTo);
       const salesMap = {};
       (salesData||[]).forEach(s => {
         if (!salesMap[s.branch_name]) salesMap[s.branch_name] = 0;
         salesMap[s.branch_name] += (s.price||0) * (s.quantity||0);
       });
       setSales(salesMap);
-
-      // 목표매출
       const { data: tData } = await supabase.from('incentive_targets')
         .select('branch_name, target_amount').eq('target_month', selMonth);
       const tMap = {};
       (tData||[]).forEach(t => { tMap[t.branch_name] = t.target_amount; });
       setTargets(tMap);
-
       setLoading(false);
     };
     load();
@@ -3369,80 +3377,46 @@ function IncentiveTab() {
     const d = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   });
-
   const fmtAmt = (v) => v ? Number(v).toLocaleString() + '원' : '-';
   const achieveRate = (branch) => {
-    const t = targets[branch];
-    const s = sales[branch];
+    const t = targets[branch], s = sales[branch];
     if (!t || !s) return null;
     return Math.round(s / t * 100);
   };
 
   return (
     <div className="card" style={{padding:0, overflow:'hidden'}}>
-      {/* 헤더 */}
       <div style={{display:'flex', alignItems:'center', gap:10, padding:'14px 20px', borderBottom:'1px solid var(--border)'}}>
-        <span style={{fontSize:13, fontWeight:700, color:'var(--text)'}}>목표 월</span>
+        <span style={{fontSize:13, fontWeight:700}}>목표 월</span>
         <select value={selMonth} onChange={e => setSelMonth(e.target.value)}
           style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
           {months.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
-        <span style={{fontSize:12, color:'var(--text3)', marginLeft:4}}>전월 매출: {prevMonStr} 기준</span>
+        <span style={{fontSize:12, color:'var(--text3)'}}>전월 매출: {prevMonStr} 기준</span>
       </div>
-
       {loading ? <div className="empty"><span className="spinner"/></div> : (
         <div className="twrap">
           <table>
-            <thead>
-              <tr>
-                <th>점포</th>
-                <th>지점명</th>
-                <th className="r">전월 매출</th>
-                <th className="r">목표 매출</th>
-                <th className="r">달성률</th>
-                <th style={{width:200}}>목표 설정</th>
-              </tr>
-            </thead>
+            <thead><tr><th>점포</th><th>지점명</th><th className="r">전월 매출</th><th className="r">목표 매출</th><th className="r">달성률</th><th style={{width:200}}>목표 설정</th></tr></thead>
             <tbody>
               {stores.map(s => {
-                const branch  = s.branch;
-                const prevSal = sales[branch] || 0;
-                const target  = targets[branch];
-                const rate    = achieveRate(branch);
+                const branch=s.branch, prevSal=sales[branch]||0, target=targets[branch], rate=achieveRate(branch);
                 return (
                   <tr key={s.id}>
                     <td style={{fontSize:13}}><span className="badge badge-dept">{s.department}</span></td>
                     <td style={{fontSize:13}}><span className="badge badge-store">{branch}</span></td>
-                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', fontWeight:600}}>
-                      {prevSal > 0 ? prevSal.toLocaleString()+'원' : '-'}
-                    </td>
-                    <td className="r" style={{fontSize:13, fontFamily:'var(--mono)', fontWeight:700, color: target?'var(--accent)':'var(--text3)'}}>
-                      {fmtAmt(target)}
-                    </td>
-                    <td className="r">
-                      {rate !== null ? (
-                        <span style={{
-                          padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:700,
-                          background: rate>=100?'#e8f5e9':rate>=80?'#fff3e0':'#ffebee',
-                          color: rate>=100?'var(--success)':rate>=80?'var(--accent)':'var(--danger)'
-                        }}>
-                          {rate}%
-                        </span>
-                      ) : '-'}
-                    </td>
+                    <td className="r" style={{fontSize:13,fontFamily:'var(--mono)',fontWeight:600}}>{prevSal>0?prevSal.toLocaleString()+'원':'-'}</td>
+                    <td className="r" style={{fontSize:13,fontFamily:'var(--mono)',fontWeight:700,color:target?'var(--accent)':'var(--text3)'}}>{fmtAmt(target)}</td>
+                    <td className="r">{rate!==null?<span style={{padding:'2px 8px',borderRadius:4,fontSize:12,fontWeight:700,background:rate>=100?'#e8f5e9':rate>=80?'#fff3e0':'#ffebee',color:rate>=100?'var(--success)':rate>=80?'var(--accent)':'var(--danger)'}}>{rate}%</span>:'-'}</td>
                     <td style={{padding:'8px 12px'}}>
-                      <div style={{display:'flex', gap:6}}>
-                        <input
-                          type="text"
-                          value={editing[branch] ?? (target ? target.toLocaleString() : '')}
-                          onChange={e => setEditing(p => ({...p, [branch]: e.target.value.replace(/[^0-9]/g,'')}))}
+                      <div style={{display:'flex',gap:6}}>
+                        <input type="text" value={editing[branch]??(target?target.toLocaleString():'')}
+                          onChange={e=>setEditing(p=>({...p,[branch]:e.target.value.replace(/[^0-9]/g,'')}))}
                           placeholder="금액 입력"
-                          style={{flex:1, height:32, padding:'0 8px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:12, fontFamily:'var(--mono)', outline:'none'}}
-                        />
-                        <button className="btn btn-p" style={{height:32, padding:'0 12px', fontSize:12}}
-                          disabled={saving[branch]}
-                          onClick={() => handleSave(s)}>
-                          {saving[branch] ? <span className="spinner"/> : '저장'}
+                          style={{flex:1,height:32,padding:'0 8px',border:'1px solid var(--border)',borderRadius:'var(--radius)',fontSize:12,fontFamily:'var(--mono)',outline:'none'}}/>
+                        <button className="btn btn-p" style={{height:32,padding:'0 12px',fontSize:12}}
+                          disabled={saving[branch]} onClick={()=>handleSave(s)}>
+                          {saving[branch]?<span className="spinner"/>:'저장'}
                         </button>
                       </div>
                     </td>
@@ -3453,6 +3427,150 @@ function IncentiveTab() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function MemberIncentiveTab() {
+  const now = new Date();
+  const curMonStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const months = Array.from({length:6}, (_,i) => {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  });
+  const [selMonth, setSelMonth] = useState(curMonStr);
+  const [rows,     setRows]     = useState([]);
+  const [loading,  setLoading]  = useState(false);
+  const [expanded, setExpanded] = useState(null);
+
+  const calcIncentive = (amt) => {
+    if (amt >= 200000) return 3000;
+    if (amt >= 100000) return 2000;
+    if (amt >= 20000)  return 1000;
+    return 0;
+  };
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const from = `${selMonth}-01`;
+    const lastDay = new Date(selMonth.split('-')[0], selMonth.split('-')[1], 0).getDate();
+    const to = `${selMonth}-${String(lastDay).padStart(2,'0')}`;
+
+    const { data: newMembers } = await supabase.from('customers')
+      .select('id, name, phone, manager_name, branch_name, store_name')
+      .eq('sms_consent', true)
+      .gte('joined_at', from).lte('joined_at', to);
+
+    if (!newMembers?.length) { setRows([]); setLoading(false); return; }
+
+    const memberIds = newMembers.map(m => m.id);
+    const { data: salesData } = await supabase.from('sales')
+      .select('customer_id, price, quantity')
+      .in('customer_id', memberIds)
+      .gte('sold_at', from).lte('sold_at', to);
+
+    const salesMap = {};
+    (salesData||[]).forEach(s => {
+      if (!salesMap[s.customer_id]) salesMap[s.customer_id] = 0;
+      salesMap[s.customer_id] += (s.price||0) * (s.quantity||0);
+    });
+
+    const managerMap = {};
+    newMembers.forEach(m => {
+      const purchaseAmt = salesMap[m.id] || 0;
+      const incentive   = calcIncentive(purchaseAmt);
+      if (!m.manager_name) return;
+      if (!managerMap[m.manager_name]) {
+        managerMap[m.manager_name] = { manager_name:m.manager_name, branch_name:m.branch_name, store_name:m.store_name, members:[], totalIncentive:0 };
+      }
+      managerMap[m.manager_name].members.push({...m, purchaseAmt, incentive});
+      managerMap[m.manager_name].totalIncentive += incentive;
+    });
+
+    setRows(Object.values(managerMap).sort((a,b) => b.totalIncentive-a.totalIncentive));
+    setLoading(false);
+  }, [selMonth]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const grandTotal = rows.reduce((s,r) => s+r.totalIncentive, 0);
+
+  return (
+    <div>
+      <div style={{background:'#e3f2fd', border:'1px solid #90caf9', borderRadius:'var(--radius)', padding:'10px 16px', marginBottom:12, fontSize:12, color:'#1565C0', lineHeight:1.8}}>
+        📌 <strong>회원가입 매출 혜택 기준</strong> — SMS 수신동의 + 가입월 내 구매 시<br/>
+        2만원 이상 <strong>1,000원</strong> · 10만원 이상 <strong>2,000원</strong> · 20만원 이상 <strong>3,000원</strong>
+      </div>
+      <div className="card" style={{padding:0, overflow:'hidden'}}>
+        <div style={{display:'flex', alignItems:'center', gap:10, padding:'14px 20px', borderBottom:'1px solid var(--border)'}}>
+          <span style={{fontSize:13, fontWeight:700}}>조회 월</span>
+          <select value={selMonth} onChange={e => setSelMonth(e.target.value)}
+            style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
+            {months.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <div style={{marginLeft:'auto', textAlign:'right'}}>
+            <div style={{fontSize:11, color:'var(--text3)'}}>총 인센티브</div>
+            <div style={{fontSize:18, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{grandTotal.toLocaleString()}원</div>
+          </div>
+        </div>
+        {loading ? <div className="empty"><span className="spinner"/></div> : rows.length===0 ? (
+          <div className="empty">{selMonth} 해당 데이터가 없습니다</div>
+        ) : (
+          <div className="twrap">
+            <table>
+              <thead><tr><th>점포</th><th>지점</th><th>담당 매니저</th><th className="r">가입+구매 회원수</th><th className="r">인센티브 합계</th><th></th></tr></thead>
+              <tbody>
+                {rows.map(r => (
+                  <>
+                    <tr key={r.manager_name} style={{background:expanded===r.manager_name?'#fffde7':''}}>
+                      <td><span className="badge badge-dept">{r.store_name}</span></td>
+                      <td><span className="badge badge-store">{r.branch_name}</span></td>
+                      <td style={{fontSize:13, fontWeight:700}}>{r.manager_name}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:600}}>{r.members.length}명</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)'}}>{r.totalIncentive.toLocaleString()}원</td>
+                      <td><button className="btn btn-s" style={{fontSize:11}} onClick={()=>setExpanded(expanded===r.manager_name?null:r.manager_name)}>{expanded===r.manager_name?'▲ 닫기':'▼ 상세'}</button></td>
+                    </tr>
+                    {expanded===r.manager_name && (
+                      <tr key={r.manager_name+'_d'}>
+                        <td colSpan={6} style={{padding:0, background:'#fffde7'}}>
+                          <div style={{padding:'8px 16px 16px'}}>
+                            <table style={{width:'100%', borderCollapse:'collapse', fontSize:12, marginTop:8}}>
+                              <thead>
+                                <tr style={{background:'#fff3e0'}}>
+                                  <th style={{padding:'6px 10px', textAlign:'left', fontWeight:600, color:'var(--text2)'}}>회원명</th>
+                                  <th style={{padding:'6px 10px', textAlign:'left', fontWeight:600, color:'var(--text2)'}}>연락처</th>
+                                  <th style={{padding:'6px 10px', textAlign:'right', fontWeight:600, color:'var(--text2)'}}>당월 구매금액</th>
+                                  <th style={{padding:'6px 10px', textAlign:'right', fontWeight:600, color:'var(--text2)'}}>인센티브</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {r.members.map(m => (
+                                  <tr key={m.id} style={{borderBottom:'1px solid #ffcc80'}}>
+                                    <td style={{padding:'7px 10px', fontWeight:600}}>{m.name}</td>
+                                    <td style={{padding:'7px 10px', fontFamily:'var(--mono)', fontSize:11}}>{m.phone}</td>
+                                    <td style={{padding:'7px 10px', textAlign:'right', fontFamily:'var(--mono)'}}>{m.purchaseAmt.toLocaleString()}원</td>
+                                    <td style={{padding:'7px 10px', textAlign:'right', fontFamily:'var(--mono)', fontWeight:700, color:m.incentive>0?'var(--accent)':'var(--text3)'}}>
+                                      {m.incentive>0?`${m.incentive.toLocaleString()}원`:'해당없음'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))}
+                <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
+                  <td colSpan={5} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
+                  <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)', padding:'10px 11px'}}>{grandTotal.toLocaleString()}원</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
