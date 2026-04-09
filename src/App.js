@@ -3183,7 +3183,7 @@ function ManagerMgmtPage() {
 // ════════════════════════════════════════════════════════
 // 인센티브 조회 페이지 (관리자/담당자)
 // ════════════════════════════════════════════════════════
-function IncentivePage() {
+function IncentivePage({ profile }) {
   const [tab, setTab] = useState('condition');
 
   return (
@@ -3199,7 +3199,7 @@ function IncentivePage() {
           </button>
         ))}
       </div>
-      {tab === 'condition'  && <SalaryConditionTab/>}
+      {tab === 'condition'  && <SalaryConditionTab profile={profile}/>}
       {tab === 'incentive'  && <IncentiveTab/>}
       {tab === 'calc'       && <SalaryCalcTab/>}
     </div>
@@ -3368,23 +3368,32 @@ function IncentiveTab() {
   );
 }
 
-function SalaryConditionTab() {
-  const [members,  setMembers]  = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [fStore,   setFStore]   = useState('');
-  const [fBranch,  setFBranch]  = useState('');
-  const [fJob,     setFJob]     = useState('');
+function SalaryConditionTab({ profile }) {
+  const [members,   setMembers]   = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [fStore,    setFStore]    = useState('');
+  const [fBranch,   setFBranch]   = useState('');
+  const [fJob,      setFJob]      = useState('');
+  const [editing,   setEditing]   = useState(null); // id
+  const [editData,  setEditData]  = useState({});
+  const [saving,    setSaving]    = useState(false);
+  const [histTarget, setHistTarget] = useState(null); // {id, name}
+  const [history,   setHistory]   = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
 
-  useEffect(() => {
-    supabase.from('store_members')
+  const fetchMembers = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('store_members')
       .select('*, store:profiles!store_account_id(department, branch)')
-      .order('store_account_id')
-      .then(({ data }) => { setMembers(data || []); setLoading(false); });
+      .order('store_account_id');
+    setMembers(data || []);
+    setLoading(false);
   }, []);
+
+  useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
   const stores   = useMemo(() => uniq(members.map(m => m.store?.department).filter(Boolean)), [members]);
   const branches = useMemo(() => uniq((fStore ? members.filter(m => m.store?.department===fStore) : members).map(m => m.store?.branch).filter(Boolean)), [members, fStore]);
-
   const filtered = useMemo(() => {
     let r = members;
     if (fStore)  r = r.filter(m => m.store?.department===fStore);
@@ -3393,60 +3402,179 @@ function SalaryConditionTab() {
     return r;
   }, [members, fStore, fBranch, fJob]);
 
+  const startEdit = (m) => {
+    setEditing(m.id);
+    setEditData({ salary_type: m.salary_type, salary: m.salary||0, extra_pay: m.extra_pay||0 });
+  };
+
+  const saveEdit = async (m) => {
+    setSaving(true);
+    // 이력 저장
+    await supabase.from('salary_history').insert({
+      store_member_id: m.id,
+      branch_name: m.store?.branch,
+      member_name: m.name,
+      changed_by: profile?.name,
+      salary_type: editData.salary_type,
+      salary: Number(editData.salary),
+      extra_pay: Number(editData.extra_pay),
+    });
+    // 실제 업데이트
+    const { error } = await supabase.from('store_members').update({
+      salary_type: editData.salary_type,
+      salary: Number(editData.salary),
+      extra_pay: Number(editData.extra_pay),
+    }).eq('id', m.id);
+    if (error) toast(error.message, 'err');
+    else { toast(`${m.display_name||m.name} 급여 수정 완료`, 'ok'); setEditing(null); fetchMembers(); }
+    setSaving(false);
+  };
+
+  const showHistory = async (m) => {
+    setHistTarget({ id: m.id, name: m.display_name || m.name });
+    setHistLoading(true);
+    const { data } = await supabase.from('salary_history')
+      .select('*').eq('store_member_id', m.id)
+      .order('changed_at', { ascending: false }).limit(20);
+    setHistory(data || []);
+    setHistLoading(false);
+  };
+
   const td = { fontSize:13, color:'var(--text)' };
+  const iStyle = { height:32, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, fontFamily:'var(--mono)', outline:'none', background:'#fff' };
 
   return (
-    <div className="card" style={{padding:'16px 20px'}}>
-      <div className="fbar">
-        <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
-          <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={!fStore} style={{background:!fStore?'#f0f0f0':'#fff'}}>
-          <option value="">전체 지점</option>{branches.map(b => <option key={b}>{b}</option>)}
-        </select>
-        <select className="fsel" value={fJob} onChange={e => setFJob(e.target.value)}>
-          <option value="">전체 직급</option>
-          <option value="매니저">매니저</option>
-          <option value="부매니저">부매니저</option>
-        </select>
-        {(fStore||fBranch||fJob) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); setFJob(''); }}>✕ 초기화</button>}
-        <div className="fbar-right"><span className="fresult">근무자 <b>{filtered.length}</b>명</span></div>
-      </div>
-      {loading ? <div className="empty"><span className="spinner"/></div> : (
-        <div className="twrap">
-          <table>
-            <thead>
-              <tr><th>점포</th><th>지점</th><th>소속</th><th>직급</th><th>이름</th><th>연락처</th><th>급여방법</th><th className="r">기본급여</th><th className="r">금·토·일 추가</th></tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0
-                ? <tr><td colSpan={9} className="empty">근무자가 없습니다</td></tr>
-                : filtered.map(m => (
-                  <tr key={m.id}>
-                    <td><span className="badge badge-dept">{m.store?.department}</span></td>
-                    <td><span className="badge badge-store">{m.store?.branch}</span></td>
-                    <td style={td}>{m.affiliation || '-'}</td>
-                    <td style={{...td, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
-                    <td style={{...td, fontWeight:700}}>{m.display_name || m.name}</td>
-                    <td style={td}>{m.phone || '-'}</td>
-                    <td style={td}>
-                      <span style={{padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:600,
-                        background: m.salary_type==='월급'?'#e3f2fd':'#f3e5f5',
-                        color: m.salary_type==='월급'?'#1565C0':'#6a1b9a'}}>
-                        {m.salary_type}
-                      </span>
-                    </td>
-                    <td className="r" style={{...td, fontWeight:700, fontFamily:'var(--mono)'}}>{(m.salary||0).toLocaleString()}원</td>
-                    <td className="r" style={{...td, fontFamily:'var(--mono)', color: m.extra_pay>0?'var(--success)':'var(--text3)'}}>
-                      {m.extra_pay > 0 ? `+${(m.extra_pay).toLocaleString()}원` : '-'}
-                    </td>
-                  </tr>
-                ))
-              }
-            </tbody>
-          </table>
+    <div>
+      {/* 급여 이력 모달 */}
+      {histTarget && (
+        <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}} onClick={() => setHistTarget(null)}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:16, padding:'28px 24px', width:'min(560px, 92vw)', maxHeight:'80vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex', alignItems:'center', marginBottom:16}}>
+              <div style={{fontSize:17, fontWeight:700}}>{histTarget.name} 급여 변경 이력</div>
+              <button onClick={() => setHistTarget(null)} style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+            </div>
+            {histLoading ? <div className="empty"><span className="spinner"/></div> : (
+              history.length === 0
+                ? <div className="empty">변경 이력이 없습니다</div>
+                : <div className="twrap">
+                    <table>
+                      <thead><tr><th>변경일시</th><th>급여방법</th><th className="r">기본급여</th><th className="r">금토일 추가</th><th>변경자</th></tr></thead>
+                      <tbody>
+                        {history.map(h => (
+                          <tr key={h.id}>
+                            <td className="mono" style={{fontSize:11}}>{new Date(h.changed_at).toLocaleString('ko-KR')}</td>
+                            <td><span style={{padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600,
+                              background: h.salary_type==='월급'?'#e3f2fd':'#f3e5f5',
+                              color: h.salary_type==='월급'?'#1565C0':'#6a1b9a'}}>{h.salary_type}</span></td>
+                            <td className="r" style={{fontFamily:'var(--mono)', fontWeight:600}}>{(h.salary||0).toLocaleString()}원</td>
+                            <td className="r" style={{fontFamily:'var(--mono)', color:'var(--success)'}}>{h.extra_pay>0?`+${(h.extra_pay).toLocaleString()}원`:'-'}</td>
+                            <td style={{fontSize:12, color:'var(--text2)'}}>{h.changed_by||'-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+            )}
+          </div>
         </div>
       )}
+
+      <div className="card" style={{padding:'16px 20px'}}>
+        <div className="fbar">
+          <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
+            <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={!fStore} style={{background:!fStore?'#f0f0f0':'#fff'}}>
+            <option value="">전체 지점</option>{branches.map(b => <option key={b}>{b}</option>)}
+          </select>
+          <select className="fsel" value={fJob} onChange={e => setFJob(e.target.value)}>
+            <option value="">전체 직급</option>
+            <option value="매니저">매니저</option>
+            <option value="부매니저">부매니저</option>
+          </select>
+          {(fStore||fBranch||fJob) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); setFJob(''); }}>✕ 초기화</button>}
+          <div className="fbar-right"><span className="fresult">근무자 <b>{filtered.length}</b>명</span></div>
+        </div>
+        {loading ? <div className="empty"><span className="spinner"/></div> : (
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr><th>점포</th><th>지점</th><th>소속</th><th>직급</th><th>이름</th><th>연락처</th><th>급여방법</th><th className="r">기본급여</th><th className="r">금·토·일 추가</th><th>관리</th></tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0
+                  ? <tr><td colSpan={10} className="empty">근무자가 없습니다</td></tr>
+                  : filtered.map(m => {
+                    const isEditing = editing === m.id;
+                    return (
+                      <tr key={m.id}>
+                        <td><span className="badge badge-dept">{m.store?.department}</span></td>
+                        <td><span className="badge badge-store">{m.store?.branch}</span></td>
+                        <td style={td}>{m.affiliation || '-'}</td>
+                        <td style={{...td, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
+                        <td style={{...td, fontWeight:700}}>{m.display_name || m.name}</td>
+                        <td style={td}>{m.phone || '-'}</td>
+                        <td>
+                          {isEditing ? (
+                            <select value={editData.salary_type} onChange={e => setEditData(p=>({...p, salary_type:e.target.value}))}
+                              style={{...iStyle, width:70}}>
+                              <option value="월급">월급</option>
+                              <option value="일급">일급</option>
+                            </select>
+                          ) : (
+                            <span style={{padding:'2px 8px', borderRadius:4, fontSize:12, fontWeight:600,
+                              background: m.salary_type==='월급'?'#e3f2fd':'#f3e5f5',
+                              color: m.salary_type==='월급'?'#1565C0':'#6a1b9a'}}>
+                              {m.salary_type}
+                            </span>
+                          )}
+                        </td>
+                        <td className="r">
+                          {isEditing ? (
+                            <input type="number" value={editData.salary} onChange={e => setEditData(p=>({...p, salary:e.target.value}))}
+                              style={{...iStyle, width:100, textAlign:'right'}}/>
+                          ) : (
+                            <span style={{...td, fontWeight:700, fontFamily:'var(--mono)'}}>{(m.salary||0).toLocaleString()}원</span>
+                          )}
+                        </td>
+                        <td className="r">
+                          {isEditing ? (
+                            <input type="number" value={editData.extra_pay} onChange={e => setEditData(p=>({...p, extra_pay:e.target.value}))}
+                              style={{...iStyle, width:80, textAlign:'right'}}/>
+                          ) : (
+                            <span style={{...td, fontFamily:'var(--mono)', color: m.extra_pay>0?'var(--success)':'var(--text3)'}}>
+                              {m.extra_pay > 0 ? `+${(m.extra_pay).toLocaleString()}원` : '-'}
+                            </span>
+                          )}
+                        </td>
+                        {true {canEdit && ({canEdit && ( (
+                          <td>
+                            {isEditing ? (
+                              <div style={{display:'flex', gap:4}}>
+                                <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}} onClick={() => saveEdit(m)} disabled={saving}>
+                                  {saving ? <span className="spinner"/> : '저장'}
+                                </button>
+                                <button className="btn btn-s" style={{padding:'3px 8px', fontSize:11}} onClick={() => setEditing(null)}>취소</button>
+                              </div>
+                            ) : (
+                              <div style={{display:'flex', gap:4}}>
+                                <button className="btn btn-s" style={{padding:'3px 8px', fontSize:11}} onClick={() => startEdit(m)}>수정</button>
+                                <button className="btn btn-s" style={{padding:'3px 8px', fontSize:11}} onClick={() => showHistory(m)}>이력</button>
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                }
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -6296,7 +6424,7 @@ export default function App() {
             {page === 'stock_store'    && canSeeMain && <StockMgmtPage/>}
             {page === 'stock_safety'   && canSeeMain && <SafetyCheckPage profile={profile}/>}
             {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
-            {page === 'incentive'      && canSeeMain && <IncentivePage/>}
+            {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sales_view'     && canSeeMain && <SalesListPage/>}
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
