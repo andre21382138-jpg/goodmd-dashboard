@@ -3404,12 +3404,11 @@ function SalaryConditionTab({ profile }) {
 
   const startEdit = (m) => {
     setEditing(m.id);
-    setEditData({ salary_type: m.salary_type, salary: m.salary||0, extra_pay: m.extra_pay||0 });
+    setEditData({ salary_type: m.salary_type, salary: m.salary||0, extra_pay: m.extra_pay||0, affiliation: m.affiliation||'', job_title: m.job_title||'' });
   };
 
   const saveEdit = async (m) => {
     setSaving(true);
-    // 이력 저장
     await supabase.from('salary_history').insert({
       store_member_id: m.id,
       branch_name: m.store?.branch,
@@ -3419,14 +3418,15 @@ function SalaryConditionTab({ profile }) {
       salary: Number(editData.salary),
       extra_pay: Number(editData.extra_pay),
     });
-    // 실제 업데이트
     const { error } = await supabase.from('store_members').update({
       salary_type: editData.salary_type,
       salary: Number(editData.salary),
       extra_pay: Number(editData.extra_pay),
+      affiliation: editData.affiliation,
+      job_title: editData.job_title,
     }).eq('id', m.id);
     if (error) toast(error.message, 'err');
-    else { toast(`${m.display_name||m.name} 급여 수정 완료`, 'ok'); setEditing(null); fetchMembers(); }
+    else { toast(`${m.display_name||m.name} 정보 수정 완료`, 'ok'); setEditing(null); fetchMembers(); }
     setSaving(false);
   };
 
@@ -3512,8 +3512,27 @@ function SalaryConditionTab({ profile }) {
                       <tr key={m.id}>
                         <td><span className="badge badge-dept">{m.store?.department}</span></td>
                         <td><span className="badge badge-store">{m.store?.branch}</span></td>
-                        <td style={td}>{m.affiliation || '-'}</td>
-                        <td style={{...td, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</td>
+                        <td style={td}>
+                          {isEditing ? (
+                            <select value={editData.affiliation} onChange={e => setEditData(p=>({...p, affiliation:e.target.value}))}
+                              style={{...iStyle, width:100}}>
+                              <option value="한국생활건강">한국생활건강</option>
+                              <option value="신우">신우</option>
+                              <option value="사업소득">사업소득</option>
+                            </select>
+                          ) : m.affiliation || '-'}
+                        </td>
+                        <td>
+                          {isEditing ? (
+                            <select value={editData.job_title} onChange={e => setEditData(p=>({...p, job_title:e.target.value}))}
+                              style={{...iStyle, width:90}}>
+                              <option value="매니저">매니저</option>
+                              <option value="부매니저">부매니저</option>
+                            </select>
+                          ) : (
+                            <span style={{...td, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title}</span>
+                          )}
+                        </td>
                         <td style={{...td, fontWeight:700}}>{m.display_name || m.name}</td>
                         <td style={td}>{m.phone || '-'}</td>
                         <td>
