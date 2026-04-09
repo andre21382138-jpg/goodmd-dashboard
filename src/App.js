@@ -1591,6 +1591,7 @@ function CustomerDocPage({ profile }) {
   const [custName,    setCustName]    = useState('');
   const [phone,       setPhone]       = useState('');
   const [birthday,    setBirthday]    = useState('');
+  const [gender,      setGender]      = useState('');
   const [smsConsent,  setSmsConsent]  = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [recentList,  setRecent]      = useState([]);
@@ -1620,7 +1621,7 @@ function CustomerDocPage({ profile }) {
     setSaving(true);
     const { error } = await supabase.from('customers').insert({
       joined_at: joinedAt, name: custName.trim(), phone,
-      birthday: birthday || null,
+      birthday: birthday || null, gender: gender || null,
       store_name: profile.department, branch_name: profile.branch,
       manager_name: selMember.name,
       sms_consent: smsConsent,
@@ -1628,7 +1629,7 @@ function CustomerDocPage({ profile }) {
       created_by: profile.id,
     });
     if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); setSmsConsent(false); fetchRecent(); }
+    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); setGender(''); setSmsConsent(false); fetchRecent(); }
     setSaving(false);
   };
 
@@ -1687,6 +1688,14 @@ function CustomerDocPage({ profile }) {
             <div>
               <label style={labelStyle}>생일 <span style={{color:'var(--text3)', fontWeight:400}}>(선택)</span></label>
               <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>성별 <span style={{color:'var(--text3)', fontWeight:400}}>(선택)</span></label>
+              <select value={gender} onChange={e => setGender(e.target.value)} style={inputStyle}>
+                <option value="">선택 안함</option>
+                <option value="여성">여성</option>
+                <option value="남성">남성</option>
+              </select>
             </div>
           </div>
 
@@ -1885,6 +1894,7 @@ function CustomerLookupPage({ profile }) {
                   <th>가입일</th>
                   <th>이름</th>
                   <th>등급</th>
+                  <th>성별</th>
                   <th>휴대폰번호</th>
                   <th>생일</th>
                   <th>점포</th>
@@ -1901,6 +1911,7 @@ function CustomerLookupPage({ profile }) {
                     <td className="mono" style={{fontSize:11}}>{c.joined_at}</td>
                     <td><strong style={{fontSize:13}}>{c.name}</strong></td>
                     <td><GradeBadge grade={c.grade || '패밀리'}/></td>
+                    <td style={{fontSize:13}}>{c.gender || '-'}</td>
                     <td className="mono" style={{fontSize:12}}>{c.phone}</td>
                     <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{c.birthday || '-'}</td>
                     <td><span className="badge badge-dept">{c.store_name}</span></td>
@@ -5853,6 +5864,7 @@ function JoinPage({ managerId }) {
   const [name,         setName]        = useState('');
   const [phone,        setPhone]       = useState('');
   const [birthday,     setBirthday]    = useState('');
+  const [gender,       setGender]      = useState('');
   const [smsConsent,   setSmsConsent]  = useState(false);
   const [saving,       setSaving]      = useState(false);
   const [done,         setDone]        = useState(false);
@@ -5895,7 +5907,7 @@ function JoinPage({ managerId }) {
 
     const { error } = await supabase.from('customers').insert({
       joined_at: new Date().toISOString().slice(0,10),
-      name: name.trim(), phone, birthday: birthday || null,
+      name: name.trim(), phone, birthday: birthday || null, gender: gender || null,
       store_name: storeProfile.department, branch_name: storeProfile.branch,
       manager_name: selMember.name,
       sms_consent: smsConsent,
@@ -5996,6 +6008,22 @@ function JoinPage({ managerId }) {
               </label>
               <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
                 style={{width:'100%',maxWidth:'100%',height:50,padding:'0 40px 0 12px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:14,outline:'none',fontFamily:'inherit',boxSizing:'border-box',color: birthday ? '#222' : '#aaa',display:'block',WebkitAppearance:'none',appearance:'none'}}/>
+            </div>
+            <div style={{marginBottom:24}}>
+              <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>
+                성별 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택)</span>
+              </label>
+              <div style={{display:'flex', gap:10}}>
+                {['여성','남성'].map(g => (
+                  <button key={g} type="button" onClick={() => setGender(gender===g ? '' : g)}
+                    style={{flex:1, height:50, border:`1.5px solid ${gender===g?'var(--accent)':'#e0e0e0'}`,
+                      borderRadius:10, fontSize:15, fontWeight:700, cursor:'pointer',
+                      background: gender===g ? '#fff8e1' : '#fafafa',
+                      color: gender===g ? 'var(--accent)' : '#888'}}>
+                    {g === '여성' ? '👩 여성' : '👨 남성'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* 마케팅 수신동의 */}
