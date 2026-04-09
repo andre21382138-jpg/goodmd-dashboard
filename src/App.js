@@ -1756,6 +1756,7 @@ function CustomerLookupPage({ profile }) {
   const [fBranch,   setFBranch]  = useState('');
   const [fFrom,     setFFrom]    = useState('');
   const [fTo,       setFTo]      = useState('');
+  const [fSms,      setFSms]     = useState(false);
   const [customers, setCustomers]= useState([]);
   const [selected,  setSelected] = useState(null);
   const [purchases, setPurchases]= useState([]);
@@ -1790,11 +1791,12 @@ function CustomerLookupPage({ profile }) {
     if (fBranch) q = q.eq('branch_name', fBranch);
     if (fFrom)   q = q.gte('joined_at', fFrom);
     if (fTo)     q = q.lte('joined_at', fTo);
+    if (fSms)    q = q.eq('sms_consent', true);
     const { data } = await q.limit(200);
     setCustomers(data || []);
     setSelected(null); setPurchases([]);
     setLoading(false);
-  }, [search, fStore, fBranch, fFrom, fTo]);
+  }, [search, fStore, fBranch, fFrom, fTo, fSms]);
 
   // 점포 변경시 지점 초기화
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
@@ -1853,8 +1855,16 @@ function CustomerLookupPage({ profile }) {
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="가입일 시작" />
           <span style={{fontSize:12,color:'var(--text3)'}}>~</span>
           <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} title="가입일 종료" />
-          {(search||fStore||fBranch||fFrom||fTo) &&
-            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setCustomers([]); setSelected(null); }}>✕ 초기화</button>}
+          <button type="button"
+            onClick={() => setFSms(p => !p)}
+            style={{ height:34, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+              borderColor: fSms ? 'var(--success)' : 'var(--border)',
+              background: fSms ? '#e8f5e9' : '#fff',
+              color: fSms ? 'var(--success)' : 'var(--text2)' }}>
+            {fSms ? '✅ 마케팅동의만' : '📱 마케팅동의만'}
+          </button>
+          {(search||fStore||fBranch||fFrom||fTo||fSms) &&
+            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setCustomers([]); setSelected(null); }}>✕ 초기화</button>}
           <div className="fbar-right">
             <button className="btn btn-p" onClick={fetchCustomers} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔍 조회'}
