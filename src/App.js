@@ -1767,6 +1767,7 @@ function CustomerLookupPage({ profile }) {
   const [fTo,        setFTo]       = useState('');
   const [fSms,       setFSms]      = useState(false);
   const [fNewOnly,   setFNewOnly]  = useState(false);
+  const [fGrade,     setFGrade]    = useState('');
   const [customers,  setCustomers] = useState([]);
   const [selected,   setSelected]  = useState(null);
   const [purchases,  setPurchases] = useState([]);
@@ -1813,6 +1814,7 @@ function CustomerLookupPage({ profile }) {
     if (fFrom)   q = q.gte('joined_at', fFrom);
     if (fTo)     q = q.lte('joined_at', fTo);
     if (fSms)    q = q.eq('sms_consent', true);
+    if (fGrade)  q = q.eq('grade', fGrade);
     if (fNewOnly) {
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -1824,7 +1826,7 @@ function CustomerLookupPage({ profile }) {
     setTotalCount(count || 0);
     setSelected(null); setPurchases([]);
     setLoading(false);
-  }, [search, fStore, fBranch, fFrom, fTo, fSms, fNewOnly]);
+  }, [search, fStore, fBranch, fFrom, fTo, fSms, fNewOnly, fGrade]);
 
   // 점포 변경시 지점 초기화
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
@@ -1894,8 +1896,14 @@ function CustomerLookupPage({ profile }) {
               color: fNewOnly ? '#1565C0' : 'var(--text2)' }}>
             {fNewOnly ? '✅ 1년 미만' : '📅 1년 미만'}
           </button>
-          {(search||fStore||fBranch||fFrom||fTo||fSms||fNewOnly) &&
-            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); }}>✕ 초기화</button>}
+          <select className="fsel" value={fGrade} onChange={e => setFGrade(e.target.value)}>
+            <option value="">전체 등급</option>
+            {['VVIP','VIP','로얄','골드','실버','패밀리'].map(g => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+          {(search||fStore||fBranch||fFrom||fTo||fSms||fNewOnly||fGrade) &&
+            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); }}>✕ 초기화</button>}
           <div className="fbar-right">
             <button className="btn btn-p" onClick={() => fetchCustomers(0)} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔍 조회'}
