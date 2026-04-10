@@ -1766,6 +1766,7 @@ function CustomerLookupPage({ profile }) {
   const [fFrom,      setFFrom]     = useState('');
   const [fTo,        setFTo]       = useState('');
   const [fSms,       setFSms]      = useState(false);
+  const [fNewOnly,   setFNewOnly]  = useState(false);
   const [customers,  setCustomers] = useState([]);
   const [selected,   setSelected]  = useState(null);
   const [purchases,  setPurchases] = useState([]);
@@ -1812,13 +1813,18 @@ function CustomerLookupPage({ profile }) {
     if (fFrom)   q = q.gte('joined_at', fFrom);
     if (fTo)     q = q.lte('joined_at', fTo);
     if (fSms)    q = q.eq('sms_consent', true);
+    if (fNewOnly) {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      q = q.gte('joined_at', oneYearAgo.toISOString().slice(0,10));
+    }
     const { data, count, error } = await q.range(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE - 1);
     if (error) { toast(error.message, 'err'); setLoading(false); return; }
     setCustomers(data || []);
     setTotalCount(count || 0);
     setSelected(null); setPurchases([]);
     setLoading(false);
-  }, [search, fStore, fBranch, fFrom, fTo, fSms]);
+  }, [search, fStore, fBranch, fFrom, fTo, fSms, fNewOnly]);
 
   // 점포 변경시 지점 초기화
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
@@ -1851,11 +1857,6 @@ function CustomerLookupPage({ profile }) {
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + r.quantity, 0), [purchases]);
 
   // 지점 목록 (선택된 점포 기준으로 customers에서 추출)
-  const branchList = useMemo(() => {
-    const src = fStore ? customers.filter(c => c.store_name === fStore) : customers;
-    return [...new Set(src.map(c => c.branch_name).filter(Boolean))].sort();
-  }, [customers, fStore]);
-
   return (
     <div>
       {/* 검색·필터 */}
@@ -1872,7 +1873,7 @@ function CustomerLookupPage({ profile }) {
           <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)}
             disabled={!fStore} style={{ background: !fStore ? '#f0f0f0' : '#fff' }}>
             <option value="">전체 지점</option>
-            {branchList.map(b => <option key={b}>{b}</option>)}
+            {allBranches.map(b => <option key={b}>{b}</option>)}
           </select>
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="가입일 시작" />
           <span style={{fontSize:12,color:'var(--text3)'}}>~</span>
@@ -1885,8 +1886,16 @@ function CustomerLookupPage({ profile }) {
               color: fSms ? 'var(--success)' : 'var(--text2)' }}>
             {fSms ? '✅ 마케팅동의만' : '📱 마케팅동의만'}
           </button>
-          {(search||fStore||fBranch||fFrom||fTo||fSms) &&
-            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); }}>✕ 초기화</button>}
+          <button type="button"
+            onClick={() => setFNewOnly(p => !p)}
+            style={{ height:34, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+              borderColor: fNewOnly ? '#1565C0' : 'var(--border)',
+              background: fNewOnly ? '#e3f2fd' : '#fff',
+              color: fNewOnly ? '#1565C0' : 'var(--text2)' }}>
+            {fNewOnly ? '✅ 1년 미만' : '📅 1년 미만'}
+          </button>
+          {(search||fStore||fBranch||fFrom||fTo||fSms||fNewOnly) &&
+            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); }}>✕ 초기화</button>}
           <div className="fbar-right">
             <button className="btn btn-p" onClick={() => fetchCustomers(0)} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔍 조회'}
@@ -1913,6 +1922,8 @@ function CustomerLookupPage({ profile }) {
                   <th>점포</th>
                   <th>지점</th>
                   <th>담당매니저</th>
+                  <th className="r">남은적립금</th>
+                  <th className="r">총구매금액</th>
                   <th style={{textAlign:'center'}}>마케팅동의</th>
                   <th></th>
                   {!isManager && <th></th>}
@@ -1930,6 +1941,8 @@ function CustomerLookupPage({ profile }) {
                     <td><span className="badge badge-dept">{c.store_name}</span></td>
                     <td><span className="badge badge-store">{c.branch_name}</span></td>
                     <td style={{fontSize:12, color:'var(--accent)', fontWeight:600}}>{c.manager_name || '-'}</td>
+                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', color: (c.total_points||0)>0?'var(--success)':'var(--text3)'}}>{(c.total_points||0).toLocaleString()}원</td>
+                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', fontWeight:600}}>{(c.total_purchase||0).toLocaleString()}원</td>
                     <td style={{textAlign:'center'}}>
                       {c.sms_consent
                         ? <span style={{color:'var(--success)', fontWeight:700, fontSize:12}}>✅ 동의</span>
