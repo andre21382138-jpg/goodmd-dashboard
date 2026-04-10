@@ -34,7 +34,7 @@ const GLOBAL_CSS = `
     --text2:   #333333;
     --text3:   #666666;
     --radius:  6px;
-    --mono:    'IBM Plex Mono', monospace;
+    --mono:    'Pretendard', 'Apple SD Gothic Neo', sans-serif;
     --sans:    'Noto Sans KR', sans-serif;
     --sidebar-w: 220px;
   }
