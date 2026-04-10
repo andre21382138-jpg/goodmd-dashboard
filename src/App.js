@@ -1800,7 +1800,7 @@ function CustomerLookupPage({ profile }) {
     setLoading(true);
     setPage(pg);
     let q = supabase.from('customers')
-      .select('*, creator:profiles(name)', { count: 'exact' })
+      .select('*', { count: 'exact' })
       .order('joined_at', { ascending: false });
     if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
     if (fStore)  q = q.eq('store_name', fStore);
@@ -1808,7 +1808,8 @@ function CustomerLookupPage({ profile }) {
     if (fFrom)   q = q.gte('joined_at', fFrom);
     if (fTo)     q = q.lte('joined_at', fTo);
     if (fSms)    q = q.eq('sms_consent', true);
-    const { data, count } = await q.range(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE - 1);
+    const { data, count, error } = await q.range(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE - 1);
+    if (error) { toast(error.message, 'err'); setLoading(false); return; }
     setCustomers(data || []);
     setTotalCount(count || 0);
     setSelected(null); setPurchases([]);
