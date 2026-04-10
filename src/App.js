@@ -1777,22 +1777,26 @@ function CustomerLookupPage({ profile }) {
   const [totalCount, setTotalCount]= useState(0);
   const [hasMore,    setHasMore]   = useState(false);
 
-  // 점포 목록 로드
+  // 점포 목록 로드 (profiles에서)
   useEffect(() => {
-    supabase.from('customers').select('store_name, branch_name')
+    supabase.from('profiles').select('department').eq('approved', true)
+      .neq('role','admin').neq('job_title','담당자')
       .then(({ data }) => {
-        const stores = [...new Set((data||[]).map(d => d.store_name))].filter(Boolean).sort();
+        const stores = [...new Set((data||[]).map(d => d.department))].filter(Boolean).sort();
         setAllStores(stores);
       });
   }, []);
 
-  const allBranches = useMemo(() => {
-    if (!fStore) return [];
-    const branches = [...new Set(
-      (customers.length ? customers : []).map(c => c.branch_name).filter(Boolean)
-    )].sort();
-    return branches;
-  }, [fStore, customers]);
+  const [allBranches, setAllBranches] = useState([]);
+  useEffect(() => {
+    if (!fStore) { setAllBranches([]); return; }
+    supabase.from('profiles').select('branch').eq('approved', true)
+      .eq('department', fStore).neq('role','admin').neq('job_title','담당자')
+      .then(({ data }) => {
+        const branches = [...new Set((data||[]).map(d => d.branch))].filter(Boolean).sort();
+        setAllBranches(branches);
+      });
+  }, [fStore]);
 
   const PAGE_SIZE = 200;
 
@@ -1884,7 +1888,7 @@ function CustomerLookupPage({ profile }) {
           {(search||fStore||fBranch||fFrom||fTo||fSms) &&
             <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); }}>✕ 초기화</button>}
           <div className="fbar-right">
-            <button className="btn btn-p" onClick={fetchCustomers} disabled={loading}>
+            <button className="btn btn-p" onClick={() => fetchCustomers(0)} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔍 조회'}
             </button>
           </div>
