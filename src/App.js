@@ -1794,9 +1794,10 @@ function CustomerLookupPage({ profile }) {
     return branches;
   }, [fStore, customers]);
 
+  const PAGE_SIZE = 200;
+
   const fetchCustomers = useCallback(async (pg = 0) => {
-    if (pg === 0) setLoading(true);
-    else setLoadingMore(true);
+    setLoading(true);
     setPage(pg);
     let q = supabase.from('customers')
       .select('*, creator:profiles(name)', { count: 'exact' })
@@ -1807,18 +1808,11 @@ function CustomerLookupPage({ profile }) {
     if (fFrom)   q = q.gte('joined_at', fFrom);
     if (fTo)     q = q.lte('joined_at', fTo);
     if (fSms)    q = q.eq('sms_consent', true);
-    const pageSize = 500;
-    const { data, count } = await q.range(page * pageSize, (page + 1) * pageSize - 1);
-    if (page === 0) {
-      setCustomers(data || []);
-    } else {
-      setCustomers(prev => [...prev, ...(data || [])]);
-    }
+    const { data, count } = await q.range(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE - 1);
+    setCustomers(data || []);
     setTotalCount(count || 0);
-    setHasMore((data || []).length === pageSize);
     setSelected(null); setPurchases([]);
-    if (pg === 0) setLoading(false);
-    else setLoadingMore(false);
+    setLoading(false);
   }, [search, fStore, fBranch, fFrom, fTo, fSms]);
 
   // 점포 변경시 지점 초기화
@@ -1899,7 +1893,7 @@ function CustomerLookupPage({ profile }) {
       {customers.length > 0 && (
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
-            <span className="fresult">총 <b>{totalCount.toLocaleString()}</b>명 중 <b>{customers.length.toLocaleString()}</b>명 표시 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
+            <span className="fresult">총 <b>{totalCount.toLocaleString()}</b>명 · 이 페이지 <b>{customers.length}</b>명 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
           </div>
           <div className="twrap">
             <table>
@@ -1963,14 +1957,43 @@ function CustomerLookupPage({ profile }) {
               </tbody>
             </table>
           </div>
-          {hasMore && (
-            <div style={{textAlign:'center', padding:'14px 0', borderTop:'1px solid var(--border)'}}>
-              <button className="btn btn-s" onClick={() => fetchCustomers(page + 1)} disabled={loadingMore}
-                style={{padding:'8px 32px', fontSize:13}}>
-                {loadingMore ? <span className="spinner"/> : `더보기 (${(totalCount - customers.length).toLocaleString()}명 남음)`}
-              </button>
-            </div>
-          )}
+          {/* 페이지 네비게이션 */}
+          {totalCount > PAGE_SIZE && (() => {
+            const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+            const visiblePages = [];
+            const delta = 4;
+            let start = Math.max(0, page - delta);
+            let end   = Math.min(totalPages - 1, page + delta);
+            if (end - start < delta * 2) {
+              start = Math.max(0, end - delta * 2);
+              end   = Math.min(totalPages - 1, start + delta * 2);
+            }
+            for (let i = start; i <= end; i++) visiblePages.push(i);
+            const btnStyle = (active) => ({
+              height: 32, minWidth: 32, padding: '0 8px', border: '1px solid',
+              borderRadius: 'var(--radius)', fontSize: 13, fontWeight: active ? 700 : 400,
+              cursor: 'pointer',
+              borderColor: active ? 'var(--accent)' : 'var(--border)',
+              background: active ? '#fff3e0' : '#fff',
+              color: active ? 'var(--accent)' : 'var(--text2)',
+            });
+            return (
+              <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:4, padding:'14px 0', borderTop:'1px solid var(--border)', flexWrap:'wrap'}}>
+                <button style={btnStyle(false)} disabled={page===0} onClick={() => fetchCustomers(0)}>«</button>
+                <button style={btnStyle(false)} disabled={page===0} onClick={() => fetchCustomers(page-1)}>‹</button>
+                {start > 0 && <span style={{padding:'0 4px', color:'var(--text3)'}}>...</span>}
+                {visiblePages.map(p => (
+                  <button key={p} style={btnStyle(p===page)} onClick={() => fetchCustomers(p)}>{p+1}</button>
+                ))}
+                {end < totalPages-1 && <span style={{padding:'0 4px', color:'var(--text3)'}}>...</span>}
+                <button style={btnStyle(false)} disabled={page===totalPages-1} onClick={() => fetchCustomers(page+1)}>›</button>
+                <button style={btnStyle(false)} disabled={page===totalPages-1} onClick={() => fetchCustomers(totalPages-1)}>»</button>
+                <span style={{fontSize:12, color:'var(--text3)', marginLeft:8}}>
+                  {page+1} / {totalPages}페이지 (총 {totalCount.toLocaleString()}명)
+                </span>
+              </div>
+            );
+          })()}
         </div>
       )}
 
