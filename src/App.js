@@ -1944,11 +1944,11 @@ function CustomerLookupPage({ profile }) {
                     <td><span className="badge badge-dept">{c.store_name}</span></td>
                     <td><span className="badge badge-store">{c.branch_name}</span></td>
                     <td style={{fontSize:12, color:'var(--accent)', fontWeight:600}}>{c.manager_name || '-'}</td>
-                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', color: (c.total_points||0)>0?'var(--success)':'var(--text3)'}}>{(c.total_points||0).toLocaleString()}원</td>
-                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', color:'var(--text3)'}}>{(c.used_points||0).toLocaleString()}원</td>
-                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)'}}>{(c.purchase_count||0)}건</td>
-                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)'}}>{(c.purchase_qty||0)}개</td>
-                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', fontWeight:600}}>{(c.total_purchase||0).toLocaleString()}원</td>
+                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', color: (c.total_points||0)>0?'var(--success)':'var(--text3)', whiteSpace:'nowrap'}}>{(c.total_points||0).toLocaleString()}원</td>
+                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', color:'var(--text3)', whiteSpace:'nowrap'}}>{(c.used_points||0).toLocaleString()}원</td>
+                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', whiteSpace:'nowrap'}}>{(c.purchase_count||0)}건</td>
+                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', whiteSpace:'nowrap'}}>{(c.purchase_qty||0)}개</td>
+                    <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', fontWeight:600, whiteSpace:'nowrap'}}>{(c.total_purchase||0).toLocaleString()}원</td>
                     <td style={{textAlign:'center'}}>
                       {c.sms_consent
                         ? <span style={{color:'var(--success)', fontWeight:700, fontSize:12}}>✅ 동의</span>
