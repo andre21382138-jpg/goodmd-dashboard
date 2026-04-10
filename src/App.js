@@ -1760,18 +1760,22 @@ function CustomerDocPage({ profile }) {
 
 function CustomerLookupPage({ profile }) {
   const isManager = profile?.job_title === '매니저';
-  const [search,    setSearch]   = useState('');
-  const [fStore,    setFStore]   = useState('');
-  const [fBranch,   setFBranch]  = useState('');
-  const [fFrom,     setFFrom]    = useState('');
-  const [fTo,       setFTo]      = useState('');
-  const [fSms,      setFSms]     = useState(false);
-  const [customers, setCustomers]= useState([]);
-  const [selected,  setSelected] = useState(null);
-  const [purchases, setPurchases]= useState([]);
-  const [loading,   setLoading]  = useState(false);
-  const [loadingP,  setLoadingP] = useState(false);
-  const [allStores, setAllStores]= useState([]);
+  const [search,     setSearch]    = useState('');
+  const [fStore,     setFStore]    = useState('');
+  const [fBranch,    setFBranch]   = useState('');
+  const [fFrom,      setFFrom]     = useState('');
+  const [fTo,        setFTo]       = useState('');
+  const [fSms,       setFSms]      = useState(false);
+  const [customers,  setCustomers] = useState([]);
+  const [selected,   setSelected]  = useState(null);
+  const [purchases,  setPurchases] = useState([]);
+  const [loading,    setLoading]   = useState(false);
+  const [loadingMore,setLoadingMore]= useState(false);
+  const [loadingP,   setLoadingP]  = useState(false);
+  const [allStores,  setAllStores] = useState([]);
+  const [page,       setPage]      = useState(0);
+  const [totalCount, setTotalCount]= useState(0);
+  const [hasMore,    setHasMore]   = useState(false);
 
   // 점포 목록 로드
   useEffect(() => {
@@ -1790,10 +1794,12 @@ function CustomerLookupPage({ profile }) {
     return branches;
   }, [fStore, customers]);
 
-  const fetchCustomers = useCallback(async () => {
-    setLoading(true);
+  const fetchCustomers = useCallback(async (pg = 0) => {
+    if (pg === 0) setLoading(true);
+    else setLoadingMore(true);
+    setPage(pg);
     let q = supabase.from('customers')
-      .select('*, creator:profiles(name)')
+      .select('*, creator:profiles(name)', { count: 'exact' })
       .order('joined_at', { ascending: false });
     if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
     if (fStore)  q = q.eq('store_name', fStore);
@@ -1801,10 +1807,18 @@ function CustomerLookupPage({ profile }) {
     if (fFrom)   q = q.gte('joined_at', fFrom);
     if (fTo)     q = q.lte('joined_at', fTo);
     if (fSms)    q = q.eq('sms_consent', true);
-    const { data } = await q.limit(200);
-    setCustomers(data || []);
+    const pageSize = 500;
+    const { data, count } = await q.range(page * pageSize, (page + 1) * pageSize - 1);
+    if (page === 0) {
+      setCustomers(data || []);
+    } else {
+      setCustomers(prev => [...prev, ...(data || [])]);
+    }
+    setTotalCount(count || 0);
+    setHasMore((data || []).length === pageSize);
     setSelected(null); setPurchases([]);
-    setLoading(false);
+    if (pg === 0) setLoading(false);
+    else setLoadingMore(false);
   }, [search, fStore, fBranch, fFrom, fTo, fSms]);
 
   // 점포 변경시 지점 초기화
@@ -1873,7 +1887,7 @@ function CustomerLookupPage({ profile }) {
             {fSms ? '✅ 마케팅동의만' : '📱 마케팅동의만'}
           </button>
           {(search||fStore||fBranch||fFrom||fTo||fSms) &&
-            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setCustomers([]); setSelected(null); }}>✕ 초기화</button>}
+            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); }}>✕ 초기화</button>}
           <div className="fbar-right">
             <button className="btn btn-p" onClick={fetchCustomers} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔍 조회'}
@@ -1885,7 +1899,7 @@ function CustomerLookupPage({ profile }) {
       {customers.length > 0 && (
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
-            <span className="fresult">총 <b>{customers.length}</b>명 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
+            <span className="fresult">총 <b>{totalCount.toLocaleString()}</b>명 중 <b>{customers.length.toLocaleString()}</b>명 표시 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
           </div>
           <div className="twrap">
             <table>
@@ -1949,6 +1963,14 @@ function CustomerLookupPage({ profile }) {
               </tbody>
             </table>
           </div>
+          {hasMore && (
+            <div style={{textAlign:'center', padding:'14px 0', borderTop:'1px solid var(--border)'}}>
+              <button className="btn btn-s" onClick={() => fetchCustomers(page + 1)} disabled={loadingMore}
+                style={{padding:'8px 32px', fontSize:13}}>
+                {loadingMore ? <span className="spinner"/> : `더보기 (${(totalCount - customers.length).toLocaleString()}명 남음)`}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
