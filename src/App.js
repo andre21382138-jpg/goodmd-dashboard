@@ -2487,6 +2487,7 @@ function ProductMgmtPage({ subPage }) {
   const [newPrice,  setNewPrice]  = useState('');
   const [newCode,   setNewCode]   = useState('');
   const [newCost,   setNewCost]   = useState('');
+  const [newErpCode,setNewErpCode]= useState('');
   const [dragging,  setDrag]      = useState(false);
   const fileRef = useRef();
 
@@ -2512,14 +2513,16 @@ function ProductMgmtPage({ subPage }) {
 
   const addProduct = async () => {
     if (!selBrand || !newProd.trim()) { toast('브랜드와 상품명을 입력해주세요', 'err'); return; }
+    if (!newCode.trim()) { toast('상품코드를 입력해주세요', 'err'); return; }
     const { error } = await supabase.from('products').insert({
       brand_id: selBrand.id, name: newProd.trim(),
-      code: newCode.trim() || null,
+      code: newCode.trim(),
+      erp_code: newErpCode.trim() || null,
       cost: Number(newCost) || 0,
       price: Number(newPrice) || 0,
     });
     if (error) toast(error.message, 'err');
-    else { toast('상품 추가 완료', 'ok'); setNewProd(''); setNewOption(''); setNewPrice(''); setNewCode(''); setNewCost(''); fetchAll(); }
+    else { toast('상품 추가 완료', 'ok'); setNewProd(''); setNewOption(''); setNewPrice(''); setNewCode(''); setNewCost(''); setNewErpCode(''); fetchAll(); }
   };
 
   const deleteProduct = async (id) => {
@@ -2623,9 +2626,10 @@ function ProductMgmtPage({ subPage }) {
             {/* 상품 직접 입력 */}
             <div className="card">
               <div className="card-label">상품 직접 추가</div>
-              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 120px auto', gap:8, marginBottom:14, alignItems:'end'}}>
+              {/* 1행: 브랜드, 상품코드(필수), ERP코드 */}
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8}}>
                 <div>
-                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>브랜드 선택</label>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>브랜드 선택 <span style={{color:'var(--danger)'}}>*</span></label>
                   <select value={selBrand?.id||''} onChange={e => setSelBrand(brands.find(b=>b.id===Number(e.target.value))||null)}
                     style={{...inputStyle, width:'100%'}}>
                     <option value="">-- 선택 --</option>
@@ -2633,11 +2637,18 @@ function ProductMgmtPage({ subPage }) {
                   </select>
                 </div>
                 <div>
-                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>상품코드</label>
-                  <input value={newCode} onChange={e => setNewCode(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="상품코드 입력 (선택)"/>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>상품코드 <span style={{color:'var(--danger)'}}>*</span></label>
+                  <input value={newCode} onChange={e => setNewCode(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="상품코드 입력"/>
                 </div>
                 <div>
-                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>상품명</label>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>ERP코드</label>
+                  <input value={newErpCode} onChange={e => setNewErpCode(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="ERP코드 입력"/>
+                </div>
+              </div>
+              {/* 2행: 상품명(넓게), 원가, 판매가, 추가버튼 */}
+              <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr auto', gap:8, alignItems:'end'}}>
+                <div>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>상품명 <span style={{color:'var(--danger)'}}>*</span></label>
                   <input value={newProd} onChange={e => setNewProd(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="상품명 입력"/>
                 </div>
                 <div>
