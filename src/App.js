@@ -2463,6 +2463,8 @@ function ProductMgmtPage({ subPage }) {
   const [newProd,   setNewProd]   = useState('');
   const [newOption, setNewOption] = useState('');
   const [newPrice,  setNewPrice]  = useState('');
+  const [newCode,   setNewCode]   = useState('');
+  const [newCost,   setNewCost]   = useState('');
   const [dragging,  setDrag]      = useState(false);
   const fileRef = useRef();
 
@@ -2490,10 +2492,12 @@ function ProductMgmtPage({ subPage }) {
     if (!selBrand || !newProd.trim()) { toast('브랜드와 상품명을 입력해주세요', 'err'); return; }
     const { error } = await supabase.from('products').insert({
       brand_id: selBrand.id, name: newProd.trim(),
+      code: newCode.trim() || null,
+      cost: Number(newCost) || 0,
       price: Number(newPrice) || 0,
     });
     if (error) toast(error.message, 'err');
-    else { toast('상품 추가 완료', 'ok'); setNewProd(''); setNewOption(''); setNewPrice(''); fetchAll(); }
+    else { toast('상품 추가 완료', 'ok'); setNewProd(''); setNewOption(''); setNewPrice(''); setNewCode(''); setNewCost(''); fetchAll(); }
   };
 
   const deleteProduct = async (id) => {
@@ -2524,6 +2528,8 @@ function ProductMgmtPage({ subPage }) {
         for (const row of rows) {
           const brandName = String(row['브랜드명'] || row['브랜드'] || '').trim();
           const prodName  = String(row['상품명'] || '').trim();
+          const code      = String(row['상품코드'] || row['code'] || '').trim() || null;
+          const cost      = Number(row['원가'] || row['cost'] || 0);
           const price     = Number(row['판매가'] || row['price'] || 0);
           if (!brandName || !prodName) continue;
           let { data: br } = await supabase.from('brands').select('id').eq('name', brandName).single();
@@ -2531,7 +2537,7 @@ function ProductMgmtPage({ subPage }) {
             const { data: newBr } = await supabase.from('brands').insert({ name: brandName }).select().single();
             br = newBr;
           }
-          if (br) { await supabase.from('products').insert({ brand_id: br.id, name: prodName, price }); cnt++; }
+          if (br) { await supabase.from('products').insert({ brand_id: br.id, name: prodName, code, cost, price }); cnt++; }
         }
         toast(`${cnt}개 상품 업로드 완료`, 'ok'); fetchAll();
       } catch(err) { toast('파싱 실패: ' + err.message, 'err'); }
@@ -2579,8 +2585,16 @@ function ProductMgmtPage({ subPage }) {
                   </select>
                 </div>
                 <div>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>상품코드</label>
+                  <input value={newCode} onChange={e => setNewCode(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="상품코드 입력 (선택)"/>
+                </div>
+                <div>
                   <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>상품명</label>
                   <input value={newProd} onChange={e => setNewProd(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="상품명 입력"/>
+                </div>
+                <div>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>원가</label>
+                  <input type="number" value={newCost} onChange={e => setNewCost(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="0"/>
                 </div>
                 <div>
                   <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>판매가</label>
@@ -2643,15 +2657,17 @@ function ProductMgmtPage({ subPage }) {
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>브랜드</th><th>상품명</th><th className="r">판매가</th><th></th></tr></thead>
+                <thead><tr><th>상품코드</th><th>브랜드</th><th>상품명</th><th className="r">원가</th><th className="r">판매가</th><th></th></tr></thead>
                 <tbody>
                   {filteredProducts.length === 0
-                    ? <tr><td colSpan={4} className="empty">등록된 상품이 없습니다</td></tr>
+                    ? <tr><td colSpan={6} className="empty">등록된 상품이 없습니다</td></tr>
                     : filteredProducts.map(p => (
                       <tr key={p.id}>
+                        <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.code || '-'}</td>
                         <td><span className="badge badge-dept">{p.brand?.name}</span></td>
-                        <td>{p.name}</td>
-                        <td className="r" style={{fontFamily:'var(--mono)',fontWeight:600,color:'var(--accent)'}}>{Number(p.price).toLocaleString()}원</td>
+                        <td style={{fontWeight:600}}>{p.name}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{p.cost ? Number(p.cost).toLocaleString()+'원' : '-'}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{Number(p.price).toLocaleString()}원</td>
                         <td><button className="btn-danger" onClick={() => deleteProduct(p.id)}>삭제</button></td>
                       </tr>
                     ))
