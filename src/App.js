@@ -2316,21 +2316,15 @@ function LectureSalesPage({ profile }) {
   const [tab, setTab] = useState('list');
 
   // 입력 폼
-  const [soldAt,    setSoldAt]   = useState(today);
-  const [storeName, setStoreName]= useState('');
-  const [branchName,setBranchName]=useState('');
-  const [brandId,   setBrandId]  = useState('');
-  const [productId, setProductId]= useState('');
-  const [pSearch,   setPSearch]  = useState('');
-  const [showSug,   setShowSug]  = useState(false);
-  const [quantity,  setQuantity] = useState(1);
-  const [price,     setPrice]    = useState('');
-  const [memo,      setMemo]     = useState('');
-  const [saving,    setSaving]   = useState(false);
+  const [soldAt,     setSoldAt]    = useState(today);
+  const [storeName,  setStoreName] = useState('');
+  const [branchName, setBranchName]= useState('');
+  const [attendees,  setAttendees] = useState('');
+  const [price,      setPrice]     = useState('');
+  const [memo,       setMemo]      = useState('');
+  const [saving,     setSaving]    = useState(false);
 
   // 데이터
-  const [brands,   setBrands]   = useState([]);
-  const [allProds, setAllProds] = useState([]);
   const [stores,   setStores]   = useState([]);
   const [branches, setBranches] = useState([]);
   const [sales,    setSales]    = useState([]);
@@ -2349,8 +2343,6 @@ function LectureSalesPage({ profile }) {
   const [fBranch, setFBranch] = useState('');
 
   useEffect(() => {
-    supabase.from('brands').select('*').order('name').then(({data})=>setBrands(data||[]));
-    supabase.from('products').select('*').order('name').then(({data})=>setAllProds(data||[]));
     supabase.from('profiles').select('department,branch').eq('approved',true)
       .neq('role','admin').neq('job_title','담당자')
       .then(({data})=>{
@@ -2374,7 +2366,7 @@ function LectureSalesPage({ profile }) {
     const lastDay = new Date(fMonth.split('-')[0], fMonth.split('-')[1], 0).getDate();
     const to = `${fMonth}-${pad(lastDay)}`;
     let q = supabase.from('lecture_sales')
-      .select('*, brand:brands(name), product:products(name)')
+      .select('*')
       .gte('sold_at', from).lte('sold_at', to)
       .order('sold_at', {ascending:false});
     if (fStore)  q = q.eq('store_name',  fStore);
@@ -2386,46 +2378,25 @@ function LectureSalesPage({ profile }) {
 
   useEffect(()=>{ if(tab==='list') fetchSales(); }, [fetchSales, tab]);
 
-  // 상품 자동완성
-  const prodPool = brandId ? allProds.filter(p=>String(p.brand_id)===String(brandId)) : allProds;
-  const suggestions = pSearch
-    ? prodPool.filter(p=>p.name.toLowerCase().includes(pSearch.toLowerCase()))
-        .sort((a,b)=>(a.name.includes('[단종]')?1:0)-(b.name.includes('[단종]')?1:0))
-        .slice(0,10)
-    : [];
-  const selProd = allProds.find(p=>String(p.id)===String(productId));
-
-  const selectProd = (p) => {
-    setProductId(String(p.id));
-    setPSearch(p.name);
-    if (!brandId) setBrandId(String(p.brand_id));
-    if (!price)   setPrice(String(p.price||''));
-    setShowSug(false);
-  };
-
   const handleSubmit = async () => {
     if (!storeName)  { toast('점포명을 선택해주세요','err'); return; }
     if (!branchName) { toast('지점명을 선택해주세요','err'); return; }
-    if (!productId)  { toast('상품을 선택해주세요','err'); return; }
-    if (!price || Number(price)<=0) { toast('판매금액을 입력해주세요','err'); return; }
-    const brand = brands.find(b=>String(b.id)===String(brandId));
+    if (!price || Number(price)<=0) { toast('매출액을 입력해주세요','err'); return; }
     setSaving(true);
     const {error} = await supabase.from('lecture_sales').insert({
       sold_at: soldAt, store_name: storeName, branch_name: branchName,
-      brand_id: Number(brandId)||null, brand_name: brand?.name,
-      product_id: Number(productId), product_name: selProd?.name,
-      quantity: Number(quantity)||1, price: Number(price)||0,
+      quantity: Number(attendees)||0,
+      price: Number(price)||0,
       memo: memo.trim()||null, created_by: profile.id,
     });
     setSaving(false);
     if (error) { toast(error.message,'err'); return; }
     toast('강좌 매출 등록 완료','ok');
-    setStoreName(''); setBranchName(''); setBrandId(''); setProductId('');
-    setPSearch(''); setQuantity(1); setPrice(''); setMemo(''); setSoldAt(today);
+    setStoreName(''); setBranchName(''); setAttendees(''); setPrice(''); setMemo(''); setSoldAt(today);
   };
 
-  const totalAmt = sales.reduce((s,r)=>s+r.price*r.quantity,0);
-  const totalQty = sales.reduce((s,r)=>s+r.quantity,0);
+  const totalAmt = sales.reduce((s,r)=>s+(r.price||0),0);
+  const totalAttendees = sales.reduce((s,r)=>s+(r.quantity||0),0);
   const inputStyle = {height:36,padding:'0 10px',border:'1px solid var(--border)',borderRadius:'var(--radius)',fontSize:13,fontFamily:'var(--sans)',outline:'none',width:'100%'};
   const labelStyle = {display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:4};
 
@@ -2466,56 +2437,23 @@ function LectureSalesPage({ profile }) {
               </select>
             </div>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'160px 1fr 120px 150px',gap:12,marginBottom:12}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
             <div>
-              <label style={labelStyle}>브랜드</label>
-              <select value={brandId} onChange={e=>setBrandId(e.target.value)} style={inputStyle}>
-                <option value="">전체 브랜드</option>
-                {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </div>
-            <div style={{position:'relative'}}>
-              <label style={labelStyle}>상품 <span style={{color:'var(--danger)'}}>*</span></label>
-              <input value={pSearch} onChange={e=>{setPSearch(e.target.value);setProductId('');setShowSug(true);}}
-                onFocus={()=>setShowSug(true)} placeholder="상품명 검색"
-                style={{...inputStyle,background:'#fff'}} autoComplete="off"/>
-              {selProd && <div style={{marginTop:4,fontSize:12,color:'var(--success)',fontWeight:600}}>✅ {selProd.name}</div>}
-              {showSug && suggestions.length>0 && (
-                <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'#fff',border:'1px solid var(--border)',borderRadius:'var(--radius)',boxShadow:'0 4px 16px rgba(0,0,0,0.12)',maxHeight:220,overflowY:'auto'}}>
-                  {suggestions.map(p=>{
-                    const br=brands.find(b=>b.id===p.brand_id);
-                    return (
-                      <div key={p.id} onMouseDown={e=>{e.preventDefault();selectProd(p);}}
-                        style={{padding:'9px 12px',cursor:'pointer',fontSize:13,borderBottom:'1px solid #f0f0f0'}}
-                        onMouseEnter={e=>e.currentTarget.style.background='#fffde7'}
-                        onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
-                        {!brandId&&br&&<span style={{fontSize:11,color:'var(--accent)',fontWeight:700,marginRight:6}}>[{br.name}]</span>}
-                        {p.name}
-                        <span style={{fontSize:11,color:'var(--text3)',marginLeft:8,fontFamily:'var(--mono)'}}>{Number(p.price).toLocaleString()}원</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <label style={labelStyle}>강좌 인원수 (명)</label>
+              <input type="number" min={0} value={attendees} onChange={e=>setAttendees(e.target.value)}
+                placeholder="0" style={inputStyle}/>
             </div>
             <div>
-              <label style={labelStyle}>수량 <span style={{color:'var(--danger)'}}>*</span></label>
-              <input type="number" min={1} value={quantity} onChange={e=>setQuantity(e.target.value)} style={inputStyle}/>
-            </div>
-            <div>
-              <label style={labelStyle}>판매금액 (원) <span style={{color:'var(--danger)'}}>*</span></label>
+              <label style={labelStyle}>매출액 (원) <span style={{color:'var(--danger)'}}>*</span></label>
               <input type="number" min={0} value={price} onChange={e=>setPrice(e.target.value)}
                 placeholder="0" style={{...inputStyle,fontWeight:700,color:'var(--accent)'}}/>
             </div>
           </div>
-          {quantity && price && (
-            <div style={{textAlign:'right',fontSize:13,fontWeight:700,color:'var(--accent)',fontFamily:'var(--mono)',marginBottom:12}}>
-              합계: {(Number(quantity)*Number(price)).toLocaleString()}원
-            </div>
-          )}
           <div style={{marginBottom:12}}>
             <label style={labelStyle}>메모</label>
-            <input value={memo} onChange={e=>setMemo(e.target.value)} placeholder="메모 (선택)" style={inputStyle}/>
+            <textarea value={memo} onChange={e=>setMemo(e.target.value)}
+              placeholder="메모 입력 (엔터키로 줄바꿈 가능)"
+              style={{width:'100%',minHeight:80,padding:'8px 10px',border:'1px solid var(--border)',borderRadius:'var(--radius)',fontSize:13,fontFamily:'var(--sans)',outline:'none',resize:'vertical',lineHeight:1.6,boxSizing:'border-box'}}/>
           </div>
           <button className="btn btn-p" onClick={handleSubmit} disabled={saving} style={{width:'100%',height:40,fontSize:14,justifyContent:'center'}}>
             {saving?<span className="spinner"/>:'✅ 강좌 매출 등록'}
@@ -2554,7 +2492,7 @@ function LectureSalesPage({ profile }) {
             <div className="twrap">
               <table>
                 <thead>
-                  <tr><th>날짜</th><th>점포</th><th>지점</th><th>브랜드</th><th>상품명</th><th className="r">수량</th><th className="r">판매금액</th><th className="r">합계</th><th>메모</th></tr>
+                  <tr><th>날짜</th><th>점포</th><th>지점</th><th className="r">인원수</th><th className="r">매출액</th><th>메모</th></tr>
                 </thead>
                 <tbody>
                   {sales.map(s=>(
@@ -2562,19 +2500,15 @@ function LectureSalesPage({ profile }) {
                       <td className="mono" style={{fontSize:12}}>{s.sold_at}</td>
                       <td><span className="badge badge-dept">{s.store_name}</span></td>
                       <td><span className="badge badge-store">{s.branch_name}</span></td>
-                      <td>{s.brand?.name||s.brand_name||'-'}</td>
-                      <td style={{fontSize:13}}>{s.product?.name||s.product_name}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)'}}>{s.quantity}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)'}}>{s.price.toLocaleString()}원</td>
-                      <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)'}}>{(s.price*s.quantity).toLocaleString()}원</td>
-                      <td style={{fontSize:11,color:'var(--text2)'}}>{s.memo||'-'}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)'}}>{s.quantity||0}명</td>
+                      <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'#1565C0'}}>{(s.price||0).toLocaleString()}원</td>
+                      <td style={{fontSize:12,color:'var(--text2)',whiteSpace:'pre-wrap',maxWidth:200}}>{s.memo||'-'}</td>
                     </tr>
                   ))}
                   <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
-                    <td colSpan={5} style={{padding:'10px 11px',fontWeight:700}}>합계</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,padding:'10px 11px'}}>{totalQty}</td>
-                    <td/>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,fontSize:14,color:'var(--accent)',padding:'10px 11px'}}>{totalAmt.toLocaleString()}원</td>
+                    <td colSpan={3} style={{padding:'10px 11px',fontWeight:700}}>합계</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,padding:'10px 11px'}}>{totalAttendees}명</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,fontSize:14,color:'#1565C0',padding:'10px 11px'}}>{totalAmt.toLocaleString()}원</td>
                     <td/>
                   </tr>
                 </tbody>
@@ -5157,7 +5091,7 @@ function HomePage({ profile, setPage }) {
             <div className="twrap">
               <table>
                 <thead>
-                  <tr><th>순위</th><th>점포</th><th>지점</th><th className="r">건수</th><th className="r">수량</th><th className="r">매출금액</th></tr>
+                  <tr><th>순위</th><th>점포</th><th>지점</th><th className="r">건수</th><th className="r">인원수</th><th className="r">매출금액</th></tr>
                 </thead>
                 <tbody>
                   {lectureRows.map((r,i)=>(
@@ -5166,14 +5100,14 @@ function HomePage({ profile, setPage }) {
                       <td><span className="badge badge-dept">{r.store}</span></td>
                       <td><span className="badge badge-store">{r.branch}</span></td>
                       <td className="r">{r.count}건</td>
-                      <td className="r">{r.qty}개</td>
+                      <td className="r">{r.qty}명</td>
                       <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'#1565C0'}}>{r.amt.toLocaleString()}원</td>
                     </tr>
                   ))}
                   <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
                     <td colSpan={3} style={{padding:'9px 11px',fontWeight:700}}>합계</td>
                     <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{lectureSummary.count}건</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{lectureSummary.qty}개</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{lectureSummary.qty}명</td>
                     <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'#1565C0',fontSize:14}}>{lectureSummary.amt.toLocaleString()}원</td>
                   </tr>
                 </tbody>
