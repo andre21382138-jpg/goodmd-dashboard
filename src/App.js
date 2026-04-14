@@ -2657,13 +2657,14 @@ function ProductMgmtPage({ subPage }) {
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>상품코드</th><th>브랜드</th><th>상품명</th><th className="r">원가</th><th className="r">판매가</th><th></th></tr></thead>
+                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th className="r">원가</th><th className="r">판매가</th><th></th></tr></thead>
                 <tbody>
                   {filteredProducts.length === 0
-                    ? <tr><td colSpan={6} className="empty">등록된 상품이 없습니다</td></tr>
+                    ? <tr><td colSpan={7} className="empty">등록된 상품이 없습니다</td></tr>
                     : filteredProducts.map(p => (
                       <tr key={p.id}>
                         <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.code || '-'}</td>
+                        <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.erp_code || '-'}</td>
                         <td><span className="badge badge-dept">{p.brand?.name}</span></td>
                         <td style={{fontWeight:600}}>{p.name}</td>
                         <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{p.cost ? Number(p.cost).toLocaleString()+'원' : '-'}</td>
