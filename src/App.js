@@ -2568,7 +2568,33 @@ function ProductMgmtPage({ subPage }) {
   };
 
   const inputStyle = { height:34, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontFamily:'var(--sans)', outline:'none' };
-  const filteredProducts = selBrand ? products.filter(p => p.brand_id === selBrand.id) : products;
+  const [pSearch,  setPSearch]  = useState('');
+  const [editing,  setEditing]  = useState({}); // { [id]: { cost, price } }
+  const [saving,   setSavingP]  = useState({});
+
+  const filteredProducts = (() => {
+    let list = selBrand ? products.filter(p => p.brand_id === selBrand.id) : products;
+    if (pSearch.trim()) {
+      const kw = pSearch.trim().toLowerCase();
+      list = list.filter(p =>
+        p.name.toLowerCase().includes(kw) ||
+        (p.code||'').toLowerCase().includes(kw) ||
+        (p.erp_code||'').toLowerCase().includes(kw)
+      );
+    }
+    return list;
+  })();
+
+  const startEdit = (p) => setEditing(prev => ({...prev, [p.id]: { cost: p.cost||0, price: p.price||0 }}));
+  const cancelEdit = (id) => setEditing(prev => { const n={...prev}; delete n[id]; return n; });
+  const saveEdit = async (p) => {
+    setSavingP(prev => ({...prev, [p.id]: true}));
+    const { cost, price } = editing[p.id];
+    const { error } = await supabase.from('products').update({ cost: Number(cost)||0, price: Number(price)||0 }).eq('id', p.id);
+    if (error) toast(error.message, 'err');
+    else { toast('저장 완료', 'ok'); cancelEdit(p.id); fetchAll(); }
+    setSavingP(prev => ({...prev, [p.id]: false}));
+  };
 
   if (subPage === 'product_add') {
     return (
@@ -2675,25 +2701,58 @@ function ProductMgmtPage({ subPage }) {
           })}
         </div>
         <div className="card">
-          <div className="card-label">{selBrand ? selBrand.name : '전체'} 상품 현황 ({filteredProducts.length}개)</div>
+          <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12}}>
+            <div className="card-label" style={{marginBottom:0}}>{selBrand ? selBrand.name : '전체'} 상품 현황 ({filteredProducts.length}개)</div>
+            <input className="finput" value={pSearch} onChange={e => setPSearch(e.target.value)}
+              placeholder="🔍 상품명·코드·ERP코드 검색" style={{height:32, fontSize:12, marginLeft:'auto', width:220}}/>
+            {pSearch && <button className="btn-ghost" style={{fontSize:11}} onClick={() => setPSearch('')}>✕</button>}
+          </div>
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th className="r">원가</th><th className="r">판매가</th><th></th></tr></thead>
+                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th className="r">원가</th><th className="r">판매가</th><th style={{width:100, textAlign:'center'}}>수정</th><th></th></tr></thead>
                 <tbody>
                   {filteredProducts.length === 0
-                    ? <tr><td colSpan={7} className="empty">등록된 상품이 없습니다</td></tr>
-                    : filteredProducts.map(p => (
-                      <tr key={p.id}>
-                        <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.code || '-'}</td>
-                        <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.erp_code || '-'}</td>
-                        <td><span className="badge badge-dept">{p.brand?.name}</span></td>
-                        <td style={{fontWeight:600}}>{p.name}</td>
-                        <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{p.cost ? Number(p.cost).toLocaleString()+'원' : '-'}</td>
-                        <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{Number(p.price).toLocaleString()}원</td>
-                        <td><button className="btn-danger" onClick={() => deleteProduct(p.id)}>삭제</button></td>
-                      </tr>
-                    ))
+                    ? <tr><td colSpan={8} className="empty">등록된 상품이 없습니다</td></tr>
+                    : filteredProducts.map(p => {
+                      const isEditing = !!editing[p.id];
+                      const ed = editing[p.id] || {};
+                      return (
+                        <tr key={p.id} style={{background: isEditing ? '#fffde7' : ''}}>
+                          <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.code || '-'}</td>
+                          <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.erp_code || '-'}</td>
+                          <td><span className="badge badge-dept">{p.brand?.name}</span></td>
+                          <td style={{fontWeight:600}}>{p.name}</td>
+                          <td className="r">
+                            {isEditing
+                              ? <input type="number" value={ed.cost} onChange={e => setEditing(prev=>({...prev,[p.id]:{...prev[p.id],cost:e.target.value}}))}
+                                  style={{width:90, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, textAlign:'right', outline:'none'}}/>
+                              : <span style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{p.cost ? Number(p.cost).toLocaleString()+'원' : '-'}</span>
+                            }
+                          </td>
+                          <td className="r">
+                            {isEditing
+                              ? <input type="number" value={ed.price} onChange={e => setEditing(prev=>({...prev,[p.id]:{...prev[p.id],price:e.target.value}}))}
+                                  style={{width:90, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, textAlign:'right', outline:'none'}}/>
+                              : <span style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{Number(p.price).toLocaleString()}원</span>
+                            }
+                          </td>
+                          <td style={{textAlign:'center'}}>
+                            {isEditing ? (
+                              <div style={{display:'flex', gap:4, justifyContent:'center'}}>
+                                <button className="btn btn-p" style={{height:26, padding:'0 10px', fontSize:11}} disabled={saving[p.id]} onClick={() => saveEdit(p)}>
+                                  {saving[p.id] ? <span className="spinner"/> : '저장'}
+                                </button>
+                                <button className="btn btn-s" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => cancelEdit(p.id)}>취소</button>
+                              </div>
+                            ) : (
+                              <button className="btn btn-s" style={{height:26, padding:'0 10px', fontSize:11}} onClick={() => startEdit(p)}>수정</button>
+                            )}
+                          </td>
+                          <td><button className="btn-danger" onClick={() => deleteProduct(p.id)}>삭제</button></td>
+                        </tr>
+                      );
+                    })
                   }
                 </tbody>
               </table>
