@@ -6189,11 +6189,7 @@ const HQ_MENUS = [
   { key: 'incentive', icon: '💰', label: '급여관리' },
   { key: 'attendance_mgmt', icon: '🗓️', label: '근태관리' },
   { key: 'member_mgmt',  icon: '👥', label: '고객관리' },
-  { key: 'sales_view',   icon: '📋', label: '매출조회', sub: [
-    { key: 'sales_list',         icon: '🏬', label: '매장 매출' },
-    { key: 'biz_sales_view',     icon: '🤝', label: '특판 매출' },
-    { key: 'lecture_sales_view', icon: '🎓', label: '강좌 매출' },
-  ]},
+  { key: 'sales_view',   icon: '📋', label: '매출조회' },
 ];
 const MANAGER_MENUS = [
   { key: 'home',        icon: '🏠', label: '홈 대시보드' },
