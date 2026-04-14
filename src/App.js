@@ -2294,6 +2294,7 @@ function SalesListPage() {
   const [fFrom,   setFFrom]   = useState('');
   const [fTo,     setFTo]     = useState('');
   const [fKeyword,setFKeyword]= useState('');
+  const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
 
   // 날짜 빠른 선택
   const setDateRange = (type) => {
@@ -2335,16 +2336,21 @@ function SalesListPage() {
 
   const stores = useMemo(() => uniq(sales.map(s => s.store_name)), [sales]);
 
-  // 키워드 필터 (클라이언트 사이드)
+  // 키워드 필터 + 정렬 (클라이언트 사이드)
   const filtered = useMemo(() => {
-    if (!fKeyword.trim()) return sales;
-    const kw = fKeyword.trim().toLowerCase();
-    return sales.filter(s =>
-      (s.product?.name || '').toLowerCase().includes(kw) ||
-      (s.brand?.name   || '').toLowerCase().includes(kw) ||
-      (s.memo          || '').toLowerCase().includes(kw)
-    );
-  }, [sales, fKeyword]);
+    let result = sales;
+    if (fKeyword.trim()) {
+      const kw = fKeyword.trim().toLowerCase();
+      result = result.filter(s =>
+        (s.product?.name || '').toLowerCase().includes(kw) ||
+        (s.brand?.name   || '').toLowerCase().includes(kw) ||
+        (s.memo          || '').toLowerCase().includes(kw)
+      );
+    }
+    if (sortBy === 'qty_desc') result = [...result].sort((a,b) => b.quantity - a.quantity);
+    if (sortBy === 'amt_desc') result = [...result].sort((a,b) => (b.price*b.quantity) - (a.price*a.quantity));
+    return result;
+  }, [sales, fKeyword, sortBy]);
 
   const totalQty = useMemo(() => filtered.reduce((s, r) => s + r.quantity, 0), [filtered]);
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + r.price * r.quantity, 0), [filtered]);
@@ -2393,8 +2399,13 @@ function SalesListPage() {
           <button style={quickBtnStyle(isLastMonth)}  onClick={() => setDateRange('lastmonth')}>전월</button>
           <input className="finput" value={fKeyword} onChange={e => setFKeyword(e.target.value)}
             placeholder="🔍 상품명·브랜드·메모 검색" style={{height:34, minWidth:180}} />
+          <select className="fsel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            <option value="date">최신순</option>
+            <option value="qty_desc">판매건수 높은순</option>
+            <option value="amt_desc">매출액 높은순</option>
+          </select>
           {(fStore||fBrand||fFrom||fTo||fKeyword) &&
-            <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); }}>✕ 초기화</button>}
+            <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); }}>✕ 초기화</button>}
           <div className="fbar-right">
             <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
           </div>
