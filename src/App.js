@@ -2311,7 +2311,7 @@ function CustomerInputPage({ profile }) {
 // ════════════════════════════════════════════════════════
 // 강좌 매출 페이지
 // ════════════════════════════════════════════════════════
-function LectureSalesPage({ profile }) {
+function LectureSalesPage({ profile, setPage }) {
   const today = new Date().toISOString().slice(0,10);
   const [tab, setTab] = useState('list');
 
@@ -2402,6 +2402,7 @@ function LectureSalesPage({ profile }) {
 
   return (
     <div>
+      {setPage && <SalesTabNav current="lecture_sales_view" setPage={setPage}/>}
       <div style={{display:'flex',gap:8,marginBottom:16}}>
         {[{key:'list',label:'📋 강좌 매출 조회'},{key:'input',label:'➕ 매출 입력'}].map(t=>(
           <button key={t.key} onClick={()=>setTab(t.key)}
@@ -2524,7 +2525,7 @@ function LectureSalesPage({ profile }) {
 // ════════════════════════════════════════════════════════
 // 특판 매출 페이지
 // ════════════════════════════════════════════════════════
-function BizSalesPage({ profile }) {
+function BizSalesPage({ profile, setPage }) {
   const today = new Date().toISOString().slice(0,10);
   const [tab, setTab] = useState('list'); // 'list' | 'input'
 
@@ -2631,6 +2632,7 @@ function BizSalesPage({ profile }) {
 
   return (
     <div>
+      {setPage && <SalesTabNav current="biz_sales_view" setPage={setPage}/>}
       {/* 탭 */}
       <div style={{display:'flex', gap:8, marginBottom:16}}>
         {[{key:'list',label:'📋 특판 매출 조회'},{key:'input',label:'➕ 매출 입력'}].map(t=>(
@@ -2776,6 +2778,42 @@ function BizSalesPage({ profile }) {
   );
 }
 
+function SalesTabNav({ current, setPage }) {
+  const tabs = [
+    { key:'sales_view',          label:'← 목록으로' },
+    { key:'sales_list',          icon:'🏬', label:'매장 매출' },
+    { key:'biz_sales_view',      icon:'🤝', label:'특판 매출' },
+    { key:'lecture_sales_view',  icon:'🎓', label:'강좌 매출' },
+  ];
+  return (
+    <div style={{display:'flex', gap:6, marginBottom:20, borderBottom:'2px solid var(--border)', paddingBottom:0}}>
+      {tabs.map(t => {
+        if (t.key === 'sales_view') {
+          return (
+            <button key={t.key} onClick={() => setPage('sales_view')}
+              style={{height:36, padding:'0 14px', border:'none', background:'none', fontSize:12,
+                color:'var(--text3)', cursor:'pointer', fontFamily:'var(--sans)', fontWeight:600,
+                marginRight:8, borderBottom:'2px solid transparent', marginBottom:-2}}>
+              {t.label}
+            </button>
+          );
+        }
+        const isActive = current === t.key;
+        return (
+          <button key={t.key} onClick={() => setPage(t.key)}
+            style={{height:36, padding:'0 16px', border:'none', background:'none', fontSize:13,
+              fontWeight: isActive ? 700 : 500, cursor:'pointer', fontFamily:'var(--sans)',
+              color: isActive ? 'var(--accent)' : 'var(--text2)',
+              borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+              marginBottom: -2, transition:'all 120ms'}}>
+            {t.icon} {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function SalesViewHub({ setPage }) {
   const items = [
     { key:'sales_list',      icon:'🏬', label:'매장 매출',  desc:'매장별 판매 내역 조회' },
@@ -2800,8 +2838,7 @@ function SalesViewHub({ setPage }) {
   );
 }
 
-// 매장 매출 직접 조회
-function SalesListPage() {
+function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [fStore,  setFStore]  = useState('');
@@ -2895,6 +2932,7 @@ function SalesListPage() {
 
   return (
     <div>
+      {setPage && <SalesTabNav current="sales_list" setPage={setPage}/>}
       <div className="card">
         <div className="card-label">판매내역 조회</div>
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
@@ -7591,9 +7629,9 @@ export default function App() {
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
-            {page === 'sales_list'          && canSeeMain && <SalesListPage/>}
-            {page === 'biz_sales_view'     && canSeeMain && <BizSalesPage profile={profile}/>}
-            {page === 'lecture_sales_view' && canSeeMain && <LectureSalesPage profile={profile}/>}
+            {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
+            {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage}/>}
+            {page === 'lecture_sales_view'  && canSeeMain && <LectureSalesPage profile={profile} setPage={setPage}/>}
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'customer_qr'    && (isManager || isAdmin || isHQ) && <CustomerQRPage profile={profile}/>}
