@@ -1285,7 +1285,14 @@ function SalesInputPage({ profile }) {
               // 브랜드 선택 여부와 관계없이 검색: 브랜드 선택시 해당 브랜드 상품, 미선택시 전체 상품
               const searchPool = l.brandId ? l.products : allProducts;
               const suggestions = l.productSearch && l.productSearch.length >= 1
-                ? searchPool.filter(p => p.name.toLowerCase().includes(l.productSearch.toLowerCase())).slice(0, 10)
+                ? searchPool
+                    .filter(p => p.name.toLowerCase().includes(l.productSearch.toLowerCase()))
+                    .sort((a,b) => {
+                      const aD = a.name.includes('[단종]') ? 1 : 0;
+                      const bD = b.name.includes('[단종]') ? 1 : 0;
+                      return aD - bD;
+                    })
+                    .slice(0, 10)
                 : [];
               const selectedProd = allProducts.find(p => String(p.id) === String(l.productId));
 
