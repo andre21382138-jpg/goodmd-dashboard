@@ -2293,6 +2293,25 @@ function SalesListPage() {
   const [fBrand,  setFBrand]  = useState('');
   const [fFrom,   setFFrom]   = useState('');
   const [fTo,     setFTo]     = useState('');
+  const [fKeyword,setFKeyword]= useState('');
+
+  // 날짜 빠른 선택
+  const setDateRange = (type) => {
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    if (type === 'yesterday') {
+      const y = new Date(now); y.setDate(now.getDate()-1);
+      setFFrom(fmt(y)); setFTo(fmt(y));
+    } else if (type === 'thismonth') {
+      setFFrom(`${now.getFullYear()}-${pad(now.getMonth()+1)}-01`);
+      setFTo(fmt(now));
+    } else if (type === 'lastmonth') {
+      const first = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const last  = new Date(now.getFullYear(), now.getMonth(), 0);
+      setFFrom(fmt(first)); setFTo(fmt(last));
+    }
+  };
 
   const fetchSales = useCallback(async () => {
     setLoading(true);
@@ -2315,14 +2334,49 @@ function SalesListPage() {
   useEffect(() => { supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || [])); }, []);
 
   const stores = useMemo(() => uniq(sales.map(s => s.store_name)), [sales]);
-  const totalQty = useMemo(() => sales.reduce((s, r) => s + r.quantity, 0), [sales]);
-  const totalAmt = useMemo(() => sales.reduce((s, r) => s + r.price * r.quantity, 0), [sales]);
+
+  // 키워드 필터 (클라이언트 사이드)
+  const filtered = useMemo(() => {
+    if (!fKeyword.trim()) return sales;
+    const kw = fKeyword.trim().toLowerCase();
+    return sales.filter(s =>
+      (s.product?.name || '').toLowerCase().includes(kw) ||
+      (s.brand?.name   || '').toLowerCase().includes(kw) ||
+      (s.memo          || '').toLowerCase().includes(kw)
+    );
+  }, [sales, fKeyword]);
+
+  const totalQty = useMemo(() => filtered.reduce((s, r) => s + r.quantity, 0), [filtered]);
+  const totalAmt = useMemo(() => filtered.reduce((s, r) => s + r.price * r.quantity, 0), [filtered]);
+
+  const quickBtnStyle = (active) => ({
+    height:34, padding:'0 12px', border:'2px solid', borderRadius:'var(--radius)',
+    fontSize:12, fontWeight:700, cursor:'pointer',
+    borderColor: active ? 'var(--accent)' : 'var(--border)',
+    background:  active ? '#fff3e0' : '#fff',
+    color:       active ? 'var(--accent)' : 'var(--text2)',
+  });
+
+  const today = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  const yest = new Date(today); yest.setDate(today.getDate()-1);
+  const yestStr = `${yest.getFullYear()}-${pad(yest.getMonth()+1)}-${pad(yest.getDate())}`;
+  const thisMonthFrom = `${today.getFullYear()}-${pad(today.getMonth()+1)}-01`;
+  const lastMonthFirst = new Date(today.getFullYear(), today.getMonth()-1, 1);
+  const lastMonthLast  = new Date(today.getFullYear(), today.getMonth(), 0);
+  const lmFrom = `${lastMonthFirst.getFullYear()}-${pad(lastMonthFirst.getMonth()+1)}-01`;
+  const lmTo   = `${lastMonthLast.getFullYear()}-${pad(lastMonthLast.getMonth()+1)}-${pad(lastMonthLast.getDate())}`;
+
+  const isYesterday  = fFrom === yestStr  && fTo === yestStr;
+  const isThisMonth  = fFrom === thisMonthFrom && fTo === todayStr;
+  const isLastMonth  = fFrom === lmFrom   && fTo === lmTo;
 
   return (
     <div>
       <div className="card">
         <div className="card-label">판매내역 조회</div>
-        <div className="fbar">
+        <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
           <select className="fsel" value={fStore} onChange={e => setFStore(e.target.value)}>
             <option value="">전체 점포</option>
             {stores.map(s => <option key={s}>{s}</option>)}
@@ -2334,9 +2388,15 @@ function SalesListPage() {
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="시작일" />
           <span style={{fontSize:12,color:'var(--text3)'}}>~</span>
           <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} title="종료일" />
-          {(fStore||fBrand||fFrom||fTo) && <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); }}>✕ 초기화</button>}
+          <button style={quickBtnStyle(isYesterday)}  onClick={() => setDateRange('yesterday')}>어제</button>
+          <button style={quickBtnStyle(isThisMonth)}  onClick={() => setDateRange('thismonth')}>당월</button>
+          <button style={quickBtnStyle(isLastMonth)}  onClick={() => setDateRange('lastmonth')}>전월</button>
+          <input className="finput" value={fKeyword} onChange={e => setFKeyword(e.target.value)}
+            placeholder="🔍 상품명·브랜드·메모 검색" style={{height:34, minWidth:180}} />
+          {(fStore||fBrand||fFrom||fTo||fKeyword) &&
+            <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); }}>✕ 초기화</button>}
           <div className="fbar-right">
-            <span className="fresult"><b>{sales.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+            <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
           </div>
         </div>
         {loading ? <div className="empty"><span className="spinner"/></div> : (
@@ -2351,9 +2411,9 @@ function SalesListPage() {
                 </tr>
               </thead>
               <tbody>
-                {sales.length === 0
+                {filtered.length === 0
                   ? <tr><td colSpan={11} className="empty">조회된 판매 내역이 없습니다</td></tr>
-                  : sales.map(s => (
+                  : filtered.map(s => (
                     <tr key={s.id}>
                       <td className="mono">{s.sold_at}</td>
                       <td><span className="badge badge-dept">{s.store_name}</span></td>
