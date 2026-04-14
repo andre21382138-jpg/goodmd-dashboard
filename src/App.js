@@ -1125,8 +1125,13 @@ function SalesInputPage({ profile }) {
         updated.products = allProducts.filter(p => String(p.brand_id) === String(value));
       }
       if (field === 'productId') {
-        const prod = l.products.find(p => String(p.id) === String(value));
+        const prod = allProducts.find(p => String(p.id) === String(value));
         if (prod?.price) { updated.normalPrice = prod.price; updated.discount = '0'; updated.price = prod.price; }
+        // 브랜드 미선택 상태면 자동으로 브랜드 세팅
+        if (prod && !updated.brandId) {
+          updated.brandId = String(prod.brand_id);
+          updated.products = allProducts.filter(p => String(p.brand_id) === String(prod.brand_id));
+        }
         updated.showSuggestions = false;
       }
       // 정상가나 할인금액 변경 시 판매가 자동 계산
@@ -1277,10 +1282,12 @@ function SalesInputPage({ profile }) {
             </div>
 
             {lines.map((l, idx) => {
-              const suggestions = l.productSearch && l.products.length > 0
-                ? l.products.filter(p => p.name.toLowerCase().includes(l.productSearch.toLowerCase())).slice(0, 8)
+              // 브랜드 선택 여부와 관계없이 검색: 브랜드 선택시 해당 브랜드 상품, 미선택시 전체 상품
+              const searchPool = l.brandId ? l.products : allProducts;
+              const suggestions = l.productSearch && l.productSearch.length >= 1
+                ? searchPool.filter(p => p.name.toLowerCase().includes(l.productSearch.toLowerCase())).slice(0, 10)
                 : [];
-              const selectedProd = l.products.find(p => String(p.id) === String(l.productId));
+              const selectedProd = allProducts.find(p => String(p.id) === String(l.productId));
 
               return (
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:8 }}>
@@ -1310,9 +1317,8 @@ function SalesInputPage({ profile }) {
                         updateLine(l.id,'showSuggestions',true);
                       }}
                       onFocus={() => updateLine(l.id,'showSuggestions',true)}
-                      style={{...inputStyle, background:!l.brandId?'#f0f0f0':'#fff'}}
-                      placeholder={!l.brandId ? '브랜드 먼저 선택' : '상품명 입력 후 선택'}
-                      disabled={!l.brandId}
+                      style={{...inputStyle, background:'#fff'}}
+                      placeholder={l.brandId ? '상품명 입력 후 선택' : '상품명 검색 (브랜드 미선택 시 전체 검색)'}
                       autoComplete="off"
                     />
                     {/* 선택된 상품 표시 */}
@@ -1324,16 +1330,19 @@ function SalesInputPage({ profile }) {
                     {/* 자동완성 목록 */}
                     {l.showSuggestions && suggestions.length > 0 && (
                       <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100, background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:220, overflowY:'auto' }}>
-                        {suggestions.map(p => (
+                        {suggestions.map(p => {
+                          const brand = brands.find(b => b.id === p.brand_id);
+                          return (
                           <div key={p.id}
                             onMouseDown={e => { e.preventDefault(); updateLine(l.id,'productId',String(p.id)); updateLine(l.id,'productSearch',p.name); }}
                             style={{ padding:'9px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0' }}
                             onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
                             onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                            {!l.brandId && brand && <span style={{fontSize:11, color:'var(--accent)', fontWeight:700, marginRight:6}}>[{brand.name}]</span>}
                             {p.name}
                             <span style={{ fontSize:11, color:'var(--text3)', marginLeft:8, fontFamily:'var(--mono)' }}>{Number(p.price).toLocaleString()}원</span>
                           </div>
-                        ))}
+                        )})}
                       </div>
                     )}
                   </div>
