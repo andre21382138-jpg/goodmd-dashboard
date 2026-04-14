@@ -2776,6 +2776,31 @@ function BizSalesPage({ profile }) {
   );
 }
 
+function SalesViewHub({ setPage }) {
+  const items = [
+    { key:'sales_list',      icon:'🏬', label:'매장 매출',  desc:'매장별 판매 내역 조회' },
+    { key:'biz_sales_view',  icon:'🤝', label:'특판 매출',  desc:'B2B 특판 업체 매출 조회' },
+    { key:'lecture_sales_view', icon:'🎓', label:'강좌 매출', desc:'강좌 진행 매출 조회' },
+  ];
+  return (
+    <div style={{display:'flex', gap:16, flexWrap:'wrap', marginTop:8}}>
+      {items.map(item => (
+        <button key={item.key} onClick={() => setPage(item.key)}
+          style={{flex:'1 1 200px', minWidth:200, background:'#fff', border:'2px solid var(--border)',
+            borderRadius:16, padding:'28px 24px', cursor:'pointer', textAlign:'left',
+            transition:'all 150ms', outline:'none', fontFamily:'var(--sans)' }}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.boxShadow='0 4px 20px rgba(255,143,0,0.15)';}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.boxShadow='none';}}>
+          <div style={{fontSize:32, marginBottom:12}}>{item.icon}</div>
+          <div style={{fontSize:16, fontWeight:700, color:'var(--text)', marginBottom:6}}>{item.label}</div>
+          <div style={{fontSize:12, color:'var(--text3)'}}>{item.desc}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// 매장 매출 직접 조회
 function SalesListPage() {
   const [sales,   setSales]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -6165,6 +6190,7 @@ const HQ_MENUS = [
   { key: 'attendance_mgmt', icon: '🗓️', label: '근태관리' },
   { key: 'member_mgmt',  icon: '👥', label: '고객관리' },
   { key: 'sales_view',   icon: '📋', label: '매출조회', sub: [
+    { key: 'sales_list',         icon: '🏬', label: '매장 매출' },
     { key: 'biz_sales_view',     icon: '🤝', label: '특판 매출' },
     { key: 'lecture_sales_view', icon: '🎓', label: '강좌 매출' },
   ]},
@@ -6718,6 +6744,7 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       customer_qr:    'customer_reg',
       customer_doc:   'customer_reg',
       my_members:     'customer_reg',
+      sales_list:         'sales_view',
       biz_sales_view:     'sales_view',
       lecture_sales_view: 'sales_view',
     };
@@ -7516,6 +7543,7 @@ export default function App() {
     incentive:      '급여관리',
     member_mgmt:    '고객관리',
     sales_view:          '매출조회',
+    sales_list:          '매장 매출',
     biz_sales_view:      '특판 매출',
     lecture_sales_view:  '강좌 매출',
     sales_input:    '판매 입력',
@@ -7566,7 +7594,8 @@ export default function App() {
             {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
-            {page === 'sales_view'         && canSeeMain && <SalesListPage/>}
+            {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
+            {page === 'sales_list'          && canSeeMain && <SalesListPage/>}
             {page === 'biz_sales_view'     && canSeeMain && <BizSalesPage profile={profile}/>}
             {page === 'lecture_sales_view' && canSeeMain && <LectureSalesPage profile={profile}/>}
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
