@@ -5266,7 +5266,7 @@ function HomePage({ profile, setPage }) {
         <div style={{display:'flex', gap:12, marginBottom:20}}>
           <SummaryCard title="매장 매출" icon="🏬" summary={storeSummary} color="#E65100"/>
           <SummaryCard title="강좌 매출" icon="🎓" summary={lectureSummary} color="#1565C0"
-              extra={<><span>강좌 <b>{lectureSummary.count}</b>횟수</span><span>인원 <b>{lectureSummary.qty}</b>명</span></>}/>
+              extra={<><span>강좌횟수 : <b>{lectureSummary.count}</b>회</span><span>인원 : <b>{lectureSummary.qty}</b>명</span></>}/>
           <SummaryCard title="특판 매출" icon="🤝" summary={bizSummary} color="#2E7D32"/>
         </div>
       )}
