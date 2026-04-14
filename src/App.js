@@ -1135,6 +1135,12 @@ function SalesInputPage({ profile }) {
         const dc = Number(field==='discount'    ? value : updated.discount)    || 0;
         updated.price = Math.max(0, np - dc);
       }
+      // 판매가 직접 변경 시 할인금액 자동 계산
+      if (field === 'price') {
+        const np = Number(updated.normalPrice) || 0;
+        const sp = Number(value) || 0;
+        updated.discount = String(Math.max(0, np - sp));
+      }
       return updated;
     }));
   };
