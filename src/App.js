@@ -5250,15 +5250,24 @@ function HomePage({ profile, setPage }) {
       )}
 
       {/* 헤더 */}
-      <div style={{ marginBottom:16 }}>
-        <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:4 }}>
-          {monthLabel} 누적 판매매출
-          {isManager && <span style={{ fontSize:13, fontWeight:500, color:'var(--text3)', marginLeft:8 }}>({profile?.branch})</span>}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+        <div>
+          <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:4 }}>
+            {monthLabel} 누적 판매매출
+            {isManager && <span style={{ fontSize:13, fontWeight:500, color:'var(--text3)', marginLeft:8 }}>({profile?.branch})</span>}
+          </div>
+          <div style={{ fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+            {monthStart} ~ {yesterdayStr} (어제까지)
+          </div>
         </div>
-        <div style={{ fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)' }}>
-          {monthStart} ~ {yesterdayStr} (어제까지)
-          {canSeeAll && <span style={{marginLeft:12, fontWeight:700, color:'var(--accent)'}}>통합 총 매출: {totalAmt.toLocaleString()}원</span>}
-        </div>
+        {canSeeAll && (
+          <div style={{ textAlign:'right', background:'#fff3e0', border:'2px solid var(--accent)', borderRadius:12, padding:'12px 20px' }}>
+            <div style={{ fontSize:11, fontWeight:600, color:'var(--accent)', marginBottom:4, letterSpacing:1 }}>통합 총 매출</div>
+            <div style={{ fontSize:28, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', lineHeight:1 }}>
+              {totalAmt.toLocaleString()}원
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 3개 매출 카드 (본사만) */}
