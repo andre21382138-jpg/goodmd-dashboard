@@ -7337,8 +7337,9 @@ function HelpPage({ profile }) {
   const isHQ      = profile?.job_title === '담당자';
   const isManager = profile?.job_title === '매니저';
 
-  const [role,    setRole]    = useState(isManager ? 'manager' : 'hq');
-  const [selMenu, setSelMenu] = useState(null);
+  const [role,       setRole]       = useState(isManager ? 'manager' : 'hq');
+  const [selMenu,    setSelMenu]    = useState(null);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const MENUS = {
     admin: [
@@ -7484,7 +7485,7 @@ function HelpPage({ profile }) {
       <div style={{width:140, flexShrink:0}}>
         <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>역할</div>
         {roles.map(r => (
-          <button key={r.key} onClick={()=>{setRole(r.key);setSelMenu(null);}}
+          <button key={r.key} onClick={()=>{setRole(r.key);setSelMenu(null);setFullscreen(false);}}
             style={{display:'block', width:'100%', textAlign:'left', padding:'10px 12px', marginBottom:4,
               border:'none', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: role===r.key?700:500,
               background: role===r.key?'var(--sidebar)':'#f5f5f5',
@@ -7498,7 +7499,7 @@ function HelpPage({ profile }) {
       <div style={{width:160, flexShrink:0}}>
         <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>메뉴</div>
         {menuList.map(m => (
-          <button key={m.key} onClick={()=>setSelMenu(m.key)}
+          <button key={m.key} onClick={()=>{setSelMenu(m.key);setFullscreen(false);}}
             style={{display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left',
               padding:'10px 12px', marginBottom:4, border:'1px solid',
               borderColor: selMenu===m.key?'var(--accent)':'transparent',
@@ -7524,10 +7525,16 @@ function HelpPage({ profile }) {
             {/* 헤더 */}
             <div style={{display:'flex', alignItems:'center', gap:10}}>
               <span style={{fontSize:24}}>{detail.icon}</span>
-              <div>
+              <div style={{flex:1}}>
                 <div style={{fontSize:17, fontWeight:700, color:'var(--text)'}}>{detail.label}</div>
                 <div style={{fontSize:12, color:'var(--text2)', marginTop:2}}>{detail.desc}</div>
               </div>
+              <button onClick={()=>setFullscreen(true)}
+                style={{height:34, padding:'0 14px', background:'var(--accent)', color:'#fff',
+                  border:'none', borderRadius:'var(--radius)', fontSize:12, fontWeight:700,
+                  cursor:'pointer', display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
+                ⛶ 전체화면
+              </button>
             </div>
 
             {/* 화면 미리보기 */}
@@ -7536,16 +7543,14 @@ function HelpPage({ profile }) {
               <div style={{
                 border:'2px solid var(--border)', borderRadius:10, overflow:'hidden',
                 background:'var(--bg)', position:'relative',
-                height: detail.previewHeight || 400,
+                height: Math.round((detail.previewHeight||400) * (detail.previewScale||0.65)),
               }}>
-                {/* 클릭 방지 오버레이 */}
                 <div style={{position:'absolute',inset:0,zIndex:10,cursor:'default'}}/>
                 <div style={{
-                  transform:`scale(${detail.previewScale || 0.6})`,
+                  transform:`scale(${detail.previewScale||0.65})`,
                   transformOrigin:'top left',
-                  width: `${100/(detail.previewScale||0.6)}%`,
+                  width:`${Math.round(100/(detail.previewScale||0.65))}%`,
                   pointerEvents:'none',
-                  overflow:'hidden',
                 }}>
                   <div style={{padding:20}}>
                     {detail.component}
@@ -7568,6 +7573,25 @@ function HelpPage({ profile }) {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 전체화면 모달 */}
+        {fullscreen && detail && (
+          <div style={{position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.6)',
+            display:'flex', flexDirection:'column'}}>
+            <div style={{display:'flex', alignItems:'center', gap:10, padding:'12px 20px',
+              background:'#fff', borderBottom:'1px solid var(--border)', flexShrink:0}}>
+              <span style={{fontSize:18}}>{detail.icon}</span>
+              <span style={{fontSize:15, fontWeight:700}}>{detail.label}</span>
+              <button onClick={()=>setFullscreen(false)}
+                style={{marginLeft:'auto', height:32, padding:'0 16px', background:'#f5f5f5',
+                  border:'1px solid var(--border)', borderRadius:'var(--radius)',
+                  fontSize:13, fontWeight:600, cursor:'pointer'}}>✕ 닫기</button>
+            </div>
+            <div style={{flex:1, overflow:'auto', background:'var(--bg)', padding:24}}>
+              {detail.component}
             </div>
           </div>
         )}
