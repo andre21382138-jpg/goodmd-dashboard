@@ -7376,652 +7376,97 @@ function HelpPage({ profile }) {
   const btn = (txt, bg='#E65100', col='#fff') => <span style={{background:bg,color:col,borderRadius:4,padding:'3px 9px',fontSize:10,fontWeight:600,cursor:'pointer'}}>{txt}</span>;
   const inp = (val, w=120) => <span style={{display:'inline-block',width:w,border:'1px solid #ddd',borderRadius:4,padding:'4px 8px',fontSize:11,background:'#fafafa',color:'#333'}}>{val}</span>;
 
+  const previewProfile = {
+    ...profile,
+    job_title: role==='manager' ? '매니저' : '담당자',
+    role: role==='admin' ? 'admin' : 'user',
+  };
+
   const DETAILS = {
-    // ── 관리자 ──
     user_mgmt: {
-      icon:'👥', label:'사용자 관리',
-      desc:'신규 가입 요청이 들어오면 승인하고 역할을 설정합니다.',
+      icon:'👥', label:'사용자 관리', desc:'신규 가입 요청을 승인하고 역할을 설정합니다.',
       steps:['사이드바 → 🔐 사용자 관리 클릭','승인 대기 목록에서 [✓ 승인] 클릭 → 즉시 로그인 가능','[관리자로] 버튼으로 관리자 권한 부여 가능'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>👥 사용자 관리</div>
-          <div style={mB}>
-            <div style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:6,padding:'7px 12px',marginBottom:10,fontSize:11,color:'#6d4c41'}}>⏳ 승인 대기 2명</div>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>이름</th><th style={mTh}>이메일</th><th style={mTh}>점포</th><th style={mTh}>직책</th><th style={mTh}>처리</th></tr></thead>
-              <tbody>
-                <tr><td style={mTd}><b>박지수</b></td><td style={mTd}>jisoo@kbh.kr</td><td style={mTd}>롯데백화점 관악점</td><td style={mTd}>{bdg('매니저','#e3f2fd','#1565C0')}</td><td style={mTd}>{btn('✓ 승인','#2e7d32')}&nbsp;{btn('거절','#fff','#e53935')}</td></tr>
-                <tr style={{background:'#fafafa'}}><td style={mTd}><b>김민준</b></td><td style={mTd}>minjun@kbh.kr</td><td style={mTd}>갤러리아 진주점</td><td style={mTd}>{bdg('매니저','#e3f2fd','#1565C0')}</td><td style={mTd}>{btn('✓ 승인','#2e7d32')}&nbsp;{btn('거절','#fff','#e53935')}</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
+      component: <AdminTab profile={previewProfile}/>, previewScale:0.55, previewHeight:420,
     },
     notice: {
-      icon:'📢', label:'공지사항',
-      desc:'담당자·매니저 전원에게 공지를 작성합니다.',
-      steps:['사이드바 → 📢 공지사항 클릭','[+ 공지사항 작성] 버튼 클릭','제목·내용 입력 → [등록] 클릭','작성 즉시 전 직원에게 노출됨'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>📢 공지사항 <span style={{marginLeft:'auto'}}>{btn('+ 공지 작성')}</span></div>
-          <div style={mB}>
-            {[['5월 판매 목표 안내','2026-05-01','팔레오 5월 목표 매출은 지점별 상이하며...'],['신상품 입고 안내','2026-04-20','팔레오 닥터스노트 신제품이 입고되었습니다.']].map(([t,d,c],i)=>(
-              <div key={i} style={{border:'1px solid #eee',borderRadius:6,padding:'10px 12px',marginBottom:8,background:i===0?'#fffde7':'#fff'}}>
-                <div style={{fontWeight:700,fontSize:12,marginBottom:3}}>{t}</div>
-                <div style={{fontSize:10,color:'#aaa',marginBottom:6}}>관리자 · {d}</div>
-                <div style={{fontSize:11,color:'#555'}}>{c}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ),
+      icon:'📢', label:'공지사항', desc:'담당자·매니저 전원에게 공지를 작성합니다.',
+      steps:['사이드바 → 📢 공지사항 클릭','[+ 공지사항 작성] 버튼 클릭','제목·내용 입력 → [등록] 클릭'],
+      component: <NoticePage profile={previewProfile}/>, previewScale:0.55, previewHeight:380,
     },
     manager_mgmt: {
-      icon:'👔', label:'매니저 현황',
-      desc:'전체 매니저 목록을 조회하고 QR 코드를 발급합니다.',
+      icon:'👔', label:'매니저 현황', desc:'전체 매니저 목록을 조회하고 QR 코드를 발급합니다.',
       steps:['사이드바 → 👔 매니저 현황 클릭','[📱 QR] 버튼 클릭 → QR 이미지 팝업 → 인쇄','카운터에 비치 → 고객이 스캔 시 자동 연결'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>👔 매니저 현황</div>
-          <div style={mB}>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>점포</th><th style={mTh}>지점</th><th style={mTh}>이름</th><th style={mTh}>연락처</th><th style={mTh}>QR</th></tr></thead>
-              <tbody>
-                {[['롯데백화점','관악점','김영희','010-1234-5678'],['갤러리아백화점','진주점','이철수','010-9876-5432'],['AK백화점','수원점','박지수','010-5555-1234']].map(([s,b,n,p],i)=>(
-                  <tr key={i} style={{background:i%2===0?'#fafafa':'#fff'}}>
-                    <td style={mTd}>{bdg(s)}</td><td style={mTd}>{bdg(b,'#e3f2fd','#1565C0')}</td>
-                    <td style={{...mTd,fontWeight:600}}>{n}</td>
-                    <td style={{...mTd,fontFamily:'monospace'}}>{p}</td>
-                    <td style={mTd}>{btn('📱 QR','#f3e5f5','#6a1b9a')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
+      component: <ManagerMgmtPage/>, previewScale:0.55, previewHeight:400,
     },
-    // ── 담당자 ──
     home: {
-      icon:'🏠', label:'홈 대시보드',
-      desc:'로그인 시 첫 화면. 당월 누적 매출을 한눈에 확인합니다.',
+      icon:'🏠', label:'홈 대시보드', desc:'당월 매장/강좌/특판 누적 매출을 한눈에 확인합니다.',
       steps:['매장매출·강좌매출·특판매출 3가지 카드로 분류 표시','우측 상단 통합 총 매출 금액 크게 표시','하단 매장별/강좌별/특판별 상세 현황표 확인'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>🏠 2026년 04월 누적 판매매출 <span style={{marginLeft:'auto',background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:6,padding:'4px 10px',color:'#E65100',fontWeight:700}}>통합 총 매출 87,450,000원</span></div>
-          <div style={mB}>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:12}}>
-              {[['🏬 매장 매출','72,300,000원','주문 : 1,842건 수량 : 18,234개','#E65100'],['🎓 강좌 매출','8,200,000원','강좌횟수 : 12회 인원 : 186명','#1565C0'],['🤝 특판 매출','6,950,000원','주문 : 23건 수량 : 456개','#2E7D32']].map(([t,v,s,c])=>(
-                <div key={t} style={{border:`2px solid ${c}20`,borderRadius:8,padding:'10px 12px'}}>
-                  <div style={{fontSize:10,fontWeight:700,color:c,marginBottom:6}}>{t}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:c,fontFamily:'monospace',marginBottom:4}}>{v}</div>
-                  <div style={{fontSize:10,color:'#888'}}>{s}</div>
-                </div>
-              ))}
-            </div>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>#</th><th style={mTh}>점포</th><th style={mTh}>지점</th><th style={mTh}>매출금액</th><th style={mTh}>비중</th></tr></thead>
-              <tbody>
-                {[['갤러리아백화점','진주점','18,400,000',82],['롯데백화점','관악점','15,200,000',68],['AK백화점','수원점','12,700,000',57]].map(([s,b,v,p],i)=>(
-                  <tr key={i}><td style={{...mTd,color:'#aaa'}}>{i+1}</td><td style={mTd}>{bdg(s)}</td><td style={mTd}>{bdg(b,'#e3f2fd','#1565C0')}</td>
-                    <td style={{...mTd,color:'#E65100',fontWeight:700,fontFamily:'monospace'}}>{v}원</td>
-                    <td style={mTd}><div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:60,height:5,background:'#eee',borderRadius:3}}><div style={{width:`${p}%`,height:'100%',background:'#E65100',borderRadius:3}}/></div><span style={{fontSize:10,color:'#888'}}>{p}%</span></div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
+      component: <HomePage profile={previewProfile} setPage={()=>{}}/>, previewScale:0.5, previewHeight:500,
     },
     product_mgmt: {
-      icon:'🛍️', label:'상품관리',
-      desc:'브랜드와 상품을 등록·조회·수정합니다.',
-      steps:['전체상품현황: 상품코드·ERP코드·브랜드·상품명·원가·판매가 조회','검색창에서 상품명·코드로 즉시 검색 가능','[수정] 클릭 → 원가·판매가 직접 수정 후 저장','상품추가: 브랜드·상품코드(필수)·ERP코드·상품명·원가·판매가 입력'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>🛍️ 전체 상품 현황 (552개) <span style={{marginLeft:'auto'}}>{inp('상품명·코드 검색',140)}</span></div>
-          <div style={mB}>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>상품코드</th><th style={mTh}>ERP코드</th><th style={mTh}>브랜드</th><th style={mTh}>상품명</th><th style={{...mTh,textAlign:'right'}}>원가</th><th style={{...mTh,textAlign:'right'}}>판매가</th><th style={mTh}>수정</th></tr></thead>
-              <tbody>
-                {[['8809470001096','8809470001096','팔레오','팔레오 오메가사차인치오일캡슐','3,400','35,000'],['8809470005834','8809470005834','팔레오','팔레오 브로콜리새싹분말 30g','7,700','30,000'],['2001608','2001608','비품','쇼핑백_소(화이트)','—','—']].map(([c,e,b,n,co,p],i)=>(
-                  <tr key={i} style={{background:i%2===0?'#fafafa':'#fff'}}>
-                    <td style={{...mTd,fontFamily:'monospace',color:'#aaa',fontSize:10}}>{c}</td>
-                    <td style={{...mTd,fontFamily:'monospace',color:'#aaa',fontSize:10}}>{e}</td>
-                    <td style={mTd}>{bdg(b)}</td><td style={{...mTd,fontWeight:600}}>{n}</td>
-                    <td style={{...mTd,textAlign:'right',fontFamily:'monospace'}}>{co}원</td>
-                    <td style={{...mTd,textAlign:'right',fontFamily:'monospace',color:'#E65100',fontWeight:700}}>{p}원</td>
-                    <td style={mTd}>{btn('수정','#f5f5f5','#555')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
+      icon:'🛍️', label:'상품관리', desc:'브랜드와 상품을 등록·조회·수정합니다.',
+      steps:['전체상품현황: 상품코드·ERP코드·브랜드·상품명·원가·판매가 조회','검색창에서 상품명·코드로 즉시 검색 가능','[수정] 클릭 → 원가·판매가 직접 수정 후 저장'],
+      component: <ProductMgmtPage subPage={null}/>, previewScale:0.52, previewHeight:420,
     },
     stock: {
-      icon:'📦', label:'매장재고',
-      desc:'매장별 현재 재고를 조회하고 수정합니다. 판매 입력 시 자동 차감됩니다.',
-      steps:['점포·지점 선택 후 해당 매장 재고 조회','상품명 또는 상품코드로 즉시 검색 가능','품절(0개) → 빨간색 표시 / 5개 이하 → 주황색 ⚠️ 경고','[수정] 클릭 → 수량 직접 입력 → [저장] 클릭','판매 입력 완료 시 해당 상품 재고 자동 차감'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>📦 매장재고 현황 <span style={{marginLeft:'auto',fontSize:10,color:'#888'}}>2,358개 상품 · 총 재고 48,234개</span></div>
-          <div style={mB}>
-            <div style={{display:'flex',gap:6,marginBottom:10,alignItems:'center'}}>
-              <select style={{height:30,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}><option>갤러리아백화점</option></select>
-              <select style={{height:30,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}><option>진주점</option></select>
-              {inp('상품명·코드 검색',180)}
-            </div>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>점포</th><th style={mTh}>지점</th><th style={mTh}>상품코드</th><th style={mTh}>상품명</th><th style={{...mTh,textAlign:'right'}}>재고수량</th><th style={mTh}>수정</th></tr></thead>
-              <tbody>
-                {[
-                  ['갤러리아백화점','진주점','8809470001096','팔레오_오메가사차인치오일캡슐 60C',42,'normal'],
-                  ['갤러리아백화점','진주점','8809470005834','팔레오_브로콜리새싹분말 30g',3,'low'],
-                  ['갤러리아백화점','진주점','8809470008729','팔레오_닥터스노트 생생활력 60포',0,'zero'],
-                  ['갤러리아백화점','진주점','8809658890018','코코엘_퍼펙트 콜라겐 스틱 14포',18,'normal'],
-                ].map(([s,b,c,n,q,t],i)=>(
-                  <tr key={i} style={{background:t==='zero'?'#fff5f5':i%2===0?'#fafafa':'#fff'}}>
-                    <td style={mTd}>{bdg(s)}</td>
-                    <td style={mTd}>{bdg(b,'#e3f2fd','#1565C0')}</td>
-                    <td style={{...mTd,fontFamily:'monospace',fontSize:10,color:'#aaa'}}>{c}</td>
-                    <td style={{...mTd,fontWeight:600,fontSize:11}}>{n}</td>
-                    <td style={{...mTd,textAlign:'right',fontFamily:'monospace',fontWeight:700,
-                      color:t==='zero'?'#c62828':t==='low'?'#E65100':'#333'}}>
-                      {q}{t==='zero'&&<span style={{background:'#ffebee',color:'#c62828',borderRadius:3,padding:'1px 5px',fontSize:9,marginLeft:4,fontWeight:600}}>품절</span>}
-                      {t==='low'&&<span style={{fontSize:10,marginLeft:4}}>⚠️</span>}
-                    </td>
-                    <td style={mTd}>{btn('수정','#f5f5f5','#555')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{marginTop:10,padding:'8px 10px',background:'#f8f8f8',borderRadius:6,fontSize:11,color:'#666'}}>
-              💡 판매 입력 시 재고가 자동으로 차감됩니다
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    sales_store: {
-      icon:'🏬', label:'매장 매출',
-      desc:'날짜·점포·브랜드·키워드 필터로 매장 판매 내역을 조회합니다.',
-      steps:['사이드바 → 📋 매출조회 → 🏬 매장 매출 클릭','날짜 빠른선택: 어제 / 당월 / 전월 버튼으로 빠르게 설정','점포·지점·브랜드·키워드 필터 조합 후 자동 조회','정렬: 최신순 / 판매건수 / 매출금액 선택 가능','상단 요약에서 총 건수·수량·금액 즉시 확인'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>
-            <span style={{color:'#aaa',fontSize:10,marginRight:8,cursor:'pointer'}}>← 목록</span>
-            {['🏬 매장 매출','🤝 특판 매출','🎓 강좌 매출'].map((t,i)=>(
-              <span key={i} style={{padding:'4px 10px',borderBottom:i===0?'2px solid #E65100':'none',color:i===0?'#E65100':'#aaa',fontWeight:i===0?700:400,cursor:'pointer',fontSize:11,marginBottom:-1}}>{t}</span>
-            ))}
-          </div>
-          <div style={mB}>
-            <div style={{display:'flex',gap:4,marginBottom:8,flexWrap:'wrap',alignItems:'center'}}>
-              <span style={{padding:'4px 10px',border:'1px solid #ddd',borderRadius:4,fontSize:10,cursor:'pointer',background:'#fff'}}>어제</span>
-              <span style={{padding:'4px 10px',border:'2px solid #E65100',borderRadius:4,fontSize:10,cursor:'pointer',background:'#fff3e0',color:'#E65100',fontWeight:700}}>당월</span>
-              <span style={{padding:'4px 10px',border:'1px solid #ddd',borderRadius:4,fontSize:10,cursor:'pointer',background:'#fff'}}>전월</span>
-              <select style={{height:28,padding:'0 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10}}><option>전체 점포</option></select>
-              <select style={{height:28,padding:'0 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10}}><option>전체 브랜드</option></select>
-              {inp('상품명 검색',120)}
-              <span style={{marginLeft:'auto',fontSize:11,fontWeight:700,color:'#E65100'}}>총 1,842건 · 18,234개 · 72,300,000원</span>
-            </div>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>판매일</th><th style={mTh}>점포</th><th style={mTh}>지점</th><th style={mTh}>브랜드</th><th style={mTh}>상품명</th><th style={{...mTh,textAlign:'right'}}>수량</th><th style={{...mTh,textAlign:'right'}}>합계</th><th style={mTh}>결제</th></tr></thead>
-              <tbody>
-                {[
-                  ['2026-04-15','갤러리아백화점','진주점','팔레오','팔레오_오메가사차인치오일캡슐',2,'70,000','카드'],
-                  ['2026-04-15','롯데백화점','관악점','팔레오','팔레오_브로콜리새싹분말 30g',3,'90,000','현금'],
-                  ['2026-04-14','AK백화점','수원점','코코엘','코코엘_퍼펙트 콜라겐 스틱',1,'48,000','카드'],
-                  ['2026-04-14','현대백화점','충청점','팔레오','팔레오_닥터스노트 생생활력',2,'80,000','카드'],
-                ].map(([d,s,b,br,n,q,t,pay],i)=>(
-                  <tr key={i} style={{background:i%2===0?'#fafafa':'#fff'}}>
-                    <td style={{...mTd,fontFamily:'monospace',fontSize:10}}>{d}</td>
-                    <td style={mTd}>{bdg(s)}</td>
-                    <td style={mTd}>{bdg(b,'#e3f2fd','#1565C0')}</td>
-                    <td style={mTd}><span style={{fontSize:10,fontWeight:600,color:'#E65100'}}>{br}</span></td>
-                    <td style={{...mTd,fontSize:11}}>{n}</td>
-                    <td style={{...mTd,textAlign:'right',fontFamily:'monospace'}}>{q}</td>
-                    <td style={{...mTd,textAlign:'right',fontFamily:'monospace',fontWeight:700,color:'#E65100'}}>{t}원</td>
-                    <td style={mTd}>{bdg(pay,pay==='카드'?'#e3f2fd':'#f3e5f5',pay==='카드'?'#1565C0':'#6a1b9a')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
-    },
-    sales_biz: {
-      icon:'🤝', label:'특판 매출',
-      desc:'B2B 특판 업체에 납품한 매출을 입력하고 조회합니다. 공급가(단가)×수량으로 집계됩니다.',
-      steps:['사이드바 → 📋 매출조회 → 🤝 특판 매출 클릭','[📋 특판 매출 조회] 탭: 월별·업체별 필터로 조회','[➕ 매출 입력] 탭에서 날짜·업체·브랜드·상품·수량·공급가 입력','공급가 = 개당 단가 (합계는 수량×공급가로 자동 계산)','업체 목록: HSF, MSH KOREA, 본사특판, 와이비팜, 파마스퀘어 등 30개'],
-      mockup: (
-        <div>
-          <div style={mW}>
-            <div style={mH}>
-              <span style={{color:'#aaa',fontSize:10,marginRight:8,cursor:'pointer'}}>← 목록</span>
-              {['🏬 매장 매출','🤝 특판 매출','🎓 강좌 매출'].map((t,i)=>(
-                <span key={i} style={{padding:'4px 10px',borderBottom:i===1?'2px solid #E65100':'none',color:i===1?'#E65100':'#aaa',fontWeight:i===1?700:400,cursor:'pointer',fontSize:11,marginBottom:-1}}>{t}</span>
-              ))}
-            </div>
-            <div style={mB}>
-              <div style={{display:'flex',gap:4,marginBottom:4}}>
-                {['📋 특판 매출 조회','➕ 매출 입력'].map((t,i)=>(
-                  <span key={i} style={{padding:'5px 14px',border:'2px solid',borderRadius:4,fontSize:11,fontWeight:700,cursor:'pointer',borderColor:i===0?'#E65100':'#ddd',background:i===0?'#fff3e0':'#fff',color:i===0?'#E65100':'#888'}}>{t}</span>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div style={mW}>
-            <div style={mH}>📋 특판 매출 조회 <span style={{marginLeft:'auto',fontSize:10,color:'#E65100',fontWeight:700}}>총 매출 6,950,000원</span></div>
-            <div style={mB}>
-              <div style={{display:'flex',gap:6,marginBottom:10}}>
-                <select style={{height:28,padding:'0 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10}}><option>2026-04</option></select>
-                <select style={{height:28,padding:'0 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10}}><option>전체 업체</option></select>
-              </div>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mTh}>날짜</th><th style={mTh}>업체</th><th style={mTh}>브랜드</th><th style={mTh}>상품명</th><th style={{...mTh,textAlign:'right'}}>수량</th><th style={{...mTh,textAlign:'right'}}>공급가(단가)</th><th style={{...mTh,textAlign:'right'}}>합계</th></tr></thead>
-                <tbody>
-                  {[
-                    ['2026-04-14','와이비팜','팔레오','팔레오_오메가사차인치오일캡슐 60C',50,28000],
-                    ['2026-04-12','파마스퀘어','팔레오','팔레오_닥터스노트 생생활력 60포',30,32000],
-                    ['2026-04-10','본사특판','코코엘','코코엘_퍼펙트 콜라겐 스틱 14포',100,18000],
-                    ['2026-04-08','HSF(에이치에스에프)','팔레오','팔레오_브로콜리새싹분말 30g',20,24000],
-                  ].map(([d,c,br,n,q,sp],i)=>(
-                    <tr key={i} style={{background:i%2===0?'#fafafa':'#fff'}}>
-                      <td style={{...mTd,fontFamily:'monospace',fontSize:10}}>{d}</td>
-                      <td style={{...mTd,fontWeight:600,fontSize:11}}>{c}</td>
-                      <td style={mTd}>{bdg(br)}</td>
-                      <td style={{...mTd,fontSize:11}}>{n}</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace'}}>{q}</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace'}}>{sp.toLocaleString()}원</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace',fontWeight:700,color:'#2E7D32'}}>{(q*sp).toLocaleString()}원</td>
-                    </tr>
-                  ))}
-                  <tr style={{background:'#f0f4f0',borderTop:'2px solid #c8e6c9'}}>
-                    <td colSpan={4} style={{padding:'8px 10px',fontWeight:700,fontSize:11}}>합계</td>
-                    <td style={{...mTd,textAlign:'right',fontWeight:700,fontFamily:'monospace'}}>200</td>
-                    <td/>
-                    <td style={{...mTd,textAlign:'right',fontFamily:'monospace',fontWeight:700,fontSize:13,color:'#2E7D32'}}>6,950,000원</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={mW}>
-            <div style={mH}>➕ 특판 매출 입력</div>
-            <div style={mB}>
-              <div style={{display:'grid',gridTemplateColumns:'140px 1fr 1fr',gap:8,marginBottom:8}}>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>매출일 *</div>{inp('2026-04-15','100%')}</div>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>업체 *</div>
-                  <select style={{width:'100%',height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}><option>와이비팜</option></select>
-                </div>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>브랜드</div>
-                  <select style={{width:'100%',height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}><option>팔레오</option></select>
-                </div>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 100px 130px',gap:8,marginBottom:8}}>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>상품 검색 *</div>{inp('팔레오 오메가사차인치','100%')}</div>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>수량 *</div>{inp('50','100%')}</div>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>공급가(단가) *</div><span style={{display:'inline-block',width:'100%',border:'1px solid #ddd',borderRadius:4,padding:'4px 8px',fontSize:11,background:'#fafafa',color:'#E65100',fontWeight:700}}>28,000원</span></div>
-              </div>
-              <div style={{textAlign:'right',fontSize:12,fontWeight:700,color:'#2E7D32',marginBottom:8}}>합계: 1,400,000원 (50 × 28,000원)</div>
-              {btn('✅ 특판 매출 등록')}
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    sales_lecture: {
-      icon:'🎓', label:'강좌 매출',
-      desc:'백화점 현장 강좌를 진행하고 발생한 매출을 입력·조회합니다.',
-      steps:['사이드바 → 📋 매출조회 → 🎓 강좌 매출 클릭','[📋 강좌 매출 조회] 탭: 월별·점포별 필터로 조회','[➕ 매출 입력] 탭에서 날짜·점포·지점·인원수·매출액·메모 입력','메모 입력칸에서 엔터키로 줄바꿈 가능','강좌 횟수(건수)와 총 인원수 자동 집계'],
-      mockup: (
-        <div>
-          <div style={mW}>
-            <div style={mH}>🎓 강좌 매출 조회 <span style={{marginLeft:'auto',fontSize:10,color:'#1565C0',fontWeight:700}}>총 매출 8,200,000원</span></div>
-            <div style={mB}>
-              <div style={{display:'flex',gap:6,marginBottom:10}}>
-                <select style={{height:28,padding:'0 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10}}><option>2026-04</option></select>
-                <select style={{height:28,padding:'0 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10}}><option>전체 점포</option></select>
-              </div>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mTh}>날짜</th><th style={mTh}>점포</th><th style={mTh}>지점</th><th style={{...mTh,textAlign:'right'}}>인원수</th><th style={{...mTh,textAlign:'right'}}>매출액</th><th style={mTh}>메모</th></tr></thead>
-                <tbody>
-                  {[
-                    ['2026-04-13','갤러리아백화점','진주점',24,1800000,'팔레오 건강강좌 + 시식행사'],
-                    ['2026-04-10','롯데백화점','관악점',18,1350000,'봄 건강관리 세미나'],
-                    ['2026-04-08','현대백화점','충청점',32,2400000,'팔레오 닥터스노트 강좌'],
-                    ['2026-04-05','AK백화점','수원점',15,1200000,'코코엘 콜라겐 강좌'],
-                  ].map(([d,s,b,people,amt,memo],i)=>(
-                    <tr key={i} style={{background:i%2===0?'#fafafa':'#fff'}}>
-                      <td style={{...mTd,fontFamily:'monospace',fontSize:10}}>{d}</td>
-                      <td style={mTd}>{bdg(s)}</td>
-                      <td style={mTd}>{bdg(b,'#e3f2fd','#1565C0')}</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace',fontWeight:600}}>{people}명</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace',fontWeight:700,color:'#1565C0'}}>{amt.toLocaleString()}원</td>
-                      <td style={{...mTd,fontSize:10,color:'#666'}}>{memo}</td>
-                    </tr>
-                  ))}
-                  <tr style={{background:'#e8eaf6',borderTop:'2px solid #c5cae9'}}>
-                    <td colSpan={3} style={{padding:'8px 10px',fontWeight:700,fontSize:11}}>합계 (4회)</td>
-                    <td style={{...mTd,textAlign:'right',fontWeight:700,fontFamily:'monospace'}}>89명</td>
-                    <td style={{...mTd,textAlign:'right',fontFamily:'monospace',fontWeight:700,fontSize:13,color:'#1565C0'}}>6,750,000원</td>
-                    <td/>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={mW}>
-            <div style={mH}>➕ 강좌 매출 입력</div>
-            <div style={mB}>
-              <div style={{display:'grid',gridTemplateColumns:'140px 1fr 1fr',gap:8,marginBottom:8}}>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>매출일 *</div>{inp('2026-04-15','100%')}</div>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>점포명 *</div>
-                  <select style={{width:'100%',height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}><option>갤러리아백화점</option></select>
-                </div>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>지점명 *</div>
-                  <select style={{width:'100%',height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}><option>진주점</option></select>
-                </div>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>강좌 인원수 (명)</div>{inp('24','100%')}</div>
-                <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>매출액 (원) *</div><span style={{display:'inline-block',width:'100%',border:'1px solid #ddd',borderRadius:4,padding:'4px 8px',fontSize:11,background:'#fafafa',color:'#1565C0',fontWeight:700}}>1,800,000원</span></div>
-              </div>
-              <div style={{marginBottom:8}}>
-                <div style={{fontSize:9,color:'#aaa',marginBottom:3}}>메모 (엔터키 줄바꿈 가능)</div>
-                <div style={{border:'1px solid #ddd',borderRadius:4,padding:'6px 8px',fontSize:11,background:'#fafafa',color:'#555',minHeight:50,lineHeight:1.6}}>
-                  팔레오 건강강좌 + 시식행사<br/>
-                  <span style={{color:'#aaa'}}>아보카도오일 집중 강좌</span>
-                </div>
-              </div>
-              {btn('✅ 강좌 매출 등록','#1565C0')}
-            </div>
-          </div>
-        </div>
-      ),
+      icon:'📦', label:'매장재고', desc:'매장별 현재 재고를 조회하고 수정합니다. 판매 시 자동 차감됩니다.',
+      steps:['점포·지점 선택 후 해당 매장 재고 조회','품절(0개) → 빨간색 / 5개 이하 → 주황색 ⚠️','[수정] 클릭 → 수량 직접 입력 → [저장] 클릭','판매 입력 완료 시 해당 상품 재고 자동 차감'],
+      component: <StoreStockPage profile={previewProfile}/>, previewScale:0.52, previewHeight:420,
     },
     salary: {
-      icon:'💰', label:'급여관리',
-      desc:'급여조건·인센티브·급여계산 3개 탭으로 구성됩니다.',
-      steps:['급여조건: 소속·직급·급여방법·기본급여·추가수당 설정','인센티브 → 목표매출달성혜택: 점포별 월 목표 설정, 전월매출 자동 조회','인센티브 → 회원가입매출혜택: SMS동의 가입월 구매 시 인센티브 자동 계산','급여계산: 출근기록 기반 자동 계산 (기본급여 + 회원인센티브)'],
-      mockup: (
-        <div>
-          <div style={mW}>
-            <div style={mH}>💰 급여 계산 — 2026년 04월</div>
-            <div style={mB}>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mTh}>이름</th><th style={mTh}>점포/지점</th><th style={{...mTh,textAlign:'right'}}>기본급여</th><th style={{...mTh,textAlign:'right'}}>회원 인센티브</th><th style={{...mTh,textAlign:'right'}}>합계 지급액</th></tr></thead>
-                <tbody>
-                  {[['김영희','롯데/관악점','1,280,000','3,000','1,283,000'],['이철수','갤러리아/진주점','2,200,000','7,000','2,207,000'],['박지수','AK/수원점','960,000','—','960,000']].map(([n,s,base,inc,tot],i)=>(
-                    <tr key={i} style={{background:i%2===0?'#fafafa':'#fff'}}>
-                      <td style={{...mTd,fontWeight:700}}>{n}</td><td style={mTd}>{s}</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace'}}>{base}원</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace',color:inc!=='—'?'#2e7d32':'#aaa',fontWeight:inc!=='—'?700:400}}>{inc!=='—'?`+${inc}원`:'-'}</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace',color:'#E65100',fontWeight:700}}>{tot}원</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={mW}>
-            <div style={mH}>🎯 목표매출달성혜택 — 2026년 05월</div>
-            <div style={mB}>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mTh}>점포</th><th style={mTh}>지점</th><th style={{...mTh,textAlign:'right'}}>전월 매출</th><th style={{...mTh,textAlign:'right'}}>목표 매출</th><th style={{...mTh,textAlign:'right'}}>달성률</th></tr></thead>
-                <tbody>
-                  {[['갤러리아백화점','진주점','18,400,000','20,000,000',92,'red'],['롯데백화점','관악점','15,200,000','15,000,000',101,'green'],['AK백화점','수원점','12,700,000','15,000,000',85,'orange']].map(([s,b,prev,tgt,rate,c],i)=>(
-                    <tr key={i}><td style={mTd}>{bdg(s)}</td><td style={mTd}>{bdg(b,'#e3f2fd','#1565C0')}</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace'}}>{prev}원</td>
-                      <td style={{...mTd,textAlign:'right',fontFamily:'monospace',color:'#E65100',fontWeight:700}}>{tgt}원</td>
-                      <td style={{...mTd,textAlign:'right'}}><span style={{padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:700,background:c==='green'?'#e8f5e9':c==='orange'?'#fff3e0':'#ffebee',color:c==='green'?'#2e7d32':c==='orange'?'#E65100':'#c62828'}}>{rate}%</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      ),
+      icon:'💰', label:'급여관리', desc:'급여조건·인센티브·급여계산 3개 탭으로 구성됩니다.',
+      steps:['급여조건: 소속·직급·급여방법·기본급여 설정','인센티브 → 목표매출달성혜택: 점포별 월 목표 / 전월매출 자동 조회','급여계산: 출근기록 기반 자동 계산 (기본급여 + 회원인센티브)'],
+      component: <IncentivePage profile={previewProfile}/>, previewScale:0.52, previewHeight:480,
     },
     attendance: {
-      icon:'🗓️', label:'근태관리',
-      desc:'매니저별 출퇴근 기록과 휴무 계획을 관리합니다.',
-      steps:['근태관리: 전체 매니저 출퇴근 현황 월별 조회','휴무계획: 매니저가 제출한 다음달 휴무계획 승인/반려','매월 20~25일 미제출 매니저에게 대시보드 알림 자동 표시'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>🗓️ 근태 관리 — 2026년 04월</div>
-          <div style={mB}>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>이름</th><th style={mTh}>점포/지점</th><th style={mTh}>04/14(화)</th><th style={mTh}>04/15(수)</th><th style={mTh}>04/16(목)</th><th style={mTh}>출근일수</th></tr></thead>
-              <tbody>
-                {[['김영희','관악점',false],['이철수','진주점',true],['박지수','수원점',false]].map(([n,b,holiday],i)=>(
-                  <tr key={i} style={{background:i%2===0?'#fafafa':'#fff'}}>
-                    <td style={{...mTd,fontWeight:700}}>{n}</td><td style={mTd}>{bdg(b,'#e3f2fd','#1565C0')}</td>
-                    <td style={{...mTd,fontSize:10,color:holiday?'#1565C0':'#333'}}>{holiday?'휴무':'09:30~18:20'}</td>
-                    <td style={{...mTd,fontSize:10}}>09:15~18:05</td>
-                    <td style={{...mTd,fontSize:10}}>09:40~18:30</td>
-                    <td style={{...mTd,fontFamily:'monospace',fontWeight:700,color:'#E65100'}}>{[18,20,15][i]}일</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
+      icon:'🗓️', label:'근태관리', desc:'매니저별 출퇴근 기록과 휴무 계획을 관리합니다.',
+      steps:['전체 매니저 출퇴근 현황 월별 조회','휴무계획: 매니저가 제출한 다음달 휴무계획 승인/반려','매월 20~25일 미제출 매니저에게 대시보드 알림 자동 표시'],
+      component: <AttendanceMgmtPage/>, previewScale:0.52, previewHeight:420,
     },
     member_mgmt: {
-      icon:'👥', label:'고객관리',
-      desc:'전체 53,000명 이상의 회원을 조회·관리합니다.',
-      steps:['점포/지점/가입일/마케팅동의/1년미만/등급 필터 조합 가능','[조회] 클릭 → 200명씩 페이지네이션 표시','회원 클릭 → 팝업으로 상세정보·구매이력 즉시 확인','등급: 패밀리→실버→골드→로얄→VIP→VVIP (누적구매액 기준 자동 변경)'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>👥 회원 조회 <span style={{marginLeft:'auto',fontSize:10,color:'#aaa'}}>총 53,143명</span></div>
-          <div style={mB}>
-            <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
-              <select style={{height:28,padding:'0 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10}}><option>전체 점포</option></select>
-              <select style={{height:28,padding:'0 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10}}><option>전체 등급</option></select>
-              <span style={{height:28,padding:'0 8px',border:'2px solid #e8f5e9',borderRadius:4,fontSize:10,display:'flex',alignItems:'center',background:'#e8f5e9',color:'#2e7d32',fontWeight:600}}>✅ 마케팅동의</span>
-              <span style={{height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,display:'flex',alignItems:'center',color:'#555'}}>📅 1년 미만</span>
-            </div>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>가입일</th><th style={mTh}>이름</th><th style={mTh}>등급</th><th style={mTh}>휴대폰</th><th style={mTh}>점포/지점</th><th style={{...mTh,textAlign:'right'}}>총구매금액</th><th style={mTh}>마케팅</th></tr></thead>
-              <tbody>
-                {[['2026-03-15','김민지','골드','010-1234-5678','롯데/관악점','485,000',true],['2026-02-08','이수진','실버','010-9876-5432','갤러리아/진주점','182,000',true],['2025-11-20','박영호','패밀리','010-5555-0000','AK/수원점','45,000',false]].map(([d,n,g,p,s,tot,sms],i)=>(
-                  <tr key={i} style={{background:i%2===0?'#fafafa':'#fff',cursor:'pointer'}}>
-                    <td style={{...mTd,fontFamily:'monospace',fontSize:10}}>{d}</td>
-                    <td style={{...mTd,fontWeight:700}}>{n}</td>
-                    <td style={mTd}>{bdg(g,g==='골드'?'#fff8e1':g==='실버'?'#f5f5f5':'#f3e5f5',g==='골드'?'#f57f17':g==='실버'?'#757575':'#6a1b9a')}</td>
-                    <td style={{...mTd,fontFamily:'monospace',fontSize:10}}>{p}</td>
-                    <td style={mTd}><span style={{fontSize:10}}>{s}</span></td>
-                    <td style={{...mTd,textAlign:'right',fontFamily:'monospace',fontWeight:600}}>{tot}원</td>
-                    <td style={mTd}><span style={{color:sms?'#2e7d32':'#aaa',fontWeight:600,fontSize:10}}>{sms?'✅':'미동의'}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
+      icon:'👥', label:'고객관리', desc:'전체 53,000명 이상의 회원을 조회·관리합니다.',
+      steps:['점포/지점/가입일/마케팅동의/등급 필터 조합 가능','[조회] 클릭 → 200명씩 페이지네이션 표시','회원 클릭 → 팝업으로 상세정보·구매이력 즉시 확인'],
+      component: <CustomerLookupPage profile={previewProfile}/>, previewScale:0.5, previewHeight:460,
     },
-    // ── 매니저 ──
+    sales_store: {
+      icon:'🏬', label:'매장 매출', desc:'날짜·점포·브랜드·키워드 필터로 매장 판매 내역을 조회합니다.',
+      steps:['날짜 빠른선택: 어제 / 당월 / 전월 버튼','점포·지점·브랜드·키워드 필터 조합 후 자동 조회','상단 탭으로 특판매출·강좌매출 바로 이동 가능'],
+      component: <SalesListPage setPage={()=>{}}/>, previewScale:0.52, previewHeight:440,
+    },
+    sales_biz: {
+      icon:'🤝', label:'특판 매출', desc:'B2B 특판 업체에 납품한 매출을 입력하고 조회합니다.',
+      steps:['[📋 조회] 탭: 월별·업체별 필터로 조회','[➕ 입력] 탭: 날짜·업체·브랜드·상품·수량·공급가 입력','공급가 = 개당 단가 (합계는 수량×공급가 자동 계산)'],
+      component: <BizSalesPage profile={previewProfile} setPage={()=>{}}/>, previewScale:0.52, previewHeight:440,
+    },
+    sales_lecture: {
+      icon:'🎓', label:'강좌 매출', desc:'백화점 현장 강좌 매출을 입력하고 조회합니다.',
+      steps:['[📋 조회] 탭: 월별·점포별 필터로 조회','[➕ 입력] 탭: 날짜·점포·지점·인원수·매출액·메모 입력','메모 입력칸에서 엔터키로 줄바꿈 가능'],
+      component: <LectureSalesPage profile={previewProfile} setPage={()=>{}}/>, previewScale:0.52, previewHeight:440,
+    },
     sales_input: {
-      icon:'🛒', label:'판매 입력',
-      desc:'매일 판매한 상품을 기록합니다. 회원 적립도 함께 처리합니다.',
-      steps:['브랜드 없이 상품명 바로 검색 (검색결과에 브랜드명 표시)','단종 상품은 검색 결과 하단에 자동 배치','판매가 입력 시 할인금액 자동 계산','회원 없음 / 기존회원 검색 / 신규회원 등록 선택','저장 시 해당 상품 매장재고 자동 차감'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>🛒 판매 입력 <span style={{fontSize:10,color:'#aaa',marginLeft:8}}>📍 롯데백화점 · 관악점</span></div>
-          <div style={mB}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-              <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>판매날짜</div>{inp('2026-04-15','100%')}</div>
-              <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>상품 검색</div>
-                <div style={{position:'relative'}}>
-                  {inp('팔레오 오메가','100%')}
-                  <div style={{position:'absolute',top:'100%',left:0,right:0,border:'1px solid #ddd',borderRadius:4,background:'#fff',zIndex:10,boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}>
-                    <div style={{padding:'6px 10px',fontSize:11,borderBottom:'1px solid #f0f0f0',background:'#fffde7'}}><span style={{fontSize:10,color:'#E65100',fontWeight:700,marginRight:4}}>[팔레오]</span>팔레오 오메가사차인치오일캡슐 <span style={{fontFamily:'monospace',color:'#aaa',fontSize:10}}>35,000원</span></div>
-                    <div style={{padding:'6px 10px',fontSize:11,color:'#888'}}><span style={{fontSize:10,color:'#E65100',fontWeight:700,marginRight:4}}>[팔레오]</span>팔레오 오메가3 오일</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:8}}>
-              <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>수량</div>{inp('2','100%')}</div>
-              <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>정상가</div>{inp('35,000','100%')}</div>
-              <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>판매가</div>{inp('30,000','100%')}</div>
-            </div>
-            <div style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:6,padding:'5px 10px',marginBottom:8,fontSize:11,color:'#E65100',fontWeight:600}}>할인 5,000원 · 소계 60,000원</div>
-            <div style={{background:'#f8f8f8',border:'1px solid #eee',borderRadius:6,padding:'8px 10px',marginBottom:8}}>
-              <div style={{fontSize:10,fontWeight:700,marginBottom:6}}>🙋 회원 연결</div>
-              <div style={{display:'flex',gap:4}}>
-                {['없음','기존 회원 검색','신규 회원등록'].map((t,i)=>(
-                  <span key={t} style={{padding:'4px 10px',border:'1px solid',borderRadius:4,fontSize:10,fontWeight:600,borderColor:i===0?'#E65100':'#ddd',background:i===0?'#fff3e0':'#f8f8f8',color:i===0?'#E65100':'#888'}}>{t}</span>
-                ))}
-              </div>
-            </div>
-            <div style={{display:'flex',gap:4,marginBottom:8}}>
-              {['카드','현금','기타'].map((p,i)=><span key={p} style={{flex:1,textAlign:'center',padding:'5px 0',border:'1px solid',borderRadius:4,fontSize:11,fontWeight:600,borderColor:i===0?'#E65100':'#ddd',background:i===0?'#fff3e0':'#f8f8f8',color:i===0?'#E65100':'#888'}}>{p}</span>)}
-            </div>
-            <div style={{background:'#E65100',color:'#fff',borderRadius:6,padding:'8px',textAlign:'center',fontSize:12,fontWeight:700}}>✅ 판매 저장</div>
-          </div>
-        </div>
-      ),
+      icon:'🛒', label:'판매 입력', desc:'매일 판매한 상품을 기록합니다. 회원 적립도 함께 처리합니다.',
+      steps:['브랜드 없이 상품명 바로 검색 (검색결과에 브랜드명 표시)','판매가 입력 시 할인금액 자동 계산','회원 없음 / 기존회원 검색 / 신규회원 등록 선택','저장 시 해당 상품 매장재고 자동 차감'],
+      component: <SalesInputPage profile={previewProfile}/>, previewScale:0.52, previewHeight:460,
     },
     stock_req: {
-      icon:'📦', label:'재고 요청',
-      desc:'본사에 상품 입고를 요청합니다.',
-      steps:['사이드바 → 📦 재고 요청 클릭','브랜드·상품 선택 → 요청 수량 입력','[요청 등록] 클릭 → 본사 담당자에게 전달','요청 내역에서 처리 상태 확인 가능'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>📦 재고 요청 <span style={{fontSize:10,color:'#aaa',marginLeft:8}}>📍 롯데백화점 · 관악점</span></div>
-          <div style={mB}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 100px',gap:8,marginBottom:10}}>
-              <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>브랜드</div><select style={{width:'100%',height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}><option>팔레오</option></select></div>
-              <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>상품</div><select style={{width:'100%',height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}}><option>오메가사차인치오일캡슐</option></select></div>
-              <div><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>수량</div>{inp('20','100%')}</div>
-            </div>
-            <div style={{marginBottom:10}}>{btn('+ 요청 등록')}</div>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr><th style={mTh}>요청일</th><th style={mTh}>상품명</th><th style={mTh}>수량</th><th style={mTh}>상태</th></tr></thead>
-              <tbody>
-                <tr><td style={mTd}>2026-04-10</td><td style={mTd}>팔레오 오메가사차인치오일캡슐</td><td style={mTd}>20</td><td style={mTd}>{bdg('처리완료','#e8f5e9','#2e7d32')}</td></tr>
-                <tr style={{background:'#fafafa'}}><td style={mTd}>2026-04-05</td><td style={mTd}>팔레오 브로콜리새싹분말 30g</td><td style={mTd}>10</td><td style={mTd}>{bdg('요청중','#fff3e0','#E65100')}</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ),
+      icon:'📦', label:'재고 요청', desc:'본사에 상품 입고를 요청합니다.',
+      steps:['사이드바 → 📦 재고 요청 클릭','브랜드·상품 선택 → 요청 수량 입력','[요청 등록] 클릭 → 본사 담당자에게 전달'],
+      component: <StockRequestPage profile={previewProfile}/>, previewScale:0.52, previewHeight:400,
     },
     member_reg: {
-      icon:'👤', label:'회원 관리',
-      desc:'담당 회원 등록·조회·QR 가입을 처리합니다.',
-      steps:['QR 가입: QR코드 출력 → 카운터 비치 → 고객이 직접 스캔하여 가입','서류 가입: 이름·연락처·생일·SMS동의 직접 입력','회원 목록: 내 담당 회원 조회 및 구매이력 확인','⚠️ 서류 가입 시 반드시 고객에게 마케팅 수신 동의 서면 별도 보관'],
-      mockup: (
-        <div style={mW}>
-          <div style={mH}>👤 서류 가입 <span style={{fontSize:10,color:'#aaa',marginLeft:8}}>📍 롯데백화점 · 관악점</span></div>
-          <div style={mB}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-              {[['가입일','2026-04-15'],['이름','홍길순'],['연락처','010-1234-5678'],['생일 (선택)','1982-09-03']].map(([l,v])=>(
-                <div key={l}><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>{l}</div>{inp(v,'100%')}</div>
-              ))}
-            </div>
-            <div style={{background:'#f8f8f8',border:'1px solid #eee',borderRadius:6,padding:'8px 10px',marginBottom:8}}>
-              <div style={{fontSize:10,fontWeight:700,marginBottom:4}}>📱 광고성 문자 수신 동의</div>
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <div style={{width:14,height:14,background:'#E65100',borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{color:'#fff',fontSize:9}}>✓</span></div>
-                <span style={{fontSize:11,color:'#E65100',fontWeight:600}}>광고성 정보 문자 수신에 동의합니다 (선택)</span>
-              </div>
-            </div>
-            <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:6,padding:'6px 10px',marginBottom:8,fontSize:10,color:'#856404'}}>⚠️ 서면 동의서를 반드시 별도 보관하세요</div>
-            <div style={{background:'#E65100',color:'#fff',borderRadius:6,padding:'8px',textAlign:'center',fontSize:12,fontWeight:700}}>✓ 회원 정보 저장</div>
-          </div>
-        </div>
-      ),
+      icon:'👤', label:'회원 관리', desc:'담당 회원 등록·조회·QR 가입을 처리합니다.',
+      steps:['QR 가입: QR코드 출력 → 카운터 비치 → 고객이 직접 스캔하여 가입','서류 가입: 이름·연락처·생일·SMS동의 직접 입력','⚠️ 서류 가입 시 반드시 고객에게 마케팅 수신 동의 서면 별도 보관'],
+      component: <CustomerDocPage profile={previewProfile}/>, previewScale:0.52, previewHeight:440,
     },
     qr: {
-      icon:'📱', label:'QR 회원가입',
-      desc:'고객이 QR을 스캔하면 자동으로 내 담당 회원으로 등록됩니다.',
-      steps:['사이드바 → 👤 회원 관리 → QR 가입 클릭','QR 이미지 출력 후 카운터에 비치','고객이 스마트폰으로 QR 스캔','고객이 이름·연락처·생일·SMS동의 직접 입력','제출 즉시 내 담당 회원으로 자동 등록'],
-      mockup: (
-        <div style={{display:'flex',gap:12}}>
-          <div style={{...mW,flex:1,marginBottom:0}}>
-            <div style={mH}>📱 QR 가입 (매니저 화면)</div>
-            <div style={mB}>
-              <div style={{background:'#fffde7',border:'1px solid #ffcc80',borderRadius:8,padding:'12px',marginBottom:10,textAlign:'center'}}>
-                <div style={{fontSize:11,fontWeight:700,marginBottom:6}}>내 QR 코드</div>
-                <div style={{width:80,height:80,background:'#333',borderRadius:6,margin:'0 auto 8px',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:9}}>QR CODE</div>
-                <div style={{fontSize:10,color:'#aaa'}}>롯데백화점 관악점 · 김영희</div>
-              </div>
-              {btn('🖨️ 출력하기')}
-            </div>
-          </div>
-          <div style={{...mW,width:180,flexShrink:0,marginBottom:0}}>
-            <div style={mH}>📱 고객 입력 화면</div>
-            <div style={mB}>
-              <div style={{textAlign:'center',marginBottom:8}}>
-                <div style={{fontSize:16,marginBottom:2}}>🏬</div>
-                <div style={{fontSize:12,fontWeight:700}}>회원 등록</div>
-                <div style={{fontSize:9,color:'#aaa'}}>롯데백화점 · 관악점</div>
-              </div>
-              {[['이름','홍길순'],['연락처','010-1234-5678'],['생일','1982-09-03']].map(([l,v])=>(
-                <div key={l} style={{marginBottom:5}}>
-                  <div style={{fontSize:9,color:'#aaa',marginBottom:2}}>{l}</div>
-                  <div style={{border:'1px solid #e0e0e0',borderRadius:5,padding:'5px 8px',fontSize:11,background:'#f8f8f8'}}>{v}</div>
-                </div>
-              ))}
-              <div style={{background:'#fff3e0',borderRadius:5,padding:'5px 8px',marginBottom:5,fontSize:10}}>
-                <div style={{display:'flex',gap:4,alignItems:'center'}}><div style={{width:11,height:11,background:'#E65100',borderRadius:2}}/><span style={{color:'#E65100'}}>SMS 수신 동의</span></div>
-              </div>
-              <div style={{background:'#E65100',color:'#fff',borderRadius:7,padding:'6px',textAlign:'center',fontSize:11,fontWeight:700}}>✓ 등록 완료</div>
-            </div>
-          </div>
-        </div>
-      ),
+      icon:'📱', label:'QR 회원가입', desc:'고객이 QR을 스캔하면 자동으로 내 담당 회원으로 등록됩니다.',
+      steps:['사이드바 → 👤 회원 관리 → QR 가입 클릭','QR 이미지 출력 후 카운터에 비치','고객이 스마트폰으로 QR 스캔 → 직접 정보 입력 → 자동 등록'],
+      component: <CustomerQRPage profile={previewProfile}/>, previewScale:0.52, previewHeight:400,
     },
     attendance_mgr: {
-      icon:'🗓️', label:'근태 관리',
-      desc:'출퇴근 체크와 다음달 휴무계획을 제출합니다.',
-      steps:['출퇴근: 사이드바 하단 [출근]/[퇴근] 버튼 → 근무자 선택 → 확인','근무현황: 내 월별 출퇴근 기록 조회','휴무신청: 다음달 희망 휴무일 선택 후 제출 (매월 25일까지)','미제출 시 대시보드에 🔴 알림 표시'],
-      mockup: (
-        <div>
-          <div style={mW}>
-            <div style={mH}>🗓️ 근무 현황 — 2026년 04월</div>
-            <div style={mB}>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mTh}>날짜</th><th style={mTh}>출근</th><th style={mTh}>퇴근</th><th style={mTh}>근무시간</th></tr></thead>
-                <tbody>
-                  {[['04/15 (수)','09:15','18:05','8시간 50분'],['04/14 (화)','09:30','18:20','8시간 50분'],['04/13 (월)','—','—','휴무']].map(([d,i,o,h],idx)=>(
-                    <tr key={idx} style={{background:h==='휴무'?'#e3f2fd':idx%2===0?'#fafafa':'#fff'}}>
-                      <td style={{...mTd,fontFamily:'monospace'}}>{d}</td>
-                      <td style={{...mTd,color:i==='—'?'#aaa':'#2e7d32',fontWeight:i!=='—'?600:400}}>{i}</td>
-                      <td style={{...mTd,color:o==='—'?'#aaa':'#c62828',fontWeight:o!=='—'?600:400}}>{o}</td>
-                      <td style={{...mTd,color:h==='휴무'?'#1565C0':'#555'}}>{h}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={mW}>
-            <div style={mH}>📅 휴무 신청 — 2026년 05월</div>
-            <div style={mB}>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:8}}>
-                {['일','월','화','수','목','금','토'].map(d=><div key={d} style={{textAlign:'center',fontSize:9,fontWeight:700,color:'#aaa',padding:'2px'}}>{d}</div>)}
-                {['','','','','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31'].map((d,i)=>(
-                  <div key={i} style={{textAlign:'center',padding:'3px 1px',fontSize:10,borderRadius:4,background:['8','15','22'].includes(d)?'#fff3e0':'transparent',color:['8','15','22'].includes(d)?'#E65100':'#333',fontWeight:['8','15','22'].includes(d)?700:400}}>{d}</div>
-                ))}
-              </div>
-              <div style={{fontSize:10,color:'#888',marginBottom:6}}>선택: 5/8, 5/15, 5/22 — 총 3일</div>
-              {btn('제출하기')}
-            </div>
-          </div>
-        </div>
-      ),
+      icon:'🗓️', label:'근태 관리', desc:'출퇴근 체크와 다음달 휴무계획을 제출합니다.',
+      steps:['출퇴근: 사이드바 하단 [출근]/[퇴근] 버튼 → 근무자 선택 → 확인','근무현황: 내 월별 출퇴근 기록 조회','휴무신청: 다음달 희망 휴무일 선택 후 제출 (매월 25일까지)'],
+      component: <MyAttendancePage profile={previewProfile}/>, previewScale:0.52, previewHeight:420,
     },
   };
 
@@ -8075,27 +7520,54 @@ function HelpPage({ profile }) {
             <div style={{fontSize:12}}>각 메뉴의 설명과 사용방법을 확인할 수 있습니다</div>
           </div>
         ) : (
-          <div className="card">
-            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:16, paddingBottom:14, borderBottom:'1px solid var(--border)'}}>
-              <span style={{fontSize:28}}>{detail.icon}</span>
+          <div style={{display:'flex', flexDirection:'column', gap:16}}>
+            {/* 헤더 */}
+            <div style={{display:'flex', alignItems:'center', gap:10}}>
+              <span style={{fontSize:24}}>{detail.icon}</span>
               <div>
-                <div style={{fontSize:18, fontWeight:700, color:'var(--text)'}}>{detail.label}</div>
+                <div style={{fontSize:17, fontWeight:700, color:'var(--text)'}}>{detail.label}</div>
                 <div style={{fontSize:12, color:'var(--text2)', marginTop:2}}>{detail.desc}</div>
               </div>
             </div>
-            <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:12}}>📋 사용 방법</div>
-            <div style={{display:'flex', flexDirection:'column', gap:8}}>
-              {detail.steps.map((step, i) => (
-                <div key={i} style={{display:'flex', gap:12, alignItems:'flex-start',
-                  background: i%2===0?'#fafafa':'#fff', borderRadius:8, padding:'10px 14px'}}>
-                  <span style={{width:22, height:22, background:'var(--accent)', color:'#fff',
-                    borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-                    fontSize:11, fontWeight:700, flexShrink:0}}>
-                    {i+1}
-                  </span>
-                  <span style={{fontSize:13, color:'var(--text)', lineHeight:1.7}}>{step}</span>
+
+            {/* 화면 미리보기 */}
+            <div>
+              <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8}}>🖥️ 화면 미리보기</div>
+              <div style={{
+                border:'2px solid var(--border)', borderRadius:10, overflow:'hidden',
+                background:'var(--bg)', position:'relative',
+                height: detail.previewHeight || 400,
+              }}>
+                {/* 클릭 방지 오버레이 */}
+                <div style={{position:'absolute',inset:0,zIndex:10,cursor:'default'}}/>
+                <div style={{
+                  transform:`scale(${detail.previewScale || 0.6})`,
+                  transformOrigin:'top left',
+                  width: `${100/(detail.previewScale||0.6)}%`,
+                  pointerEvents:'none',
+                  overflow:'hidden',
+                }}>
+                  <div style={{padding:20}}>
+                    {detail.component}
+                  </div>
                 </div>
-              ))}
+              </div>
+            </div>
+
+            {/* 사용 방법 */}
+            <div className="card">
+              <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>📋 사용 방법</div>
+              <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                {detail.steps.map((step, i) => (
+                  <div key={i} style={{display:'flex', gap:10, alignItems:'flex-start',
+                    background: i%2===0?'#fafafa':'#fff', borderRadius:8, padding:'9px 12px'}}>
+                    <span style={{width:20, height:20, background:'var(--accent)', color:'#fff',
+                      borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+                      fontSize:10, fontWeight:700, flexShrink:0}}>{i+1}</span>
+                    <span style={{fontSize:12, color:'var(--text)', lineHeight:1.7}}>{step}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
