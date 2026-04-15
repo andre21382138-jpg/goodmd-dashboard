@@ -6464,8 +6464,11 @@ function StockRequestPage({ profile }) {
   const [memo,      setMemo]      = useState('');
   const [showSugg,  setShowSugg]  = useState(false);
 
-  const filteredProds = brandId && prodSearch
-    ? allProducts.filter(p => String(p.brand_id) === String(brandId) && p.name.toLowerCase().includes(prodSearch.toLowerCase())).slice(0, 8)
+  const filteredProds = prodSearch.trim()
+    ? allProducts.filter(p =>
+        p.name.toLowerCase().includes(prodSearch.toLowerCase()) &&
+        (!brandId || String(p.brand_id) === String(brandId))
+      ).sort((a,b) => (a.name.includes('[단종]')?1:0)-(b.name.includes('[단종]')?1:0)).slice(0, 10)
     : [];
 
   useEffect(() => {
@@ -6492,7 +6495,9 @@ function StockRequestPage({ profile }) {
   };
 
   const handleSelectProd = (p) => {
-    setProdId(p.id); setProdName(p.name); setProdSearch(p.name); setShowSugg(false);
+    setProdId(p.id); setProdName(p.name); setProdSearch(p.name);
+    if (!brandId) setBrandId(String(p.brand_id));
+    setShowSugg(false);
   };
 
   const handleSubmit = async (e) => {
@@ -6536,8 +6541,8 @@ function StockRequestPage({ profile }) {
             </div>
             <div>
               <label style={labelStyle}>브랜드</label>
-              <select value={brandId} onChange={e => handleBrandChange(e.target.value)} style={inputStyle} required>
-                <option value="">-- 브랜드 선택 --</option>
+              <select value={brandId} onChange={e => handleBrandChange(e.target.value)} style={inputStyle}>
+                <option value="">전체 브랜드</option>
                 {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
@@ -6550,9 +6555,8 @@ function StockRequestPage({ profile }) {
                 value={prodSearch}
                 onChange={e => { setProdSearch(e.target.value); setProdId(''); setProdName(''); setShowSugg(true); }}
                 onFocus={() => setShowSugg(true)}
-                style={{ ...inputStyle, background: !brandId ? '#f0f0f0' : '#fff' }}
-                placeholder={!brandId ? '브랜드 먼저 선택' : '상품명 키워드 입력'}
-                disabled={!brandId}
+                style={{ ...inputStyle }}
+                placeholder="상품명 키워드 입력"
                 autoComplete="off"
               />
               {prodId && (
@@ -6560,15 +6564,19 @@ function StockRequestPage({ profile }) {
               )}
               {showSugg && filteredProds.length > 0 && (
                 <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100, background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:220, overflowY:'auto' }}>
-                  {filteredProds.map(p => (
-                    <div key={p.id}
-                      onMouseDown={e => { e.preventDefault(); handleSelectProd(p); }}
-                      style={{ padding:'9px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0' }}
-                      onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
-                      onMouseLeave={e => e.currentTarget.style.background='#fff'}>
-                      {p.name}
-                    </div>
-                  ))}
+                  {filteredProds.map(p => {
+                    const br = brands.find(b => b.id === p.brand_id);
+                    return (
+                      <div key={p.id}
+                        onMouseDown={e => { e.preventDefault(); handleSelectProd(p); }}
+                        style={{ padding:'9px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0' }}
+                        onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
+                        onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                        {!brandId && br && <span style={{fontSize:11, color:'var(--accent)', fontWeight:700, marginRight:6}}>[{br.name}]</span>}
+                        {p.name}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
