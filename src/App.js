@@ -7364,17 +7364,121 @@ function HelpPage({ profile }) {
     ],
   };
 
+  // 공통 목업 스타일
+  const mW  = { border:'1px solid #e0e0e0', borderRadius:8, overflow:'hidden', marginBottom:16, fontSize:11, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' };
+  const mH  = { background:'#f5f5f5', borderBottom:'1px solid #ddd', padding:'7px 12px', fontWeight:700, fontSize:11, color:'#555', display:'flex', alignItems:'center', gap:6 };
+  const mB  = { background:'#fff', padding:'12px' };
+  const mTh = { background:'#f8f8f8', padding:'6px 10px', fontSize:10, fontWeight:600, color:'#888', borderBottom:'1px solid #eee', whiteSpace:'nowrap', textAlign:'left' };
+  const mTd = { padding:'7px 10px', fontSize:11, borderBottom:'1px solid #f0f0f0', whiteSpace:'nowrap' };
+  const bdg = (txt, bg='#fff3e0', col='#E65100') => <span style={{background:bg,color:col,border:`1px solid ${col}33`,borderRadius:3,padding:'2px 7px',fontSize:10,fontWeight:600}}>{txt}</span>;
+  const btn = (txt, bg='#E65100', col='#fff') => <span style={{background:bg,color:col,borderRadius:4,padding:'3px 9px',fontSize:10,fontWeight:600,cursor:'pointer'}}>{txt}</span>;
+  const inp = (val, w=120) => <span style={{display:'inline-block',width:w,border:'1px solid #ddd',borderRadius:4,padding:'4px 8px',fontSize:11,background:'#fafafa',color:'#333'}}>{val}</span>;
+
   const DETAILS = {
-    // 관리자
+    // ── 관리자 ──
     user_mgmt: {
       icon:'👥', label:'사용자 관리',
       desc:'신규 가입 요청이 들어오면 승인하고 역할을 설정합니다.',
-      steps:[
-        '사이드바 → 🔐 사용자 관리 클릭',
-        '승인 대기 목록에서 [✓ 승인] 클릭 → 즉시 로그인 가능',
-        '[관리자로] 버튼으로 관리자 권한 부여 가능',
-      ],
+      steps:['사이드바 → 🔐 사용자 관리 클릭','승인 대기 목록에서 [✓ 승인] 클릭 → 즉시 로그인 가능','[관리자로] 버튼으로 관리자 권한 부여 가능'],
+      mockup: (
+        <div style={mW}>
+          <div style={mH}>👥 사용자 관리</div>
+          <div style={mB}>
+            <div style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:6,padding:'7px 12px',marginBottom:10,fontSize:11,color:'#6d4c41'}}>⏳ 승인 대기 2명</div>
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead><tr><th style={mTh}>이름</th><th style={mTh}>이메일</th><th style={mTh}>점포</th><th style={mTh}>직책</th><th style={mTh}>처리</th></tr></thead>
+              <tbody>
+                <tr><td style={mTd}><b>박지수</b></td><td style={mTd}>jisoo@kbh.kr</td><td style={mTd}>롯데백화점 관악점</td><td style={mTd}>{bdg('매니저','#e3f2fd','#1565C0')}</td><td style={mTd}>{btn('✓ 승인','#2e7d32')}&nbsp;{btn('거절','#fff','#e53935',)}</td></tr>
+                <tr style={{background:'#fafafa'}}><td style={mTd}><b>김민준</b></td><td style={mTd}>minjun@kbh.kr</td><td style={mTd}>갤러리아 진주점</td><td style={mTd}>{bdg('매니저','#e3f2fd','#1565C0')}</td><td style={mTd}>{btn('✓ 승인','#2e7d32')}&nbsp;{btn('거절','#fff','#e53935')}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ),
     },
+  const roles = [];
+  if (isAdmin || isHQ) roles.push({key:'admin', label:'🔐 관리자'});
+  if (isAdmin || isHQ) roles.push({key:'hq',    label:'🏢 본사담당자'});
+  roles.push({key:'manager', label:'👔 매니저'});
+
+  const menuList = MENUS[role] || [];
+  const detail   = selMenu ? DETAILS[selMenu] : null;
+
+  return (
+    <div style={{display:'flex', gap:16, minHeight:500}}>
+      {/* 역할 선택 */}
+      <div style={{width:140, flexShrink:0}}>
+        <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>역할</div>
+        {roles.map(r => (
+          <button key={r.key} onClick={()=>{setRole(r.key);setSelMenu(null);}}
+            style={{display:'block', width:'100%', textAlign:'left', padding:'10px 12px', marginBottom:4,
+              border:'none', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: role===r.key?700:500,
+              background: role===r.key?'var(--sidebar)':'#f5f5f5',
+              color: role===r.key?'#1a1a1a':'var(--text2)'}}>
+            {r.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 메뉴 목록 */}
+      <div style={{width:160, flexShrink:0}}>
+        <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>메뉴</div>
+        {menuList.map(m => (
+          <button key={m.key} onClick={()=>setSelMenu(m.key)}
+            style={{display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left',
+              padding:'10px 12px', marginBottom:4, border:'1px solid',
+              borderColor: selMenu===m.key?'var(--accent)':'transparent',
+              borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: selMenu===m.key?700:400,
+              background: selMenu===m.key?'#fff3e0':'#fff',
+              color: selMenu===m.key?'var(--accent)':'var(--text)'}}>
+            <span>{m.icon}</span>{m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 상세 설명 */}
+      <div style={{flex:1, minWidth:0}}>
+        {!detail ? (
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            height:'100%', color:'var(--text3)', gap:12}}>
+            <span style={{fontSize:48}}>📖</span>
+            <div style={{fontSize:14, fontWeight:600}}>왼쪽에서 메뉴를 선택하세요</div>
+            <div style={{fontSize:12}}>각 메뉴의 설명과 사용방법을 확인할 수 있습니다</div>
+          </div>
+        ) : (
+          <div className="card">
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:16, paddingBottom:14, borderBottom:'1px solid var(--border)'}}>
+              <span style={{fontSize:28}}>{detail.icon}</span>
+              <div>
+                <div style={{fontSize:18, fontWeight:700}}>{detail.label}</div>
+                <div style={{fontSize:12, color:'var(--text2)', marginTop:2}}>{detail.desc}</div>
+              </div>
+            </div>
+            {/* 목업 */}
+            {detail.mockup && (
+              <div style={{marginBottom:20}}>
+                <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:10}}>🖥️ 화면 예시</div>
+                {detail.mockup}
+              </div>
+            )}
+            {/* 사용 방법 */}
+            <div style={{fontSize:13, fontWeight:700, marginBottom:10}}>📋 사용 방법</div>
+            <div style={{display:'flex', flexDirection:'column', gap:6}}>
+              {detail.steps.map((step, i) => (
+                <div key={i} style={{display:'flex', gap:10, alignItems:'flex-start',
+                  background: i%2===0?'#fafafa':'#fff', borderRadius:8, padding:'9px 12px'}}>
+                  <span style={{width:20, height:20, background:'var(--accent)', color:'#fff',
+                    borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:10, fontWeight:700, flexShrink:0}}>{i+1}</span>
+                  <span style={{fontSize:12, color:'var(--text)', lineHeight:1.7}}>{step}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
     notice: {
       icon:'📢', label:'공지사항',
       desc:'담당자·매니저 전원에게 공지를 작성합니다.',
