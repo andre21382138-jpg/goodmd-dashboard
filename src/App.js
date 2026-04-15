@@ -7336,364 +7336,271 @@ function HelpPage({ profile }) {
   const isAdmin   = profile?.role === 'admin';
   const isHQ      = profile?.job_title === '담당자';
   const isManager = profile?.job_title === '매니저';
-  const defaultTab = isManager ? 'manager' : isHQ ? 'hq' : 'admin';
-  const [tab, setTab] = useState(defaultTab);
 
-  // ── 공통 스타일 ──
-  const mockWrap = { border:'1px solid #ddd', borderRadius:8, overflow:'hidden', marginBottom:8, boxShadow:'0 2px 8px rgba(0,0,0,0.07)', fontSize:11 };
-  const mockHead = { background:'#f5f5f5', borderBottom:'1px solid #ddd', padding:'6px 10px', fontWeight:700, fontSize:11, color:'#555', display:'flex', alignItems:'center', gap:6 };
-  const mockBody = { background:'#fff', padding:'10px' };
-  const mockTh   = { background:'#f8f8f8', padding:'5px 8px', fontSize:10, fontWeight:600, color:'#888', borderBottom:'1px solid #eee', whiteSpace:'nowrap' };
-  const mockTd   = { padding:'6px 8px', fontSize:11, borderBottom:'1px solid #f0f0f0', whiteSpace:'nowrap' };
-  const bdg      = (txt, bg='#fff3e0', col='#E65100') => <span style={{background:bg,color:col,border:`1px solid ${col}33`,borderRadius:3,padding:'1px 6px',fontSize:10,fontWeight:600}}>{txt}</span>;
-  const suc      = { color:'#2e7d32', fontWeight:700 };
-  const dan      = { color:'#c62828', fontWeight:700 };
+  const [role,    setRole]    = useState(isManager ? 'manager' : 'hq');
+  const [selMenu, setSelMenu] = useState(null);
 
-  // ── 섹션 래퍼 ──
-  const Sec = ({ icon, title, desc, children }) => (
-    <div style={{marginBottom:12, background:'#fff', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.04)'}}>
-      <div style={{display:'flex', alignItems:'center', gap:10, padding:'11px 16px', background:'#FFF9C4', color:'#5d4a00'}}>
-        <span style={{fontSize:17}}>{icon}</span>
-        <span style={{fontSize:13, fontWeight:700, letterSpacing:'-0.2px'}}>{title}</span>
-      </div>
-      <div style={{padding:'14px 16px'}}>
-        {desc && <div style={{fontSize:12, color:'var(--text2)', marginBottom:12, lineHeight:1.7, background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:6, padding:'8px 12px'}}>{desc}</div>}
-        {children}
-      </div>
-    </div>
-  );
+  const MENUS = {
+    admin: [
+      { key:'user_mgmt',   icon:'👥', label:'사용자 관리' },
+      { key:'notice',      icon:'📢', label:'공지사항' },
+      { key:'manager_mgmt',icon:'👔', label:'매니저 현황' },
+    ],
+    hq: [
+      { key:'home',         icon:'🏠', label:'홈 대시보드' },
+      { key:'product_mgmt', icon:'🛍️', label:'상품관리' },
+      { key:'stock',        icon:'📦', label:'재고관리' },
+      { key:'salary',       icon:'💰', label:'급여관리' },
+      { key:'attendance',   icon:'🗓️', label:'근태관리' },
+      { key:'member_mgmt',  icon:'👥', label:'고객관리' },
+      { key:'sales_view',   icon:'📋', label:'매출조회' },
+    ],
+    manager: [
+      { key:'sales_input',  icon:'🛒', label:'판매 입력' },
+      { key:'stock_req',    icon:'📦', label:'재고 요청' },
+      { key:'member_reg',   icon:'👤', label:'회원 관리' },
+      { key:'qr',           icon:'📱', label:'QR 회원가입' },
+      { key:'attendance',   icon:'🗓️', label:'근태 관리' },
+    ],
+  };
+
+  const DETAILS = {
+    // 관리자
+    user_mgmt: {
+      icon:'👥', label:'사용자 관리',
+      desc:'신규 가입 요청이 들어오면 승인하고 역할을 설정합니다.',
+      steps:[
+        '사이드바 → 🔐 사용자 관리 클릭',
+        '승인 대기 목록에서 [✓ 승인] 클릭 → 즉시 로그인 가능',
+        '[관리자로] 버튼으로 관리자 권한 부여 가능',
+      ],
+    },
+    notice: {
+      icon:'📢', label:'공지사항',
+      desc:'담당자·매니저 전원에게 공지를 작성합니다.',
+      steps:[
+        '사이드바 → 📢 공지사항 클릭',
+        '[+ 공지사항 작성] 버튼 클릭',
+        '제목·내용 입력 → [등록] 클릭',
+        '작성 즉시 전 직원에게 노출됨',
+      ],
+    },
+    manager_mgmt: {
+      icon:'👔', label:'매니저 현황',
+      desc:'전체 매니저 목록을 조회하고 QR 코드를 발급합니다.',
+      steps:[
+        '사이드바 → 👔 매니저 현황 클릭',
+        '[📱 QR] 버튼 클릭 → QR 이미지 팝업',
+        '인쇄 후 카운터에 비치',
+        '고객이 스캔하면 해당 매니저 담당으로 자동 연결',
+      ],
+    },
+    // 담당자
+    home: {
+      icon:'🏠', label:'홈 대시보드',
+      desc:'로그인 시 첫 화면. 당월 누적 매출을 한눈에 확인합니다.',
+      steps:[
+        '매장매출 / 강좌매출 / 특판매출 3가지 분류로 표시',
+        '우측 상단 통합 총 매출 금액 확인',
+        '하단에 매장별·강좌별·특판업체별 상세 현황표',
+        '매월 1일 자동으로 당월 기준으로 리셋',
+      ],
+    },
+    product_mgmt: {
+      icon:'🛍️', label:'상품관리',
+      desc:'브랜드와 상품을 등록·조회·수정합니다.',
+      steps:[
+        '전체상품현황: 상품코드·ERP코드·브랜드·상품명·원가·판매가 조회',
+        '검색창에서 상품명·코드로 즉시 검색',
+        '[수정] 버튼으로 원가·판매가 직접 수정 가능',
+        '상품추가: 브랜드 선택 → 상품코드(필수)·ERP코드·상품명·원가·판매가 입력',
+        '엑셀 일괄 업로드: 브랜드·상품코드·상품명·원가·판매가 컬럼 형식',
+      ],
+    },
+    stock: {
+      icon:'📦', label:'재고관리',
+      desc:'센터재고·매장재고·안전재고를 관리합니다.',
+      steps:[
+        '매장재고: 점포/지점별 재고 현황 조회 (품절=빨강, 5개 이하=주황 경고)',
+        '매장재고: [수정] 버튼으로 재고 수량 직접 조정 가능',
+        '판매 입력 시 해당 상품 재고 자동 차감',
+        '안전재고: 최근 판매량 기준 부족 상품 파악 및 발주 요청',
+      ],
+    },
+    salary: {
+      icon:'💰', label:'급여관리',
+      desc:'급여조건·인센티브·급여계산 3개 탭으로 구성됩니다.',
+      steps:[
+        '급여조건: 소속·직급·급여방법·기본급여·추가수당 설정',
+        '인센티브 → 목표매출달성혜택: 점포별 월 목표 매출 설정, 전월 매출 자동 조회',
+        '인센티브 → 회원가입매출혜택: SMS동의 회원이 가입월에 구매 시 매니저 인센티브 자동 계산',
+        '급여계산: 출근 기록 기반 자동 계산 (기본급여 + 회원가입 인센티브)',
+      ],
+    },
+    attendance: {
+      icon:'🗓️', label:'근태관리',
+      desc:'매니저별 출퇴근 기록과 휴무 계획을 관리합니다.',
+      steps:[
+        '근태관리 메뉴: 전체 매니저 출퇴근 현황 조회',
+        '휴무계획: 매니저가 제출한 다음달 휴무계획 승인/반려',
+        '매월 20~25일 사이 미제출 매니저에게 대시보드 알림 자동 표시',
+      ],
+    },
+    member_mgmt: {
+      icon:'👥', label:'고객관리',
+      desc:'전체 53,000명 이상의 회원을 조회·관리합니다.',
+      steps:[
+        '점포/지점/가입일/마케팅동의/1년미만/등급별 필터 조합 가능',
+        '[조회] 클릭 → 200명씩 페이지네이션',
+        '회원 클릭 → 팝업으로 상세정보·구매이력 확인',
+        '등급: 패밀리→실버→골드→로얄→VIP→VVIP (누적구매금액 기준 자동 변경)',
+      ],
+    },
+    sales_view: {
+      icon:'📋', label:'매출조회',
+      desc:'매장매출·특판매출·강좌매출을 분리 조회합니다.',
+      steps:[
+        '매장매출: 날짜·점포·브랜드·키워드 필터, 최신순/판매건수/매출액 정렬',
+        '특판매출: 월별·업체별 필터, 입력 탭에서 업체·상품·수량·공급가 입력',
+        '강좌매출: 월별·점포별 필터, 입력 탭에서 날짜·점포·인원수·매출액 입력',
+        '각 페이지 상단 탭으로 다른 매출 종류로 바로 이동 가능',
+      ],
+    },
+    // 매니저
+    sales_input: {
+      icon:'🛒', label:'판매 입력',
+      desc:'매일 판매한 상품을 기록합니다. 회원 적립도 함께 처리합니다.',
+      steps:[
+        '브랜드 없이 상품명 바로 검색 가능 (검색결과에 브랜드명 표시)',
+        '단종 상품은 검색 결과 하단에 자동 배치',
+        '판매가 입력 시 할인금액 자동 계산 (정상가 - 판매가)',
+        '회원 없음 / 기존회원 검색 / 신규회원 등록 중 선택',
+        '저장 시 해당 상품 매장재고 자동 차감',
+      ],
+    },
+    stock_req: {
+      icon:'📦', label:'재고 요청',
+      desc:'본사에 상품 입고를 요청합니다.',
+      steps:[
+        '사이드바 → 📦 재고 요청 클릭',
+        '브랜드·상품 선택 → 요청 수량 입력',
+        '[요청 등록] 클릭 → 본사 담당자에게 전달',
+        '요청 내역에서 처리 상태 확인 가능',
+      ],
+    },
+    member_reg: {
+      icon:'👤', label:'회원 관리',
+      desc:'담당 회원 등록·조회·QR 가입을 처리합니다.',
+      steps:[
+        'QR 가입: QR코드 출력 → 카운터 비치 → 고객이 직접 스캔하여 가입',
+        '서류 가입: 이름·연락처·생일·SMS동의 직접 입력',
+        '회원 목록: 내 담당 회원 조회·구매이력 확인',
+        '⚠️ 서류 가입 시 반드시 고객에게 마케팅 수신 동의 서면을 별도 보관',
+      ],
+    },
+    qr: {
+      icon:'📱', label:'QR 회원가입',
+      desc:'고객이 QR을 스캔하면 자동으로 내 담당 회원으로 등록됩니다.',
+      steps:[
+        '사이드바 → 👤 회원 관리 → QR 가입 클릭',
+        'QR 이미지 출력 후 카운터에 비치',
+        '고객이 스마트폰으로 스캔',
+        '고객이 이름·연락처·생일·SMS동의 직접 입력',
+        '제출 즉시 내 담당 회원으로 자동 등록',
+      ],
+    },
+    attendance_mgr: {
+      icon:'🗓️', label:'근태 관리',
+      desc:'출퇴근 체크와 다음달 휴무계획을 제출합니다.',
+      steps:[
+        '출퇴근: 사이드바 하단 [출근] / [퇴근] 버튼 클릭 → 근무자 선택 → 확인',
+        '근무현황: 내 월별 출퇴근 기록 조회',
+        '휴무신청: 다음달 희망 휴무일 선택 → 제출 (매월 25일까지)',
+        '미제출 시 대시보드에 알림 표시',
+      ],
+    },
+  };
+
+  const roles = [];
+  if (isAdmin || isHQ) roles.push({key:'admin', label:'🔐 관리자'});
+  if (isAdmin || isHQ) roles.push({key:'hq',    label:'🏢 본사담당자'});
+  roles.push({key:'manager', label:'👔 매니저'});
+
+  const menuList = MENUS[role] || [];
+  const detail   = selMenu ? DETAILS[selMenu] : null;
 
   return (
-    <div>
-      <div className="tabs" style={{marginBottom:20}}>
-        {(isAdmin||isHQ) && <button className={`tab ${tab==='admin'?'on':''}`} onClick={()=>setTab('admin')}>🔐 관리자</button>}
-        {(isAdmin||isHQ) && <button className={`tab ${tab==='hq'?'on':''}`} onClick={()=>setTab('hq')}>🏢 담당자</button>}
-        <button className={`tab ${tab==='manager'?'on':''}`} onClick={()=>setTab('manager')}>👔 매니저</button>
+    <div style={{display:'flex', gap:16, minHeight:500}}>
+      {/* 역할 선택 */}
+      <div style={{width:140, flexShrink:0}}>
+        <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>역할</div>
+        {roles.map(r => (
+          <button key={r.key} onClick={()=>{setRole(r.key);setSelMenu(null);}}
+            style={{display:'block', width:'100%', textAlign:'left', padding:'10px 12px', marginBottom:4,
+              border:'none', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: role===r.key?700:500,
+              background: role===r.key?'var(--sidebar)':'#f5f5f5',
+              color: role===r.key?'#1a1a1a':'var(--text2)'}}>
+            {r.label}
+          </button>
+        ))}
       </div>
 
-      {/* ════ 관리자 ════ */}
-      {tab==='admin' && <div style={{display:'flex',flexDirection:'column',gap:12}}>
+      {/* 메뉴 목록 */}
+      <div style={{width:160, flexShrink:0}}>
+        <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>메뉴</div>
+        {menuList.map(m => (
+          <button key={m.key} onClick={()=>setSelMenu(m.key)}
+            style={{display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left',
+              padding:'10px 12px', marginBottom:4, border:'1px solid',
+              borderColor: selMenu===m.key?'var(--accent)':'transparent',
+              borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: selMenu===m.key?700:400,
+              background: selMenu===m.key?'#fff3e0':'#fff',
+              color: selMenu===m.key?'var(--accent)':'var(--text)'}}>
+            <span>{m.icon}</span>{m.label}
+          </button>
+        ))}
+      </div>
 
-        <Sec icon="👥" title="사용자 관리"
-          desc="신규 가입 요청이 들어오면 승인하고 권한을 설정합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>👥 사용자 관리</div>
-            <div style={mockBody}>
-              <div style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:6,padding:'6px 10px',marginBottom:8,fontSize:11,color:'#6d4c41'}}>⏳ 승인 대기 (2명)</div>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mockTh}>이름</th><th style={mockTh}>직책</th><th style={mockTh}>점포</th><th style={mockTh}>이메일</th><th style={mockTh}>처리</th></tr></thead>
-                <tbody>
-                  <tr><td style={mockTd}><b>김지영</b></td><td style={mockTd}>{bdg('매니저','#e3f2fd','#1565C0')}</td><td style={mockTd}>롯데백화점 건대점</td><td style={mockTd}>kim@kbh.kr</td><td style={mockTd}><span style={{background:'#e8f5e9',color:'#2e7d32',border:'1px solid #a5d6a7',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>✓ 승인</span></td></tr>
-                  <tr><td style={mockTd}><b>박수진</b></td><td style={mockTd}>{bdg('매니저','#e3f2fd','#1565C0')}</td><td style={mockTd}>갤러리아 진주점</td><td style={mockTd}>park@kbh.kr</td><td style={mockTd}><span style={{background:'#e8f5e9',color:'#2e7d32',border:'1px solid #a5d6a7',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>✓ 승인</span></td></tr>
-                </tbody>
-              </table>
-            </div>
+      {/* 상세 설명 */}
+      <div style={{flex:1}}>
+        {!detail ? (
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            height:'100%', color:'var(--text3)', gap:12}}>
+            <span style={{fontSize:48}}>📖</span>
+            <div style={{fontSize:14, fontWeight:600}}>왼쪽에서 메뉴를 선택하세요</div>
+            <div style={{fontSize:12}}>각 메뉴의 설명과 사용방법을 확인할 수 있습니다</div>
           </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>① 승인 대기 목록에서 <b>✓ 승인</b> 클릭 → 즉시 로그인 가능 &nbsp;|&nbsp; ② '관리자로' 버튼으로 관리자 권한 부여 가능</div>
-        </Sec>
-
-        <Sec icon="📢" title="공지사항 작성"
-          desc="담당자·매니저 전원에게 공지를 작성합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>📢 공지사항</div>
-            <div style={mockBody}>
-              <div style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:6,padding:'8px 12px',marginBottom:8}}>
-                <div style={{fontSize:11,fontWeight:700,marginBottom:4}}>3월 판매 목표 공지</div>
-                <div style={{fontSize:10,color:'#888'}}>관리자 · 2026-03-20</div>
+        ) : (
+          <div className="card">
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:16, paddingBottom:14, borderBottom:'1px solid var(--border)'}}>
+              <span style={{fontSize:28}}>{detail.icon}</span>
+              <div>
+                <div style={{fontSize:18, fontWeight:700, color:'var(--text)'}}>{detail.label}</div>
+                <div style={{fontSize:12, color:'var(--text2)', marginTop:2}}>{detail.desc}</div>
               </div>
-              <div style={{background:'#f8f8f8',border:'1px solid #eee',borderRadius:6,padding:'8px 12px'}}>
-                <div style={{fontSize:11,fontWeight:700,marginBottom:4}}>팔레오 신상품 입고 안내</div>
-                <div style={{fontSize:10,color:'#888'}}>관리자 · 2026-03-15</div>
-              </div>
             </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>① <b>+ 공지사항 작성</b> 버튼 클릭 → 제목·내용 입력 → <b>등록</b> &nbsp;|&nbsp; ② 작성 즉시 전 직원에게 노출</div>
-        </Sec>
-
-        <Sec icon="👔" title="매니저관리 & QR 코드 발급"
-          desc="매니저별 고유 QR을 발급해 카운터에 비치합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>👔 매니저 현황</div>
-            <div style={mockBody}>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mockTh}>이름</th><th style={mockTh}>점포</th><th style={mockTh}>지점</th><th style={mockTh}>QR</th><th style={mockTh}>수정</th></tr></thead>
-                <tbody>
-                  <tr><td style={mockTd}><b>홍길동</b></td><td style={mockTd}>{bdg('롯데백화점')}</td><td style={mockTd}>{bdg('건대점','#e3f2fd','#1565C0')}</td><td style={mockTd}><span style={{background:'#f3e5f5',color:'#6a1b9a',border:'1px solid #ce93d8',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>📱 QR</span></td><td style={mockTd}><span style={{background:'#f8f8f8',border:'1px solid #ddd',borderRadius:4,padding:'2px 8px',fontSize:10}}>수정</span></td></tr>
-                  <tr><td style={mockTd}><b>김지영</b></td><td style={mockTd}>{bdg('갤러리아')}</td><td style={mockTd}>{bdg('진주점','#e3f2fd','#1565C0')}</td><td style={mockTd}><span style={{background:'#f3e5f5',color:'#6a1b9a',border:'1px solid #ce93d8',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>📱 QR</span></td><td style={mockTd}><span style={{background:'#f8f8f8',border:'1px solid #ddd',borderRadius:4,padding:'2px 8px',fontSize:10}}>수정</span></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>① <b>📱 QR</b> 버튼 클릭 → QR 이미지 팝업 → <b>인쇄</b> 출력 후 카운터 비치 &nbsp;|&nbsp; ② 고객이 스캔하면 해당 매니저와 자동 연결</div>
-        </Sec>
-
-      </div>}
-
-      {/* ════ 담당자 ════ */}
-      {tab==='hq' && <div style={{display:'flex',flexDirection:'column',gap:12}}>
-
-        <Sec icon="🏠" title="홈 대시보드"
-          desc="로그인 시 첫 화면. 당월 누적 매출을 한눈에 확인합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>🏠 2026년 03월 대시보드 <span style={{marginLeft:'auto',fontSize:10,color:'#aaa'}}>03/01 ~ 03/24 (어제까지)</span></div>
-            <div style={mockBody}>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:10}}>
-                {[['총 매출금액','136,320,000원','#E65100'],['판매 건수','2,864건','#333'],['판매 수량','28,294개','#333'],['활동 점포','23개','#333']].map(([l,v,c])=>(
-                  <div key={l} style={{border:'1px solid #eee',borderRadius:6,padding:'8px 10px'}}>
-                    <div style={{fontSize:9,color:'#aaa',marginBottom:4}}>{l}</div>
-                    <div style={{fontSize:13,fontWeight:700,color:c}}>{v}</div>
-                  </div>
-                ))}
-              </div>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mockTh}>#</th><th style={mockTh}>점포</th><th style={mockTh}>지점</th><th style={mockTh}>매출금액</th><th style={mockTh}>비중</th></tr></thead>
-                <tbody>
-                  <tr><td style={mockTd}>1</td><td style={mockTd}>{bdg('갤러리아')}</td><td style={mockTd}>{bdg('진주점','#e3f2fd','#1565C0')}</td><td style={{...mockTd,color:'#E65100',fontWeight:700}}>25,400,000</td><td style={mockTd}><div style={{background:'#eee',height:5,borderRadius:3,width:80}}><div style={{background:'#E65100',height:'100%',width:'82%',borderRadius:3}}/></div></td></tr>
-                  <tr><td style={mockTd}>2</td><td style={mockTd}>{bdg('롯데백화점')}</td><td style={mockTd}>{bdg('건대점','#e3f2fd','#1565C0')}</td><td style={{...mockTd,color:'#E65100',fontWeight:700}}>22,100,000</td><td style={mockTd}><div style={{background:'#eee',height:5,borderRadius:3,width:80}}><div style={{background:'#E65100',height:'100%',width:'71%',borderRadius:3}}/></div></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>점포/지점별 매출 순위와 비중(%)을 막대로 확인 &nbsp;|&nbsp; 사이드바 상단 🏬 클릭으로 언제든 돌아올 수 있음</div>
-        </Sec>
-
-        <Sec icon="🛡️" title="안전재고 확인"
-          desc="최근 1달 판매수량 기준으로 부족 재고를 파악하고 발주요청합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>🛡️ 안전재고 확인</div>
-            <div style={mockBody}>
-              <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:6,padding:'6px 10px',marginBottom:8,fontSize:11,color:'#78350f'}}>⚠️ 재고 부족 항목 <b>14개</b> — 안전재고 미달</div>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mockTh}>점포</th><th style={mockTh}>상품명</th><th style={mockTh}>안전재고</th><th style={mockTh}>현재재고</th><th style={mockTh}>부족수량</th><th style={mockTh}>발주</th></tr></thead>
-                <tbody>
-                  <tr style={{background:'#fff9f9'}}><td style={mockTd}>{bdg('건대점','#e3f2fd','#1565C0')}</td><td style={{...mockTd,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis'}}>팔레오_탱글탱글석류콜라겐젤리</td><td style={{...mockTd,...suc}}>100</td><td style={mockTd}>62</td><td style={{...mockTd,...dan}}>▼ 38</td><td style={mockTd}><span style={{background:'#E65100',color:'#fff',borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>발주요청</span></td></tr>
-                  <tr><td style={mockTd}>{bdg('진주점','#e3f2fd','#1565C0')}</td><td style={mockTd}>팔레오_닥터스노트 생생활력</td><td style={{...mockTd,...suc}}>45</td><td style={mockTd}>51</td><td style={{...mockTd,color:'#2e7d32',fontWeight:700}}>+6</td><td style={mockTd}></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>빨간 행 = 부족 &nbsp;|&nbsp; <b>발주요청</b> 클릭 시 저장되며 '요청중'으로 표시 &nbsp;|&nbsp; 우측 상단 '부족 항목만 보기'로 필터 가능</div>
-        </Sec>
-
-        <Sec icon="👥" title="회원(고객)관리"
-          desc="전체 회원을 테이블로 조회하고 구매이력을 확인합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>👥 회원(고객)관리 <span style={{marginLeft:'auto',fontSize:10,color:'#aaa'}}>총 247명 · SMS동의 183명</span></div>
-            <div style={mockBody}>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mockTh}>가입일</th><th style={mockTh}>이름</th><th style={mockTh}>연락처</th><th style={mockTh}>생일</th><th style={mockTh}>점포</th><th style={mockTh}>담당매니저</th><th style={mockTh}>마케팅동의</th><th style={mockTh}>문자</th></tr></thead>
-                <tbody>
-                  <tr><td style={mockTd}>2026-03-22</td><td style={mockTd}><b>조해숙</b></td><td style={mockTd}>010-3554-2100</td><td style={mockTd}>1975-06-15</td><td style={mockTd}>{bdg('건대점','#e3f2fd','#1565C0')}</td><td style={{...mockTd,color:'#E65100',fontWeight:600}}>홍길동</td><td style={{...mockTd,...suc}}>✅ 동의</td><td style={mockTd}><span style={{background:'#f3e5f5',color:'#6a1b9a',border:'1px solid #ce93d8',borderRadius:4,padding:'2px 6px',fontSize:10}}>📱 문자</span></td></tr>
-                  <tr><td style={mockTd}>2026-03-20</td><td style={mockTd}><b>정수아</b></td><td style={mockTd}>010-3498-3750</td><td style={mockTd}>-</td><td style={mockTd}>{bdg('진주점','#e3f2fd','#1565C0')}</td><td style={{...mockTd,color:'#E65100',fontWeight:600}}>김지영</td><td style={{...mockTd,color:'#aaa'}}>미동의</td><td style={mockTd}><span style={{opacity:0.3,background:'#f3e5f5',color:'#6a1b9a',border:'1px solid #ce93d8',borderRadius:4,padding:'2px 6px',fontSize:10}}>📱 문자</span></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>조건 없이 <b>조회</b> 클릭 → 전체 회원 목록 &nbsp;|&nbsp; 행 클릭 시 하단에 구매이력 펼침 &nbsp;|&nbsp; SMS 동의 회원만 📱 문자 버튼 활성</div>
-        </Sec>
-
-        <Sec icon="💰" title="인센티브 조회"
-          desc="매니저가 가입시킨 회원들의 구매 실적을 매니저별로 집계합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>💰 인센티브 조회 <span style={{marginLeft:'auto',fontSize:10,color:'#aaa'}}>2026-03-01 ~ 2026-03-24</span></div>
-            <div style={mockBody}>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mockTh}>담당 매니저</th><th style={mockTh}>가입 회원수</th><th style={mockTh}>총 구매횟수</th><th style={mockTh}>총 결제금액</th><th style={mockTh}></th></tr></thead>
-                <tbody>
-                  <tr><td style={mockTd}><b>👤 홍길동</b></td><td style={mockTd}>23명</td><td style={mockTd}>87회</td><td style={{...mockTd,color:'#E65100',fontWeight:700,fontSize:13}}>4,320,000원</td><td style={mockTd}><span style={{background:'#f8f8f8',border:'1px solid #ddd',borderRadius:4,padding:'2px 8px',fontSize:10}}>▼ 상세</span></td></tr>
-                  <tr><td style={mockTd}><b>👤 김지영</b></td><td style={mockTd}>18명</td><td style={mockTd}>64회</td><td style={{...mockTd,color:'#E65100',fontWeight:700,fontSize:13}}>3,150,000원</td><td style={mockTd}><span style={{background:'#f8f8f8',border:'1px solid #ddd',borderRadius:4,padding:'2px 8px',fontSize:10}}>▼ 상세</span></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>날짜 선택 후 <b>조회</b> &nbsp;|&nbsp; <b>▼ 상세</b> 클릭 시 회원별·구매건별 내역 펼침 &nbsp;|&nbsp; 담당 매니저 이름 기준으로 자동 집계</div>
-        </Sec>
-
-        <Sec icon="📋" title="매출조회"
-          desc="날짜·점포·브랜드 필터로 판매 내역을 조회합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>📋 매출조회</div>
-            <div style={mockBody}>
-              <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
-                <select style={{height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}} disabled><option>전체 점포</option></select>
-                <select style={{height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}} disabled><option>팔레오</option></select>
-                <input type="date" style={{height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}} defaultValue="2026-03-01" readOnly/>
-                <span style={{lineHeight:'28px',fontSize:11}}>~</span>
-                <input type="date" style={{height:28,padding:'0 8px',border:'1px solid #ddd',borderRadius:4,fontSize:11}} defaultValue="2026-03-24" readOnly/>
-                <span style={{fontSize:11,color:'#888',lineHeight:'28px',marginLeft:4}}><b>2,864</b>건 · <b>136,320,000</b>원</span>
-              </div>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mockTh}>판매일</th><th style={mockTh}>점포</th><th style={mockTh}>매니저</th><th style={mockTh}>상품명</th><th style={mockTh}>수량</th><th style={mockTh}>합계</th><th style={mockTh}>결제</th></tr></thead>
-                <tbody>
-                  <tr><td style={mockTd}>2026-03-24</td><td style={mockTd}>{bdg('건대점','#e3f2fd','#1565C0')}</td><td style={mockTd}>홍길동</td><td style={mockTd}>팔레오_탱글탱글젤리</td><td style={mockTd}>3</td><td style={{...mockTd,color:'#E65100',fontWeight:700}}>120,000</td><td style={mockTd}>{bdg('카드','#e8f5e9','#2e7d32')}</td></tr>
-                  <tr><td style={mockTd}>2026-03-24</td><td style={mockTd}>{bdg('진주점','#e3f2fd','#1565C0')}</td><td style={mockTd}>김지영</td><td style={mockTd}>팔레오_닥터스노트</td><td style={mockTd}>2</td><td style={{...mockTd,color:'#E65100',fontWeight:700}}>100,000</td><td style={mockTd}>{bdg('현금','#f3e5f5','#6a1b9a')}</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>필터 조합 후 자동 조회 &nbsp;|&nbsp; 상단 요약에서 총 건수·금액 즉시 확인</div>
-        </Sec>
-
-      </div>}
-
-      {/* ════ 매니저 ════ */}
-      {tab==='manager' && <div style={{display:'flex',flexDirection:'column',gap:12}}>
-
-        <Sec icon="🛒" title="판매 입력"
-          desc="매일 판매한 상품을 기록합니다. 회원 적립도 함께 처리합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>🛒 판매 입력 <span style={{marginLeft:8,fontSize:10,color:'#aaa'}}>📍 롯데백화점 · 건대스타시티점</span></div>
-            <div style={mockBody}>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:8}}>
-                {[['판매날짜','2026-03-24'],['브랜드','팔레오'],['상품','팔레오_탱글탱글석류콜라겐젤리']].map(([l,v])=>(
-                  <div key={l}><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>{l}</div><div style={{border:'1px solid #ddd',borderRadius:4,padding:'5px 8px',fontSize:11,background:'#f8f8f8'}}>{v}</div></div>
-                ))}
-                {[['수량','3'],['판매가','40,000'],['결제수단','']].map(([l,v])=>(
-                  <div key={l}><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>{l}</div>
-                    {l==='결제수단'
-                      ? <div style={{display:'flex',gap:4}}>{['카드','현금','기타'].map((p,i)=><span key={p} style={{flex:1,textAlign:'center',padding:'4px 0',border:'1px solid',borderRadius:4,fontSize:10,fontWeight:600, borderColor:i===0?'#E65100':'#ddd',background:i===0?'#fff3e0':'#f8f8f8',color:i===0?'#E65100':'#888'}}>{p}</span>)}</div>
-                      : <div style={{border:'1px solid #ddd',borderRadius:4,padding:'5px 8px',fontSize:11,background:'#f8f8f8'}}>{v}</div>
-                    }
-                  </div>
-                ))}
-              </div>
-              <div style={{background:'#f8f8f8',border:'1px solid #ddd',borderRadius:6,padding:'8px 10px',marginBottom:6}}>
-                <div style={{fontSize:10,fontWeight:700,marginBottom:6}}>🙋 회원 연결</div>
-                <div style={{display:'flex',gap:6}}>
-                  {['없음','기존 회원 검색','신규 회원등록'].map((t,i)=><span key={t} style={{padding:'4px 10px',border:'1px solid',borderRadius:4,fontSize:10,fontWeight:600, borderColor:i===1?'#E65100':'#ddd',background:i===1?'#fff3e0':'#f8f8f8',color:i===1?'#E65100':'#888'}}>{t}</span>)}
+            <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:12}}>📋 사용 방법</div>
+            <div style={{display:'flex', flexDirection:'column', gap:8}}>
+              {detail.steps.map((step, i) => (
+                <div key={i} style={{display:'flex', gap:12, alignItems:'flex-start',
+                  background: i%2===0?'#fafafa':'#fff', borderRadius:8, padding:'10px 14px'}}>
+                  <span style={{width:22, height:22, background:'var(--accent)', color:'#fff',
+                    borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:11, fontWeight:700, flexShrink:0}}>
+                    {i+1}
+                  </span>
+                  <span style={{fontSize:13, color:'var(--text)', lineHeight:1.7}}>{step}</span>
                 </div>
-              </div>
-              <div style={{background:'#e8f5e9',border:'1px solid #a5d6a7',borderRadius:4,padding:'5px 10px',fontSize:11,color:'#2e7d32',fontWeight:600}}>✅ 조해숙 (010-3554-2100)</div>
+              ))}
             </div>
           </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>
-            브랜드→상품 순서로 선택하면 기본 판매가 자동 입력 &nbsp;|&nbsp;
-            <b>기존 회원 검색</b>: 이름·연락처 입력 후 선택 → 해당 회원 구매이력에 기록 &nbsp;|&nbsp;
-            <b>신규 회원등록</b>: 가입과 판매를 한 번에 처리
-          </div>
-        </Sec>
-
-        <Sec icon="👤" title="회원 등록"
-          desc="구매 없이 회원가입만 하는 경우 이 메뉴를 사용합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>👤 회원 등록 <span style={{marginLeft:8,fontSize:10,color:'#aaa'}}>📍 롯데백화점 · 건대스타시티점</span></div>
-            <div style={mockBody}>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8,marginBottom:8}}>
-                {[['회원가입일','2026-03-24'],['고객 이름','홍길순'],['연락처','010-1234-5678'],['생일 (선택)','1982-09-03'],['담당 매니저','홍길동'],['','']].map(([l,v],i)=> l ? (
-                  <div key={i}><div style={{fontSize:9,color:'#aaa',marginBottom:3}}>{l}</div><div style={{border:'1px solid #ddd',borderRadius:4,padding:'5px 8px',fontSize:11,background:'#f8f8f8'}}>{v||'-'}</div></div>
-                ) : <div key={i}/>)}
-              </div>
-              <div style={{background:'#f8f8f8',border:'1px solid #ddd',borderRadius:6,padding:'8px 10px',marginBottom:8}}>
-                <div style={{fontSize:10,fontWeight:700,marginBottom:4}}>📱 광고성 문자 수신 동의</div>
-                <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <div style={{width:14,height:14,background:'#E65100',borderRadius:3,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{color:'#fff',fontSize:9}}>✓</span></div>
-                  <span style={{fontSize:11,color:'#E65100',fontWeight:600}}>광고성 정보 문자 수신에 동의합니다 (선택)</span>
-                </div>
-              </div>
-              <div style={{background:'#E65100',color:'#fff',borderRadius:6,padding:'8px',textAlign:'center',fontSize:12,fontWeight:700}}>✓ 회원 정보 저장</div>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>
-            연락처는 숫자만 입력해도 010-XXXX-XXXX 형식으로 자동 변환 &nbsp;|&nbsp;
-            SMS 동의: 고객에게 직접 확인 후 체크 &nbsp;|&nbsp;
-            생일 입력 시 추후 생일 혜택 문자 발송에 활용
-          </div>
-          <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:'var(--radius)',padding:'12px 14px',marginTop:12}}>
-            <div style={{fontWeight:700,fontSize:12,color:'#856404',marginBottom:6}}>⚠️ 중요사항</div>
-            <div style={{fontSize:12,color:'#856404',lineHeight:1.8}}>
-              앱에서 매니저가 직접 회원을 등록하는 경우, <b>마케팅 수신 동의 체크는 매니저가 대신 입력</b>하게 됩니다.<br/>
-              법적 분쟁을 예방하기 위해 반드시 <b>고객에게 마케팅 수신 동의 서명을 받은 서면 동의서를 별도로 보관</b>하세요.<br/>
-              고객이 QR코드로 직접 가입한 경우에는 서면 동의서가 필요하지 않습니다.
-            </div>
-          </div>
-        </Sec>
-
-        <Sec icon="📋" title="내 회원 목록"
-          desc="내가 담당하는 회원과 그들의 구매이력을 확인합니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>📋 내 회원 목록</div>
-            <div style={mockBody}>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:8}}>
-                {[['총 회원수','23명'],['SMS 동의','18명'],['미동의','5명']].map(([l,v])=>(
-                  <div key={l} style={{border:'1px solid #eee',borderRadius:6,padding:'8px',textAlign:'center'}}>
-                    <div style={{fontSize:9,color:'#aaa',marginBottom:4}}>{l}</div>
-                    <div style={{fontSize:16,fontWeight:700,color:'#E65100'}}>{v}</div>
-                  </div>
-                ))}
-              </div>
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                <thead><tr><th style={mockTh}>가입일</th><th style={mockTh}>이름</th><th style={mockTh}>연락처</th><th style={mockTh}>SMS</th></tr></thead>
-                <tbody>
-                  <tr style={{background:'#fff8e1',border:'1px solid #ffcc80',borderRadius:4}}><td style={mockTd}>2026-03-22</td><td style={mockTd}><b>조해숙</b></td><td style={mockTd}>010-3554-2100</td><td style={{...mockTd,...suc}}>✅</td></tr>
-                  <tr><td style={mockTd}>2026-03-18</td><td style={mockTd}><b>김민수</b></td><td style={mockTd}>010-2233-4455</td><td style={{...mockTd,color:'#aaa'}}>-</td></tr>
-                </tbody>
-              </table>
-              <div style={{marginTop:8,background:'#f8f8f8',border:'1px solid #eee',borderRadius:6,padding:'8px 10px'}}>
-                <div style={{fontSize:10,fontWeight:700,marginBottom:4}}>📦 조해숙 구매이력</div>
-                <div style={{display:'flex',gap:8}}>
-                  {[['구매건수','3건'],['총 금액','370,000원']].map(([l,v])=>(
-                    <div key={l} style={{background:'#fff3e0',border:'1px solid #ffcc80',borderRadius:4,padding:'4px 10px',textAlign:'center'}}>
-                      <div style={{fontSize:9,color:'#aaa'}}>{l}</div>
-                      <div style={{fontSize:12,fontWeight:700,color:'#E65100'}}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.8}}>
-            회원 카드 클릭 → 우측에 구매이력 펼침 &nbsp;|&nbsp; 이름·연락처 검색 가능 &nbsp;|&nbsp; 내 이름으로 담당 등록된 회원만 표시
-          </div>
-        </Sec>
-
-        <Sec icon="📱" title="내 QR 코드"
-          desc="고객이 스캔하면 자동으로 내 담당 회원으로 등록됩니다.">
-          <div style={mockWrap}>
-            <div style={mockHead}>📱 QR 회원가입 화면 (고객 화면)</div>
-            <div style={mockBody}>
-              <div style={{display:'flex',gap:16,alignItems:'flex-start'}}>
-                <div style={{flex:1}}>
-                  <div style={{background:'#fff9f0',border:'1px solid #eee',borderRadius:12,padding:'16px',maxWidth:200}}>
-                    <div style={{textAlign:'center',marginBottom:12}}>
-                      <div style={{fontSize:20,marginBottom:4}}>🏬</div>
-                      <div style={{fontSize:13,fontWeight:700}}>회원 등록</div>
-                      <div style={{fontSize:10,color:'#aaa'}}>롯데백화점 · 건대스타시티점</div>
-                    </div>
-                    {[['이름','홍길순'],['연락처','010-1234-5678'],['생일 (선택)','1982-09-03']].map(([l,v])=>(
-                      <div key={l} style={{marginBottom:8}}>
-                        <div style={{fontSize:10,fontWeight:700,color:'#444',marginBottom:3}}>{l}</div>
-                        <div style={{border:'1px solid #e0e0e0',borderRadius:8,padding:'8px 10px',fontSize:12,background:'#f8f8f8'}}>{v}</div>
-                      </div>
-                    ))}
-                    <div style={{background:'#f8f8f8',borderRadius:8,padding:'8px',marginBottom:8}}>
-                      <div style={{fontSize:10,fontWeight:700,marginBottom:4}}>📱 광고성 문자 수신 동의</div>
-                      <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                        <div style={{width:14,height:14,background:'#E65100',borderRadius:3}}/>
-                        <span style={{fontSize:10,color:'#E65100'}}>동의합니다 (선택)</span>
-                      </div>
-                    </div>
-                    <div style={{background:'#E65100',color:'#fff',borderRadius:10,padding:'8px',textAlign:'center',fontSize:12,fontWeight:700}}>✓ 회원 등록 완료</div>
-                  </div>
-                </div>
-                <div style={{fontSize:11,color:'var(--text2)',lineHeight:1.8,flex:1}}>
-                  <b>① 사이드바 → 📱 내 QR 코드 클릭</b><br/>
-                  인쇄 화면이 열립니다<br/><br/>
-                  <b>② QR 출력 후 카운터 비치</b><br/>
-                  고객이 스마트폰으로 스캔<br/><br/>
-                  <b>③ 고객이 직접 입력</b><br/>
-                  이름·연락처·생일·SMS동의<br/><br/>
-                  <b>④ 자동으로 내 담당 회원으로 등록</b><br/>
-                  인센티브도 자동 귀속
-                </div>
-              </div>
-            </div>
-          </div>
-        </Sec>
-
-      </div>}
+        )}
+      </div>
     </div>
   );
 }
+
+
 
 // ════════════════════════════════════════════════════════
 // MAIN APP
