@@ -5219,8 +5219,8 @@ function HomePage({ profile, setPage }) {
       </div>
       <div style={{display:'flex', gap:12, fontSize:12, color:'var(--text2)'}}>
         {extra || <>
-          <span>판매 <b>{summary.count}</b>건</span>
-          <span>수량 <b>{summary.qty}</b>개</span>
+          <span>주문 : <b>{summary.count}</b>건</span>
+          <span>수량 : <b>{summary.qty}</b>개</span>
         </>}
       </div>
     </div>
