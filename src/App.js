@@ -6424,7 +6424,10 @@ const HQ_MENUS = [
 const MANAGER_MENUS = [
   { key: 'home',        icon: '🏠', label: '홈 대시보드' },
   { key: 'sales_input', icon: '🛒', label: '판매 입력' },
-  { key: 'stock_request', icon: '📦', label: '재고 요청' },
+  { key: 'stock_mgmt_mgr', icon: '📦', label: '재고 관리', sub: [
+    { key: 'stock_mgr_view', icon: '📊', label: '재고 현황' },
+    { key: 'stock_request',  icon: '📋', label: '재고 요청' },
+  ]},
   { key: 'customer_reg', icon: '👤', label: '회원 관리', sub: [
     { key: 'customer_qr',  icon: '📱', label: 'QR 가입' },
     { key: 'customer_doc', icon: '📝', label: '서류 가입' },
@@ -6971,7 +6974,8 @@ function Sidebar({ page, setPage, profile, onLogout }) {
       customer_doc:   'customer_reg',
       my_members:     'customer_reg',
       sales_list:         'sales_view',
-      biz_sales_view:     'sales_view',
+      stock_mgr_view:     'stock_mgmt_mgr',
+      stock_request:      'stock_mgmt_mgr',
       lecture_sales_view: 'sales_view',
     };
     return parentMap[page] ? [parentMap[page]] : [];
@@ -7360,7 +7364,8 @@ function HelpPage({ profile }) {
     ],
     manager: [
       { key:'sales_input',   icon:'🛒', label:'판매 입력' },
-      { key:'stock_req',     icon:'📦', label:'재고 요청' },
+      { key:'stock_mgr_view',icon:'📊', label:'재고 현황' },
+      { key:'stock_req',     icon:'📋', label:'재고 요청' },
       { key:'member_reg',    icon:'👤', label:'회원 관리' },
       { key:'qr',            icon:'📱', label:'QR 회원가입' },
       { key:'attendance_mgr',icon:'🗓️', label:'근태 관리' },
@@ -7448,6 +7453,11 @@ function HelpPage({ profile }) {
       icon:'🛒', label:'판매 입력', desc:'매일 판매한 상품을 기록합니다. 회원 적립도 함께 처리합니다.',
       steps:['브랜드 없이 상품명 바로 검색 (검색결과에 브랜드명 표시)','판매가 입력 시 할인금액 자동 계산','회원 없음 / 기존회원 검색 / 신규회원 등록 선택','저장 시 해당 상품 매장재고 자동 차감'],
       component: <SalesInputPage profile={previewProfile}/>, previewScale:0.52, previewHeight:460,
+    },
+    stock_mgr_view: {
+      icon:'📊', label:'재고 현황', desc:'담당 매장의 현재 재고를 확인합니다.',
+      steps:['사이드바 → 📦 재고 관리 → 📊 재고 현황 클릭','본인 매장 재고 자동 표시 (점포/지점 필터 고정)','상품명 또는 코드로 검색 가능','품절(0개) → 빨간색 / 5개 이하 → 주황색 ⚠️ 경고','판매 입력 시 재고 자동 차감'],
+      component: <StoreStockPage profile={previewProfile}/>, previewScale:0.55, previewHeight:420,
     },
     stock_req: {
       icon:'📦', label:'재고 요청', desc:'본사에 상품 입고를 요청합니다.',
@@ -7684,7 +7694,9 @@ export default function App() {
     customer_qr:    'QR 가입',
     customer_doc:   '서류 가입',
     my_members:     '회원 목록',
-    stock_request:  '재고 요청',
+    stock_request:   '재고 요청',
+    stock_mgmt_mgr:  '재고 관리',
+    stock_mgr_view:  '재고 현황',
     attendance_mgmt: '근태 관리',
     clock_inout:     '출근/퇴근 체크',
     leave_plan:      '휴무 신청',
@@ -7737,6 +7749,7 @@ export default function App() {
             {page === 'customer_doc'   && (isManager || isAdmin || isHQ) && <CustomerDocPage profile={profile}/>}
             {page === 'my_members'     && (isManager || isAdmin || isHQ) && <MyMembersPage profile={profile}/>}
             {page === 'stock_request'  && (isManager || isAdmin || isHQ) && <StockRequestPage profile={profile}/>}
+            {page === 'stock_mgr_view' && (isManager || isAdmin || isHQ) && <StoreStockPage profile={profile}/>}
             {page === 'my_attendance'  && (isManager || isAdmin || isHQ) && <MyAttendancePage profile={profile}/>}
             {page === 'leave_plan'     && (isManager || isAdmin || isHQ) && <LeavePlanPage profile={profile}/>}
             {page === 'attendance_mgmt'&& canSeeMain && <AttendanceMgmtPage/>}
