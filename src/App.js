@@ -5288,32 +5288,43 @@ function HomePage({ profile, setPage }) {
           const diff = totalAmt - prevTotalAmt;
           const diffPct = prevTotalAmt > 0 ? ((diff / prevTotalAmt) * 100).toFixed(1) : null;
           const isUp = diff >= 0;
+          const diffColor = isUp ? '#1b5e20' : '#b71c1c';
           return (
-            <div style={{ textAlign:'right', background:'#fff3e0', border:'2px solid var(--accent)', borderRadius:12, padding:'14px 20px', minWidth:220 }}>
-              <div style={{ fontSize:11, fontWeight:600, color:'var(--accent)', marginBottom:10, letterSpacing:1 }}>통합 총 매출</div>
-              {/* 당월 */}
-              <div style={{ marginBottom:6 }}>
-                <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>당월 ({month}월 1일~어제)</div>
-                <div style={{ fontSize:26, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', lineHeight:1 }}>
-                  {totalAmt.toLocaleString()}원
-                </div>
+            <div style={{ background:'#fff8f0', border:'2px solid #e65100', borderRadius:12, padding:'12px 20px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#bf360c', letterSpacing:1, textAlign:'center', marginBottom:10 }}>
+                통합 총 매출
               </div>
-              {/* 구분선 */}
-              <div style={{ borderTop:'1px solid #ffe0b2', margin:'8px 0' }}/>
-              {/* 전월 동기 */}
-              <div style={{ marginBottom:6 }}>
-                <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>전월 동기 ({prevMon}월 1일~{String(prevMonthEndDay).padStart(2,'0')}일)</div>
-                <div style={{ fontSize:14, fontWeight:600, color:'var(--text2)', fontFamily:'var(--mono)' }}>
-                  {prevTotalAmt.toLocaleString()}원
+              <div style={{ display:'flex', alignItems:'center', gap:0 }}>
+                {/* 당월 */}
+                <div style={{ textAlign:'center', padding:'0 18px' }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:'#6d4c41', marginBottom:5 }}>{month}월 (당월)</div>
+                  <div style={{ fontFamily:'var(--mono)', fontSize:20, fontWeight:800, color:'#bf360c', lineHeight:1 }}>
+                    {totalAmt.toLocaleString()}<span style={{ fontSize:12, marginLeft:2, fontWeight:600 }}>원</span>
+                  </div>
                 </div>
-              </div>
-              {/* 증감 */}
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
-                <span style={{ fontSize:10, color:'var(--text3)' }}>증감</span>
-                <span style={{ fontSize:13, fontWeight:700, fontFamily:'var(--mono)', color: isUp ? '#2e7d32' : '#c62828' }}>
-                  {isUp ? '▲' : '▼'} {Math.abs(diff).toLocaleString()}원
-                  {diffPct !== null && <span style={{ fontSize:11, marginLeft:4 }}>({isUp?'+':''}{diffPct}%)</span>}
-                </span>
+                {/* 세로 구분선 */}
+                <div style={{ width:1, background:'#ffcc80', alignSelf:'stretch', margin:'2px 0' }}/>
+                {/* 전월 동기 */}
+                <div style={{ textAlign:'center', padding:'0 18px' }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:'#6d4c41', marginBottom:5 }}>{prevMon}월 동기 (1~{String(prevMonthEndDay).padStart(2,'0')}일)</div>
+                  <div style={{ fontFamily:'var(--mono)', fontSize:20, fontWeight:700, color:'#4e342e', lineHeight:1 }}>
+                    {prevTotalAmt.toLocaleString()}<span style={{ fontSize:12, marginLeft:2, fontWeight:600 }}>원</span>
+                  </div>
+                </div>
+                {/* 세로 구분선 */}
+                <div style={{ width:1, background:'#ffcc80', alignSelf:'stretch', margin:'2px 0' }}/>
+                {/* 증감 */}
+                <div style={{ textAlign:'center', padding:'0 18px' }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:'#6d4c41', marginBottom:5 }}>증감</div>
+                  <div style={{ fontFamily:'var(--mono)', fontSize:20, fontWeight:800, color:diffColor, lineHeight:1 }}>
+                    {isUp ? '▲' : '▼'} {Math.abs(diff).toLocaleString()}<span style={{ fontSize:12, marginLeft:2, fontWeight:600 }}>원</span>
+                  </div>
+                  {diffPct !== null && (
+                    <div style={{ fontSize:12, fontWeight:700, color:diffColor, marginTop:4 }}>
+                      ({isUp ? '+' : ''}{diffPct}%)
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           );
