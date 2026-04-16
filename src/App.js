@@ -5732,10 +5732,10 @@ function NoticePage({ profile }) {
                 style={{padding:'11px 12px', borderRadius:'var(--radius)', cursor:'pointer', marginBottom:4,
                   background: selected?.id===n.id ? '#fff8e1' : 'var(--bg3)',
                   border: `1px solid ${selected?.id===n.id ? '#ffcc80' : 'transparent'}`}}>
-                <div style={{fontWeight:600, fontSize:13, marginBottom:3}}>{n.title}</div>
-                <div style={{fontSize:11, color:'var(--text3)', display:'flex', gap:8}}>
-                  <span>{n.author?.job_title === '담당자' ? '담당자' : (n.author?.name || '-')}</span>
-                  <span>{new Date(n.created_at).toLocaleDateString('ko-KR')}</span>
+                <div style={{fontWeight:600, fontSize:13, marginBottom:5}}>{n.title}</div>
+                <div style={{fontSize:11, color:'var(--text3)', marginBottom:2}}>{new Date(n.created_at).toLocaleDateString('ko-KR')}</div>
+                <div style={{fontSize:11, fontWeight:600, color: n.author?.job_title === '담당자' ? '#1565C0' : '#E65100'}}>
+                  {n.author?.job_title === '담당자' ? '담당자' : (n.author?.name || '-')}
                 </div>
               </div>
             ))
