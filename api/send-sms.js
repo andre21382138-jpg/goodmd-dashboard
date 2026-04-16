@@ -2,7 +2,19 @@
 // Body: { receivers: [{ name, phone }], message, sender }
 // Env:  MUNJANARA_USERID, MUNJANARA_PASSWD
 
+import iconv from 'iconv-lite';
+
 const BATCH = 50; // 동시 발송 수 (Vercel Pro 300s 기준)
+
+// 메시지를 EUC-KR로 변환 후 percent-encode
+function encodeEucKr(str) {
+  const buf = iconv.encode(str, 'EUC-KR');
+  let encoded = '';
+  for (const byte of buf) {
+    encoded += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
+  }
+  return encoded;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -22,6 +34,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: '발신번호가 없습니다' });
   }
 
+  const encodedMsg = encodeEucKr(message);
+
   const sendOne = async (r) => {
     const phone = String(r.phone || '').replace(/\D/g, '');
     if (phone.length < 10) return { ok: false, label: r.name || phone, reason: '번호 오류' };
@@ -34,7 +48,7 @@ export default async function handler(req, res) {
       `&receiver=${phone}` +
       `&encode=1` +
       `&end_alert=0` +
-      `&message=${encodeURIComponent(message)}`;
+      `&message=${encodedMsg}`;
 
     try {
       const resp = await fetch(url);
