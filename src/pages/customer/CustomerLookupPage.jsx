@@ -40,6 +40,8 @@ export default function CustomerLookupPage({ profile }) {
   const [loadingBulk,   setLoadingBulk]   = useState(false);
   const [testPhone,     setTestPhone]     = useState('');
   const [sendingTest,   setSendingTest]   = useState(false);
+  const [preview,       setPreview]       = useState(false);  // 미리보기 모달
+  const [sendResult,    setSendResult]    = useState(null);   // 전송 결과 { ok, failCount, failed, total }
 
   // 점포 목록 로드 (profiles에서)
   useEffect(() => {
@@ -233,10 +235,7 @@ export default function CustomerLookupPage({ profile }) {
       const result = await res.json();
       if (!res.ok) { toast(result.error || 'SMS 발송 실패', 'err'); }
       else {
-        toast(`발송 완료: ${result.ok}건 성공${result.failCount ? ` / ${result.failCount}건 실패` : ''}`, result.failCount ? 'inf' : 'ok');
-        if (result.failCount) {
-          console.warn('SMS 실패 목록:', result.failed);
-        }
+        setSendResult({ ...result, total: checkedCustomers.length });
         setSmsModal(false);
         setSmsMsg('');
         setSmsSender('');
@@ -506,9 +505,18 @@ export default function CustomerLookupPage({ profile }) {
               />
             </div>
 
-            {/* 바이트 카운터 */}
-            <div style={{display:'flex', justifyContent:'flex-end', marginBottom:16, fontSize:12, color: msgBytes > 2000 ? 'var(--err, #d32f2f)' : msgBytes > 90 ? '#f57c00' : 'var(--text3)'}}>
-              {msgBytes} byte{msgBytes <= 90 ? ` (단문 SMS, 최대 90byte)` : msgBytes <= 2000 ? ` (장문 LMS)` : ` ⚠ 2000byte 초과`}
+            {/* 바이트 카운터 + 미리보기 */}
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, fontSize:12}}>
+              <button
+                type="button"
+                onClick={() => setPreview(true)}
+                disabled={!smsMsg.trim()}
+                style={{height:28, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:12, fontWeight:600, cursor:'pointer', background:'#fff', color:'var(--text2)'}}>
+                📱 미리보기
+              </button>
+              <span style={{color: msgBytes > 2000 ? 'var(--err, #d32f2f)' : msgBytes > 90 ? '#f57c00' : 'var(--text3)'}}>
+                {msgBytes} byte{msgBytes <= 90 ? ` (단문 SMS)` : msgBytes <= 2000 ? ` (장문 LMS)` : ` ⚠ 2000byte 초과`}
+              </span>
             </div>
 
             {/* 테스트 발송 */}
@@ -541,6 +549,111 @@ export default function CustomerLookupPage({ profile }) {
                 {sending ? <span className="spinner"/> : `📨 ${checkedCustomers.length}명에게 발송`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 미리보기 모달 */}
+      {preview && (
+        <div style={{position:'fixed', inset:0, zIndex:11000, display:'flex', alignItems:'center', justifyContent:'center'}}
+          onClick={() => setPreview(false)}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.6)'}}/>
+          <div style={{position:'relative', display:'flex', flexDirection:'column', alignItems:'center', gap:12}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{color:'#fff', fontSize:13, fontWeight:600, opacity:0.8}}>📱 수신자에게 보이는 화면</div>
+            {/* 폰 외곽 */}
+            <div style={{
+              width:280, background:'#1a1a1a', borderRadius:36, padding:'16px 10px',
+              boxShadow:'0 0 0 2px #444, 0 20px 60px rgba(0,0,0,0.6)',
+              position:'relative',
+            }}>
+              {/* 노치 */}
+              <div style={{width:80, height:6, background:'#333', borderRadius:3, margin:'0 auto 14px'}}/>
+              {/* 화면 */}
+              <div style={{background:'#f2f2f7', borderRadius:24, minHeight:360, padding:'16px 12px', display:'flex', flexDirection:'column', gap:8}}>
+                {/* 발신번호 */}
+                <div style={{textAlign:'center', fontSize:11, color:'#8e8e93', marginBottom:4}}>
+                  {smsSender || '발신번호'}
+                </div>
+                {/* 말풍선 */}
+                <div style={{display:'flex', justifyContent:'flex-start'}}>
+                  <div style={{
+                    background:'#fff', borderRadius:'0 16px 16px 16px',
+                    padding:'10px 14px', maxWidth:'85%',
+                    boxShadow:'0 1px 3px rgba(0,0,0,0.12)',
+                    fontSize:13, lineHeight:1.6, color:'#000',
+                    whiteSpace:'pre-wrap', wordBreak:'break-all',
+                  }}>
+                    <span style={{color:'#8e8e93', fontSize:11}}>[Web발신]{'\n'}</span>
+                    {smsMsg}
+                  </div>
+                </div>
+                {/* 시간 */}
+                <div style={{fontSize:10, color:'#8e8e93', marginLeft:4}}>
+                  {new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'})}
+                </div>
+              </div>
+              {/* 홈버튼 */}
+              <div style={{width:40, height:40, background:'#333', borderRadius:'50%', margin:'12px auto 0', border:'2px solid #444'}}/>
+            </div>
+            <button onClick={() => setPreview(false)}
+              style={{color:'#fff', background:'rgba(255,255,255,0.15)', border:'none', borderRadius:20, padding:'8px 24px', fontSize:13, cursor:'pointer', fontWeight:600}}>
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 전송 결과 모달 */}
+      {sendResult && (
+        <div style={{position:'fixed', inset:0, zIndex:10500, display:'flex', alignItems:'center', justifyContent:'center'}}
+          onClick={() => setSendResult(null)}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(480px,95vw)', boxShadow:'0 8px 40px rgba(0,0,0,0.25)', padding:'28px 24px'}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{textAlign:'center', marginBottom:20}}>
+              {sendResult.failCount === 0
+                ? <div style={{fontSize:40}}>✅</div>
+                : <div style={{fontSize:40}}>⚠️</div>
+              }
+              <div style={{fontSize:18, fontWeight:700, marginTop:8}}>전송 결과</div>
+            </div>
+
+            {/* 요약 카드 */}
+            <div style={{display:'flex', gap:10, marginBottom:20}}>
+              <div style={{flex:1, background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:12, padding:'14px', textAlign:'center'}}>
+                <div style={{fontSize:11, color:'#388e3c', fontWeight:600, marginBottom:4}}>발송 성공</div>
+                <div style={{fontSize:28, fontWeight:800, color:'#2e7d32', fontFamily:'var(--mono)'}}>{sendResult.ok}</div>
+                <div style={{fontSize:11, color:'#388e3c'}}>건</div>
+              </div>
+              <div style={{flex:1, background: sendResult.failCount > 0 ? '#fce4ec' : '#f5f5f5', border:`1px solid ${sendResult.failCount > 0 ? '#f48fb1' : '#e0e0e0'}`, borderRadius:12, padding:'14px', textAlign:'center'}}>
+                <div style={{fontSize:11, color: sendResult.failCount > 0 ? '#c62828' : '#9e9e9e', fontWeight:600, marginBottom:4}}>발송 실패</div>
+                <div style={{fontSize:28, fontWeight:800, color: sendResult.failCount > 0 ? '#b71c1c' : '#9e9e9e', fontFamily:'var(--mono)'}}>{sendResult.failCount}</div>
+                <div style={{fontSize:11, color: sendResult.failCount > 0 ? '#c62828' : '#9e9e9e'}}>건</div>
+              </div>
+              <div style={{flex:1, background:'#e3f2fd', border:'1px solid #90caf9', borderRadius:12, padding:'14px', textAlign:'center'}}>
+                <div style={{fontSize:11, color:'#1565c0', fontWeight:600, marginBottom:4}}>전체</div>
+                <div style={{fontSize:28, fontWeight:800, color:'#0d47a1', fontFamily:'var(--mono)'}}>{sendResult.total}</div>
+                <div style={{fontSize:11, color:'#1565c0'}}>명</div>
+              </div>
+            </div>
+
+            {/* 실패 목록 */}
+            {sendResult.failCount > 0 && (
+              <div style={{background:'#fafafa', border:'1px solid var(--border)', borderRadius:8, padding:'12px', marginBottom:16, maxHeight:160, overflowY:'auto'}}>
+                <div style={{fontSize:12, fontWeight:700, color:'#c62828', marginBottom:8}}>실패 목록</div>
+                {sendResult.failed.map((f, i) => (
+                  <div key={i} style={{fontSize:12, color:'var(--text2)', padding:'3px 0', borderBottom:'1px solid #f0f0f0'}}>
+                    {f}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button className="btn btn-p" style={{width:'100%', justifyContent:'center', height:42, fontWeight:700}}
+              onClick={() => setSendResult(null)}>
+              확인
+            </button>
           </div>
         </div>
       )}
