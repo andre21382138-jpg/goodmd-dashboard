@@ -465,8 +465,7 @@ export default function CustomerLookupPage({ profile }) {
 
       {/* SMS 발송 모달 */}
       {smsModal && (
-        <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}
-          onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); } }}>
+        <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}>
           <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
           <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(520px,95vw)', boxShadow:'0 8px 40px rgba(0,0,0,0.25)', padding:'24px'}}
             onClick={e => e.stopPropagation()}>
