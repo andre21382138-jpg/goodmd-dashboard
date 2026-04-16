@@ -7023,13 +7023,34 @@ function Sidebar({ page, setPage, profile, onLogout }) {
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
   const canSeeMain = isAdmin || isHQ;
-  const [newPlanCount, setNewPlanCount] = useState(0);
+  const [newPlanCount,  setNewPlanCount]  = useState(0);
+  const [hasNewNotice,  setHasNewNotice]  = useState(false);
 
   useEffect(() => {
     if (!canSeeMain) return;
     supabase.from('leave_plans').select('id', { count: 'exact' }).eq('status', 'pending')
       .then(({ count }) => setNewPlanCount(count || 0));
   }, [canSeeMain]);
+
+  // 새 공지 여부 확인 (담당자·매니저·관리자 모두)
+  useEffect(() => {
+    if (!profile?.id) return;
+    const storageKey = `notice_last_read_${profile.id}`;
+    supabase.from('notices').select('created_at').order('created_at', { ascending: false }).limit(1)
+      .then(({ data }) => {
+        if (!data || data.length === 0) return;
+        const latestAt = data[0].created_at;
+        const lastRead = localStorage.getItem(storageKey);
+        setHasNewNotice(!lastRead || latestAt > lastRead);
+      });
+  }, [profile?.id]);
+
+  const handleNoticeClick = () => {
+    const storageKey = `notice_last_read_${profile?.id}`;
+    localStorage.setItem(storageKey, new Date().toISOString());
+    setHasNewNotice(false);
+    setPage('notice');
+  };
   const [expanded, setExpanded] = useState(() => {
     const parentMap = {
       product_add:    'product_mgmt',
@@ -7146,8 +7167,12 @@ function Sidebar({ page, setPage, profile, onLogout }) {
           <>
             <div className="sidebar-section" style={{marginTop:8}}>관리자</div>
             {isAdmin && ADMIN_MENUS.map(m => (
-              <button key={m.key} className={`sidebar-item ${page===m.key?'on':''}`} onClick={() => setPage(m.key)}>
+              <button key={m.key} className={`sidebar-item ${page===m.key?'on':''}`}
+                onClick={() => m.key === 'notice' ? handleNoticeClick() : setPage(m.key)}>
                 <span className="sidebar-item-icon">{m.icon}</span>{m.label}
+                {m.key === 'notice' && hasNewNotice && (
+                  <span style={{marginLeft:'auto', background:'#e53935', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, letterSpacing:0.5}}>NEW</span>
+                )}
               </button>
             ))}
             {!isAdmin && (
@@ -7161,8 +7186,11 @@ function Sidebar({ page, setPage, profile, onLogout }) {
         {(isHQ || isManager) && (
           <>
             <div className="sidebar-section" style={{marginTop:8}}>공지</div>
-            <button className={`sidebar-item ${page==='notice'?'on':''}`} onClick={() => setPage('notice')}>
+            <button className={`sidebar-item ${page==='notice'?'on':''}`} onClick={handleNoticeClick}>
               <span className="sidebar-item-icon">📢</span>공지 사항
+              {hasNewNotice && (
+                <span style={{marginLeft:'auto', background:'#e53935', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, letterSpacing:0.5}}>NEW</span>
+              )}
             </button>
           </>
         )}
