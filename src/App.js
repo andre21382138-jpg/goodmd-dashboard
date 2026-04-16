@@ -5664,7 +5664,7 @@ function NoticePage({ profile }) {
   const fetchNotices = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase.from('notices')
-      .select('*, author:profiles(name, job_title)')
+      .select('*, author:profiles(name, job_title, role)')
       .order('created_at', { ascending: false });
     setNotices(data || []);
     setLoading(false);
@@ -5732,11 +5732,22 @@ function NoticePage({ profile }) {
                 style={{padding:'11px 12px', borderRadius:'var(--radius)', cursor:'pointer', marginBottom:4,
                   background: selected?.id===n.id ? '#fff8e1' : 'var(--bg3)',
                   border: `1px solid ${selected?.id===n.id ? '#ffcc80' : 'transparent'}`}}>
-                <div style={{fontWeight:600, fontSize:13, marginBottom:5}}>{n.title}</div>
-                <div style={{fontSize:11, color:'var(--text3)', marginBottom:2}}>{new Date(n.created_at).toLocaleDateString('ko-KR')}</div>
-                <div style={{fontSize:11, fontWeight:600, color: n.author?.job_title === '담당자' ? '#1565C0' : '#E65100'}}>
-                  {n.author?.job_title === '담당자' ? '담당자' : (n.author?.name || '-')}
-                </div>
+                {(() => {
+                  const a = n.author;
+                  const authorLabel = a?.job_title === '담당자' ? '담당자' : a?.role === 'admin' ? '관리자' : (a?.name || '-');
+                  const authorColor = a?.job_title === '담당자' ? '#1565C0' : '#E65100';
+                  return (
+                    <div style={{display:'flex', alignItems:'center', gap:0}}>
+                      <div style={{fontWeight:600, fontSize:13, flex:1, marginRight:8}}>{n.title}</div>
+                      <div style={{fontSize:11, color:'var(--text3)', whiteSpace:'nowrap', marginRight:10}}>
+                        {new Date(n.created_at).toLocaleDateString('ko-KR')}
+                      </div>
+                      <div style={{fontSize:11, fontWeight:700, color:authorColor, whiteSpace:'nowrap'}}>
+                        {authorLabel}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ))
           }
@@ -5748,7 +5759,7 @@ function NoticePage({ profile }) {
               <div>
                 <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>{selected.title}</div>
                 <div style={{fontSize:12, color:'var(--text3)'}}>
-                  {selected.author?.job_title === '담당자' ? '담당자' : (selected.author?.name || '-')} · {new Date(selected.created_at).toLocaleString('ko-KR')}
+                  {selected.author?.job_title === '담당자' ? '담당자' : selected.author?.role === 'admin' ? '관리자' : (selected.author?.name || '-')} · {new Date(selected.created_at).toLocaleString('ko-KR')}
                 </div>
               </div>
               <div style={{display:'flex', gap:6}}>
