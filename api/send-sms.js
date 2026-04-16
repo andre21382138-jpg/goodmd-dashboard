@@ -27,13 +27,14 @@ export default async function handler(req, res) {
     if (phone.length < 10) return { ok: false, label: r.name || phone, reason: '번호 오류' };
 
     const url =
-      `https://munjanara.co.kr/send.sys` +
+      `http://munjanara.co.kr/send.sys` +
       `?userid=${encodeURIComponent(MUNJANARA_USERID)}` +
       `&passwd=${encodeURIComponent(MUNJANARA_PASSWD)}` +
       `&sender=${SENDER}` +
       `&receiver=${phone}` +
-      `&message=${encodeURIComponent(message)}` +
-      `&encode=1`;
+      `&encode=1` +
+      `&end_alert=0` +
+      `&message=${encodeURIComponent(message)}`;
 
     try {
       const resp = await fetch(url);
