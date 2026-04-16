@@ -2,6 +2,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge } from '../../lib/utils';
 
+function byteLen(str) {
+  let len = 0;
+  for (const ch of str) len += ch.charCodeAt(0) > 127 ? 2 : 1;
+  return len;
+}
+
 export default function CustomerLookupPage({ profile }) {
   const isManager = profile?.job_title === '매니저';
   const [search,     setSearch]    = useState('');
@@ -21,6 +27,15 @@ export default function CustomerLookupPage({ profile }) {
   const [page,       setPage]      = useState(0);
   const [totalCount, setTotalCount]= useState(0);
   const [hasMore,    setHasMore]   = useState(false); // eslint-disable-line no-unused-vars
+
+  // 체크박스 선택
+  const [checkedIds, setCheckedIds] = useState(new Set());
+
+  // SMS 모달
+  const [smsModal,   setSmsModal]  = useState(false);
+  const [smsMsg,     setSmsMsg]    = useState('');
+  const [smsSender,  setSmsSender] = useState('');
+  const [sending,    setSending]   = useState(false);
 
   // 점포 목록 로드 (profiles에서)
   useEffect(() => {
@@ -48,6 +63,7 @@ export default function CustomerLookupPage({ profile }) {
   const fetchCustomers = useCallback(async (pg = 0) => {
     setLoading(true);
     setPage(pg);
+    setCheckedIds(new Set());
     let q = supabase.from('customers')
       .select('*', { count: 'exact' })
       .order('joined_at', { ascending: false });
@@ -98,8 +114,77 @@ export default function CustomerLookupPage({ profile }) {
     }
   };
 
+  // 체크박스 토글
+  const toggleCheck = (e, id) => {
+    e.stopPropagation();
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // 전체 선택 / 해제 (SMS동의 회원만)
+  const smsConsentIds = useMemo(() => customers.filter(c => c.sms_consent).map(c => c.id), [customers]);
+  const allChecked = smsConsentIds.length > 0 && smsConsentIds.every(id => checkedIds.has(id));
+  const toggleAll = (e) => {
+    e.stopPropagation();
+    if (allChecked) {
+      setCheckedIds(new Set());
+    } else {
+      setCheckedIds(new Set(smsConsentIds));
+    }
+  };
+
+  // 선택된 수신자 목록
+  const checkedCustomers = useMemo(() => customers.filter(c => checkedIds.has(c.id)), [customers, checkedIds]);
+
+  // SMS 발송
+  const handleSendSms = async () => {
+    if (!smsSender.replace(/\D/g,'')) { toast('발신번호를 입력해주세요', 'err'); return; }
+    if (!smsMsg.trim()) { toast('메시지를 입력해주세요', 'err'); return; }
+    if (checkedCustomers.length === 0) { toast('수신자를 선택해주세요', 'err'); return; }
+    setSending(true);
+    try {
+      const res = await fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receivers: checkedCustomers.map(c => ({ name: c.name, phone: c.phone })),
+          message: smsMsg,
+          sender: smsSender,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) { toast(result.error || 'SMS 발송 실패', 'err'); }
+      else {
+        toast(`발송 완료: ${result.ok}건 성공${result.failCount ? ` / ${result.failCount}건 실패` : ''}`, result.failCount ? 'inf' : 'ok');
+        if (result.failCount) {
+          console.warn('SMS 실패 목록:', result.failed);
+        }
+        setSmsModal(false);
+        setSmsMsg('');
+        setSmsSender('');
+        setCheckedIds(new Set());
+      }
+    } catch(e) {
+      toast('네트워크 오류: ' + e.message, 'err');
+    }
+    setSending(false);
+  };
+
+  // 단건 문자 버튼 (행 내)
+  const handleSingleSms = (e, c) => {
+    e.stopPropagation();
+    if (!c.sms_consent) { toast('SMS 수신 미동의 회원입니다', 'err'); return; }
+    setCheckedIds(new Set([c.id]));
+    setSmsModal(true);
+  };
+
   const totalAmt = useMemo(() => purchases.reduce((s,r) => s + r.price * r.quantity, 0), [purchases]);
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + r.quantity, 0), [purchases]); // eslint-disable-line no-unused-vars
+
+  const msgBytes = byteLen(smsMsg);
 
   return (
     <div>
@@ -145,7 +230,7 @@ export default function CustomerLookupPage({ profile }) {
             ))}
           </select>
           {(search||fStore||fBranch||fFrom||fTo||fSms||fNewOnly||fGrade) &&
-            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); }}>✕ 초기화</button>}
+            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); setCheckedIds(new Set()); }}>✕ 초기화</button>}
           <div className="fbar-right">
             <button className="btn btn-p" onClick={() => fetchCustomers(0)} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔍 조회'}
@@ -156,13 +241,28 @@ export default function CustomerLookupPage({ profile }) {
 
       {customers.length > 0 && (
         <div className="card" style={{padding:'16px 20px'}}>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
             <span className="fresult">총 <b>{totalCount.toLocaleString()}</b>명 · 이 페이지 <b>{customers.length}</b>명 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
+            {checkedIds.size > 0 && (
+              <button
+                className="btn btn-p"
+                style={{padding:'6px 18px', fontSize:13, fontWeight:700}}
+                onClick={() => setSmsModal(true)}>
+                📨 선택 {checkedIds.size}명 문자 발송
+              </button>
+            )}
           </div>
           <div className="twrap">
             <table>
               <thead>
                 <tr>
+                  <th style={{textAlign:'center', width:36}}>
+                    <input type="checkbox"
+                      checked={allChecked}
+                      onChange={toggleAll}
+                      title="SMS동의 회원 전체 선택"
+                      style={{cursor:'pointer', width:15, height:15}}/>
+                  </th>
                   <th>가입일</th>
                   <th>이름</th>
                   <th>등급</th>
@@ -185,6 +285,16 @@ export default function CustomerLookupPage({ profile }) {
               <tbody>
                 {customers.map(c => (
                   <tr key={c.id} style={{cursor:'pointer'}} onClick={() => handleSelect(c)}>
+                    <td style={{textAlign:'center'}} onClick={e => e.stopPropagation()}>
+                      {c.sms_consent ? (
+                        <input type="checkbox"
+                          checked={checkedIds.has(c.id)}
+                          onChange={e => toggleCheck(e, c.id)}
+                          style={{cursor:'pointer', width:15, height:15}}/>
+                      ) : (
+                        <span style={{color:'var(--text3)', fontSize:12}}>-</span>
+                      )}
+                    </td>
                     <td className="mono" style={{fontSize:11}}>{c.joined_at}</td>
                     <td><strong style={{fontSize:13}}>{c.name}</strong></td>
                     <td><GradeBadge grade={c.grade || '패밀리'}/></td>
@@ -210,11 +320,7 @@ export default function CustomerLookupPage({ profile }) {
                         className="btn btn-s"
                         style={{fontSize:11, padding:'3px 10px', opacity: c.sms_consent ? 1 : 0.35}}
                         title={c.sms_consent ? '문자 발송' : 'SMS 미동의 회원'}
-                        onClick={e => {
-                          e.stopPropagation();
-                          if (!c.sms_consent) { toast('SMS 수신 미동의 회원입니다', 'err'); return; }
-                          toast(`${c.name} (${c.phone}) — 문자 발송 기능은 SMS API 연동 후 활성화됩니다`, 'inf');
-                        }}>
+                        onClick={e => handleSingleSms(e, c)}>
                         📱 문자
                       </button>
                     </td>
@@ -268,6 +374,69 @@ export default function CustomerLookupPage({ profile }) {
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {/* SMS 발송 모달 */}
+      {smsModal && (
+        <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}
+          onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); } }}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(520px,95vw)', boxShadow:'0 8px 40px rgba(0,0,0,0.25)', padding:'24px'}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex', alignItems:'center', marginBottom:18}}>
+              <div style={{fontSize:17, fontWeight:700}}>📨 마케팅 SMS 발송</div>
+              <button onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); } }}
+                style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999', lineHeight:1}}>✕</button>
+            </div>
+
+            {/* 수신자 요약 */}
+            <div style={{background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:14, fontSize:13}}>
+              <span style={{fontWeight:700, color:'var(--accent)'}}>수신자 {checkedCustomers.length}명</span>
+              <span style={{color:'var(--text2)', marginLeft:8}}>
+                {checkedCustomers.slice(0,5).map(c => c.name).join(', ')}{checkedCustomers.length > 5 ? ` 외 ${checkedCustomers.length - 5}명` : ''}
+              </span>
+            </div>
+
+            {/* 발신번호 */}
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:6}}>발신번호 <span style={{fontWeight:400, color:'var(--text3)'}}>(문자나라에 사전등록된 번호)</span></label>
+              <input
+                value={smsSender}
+                onChange={e => setSmsSender(e.target.value)}
+                placeholder="01012345678"
+                style={{width:'100%', height:36, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--mono)', outline:'none', boxSizing:'border-box'}}
+              />
+            </div>
+
+            {/* 메시지 입력 */}
+            <div style={{marginBottom:6}}>
+              <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:6}}>메시지 내용</label>
+              <textarea
+                value={smsMsg}
+                onChange={e => setSmsMsg(e.target.value)}
+                rows={6}
+                placeholder="발송할 메시지를 입력하세요"
+                style={{width:'100%', padding:'10px 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', resize:'vertical', outline:'none', boxSizing:'border-box'}}
+              />
+            </div>
+
+            {/* 바이트 카운터 */}
+            <div style={{display:'flex', justifyContent:'flex-end', marginBottom:16, fontSize:12, color: msgBytes > 2000 ? 'var(--err, #d32f2f)' : msgBytes > 90 ? '#f57c00' : 'var(--text3)'}}>
+              {msgBytes} byte{msgBytes <= 90 ? ` (단문 SMS, 최대 90byte)` : msgBytes <= 2000 ? ` (장문 LMS)` : ` ⚠ 2000byte 초과`}
+            </div>
+
+            <div style={{display:'flex', gap:10}}>
+              <button className="btn btn-s" style={{flex:1, justifyContent:'center', height:42}}
+                onClick={() => { setSmsModal(false); setSmsMsg(''); setSmsSender(''); }} disabled={sending}>
+                취소
+              </button>
+              <button className="btn btn-p" style={{flex:2, justifyContent:'center', height:42, fontWeight:700}}
+                onClick={handleSendSms} disabled={sending || !smsMsg.trim() || !smsSender.replace(/\D/g,'') || msgBytes > 2000}>
+                {sending ? <span className="spinner"/> : `📨 ${checkedCustomers.length}명에게 발송`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
