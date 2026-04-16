@@ -1,14 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
-
-// ════════════════════════════════════════════════════════
-// SUPABASE
-// ════════════════════════════════════════════════════════
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
-);
+import { supabase } from './lib/supabase';
+import { STORE_MAP, STORE_NAMES, SC, S_DATA_START, S_PERIOD_ROW, GRADE_TABLE, HQ_MENUS, MANAGER_MENUS, ADMIN_MENUS } from './lib/constants';
+import { useStyle, toast, Toasts, useSort, sortRows, uniq, formatPhone, getGrade, GradeBadge, parseSubul, dlBlob } from './lib/utils';
 
 // ════════════════════════════════════════════════════════
 // GLOBAL CSS
@@ -233,57 +227,7 @@ const GLOBAL_CSS = `
 // ════════════════════════════════════════════════════════
 // STYLE INJECT
 // ════════════════════════════════════════════════════════
-function useStyle(css) {
-  useEffect(() => {
-    const el = document.createElement('style');
-    el.textContent = css;
-    document.head.appendChild(el);
-    return () => el.remove();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-}
 
-// ════════════════════════════════════════════════════════
-// TOAST
-// ════════════════════════════════════════════════════════
-let _toast = null;
-function toast(msg, type = 'ok') { _toast?.(msg, type); }
-
-function Toasts() {
-  const [list, setList] = useState([]);
-  useEffect(() => {
-    _toast = (msg, type) => {
-      const id = Date.now();
-      setList(p => [...p, { id, msg, type }]);
-      setTimeout(() => setList(p => p.filter(t => t.id !== id)), 3200);
-    };
-  }, []);
-  const icon = { ok: '✓', err: '✕', inf: 'ℹ' };
-  return (
-    <div className="toasts">
-      {list.map(t => (
-        <div key={t.id} className={`toast t-${t.type}`}>
-          <span>{icon[t.type]}</span><span>{t.msg}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════
-// 점포/지점 목록
-// ════════════════════════════════════════════════════════
-const STORE_MAP = {
-  '롯데백화점':    ['건대스타시티점','천호점','영등포점','관악점','수원점','대구점','센텀시티점','부산점','강남점','잠실점','노원점','청량리점','본점','인천점','광주점','울산점','창원점','포항점','기타'],
-  '신세계백화점':  ['강남점','본점','마산점','센텀시티점','대전점','광주점','충청점','경기점','하남점','기타'],
-  '현대백화점':    ['더현대서울점','목동점','중동점','무역센터점','천호점','신촌점','압구정본점','판교점','대구점','울산점','기타'],
-  'AK백화점':     ['평택점','수원점','분당점','원주점','홍대점','기타'],
-  '갤러리아백화점': ['명품관','타임월드점','센터시티점','광교점','진주점','기타'],
-  '그린푸드':     ['그린푸드'],
-  '농협_SHOP':   ['농협_SHOP'],
-  '대동백화점':   ['대동백화점'],
-  '특판':        ['특판'],
-};
-const STORE_NAMES = Object.keys(STORE_MAP);
 
 // ════════════════════════════════════════════════════════
 // AUTH SCREEN
@@ -490,30 +434,7 @@ function AdminTab({ profile }) {
 // col14:재고수량, col32:매출수량
 // 데이터 시작: 10행 / 기간: 2행
 // ════════════════════════════════════════════════════════
-const SC = { DEPT:1, STORE:2, CODE:3, NAME:4, STOCK:14, SALES:32 };
-const S_DATA_START = 10;
-const S_PERIOD_ROW = 2;
 
-function parseSubul(binary) {
-  const wb = XLSX.read(binary, { type: 'binary' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-  const periodStr = String(raw[S_PERIOD_ROW]?.[0] || '')
-    .replace('조회기간 :', '').replace('조회기간:', '').trim();
-  const rows = [];
-  for (let i = S_DATA_START; i < raw.length; i++) {
-    const row = raw[i];
-    const dept  = String(row[SC.DEPT]  || '').trim();
-    const store = String(row[SC.STORE] || '').trim();
-    const code  = String(row[SC.CODE]  || '').trim();
-    const name  = String(row[SC.NAME]  || '').trim();
-    if (!dept || !code || dept === '합계') continue;
-    const stock = Number(row[SC.STOCK]) || 0;
-    const sales = Number(row[SC.SALES]) || 0;
-    rows.push({ dept, store, code, name, stock, sales });
-  }
-  return { rows, periodStr };
-}
 
 // ════════════════════════════════════════════════════════
 // EXCEL EXPORT
@@ -560,33 +481,10 @@ async function exportSafety(rows, period) {
   dlBlob(buf, `안전재고현황_${period.replace(/\s/g,'')}.xlsx`);
 }
 
-function dlBlob(buf, filename) {
-  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
 
 // ════════════════════════════════════════════════════════
 // SORT HOOK
 // ════════════════════════════════════════════════════════
-function useSort(initKey = '') {
-  const [key, setKey] = useState(initKey);
-  const [dir, setDir] = useState('asc');
-  const toggle = (k) => { if (key === k) setDir(d => d === 'asc' ? 'desc' : 'asc'); else { setKey(k); setDir('asc'); } };
-  const thClass = (k) => key === k ? (dir === 'asc' ? 's-a' : 's-d') : '';
-  return { key, dir, toggle, thClass };
-}
-function sortRows(rows, key, dir) {
-  if (!key) return rows;
-  return [...rows].sort((a, b) => {
-    const av = a[key] ?? 0, bv = b[key] ?? 0;
-    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'ko');
-    return dir === 'asc' ? cmp : -cmp;
-  });
-}
-function uniq(arr) { return [...new Set(arr)].filter(Boolean).sort((a,b) => a.localeCompare(b,'ko')); }
 
 // ════════════════════════════════════════════════════════
 // SAFETY STOCK TAB
@@ -1040,29 +938,6 @@ function UploadHistoryPage({ profile, activeUploadId, setActiveUploadId, setPage
 // ════════════════════════════════════════════════════════
 // 전화번호 자동 포맷
 // ════════════════════════════════════════════════════════
-function formatPhone(val) {
-  const num = val.replace(/\D/g, '').slice(0, 11);
-  if (num.length < 4) return num;
-  if (num.length < 8) return `${num.slice(0,3)}-${num.slice(3)}`;
-  return `${num.slice(0,3)}-${num.slice(3,7)}-${num.slice(7)}`;
-}
-
-// ════════════════════════════════════════════════════════
-// 회원 등급 유틸
-// ════════════════════════════════════════════════════════
-const GRADE_TABLE = [
-  { grade:'VVIP',   min:10000000, rate:0.07, color:'#6a1b9a', bg:'#f3e5f5' },
-  { grade:'VIP',    min:3000000,  rate:0.06, color:'#c62828', bg:'#ffebee' },
-  { grade:'로얄',   min:1000000,  rate:0.05, color:'#1565C0', bg:'#e3f2fd' },
-  { grade:'골드',   min:300000,   rate:0.04, color:'#E65100', bg:'#fff3e0' },
-  { grade:'실버',   min:100000,   rate:0.03, color:'#455a64', bg:'#eceff1' },
-  { grade:'패밀리', min:0,        rate:0.02, color:'#2e7d32', bg:'#e8f5e9' },
-];
-const getGrade = (total) => GRADE_TABLE.find(g => total >= g.min) || GRADE_TABLE[GRADE_TABLE.length-1];
-const GradeBadge = ({ grade }) => {
-  const g = GRADE_TABLE.find(x => x.grade === grade) || GRADE_TABLE[GRADE_TABLE.length-1];
-  return <span style={{padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:700, background:g.bg, color:g.color, whiteSpace:'nowrap'}}>{g.grade}</span>;
-};
 
 // ════════════════════════════════════════════════════════
 // 판매 입력 페이지 (고객 동시 등록 포함)
@@ -6489,41 +6364,6 @@ function AttendanceMgmtPage() {
 }
 
 
-const HQ_MENUS = [
-  { key: 'product_mgmt', icon: '🛍️', label: '상품관리', sub: [
-    { key: 'product_add', icon: '➕', label: '상품추가' },
-  ]},
-  { key: 'stock_mgmt', icon: '📦', label: '재고관리', sub: [
-    { key: 'stock_center', icon: '🏭', label: '센터재고' },
-    { key: 'stock_store',  icon: '🏬', label: '매장재고' },
-    { key: 'stock_safety', icon: '🛡️', label: '안전재고' },
-  ]},
-  { key: 'incentive', icon: '💰', label: '급여관리' },
-  { key: 'attendance_mgmt', icon: '🗓️', label: '근태관리' },
-  { key: 'member_mgmt',  icon: '👥', label: '고객관리' },
-  { key: 'sales_view',   icon: '📋', label: '매출조회' },
-];
-const MANAGER_MENUS = [
-  { key: 'home',        icon: '🏠', label: '홈 대시보드' },
-  { key: 'sales_input', icon: '🛒', label: '판매 입력' },
-  { key: 'stock_mgmt_mgr', icon: '📦', label: '재고 관리', sub: [
-    { key: 'stock_mgr_view', icon: '📊', label: '재고 현황' },
-    { key: 'stock_request',  icon: '📋', label: '재고 요청' },
-  ]},
-  { key: 'customer_reg', icon: '👤', label: '회원 관리', sub: [
-    { key: 'customer_qr',  icon: '📱', label: 'QR 가입' },
-    { key: 'customer_doc', icon: '📝', label: '서류 가입' },
-    { key: 'my_members',   icon: '📋', label: '회원 목록' },
-  ]},
-  { key: 'attendance', icon: '🗓️', label: '근태 관리', sub: [
-    { key: 'my_attendance', icon: '📊', label: '근무 현황' },
-    { key: 'leave_plan',    icon: '📅', label: '휴무 신청' },
-  ]},
-];
-const ADMIN_MENUS = [
-  { key: 'admin',  icon: '🔐', label: '사용자 관리' },
-  { key: 'notice', icon: '📢', label: '공지 사항' },
-];
 
 // ════════════════════════════════════════════════════════
 // 재고 요청 페이지 (매니저)
