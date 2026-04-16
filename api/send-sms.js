@@ -55,7 +55,11 @@ export default async function handler(req, res) {
       const text = await resp.text();
       const code = text.trim().split('|')[0];
       if (code === '9') return { ok: true };
-      const reason = { '1':'필수값 부족', '2':'아이디 오류', '3':'비밀번호 오류', '4':'잔액 부족' }[code] || `오류코드 ${code}`;
+      const reason = {
+        '1':'필수값 부족', '2':'아이디 오류', '3':'비밀번호 오류', '4':'잔액 부족',
+        '5':'수신번호 오류', '6':'발신번호 오류', '7':'메시지 없음', '8':'메시지 초과',
+        '10':'차단 번호', '11':'스팸 차단', '12':'발송 실패', '13':'발신번호 미등록',
+      }[code] || `오류코드 ${code}`;
       return { ok: false, label: r.name || phone, reason };
     } catch (e) {
       return { ok: false, label: r.name || phone, reason: '네트워크 오류' };
