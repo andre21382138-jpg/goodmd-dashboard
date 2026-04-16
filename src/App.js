@@ -5117,8 +5117,18 @@ function HomePage({ profile, setPage }) {
   const [lectureRows,    setLectureRows]    = useState([]);
   const [bizSummary,     setBizSummary]     = useState({amt:0,count:0,qty:0});
   const [bizRows,        setBizRows]        = useState([]);
+  const [prevTotalAmt,   setPrevTotalAmt]   = useState(0);
   const [loading,        setLoading]        = useState(true);
   const [showBanner,     setShowBanner]     = useState(false);
+
+  // 전월 동일기간 날짜 계산
+  const prevMonthDate = new Date(year, now.getMonth() - 1, 1);
+  const prevYear = prevMonthDate.getFullYear();
+  const prevMon  = String(prevMonthDate.getMonth() + 1).padStart(2, '0');
+  const prevMonthStart = `${prevYear}-${prevMon}-01`;
+  const prevMonthLastDay = new Date(prevYear, prevMonthDate.getMonth() + 1, 0).getDate();
+  const prevMonthEndDay  = Math.min(yesterday.getDate(), prevMonthLastDay);
+  const prevMonthEnd = `${prevYear}-${prevMon}-${String(prevMonthEndDay).padStart(2, '0')}`;
 
   const isManager = profile?.job_title === '매니저';
   const isHQ      = profile?.job_title === '담당자';
@@ -5199,6 +5209,20 @@ function HomePage({ profile, setPage }) {
           qty:   bRows.reduce((s,r)=>s+r.quantity, 0),
         });
         setBizRows([...bMap.values()].sort((a,b)=>b.amt-a.amt));
+
+        // 4. 전월 동일기간 통합 매출
+        const [{ data: prevSales }, { data: prevLecture }, { data: prevBiz }] = await Promise.all([
+          supabase.from('sales').select('quantity, price')
+            .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
+          supabase.from('lecture_sales').select('quantity, price')
+            .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
+          supabase.from('biz_sales').select('quantity, supply_price')
+            .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
+        ]);
+        const prevStore   = (prevSales   ||[]).reduce((s,r)=>s+r.price*r.quantity, 0);
+        const prevLect    = (prevLecture ||[]).reduce((s,r)=>s+r.price*r.quantity, 0);
+        const prevBizAmt  = (prevBiz     ||[]).reduce((s,r)=>s+r.supply_price*r.quantity, 0);
+        setPrevTotalAmt(prevStore + prevLect + prevBizAmt);
       }
       setLoading(false);
     };
@@ -5260,14 +5284,40 @@ function HomePage({ profile, setPage }) {
             {monthStart} ~ {yesterdayStr} (어제까지)
           </div>
         </div>
-        {canSeeAll && (
-          <div style={{ textAlign:'right', background:'#fff3e0', border:'2px solid var(--accent)', borderRadius:12, padding:'12px 20px' }}>
-            <div style={{ fontSize:11, fontWeight:600, color:'var(--accent)', marginBottom:4, letterSpacing:1 }}>통합 총 매출</div>
-            <div style={{ fontSize:28, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', lineHeight:1 }}>
-              {totalAmt.toLocaleString()}원
+        {canSeeAll && (() => {
+          const diff = totalAmt - prevTotalAmt;
+          const diffPct = prevTotalAmt > 0 ? ((diff / prevTotalAmt) * 100).toFixed(1) : null;
+          const isUp = diff >= 0;
+          return (
+            <div style={{ textAlign:'right', background:'#fff3e0', border:'2px solid var(--accent)', borderRadius:12, padding:'14px 20px', minWidth:220 }}>
+              <div style={{ fontSize:11, fontWeight:600, color:'var(--accent)', marginBottom:10, letterSpacing:1 }}>통합 총 매출</div>
+              {/* 당월 */}
+              <div style={{ marginBottom:6 }}>
+                <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>당월 ({month}월 1일~어제)</div>
+                <div style={{ fontSize:26, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', lineHeight:1 }}>
+                  {totalAmt.toLocaleString()}원
+                </div>
+              </div>
+              {/* 구분선 */}
+              <div style={{ borderTop:'1px solid #ffe0b2', margin:'8px 0' }}/>
+              {/* 전월 동기 */}
+              <div style={{ marginBottom:6 }}>
+                <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>전월 동기 ({prevMon}월 1일~{String(prevMonthEndDay).padStart(2,'0')}일)</div>
+                <div style={{ fontSize:14, fontWeight:600, color:'var(--text2)', fontFamily:'var(--mono)' }}>
+                  {prevTotalAmt.toLocaleString()}원
+                </div>
+              </div>
+              {/* 증감 */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
+                <span style={{ fontSize:10, color:'var(--text3)' }}>증감</span>
+                <span style={{ fontSize:13, fontWeight:700, fontFamily:'var(--mono)', color: isUp ? '#2e7d32' : '#c62828' }}>
+                  {isUp ? '▲' : '▼'} {Math.abs(diff).toLocaleString()}원
+                  {diffPct !== null && <span style={{ fontSize:11, marginLeft:4 }}>({isUp?'+':''}{diffPct}%)</span>}
+                </span>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* 3개 매출 카드 (본사만) */}
