@@ -89,29 +89,44 @@ export default function CustomerLookupPage({ profile }) {
     setLoading(false);
   }, [search, fStore, fBranch, fFrom, fTo, fSms, fNewOnly, fGrade]);
 
-  // 필터 조건 전체 SMS동의 회원 가져오기
+  // 필터 조건 전체 SMS동의 회원 가져오기 (Supabase 1000행 제한 우회)
   const fetchAllSmsTargets = useCallback(async () => {
     setLoadingBulk(true);
-    let q = supabase.from('customers')
-      .select('id, name, phone')
-      .eq('sms_consent', true)
-      .order('joined_at', { ascending: false });
-    if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
-    if (fStore)  q = q.eq('store_name', fStore);
-    if (fBranch) q = q.eq('branch_name', fBranch);
-    if (fFrom)   q = q.gte('joined_at', fFrom);
-    if (fTo)     q = q.lte('joined_at', fTo);
-    if (fGrade)  q = q.eq('grade', fGrade);
-    if (fNewOnly) {
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-      q = q.gte('joined_at', oneYearAgo.toISOString().slice(0,10));
+    const CHUNK = 1000;
+    let all = [];
+    let from = 0;
+
+    const buildQuery = () => {
+      let q = supabase.from('customers')
+        .select('id, name, phone')
+        .eq('sms_consent', true)
+        .order('joined_at', { ascending: false });
+      if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+      if (fStore)  q = q.eq('store_name', fStore);
+      if (fBranch) q = q.eq('branch_name', fBranch);
+      if (fFrom)   q = q.gte('joined_at', fFrom);
+      if (fTo)     q = q.lte('joined_at', fTo);
+      if (fGrade)  q = q.eq('grade', fGrade);
+      if (fNewOnly) {
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        q = q.gte('joined_at', oneYearAgo.toISOString().slice(0,10));
+      }
+      return q;
+    };
+
+    while (true) {
+      const { data, error } = await buildQuery().range(from, from + CHUNK - 1);
+      if (error) { toast(error.message, 'err'); setLoadingBulk(false); return; }
+      if (!data?.length) break;
+      all = all.concat(data);
+      if (data.length < CHUNK) break;
+      from += CHUNK;
     }
-    const { data, error } = await q;
+
     setLoadingBulk(false);
-    if (error) { toast(error.message, 'err'); return; }
-    if (!data?.length) { toast('SMS동의 회원이 없습니다', 'inf'); return; }
-    setBulkTargets(data);
+    if (!all.length) { toast('SMS동의 회원이 없습니다', 'inf'); return; }
+    setBulkTargets(all);
     setSmsModal(true);
   }, [search, fStore, fBranch, fFrom, fTo, fGrade, fNewOnly]);
 
