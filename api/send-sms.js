@@ -16,6 +16,12 @@ function encodeEucKr(str) {
   return encoded;
 }
 
+const ERR = {
+  '1':'필수값 부족', '2':'아이디 오류', '3':'비밀번호 오류', '4':'잔액 부족',
+  '5':'번호오류', '6':'발신번호 오류', '7':'메시지 없음', '8':'메시지 초과',
+  '10':'수신거부', '11':'수신거부', '12':'수신오류', '13':'발신번호 미등록',
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -38,7 +44,7 @@ export default async function handler(req, res) {
 
   const sendOne = async (r) => {
     const phone = String(r.phone || '').replace(/\D/g, '');
-    if (phone.length < 10) return { ok: false, label: r.name || phone, reason: '번호 오류' };
+    if (phone.length < 10) return { ok: false, name: r.name || '', phone, status: '번호오류' };
 
     const url =
       `http://munjanara.co.kr/send.sys` +
@@ -54,31 +60,30 @@ export default async function handler(req, res) {
       const resp = await fetch(url);
       const text = await resp.text();
       const code = text.trim().split('|')[0];
-      if (code === '9') return { ok: true };
-      const reason = {
-        '1':'필수값 부족', '2':'아이디 오류', '3':'비밀번호 오류', '4':'잔액 부족',
-        '5':'수신번호 오류', '6':'발신번호 오류', '7':'메시지 없음', '8':'메시지 초과',
-        '10':'차단 번호', '11':'스팸 차단', '12':'발송 실패', '13':'발신번호 미등록',
-      }[code] || `오류코드 ${code}`;
-      return { ok: false, label: r.name || phone, reason };
+      if (code === '9') return { ok: true, name: r.name || '', phone, status: '정상수신' };
+      const status = ERR[code] || `오류코드 ${code}`;
+      return { ok: false, name: r.name || '', phone, status };
     } catch (e) {
-      return { ok: false, label: r.name || phone, reason: '네트워크 오류' };
+      return { ok: false, name: r.name || '', phone, status: '수신오류' };
     }
   };
 
   let okCount = 0;
-  const failed = [];
+  const details = []; // { name, phone, status }
 
   // BATCH 단위로 병렬 발송
   for (let i = 0; i < receivers.length; i += BATCH) {
     const chunk = receivers.slice(i, i + BATCH);
     const results = await Promise.allSettled(chunk.map(sendOne));
     for (const r of results) {
-      const v = r.status === 'fulfilled' ? r.value : { ok: false, label: '?', reason: r.reason?.message };
+      const v = r.status === 'fulfilled' ? r.value : { ok: false, name: '?', phone: '?', status: '수신오류' };
       if (v.ok) okCount++;
-      else failed.push(`${v.label}(${v.reason})`);
+      details.push({ name: v.name, phone: v.phone, status: v.status });
     }
   }
 
-  res.json({ ok: okCount, failCount: failed.length, failed });
+  const failCount = details.filter(d => d.status !== '정상수신').length;
+  const failed = details.filter(d => d.status !== '정상수신').map(d => `${d.name}(${d.status})`);
+
+  res.json({ ok: okCount, failCount, failed, details });
 }

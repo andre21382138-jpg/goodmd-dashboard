@@ -235,6 +235,17 @@ export default function CustomerLookupPage({ profile }) {
       const result = await res.json();
       if (!res.ok) { toast(result.error || 'SMS 발송 실패', 'err'); }
       else {
+        // sms_logs 저장 (500건씩 배치 insert)
+        if (result.details?.length) {
+          const sentAt = new Date().toISOString();
+          const rows = result.details.map(d => ({
+            sent_at: sentAt, message: smsMsg, sender: smsSender,
+            receiver: d.phone, receiver_name: d.name, status: d.status,
+          }));
+          for (let i = 0; i < rows.length; i += 500) {
+            await supabase.from('sms_logs').insert(rows.slice(i, i + 500));
+          }
+        }
         setSendResult({ ...result, total: checkedCustomers.length });
         setSmsModal(false);
         setSmsMsg('');

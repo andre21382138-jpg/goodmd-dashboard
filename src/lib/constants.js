@@ -47,7 +47,10 @@ export const HQ_MENUS = [
   ]},
   { key: 'incentive',      icon: '💰', label: '급여관리' },
   { key: 'attendance_mgmt',icon: '🗓️', label: '근태관리' },
-  { key: 'member_mgmt',    icon: '👥', label: '고객관리' },
+  { key: 'member_mgmt', icon: '👥', label: '고객관리', sub: [
+    { key: 'member_mgmt',   icon: '🔍', label: '회원 조회' },
+    { key: 'sms_history',   icon: '📨', label: '문자 내역' },
+  ]},
   { key: 'sales_view',     icon: '📋', label: '매출조회' },
 ];
 export const MANAGER_MENUS = [

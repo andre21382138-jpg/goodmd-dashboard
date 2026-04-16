@@ -9,6 +9,7 @@ import CustomerDocPage from './pages/customer/CustomerDocPage';
 import CustomerLookupPage from './pages/customer/CustomerLookupPage';
 import CustomerInputPage from './pages/customer/CustomerInputPage';
 import MyMembersPage from './pages/customer/MyMembersPage';
+import SmsHistoryPage from './pages/customer/SmsHistoryPage';
 import SalesInputPage from './pages/sales/SalesInputPage';
 import SalesListPage from './pages/sales/SalesListPage';
 import LectureSalesPage from './pages/sales/LectureSalesPage';
@@ -402,7 +403,8 @@ export default function App() {
     stock_safety:   '안전재고',
     manager_mgmt:   '매니저 현황',
     incentive:      '급여관리',
-    member_mgmt:    '고객관리',
+    member_mgmt:    '회원 조회',
+    sms_history:    '문자 내역',
     sales_view:          '매출조회',
     sales_list:          '매장 매출',
     biz_sales_view:      '특판 매출',
@@ -457,6 +459,7 @@ export default function App() {
             {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
+            {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
             {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage}/>}
