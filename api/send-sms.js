@@ -2,7 +2,7 @@
 // Body: { receivers: [{ name, phone }], message, sender }
 // Env:  MUNJANARA_USERID, MUNJANARA_PASSWD
 
-const BATCH = 20; // 동시 발송 수
+const BATCH = 50; // 동시 발송 수 (Vercel Pro 300s 기준)
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
