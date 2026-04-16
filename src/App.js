@@ -81,7 +81,11 @@ const GLOBAL_CSS = `
   .sidebar-logo-text { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--sidebar-text); letter-spacing: -0.3px; margin-top: 2px; }
   .sidebar-logo-sub { font-size: 10px; color: rgba(0,0,0,0.55); margin-top: 1px; }
   .sidebar-section { padding: 12px 10px 4px; font-size: 9px; font-weight: 700; color: rgba(0,0,0,0.5); letter-spacing: 2px; text-transform: uppercase; }
-  .sidebar-menu { flex: 1; padding: 6px 8px; overflow-y: auto; }
+  .sidebar-menu { flex: 1; padding: 6px 8px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent; }
+  .sidebar-menu::-webkit-scrollbar { width: 4px; }
+  .sidebar-menu::-webkit-scrollbar-track { background: transparent; }
+  .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
+  .sidebar-menu::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35); }
   .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 120ms; margin-bottom: 2px; font-size: 13px; font-weight: 600; color: #1a1a1a; border: none; background: none; width: 100%; text-align: left; }
   .sidebar-item:hover { background: rgba(0,0,0,0.12); }
   .sidebar-item.on { background: rgba(0,0,0,0.18); font-weight: 700; color: #1a1a1a; }
