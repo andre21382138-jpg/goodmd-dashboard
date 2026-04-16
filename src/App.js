@@ -5651,6 +5651,8 @@ function StockStatusPage() {
 // ════════════════════════════════════════════════════════
 function NoticePage({ profile }) {
   const isAdmin = profile?.role === 'admin';
+  const isHQ    = profile?.job_title === '담당자';
+  const canWrite = isAdmin || isHQ;
   const [notices,  setNotices]  = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState(null);
@@ -5662,7 +5664,7 @@ function NoticePage({ profile }) {
   const fetchNotices = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase.from('notices')
-      .select('*, author:profiles(name)')
+      .select('*, author:profiles(name, job_title)')
       .order('created_at', { ascending: false });
     setNotices(data || []);
     setLoading(false);
@@ -5693,7 +5695,7 @@ function NoticePage({ profile }) {
   return (
     <div>
       {/* 작성 폼 */}
-      {isAdmin && (
+      {canWrite && (
         <div className="card" style={{marginBottom:14}}>
           {!writing ? (
             <button className="btn btn-p" onClick={() => setWriting(true)}>+ 공지사항 작성</button>
@@ -5732,7 +5734,7 @@ function NoticePage({ profile }) {
                   border: `1px solid ${selected?.id===n.id ? '#ffcc80' : 'transparent'}`}}>
                 <div style={{fontWeight:600, fontSize:13, marginBottom:3}}>{n.title}</div>
                 <div style={{fontSize:11, color:'var(--text3)', display:'flex', gap:8}}>
-                  <span>{n.author?.name || '-'}</span>
+                  <span>{n.author?.job_title === '담당자' ? '담당자' : (n.author?.name || '-')}</span>
                   <span>{new Date(n.created_at).toLocaleDateString('ko-KR')}</span>
                 </div>
               </div>
@@ -5746,11 +5748,13 @@ function NoticePage({ profile }) {
               <div>
                 <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>{selected.title}</div>
                 <div style={{fontSize:12, color:'var(--text3)'}}>
-                  {selected.author?.name} · {new Date(selected.created_at).toLocaleString('ko-KR')}
+                  {selected.author?.job_title === '담당자' ? '담당자' : (selected.author?.name || '-')} · {new Date(selected.created_at).toLocaleString('ko-KR')}
                 </div>
               </div>
               <div style={{display:'flex', gap:6}}>
-                {isAdmin && <button className="btn-danger" onClick={() => handleDelete(selected.id)}>삭제</button>}
+                {(isAdmin || (isHQ && selected.created_by === profile?.id)) && (
+                  <button className="btn-danger" onClick={() => handleDelete(selected.id)}>삭제</button>
+                )}
                 <button className="btn btn-s" style={{fontSize:11}} onClick={() => setSelected(null)}>닫기</button>
               </div>
             </div>
