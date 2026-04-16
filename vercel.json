@@ -3,5 +3,11 @@
     "api/*.js": {
       "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron-sms",
+      "schedule": "* * * * *"
+    }
+  ]
 }

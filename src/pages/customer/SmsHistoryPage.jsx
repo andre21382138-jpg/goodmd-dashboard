@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 
@@ -13,9 +13,20 @@ const STATUS_STYLE = {
   '수신오류': { background:'#fbe9e7', color:'#bf360c', border:'1px solid #ffab91' },
 };
 
+const SCH_STATUS_STYLE = {
+  'pending':  { background:'#fff8e1', color:'#f57f17', border:'1px solid #ffe082', label:'대기중' },
+  'sending':  { background:'#e3f2fd', color:'#1565c0', border:'1px solid #90caf9', label:'발송중' },
+  'sent':     { background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', label:'발송완료' },
+  'failed':   { background:'#fce4ec', color:'#b71c1c', border:'1px solid #f48fb1', label:'실패' },
+  'cancelled':{ background:'#f5f5f5', color:'#757575', border:'1px solid #e0e0e0', label:'취소됨' },
+};
+
 const PAGE_SIZE = 200;
 
 export default function SmsHistoryPage() {
+  const [tab,      setTab]      = useState('history'); // 'history' | 'schedule'
+
+  // 발송 내역
   const [fFrom,    setFFrom]    = useState('');
   const [fTo,      setFTo]      = useState('');
   const [fStatus,  setFStatus]  = useState('');
@@ -23,7 +34,12 @@ export default function SmsHistoryPage() {
   const [loading,  setLoading]  = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [page,     setPage]     = useState(0);
-  const [preview,  setPreview]  = useState(null); // { message, sender, receiver, receiver_name }
+  const [preview,  setPreview]  = useState(null);
+
+  // 예약 내역
+  const [schedules,    setSchedules]    = useState([]);
+  const [loadingSch,   setLoadingSch]   = useState(false);
+  const [previewSch,   setPreviewSch]   = useState(null);
 
   const fetchLogs = useCallback(async (pg = 0) => {
     setLoading(true);
@@ -41,145 +57,241 @@ export default function SmsHistoryPage() {
     setLoading(false);
   }, [fFrom, fTo, fStatus]);
 
-  const statusStyle = (s) => ({
+  const fetchSchedules = useCallback(async () => {
+    setLoadingSch(true);
+    const { data, error } = await supabase.from('sms_schedules')
+      .select('*')
+      .order('scheduled_at', { ascending: false });
+    if (error) { toast(error.message, 'err'); }
+    else setSchedules(data || []);
+    setLoadingSch(false);
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'schedule') fetchSchedules();
+  }, [tab, fetchSchedules]);
+
+  const cancelSchedule = async (id) => {
+    if (!window.confirm('예약을 취소하시겠습니까?')) return;
+    const { error } = await supabase.from('sms_schedules').update({ status: 'cancelled' }).eq('id', id);
+    if (error) toast(error.message, 'err');
+    else { toast('예약 취소됨', 'ok'); fetchSchedules(); }
+  };
+
+  const statusBadge = (s) => ({
     display:'inline-block', padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:700,
     ...(STATUS_STYLE[s] || { background:'#f5f5f5', color:'#666', border:'1px solid #ddd' }),
   });
 
+  const schBadge = (s) => {
+    const st = SCH_STATUS_STYLE[s] || { background:'#f5f5f5', color:'#666', border:'1px solid #ddd', label: s };
+    return { style: { display:'inline-block', padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:700, background:st.background, color:st.color, border:st.border }, label: st.label };
+  };
+
   return (
     <div>
-      {/* 필터 */}
-      <div className="card">
-        <div className="card-label">문자 발송 내역</div>
-        <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
-          <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="전송일 시작"/>
-          <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
-          <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} title="전송일 종료"/>
-          <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
-            <option value="">전체 결과</option>
-            {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {(fFrom || fTo || fStatus) &&
-            <button className="btn-ghost" onClick={() => { setFFrom(''); setFTo(''); setFStatus(''); setLogs([]); setTotalCount(0); }}>✕ 초기화</button>}
-          <div className="fbar-right">
-            <button className="btn btn-p" onClick={() => fetchLogs(0)} disabled={loading}>
-              {loading ? <span className="spinner"/> : '🔍 조회'}
-            </button>
-          </div>
-        </div>
+      <div className="tabs">
+        <button className={`tab ${tab==='history'?'on':''}`} onClick={() => setTab('history')}>발송 내역</button>
+        <button className={`tab ${tab==='schedule'?'on':''}`} onClick={() => setTab('schedule')}>예약 내역</button>
       </div>
 
-      {/* 결과 테이블 */}
-      {logs.length > 0 && (
+      {/* ── 발송 내역 탭 ── */}
+      {tab === 'history' && (
+        <>
+          <div className="card">
+            <div className="card-label">문자 발송 내역</div>
+            <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
+              <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="전송일 시작"/>
+              <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+              <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} title="전송일 종료"/>
+              <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
+                <option value="">전체 결과</option>
+                {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {(fFrom || fTo || fStatus) &&
+                <button className="btn-ghost" onClick={() => { setFFrom(''); setFTo(''); setFStatus(''); setLogs([]); setTotalCount(0); }}>✕ 초기화</button>}
+              <div className="fbar-right">
+                <button className="btn btn-p" onClick={() => fetchLogs(0)} disabled={loading}>
+                  {loading ? <span className="spinner"/> : '🔍 조회'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {logs.length > 0 && (
+            <div className="card" style={{padding:'16px 20px'}}>
+              <div style={{marginBottom:12}}>
+                <span className="fresult">총 <b>{totalCount.toLocaleString()}</b>건</span>
+              </div>
+              <div className="twrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>전송일시</th>
+                      <th>내용</th>
+                      <th style={{textAlign:'center'}}>전송결과</th>
+                      <th>수신자</th>
+                      <th>수신번호</th>
+                      <th>발신번호</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map(log => (
+                      <tr key={log.id}>
+                        <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
+                          {new Date(log.sent_at).toLocaleString('ko-KR', {year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                        </td>
+                        <td>
+                          <button style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',fontWeight:600,fontSize:12,padding:0,textAlign:'left',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}
+                            onClick={() => setPreview(log)}>
+                            {log.message.length > 20 ? log.message.slice(0,20)+'…' : log.message}
+                          </button>
+                        </td>
+                        <td style={{textAlign:'center'}}><span style={statusBadge(log.status)}>{log.status}</span></td>
+                        <td style={{fontSize:12}}>{log.receiver_name || '-'}</td>
+                        <td className="mono" style={{fontSize:12}}>{log.receiver}</td>
+                        <td className="mono" style={{fontSize:12}}>{log.sender}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {totalCount > PAGE_SIZE && (() => {
+                const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+                const delta = 4;
+                let start = Math.max(0, page - delta), end = Math.min(totalPages-1, page+delta);
+                if (end-start < delta*2) { start = Math.max(0,end-delta*2); end = Math.min(totalPages-1,start+delta*2); }
+                const pages = []; for (let i=start;i<=end;i++) pages.push(i);
+                const btn = (active) => ({height:32,minWidth:32,padding:'0 8px',border:'1px solid',borderRadius:'var(--radius)',fontSize:13,fontWeight:active?700:400,cursor:'pointer',borderColor:active?'var(--accent)':'var(--border)',background:active?'#fff3e0':'#fff',color:active?'var(--accent)':'var(--text2)'});
+                return (
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,padding:'14px 0',borderTop:'1px solid var(--border)',flexWrap:'wrap'}}>
+                    <button style={btn(false)} disabled={page===0} onClick={()=>fetchLogs(0)}>«</button>
+                    <button style={btn(false)} disabled={page===0} onClick={()=>fetchLogs(page-1)}>‹</button>
+                    {start>0&&<span style={{padding:'0 4px',color:'var(--text3)'}}>...</span>}
+                    {pages.map(p=><button key={p} style={btn(p===page)} onClick={()=>fetchLogs(p)}>{p+1}</button>)}
+                    {end<totalPages-1&&<span style={{padding:'0 4px',color:'var(--text3)'}}>...</span>}
+                    <button style={btn(false)} disabled={page===totalPages-1} onClick={()=>fetchLogs(page+1)}>›</button>
+                    <button style={btn(false)} disabled={page===totalPages-1} onClick={()=>fetchLogs(totalPages-1)}>»</button>
+                    <span style={{fontSize:12,color:'var(--text3)',marginLeft:8}}>{page+1}/{totalPages}페이지</span>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          {logs.length === 0 && !loading && (
+            <div className="empty">날짜·결과를 선택하고 <strong>조회</strong> 버튼을 눌러주세요</div>
+          )}
+        </>
+      )}
+
+      {/* ── 예약 내역 탭 ── */}
+      {tab === 'schedule' && (
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
-            <span className="fresult">총 <b>{totalCount.toLocaleString()}</b>건</span>
+            <span className="card-label" style={{margin:0}}>예약 발송 내역</span>
+            <button className="btn btn-s" onClick={fetchSchedules} disabled={loadingSch}>
+              {loadingSch ? <span className="spinner"/> : '🔄 새로고침'}
+            </button>
           </div>
-          <div className="twrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>전송일시</th>
-                  <th>내용</th>
-                  <th style={{textAlign:'center'}}>전송결과</th>
-                  <th>수신자</th>
-                  <th>수신번호</th>
-                  <th>발신번호</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map(log => (
-                  <tr key={log.id}>
-                    <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
-                      {new Date(log.sent_at).toLocaleString('ko-KR', {
-                        year:'2-digit', month:'2-digit', day:'2-digit',
-                        hour:'2-digit', minute:'2-digit',
-                      })}
-                    </td>
-                    <td>
-                      <button
-                        style={{background:'none', border:'none', cursor:'pointer', color:'var(--accent)', fontWeight:600, fontSize:12, padding:0, textAlign:'left', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block'}}
-                        onClick={() => setPreview(log)}
-                        title="클릭하여 내용 보기">
-                        {log.message.length > 20 ? log.message.slice(0, 20) + '…' : log.message}
-                      </button>
-                    </td>
-                    <td style={{textAlign:'center'}}>
-                      <span style={statusStyle(log.status)}>{log.status}</span>
-                    </td>
-                    <td style={{fontSize:12}}>{log.receiver_name || '-'}</td>
-                    <td className="mono" style={{fontSize:12}}>{log.receiver}</td>
-                    <td className="mono" style={{fontSize:12}}>{log.sender}</td>
+          {loadingSch ? <div className="empty"><span className="spinner"/></div> : schedules.length === 0 ? (
+            <div className="empty">예약된 발송이 없습니다</div>
+          ) : (
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>예약일시</th>
+                    <th style={{textAlign:'center'}}>상태</th>
+                    <th className="r">수신자</th>
+                    <th className="r">성공</th>
+                    <th className="r">실패</th>
+                    <th>내용</th>
+                    <th>발신번호</th>
+                    <th>발송일시</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* 페이지네이션 */}
-          {totalCount > PAGE_SIZE && (() => {
-            const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-            const delta = 4;
-            let start = Math.max(0, page - delta);
-            let end   = Math.min(totalPages - 1, page + delta);
-            if (end - start < delta * 2) { start = Math.max(0, end - delta * 2); end = Math.min(totalPages - 1, start + delta * 2); }
-            const pages = [];
-            for (let i = start; i <= end; i++) pages.push(i);
-            const btn = (active) => ({
-              height:32, minWidth:32, padding:'0 8px', border:'1px solid', borderRadius:'var(--radius)', fontSize:13,
-              fontWeight: active ? 700 : 400, cursor:'pointer',
-              borderColor: active ? 'var(--accent)' : 'var(--border)',
-              background: active ? '#fff3e0' : '#fff',
-              color: active ? 'var(--accent)' : 'var(--text2)',
-            });
-            return (
-              <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:4, padding:'14px 0', borderTop:'1px solid var(--border)', flexWrap:'wrap'}}>
-                <button style={btn(false)} disabled={page===0} onClick={() => fetchLogs(0)}>«</button>
-                <button style={btn(false)} disabled={page===0} onClick={() => fetchLogs(page-1)}>‹</button>
-                {start > 0 && <span style={{padding:'0 4px', color:'var(--text3)'}}>...</span>}
-                {pages.map(p => <button key={p} style={btn(p===page)} onClick={() => fetchLogs(p)}>{p+1}</button>)}
-                {end < totalPages-1 && <span style={{padding:'0 4px', color:'var(--text3)'}}>...</span>}
-                <button style={btn(false)} disabled={page===totalPages-1} onClick={() => fetchLogs(page+1)}>›</button>
-                <button style={btn(false)} disabled={page===totalPages-1} onClick={() => fetchLogs(totalPages-1)}>»</button>
-                <span style={{fontSize:12, color:'var(--text3)', marginLeft:8}}>{page+1} / {totalPages}페이지</span>
-              </div>
-            );
-          })()}
+                </thead>
+                <tbody>
+                  {schedules.map(sch => {
+                    const { style, label } = schBadge(sch.status);
+                    return (
+                      <tr key={sch.id}>
+                        <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
+                          {new Date(sch.scheduled_at).toLocaleString('ko-KR', {year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                        </td>
+                        <td style={{textAlign:'center'}}><span style={style}>{label}</span></td>
+                        <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{sch.receivers?.length?.toLocaleString() || 0}명</td>
+                        <td className="r" style={{fontFamily:'var(--mono)', color:'var(--success)', fontWeight:700}}>{sch.status==='sent'? sch.ok_count?.toLocaleString() : '-'}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)', color: sch.fail_count>0?'#c62828':'var(--text3)', fontWeight:700}}>{sch.status==='sent'? sch.fail_count?.toLocaleString() : '-'}</td>
+                        <td>
+                          <button style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',fontWeight:600,fontSize:12,padding:0,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}
+                            onClick={() => setPreviewSch(sch)}>
+                            {sch.message.length > 18 ? sch.message.slice(0,18)+'…' : sch.message}
+                          </button>
+                        </td>
+                        <td className="mono" style={{fontSize:12}}>{sch.sender}</td>
+                        <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>
+                          {sch.sent_at ? new Date(sch.sent_at).toLocaleString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-'}
+                        </td>
+                        <td>
+                          {sch.status === 'pending' && (
+                            <button className="btn-danger" style={{padding:'3px 8px', fontSize:11}} onClick={() => cancelSchedule(sch.id)}>취소</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {logs.length === 0 && !loading && (
-        <div className="empty">
-          날짜·결과를 선택하고 <strong>조회</strong> 버튼을 눌러주세요
-        </div>
-      )}
-
-      {/* 내용 미리보기 팝업 */}
+      {/* 발송내역 내용 팝업 */}
       {preview && (
-        <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}
-          onClick={() => setPreview(null)}>
-          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
-          <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(420px,95vw)', boxShadow:'0 8px 40px rgba(0,0,0,0.25)', padding:'24px'}}
-            onClick={e => e.stopPropagation()}>
-            <div style={{display:'flex', alignItems:'center', marginBottom:16}}>
-              <div style={{fontSize:16, fontWeight:700}}>문자 내용</div>
-              <button onClick={() => setPreview(null)} style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+        <div style={{position:'fixed',inset:0,zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={() => setPreview(null)}>
+          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.5)'}}/>
+          <div style={{position:'relative',background:'#fff',borderRadius:16,width:'min(420px,95vw)',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',padding:'24px'}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',alignItems:'center',marginBottom:16}}>
+              <div style={{fontSize:16,fontWeight:700}}>문자 내용</div>
+              <button onClick={()=>setPreview(null)} style={{marginLeft:'auto',background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#999'}}>✕</button>
             </div>
-            <div style={{display:'flex', flexWrap:'wrap', gap:6, fontSize:12, marginBottom:14, paddingBottom:12, borderBottom:'1px solid var(--border)'}}>
-              <span style={{color:'var(--text3)'}}>전송일시</span>
-              <strong>{new Date(preview.sent_at).toLocaleString('ko-KR')}</strong>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,fontSize:12,marginBottom:14,paddingBottom:12,borderBottom:'1px solid var(--border)'}}>
+              <span style={{color:'var(--text3)'}}>전송일시</span><strong>{new Date(preview.sent_at).toLocaleString('ko-KR')}</strong>
               <span style={{color:'var(--border2)'}}>|</span>
-              <span style={{color:'var(--text3)'}}>수신자</span>
-              <strong>{preview.receiver_name || '-'} ({preview.receiver})</strong>
+              <span style={{color:'var(--text3)'}}>수신자</span><strong>{preview.receiver_name||'-'} ({preview.receiver})</strong>
               <span style={{color:'var(--border2)'}}>|</span>
-              <span style={statusStyle(preview.status)}>{preview.status}</span>
+              <span style={{display:'inline-block',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:700,...(STATUS_STYLE[preview.status]||{})}}>{preview.status}</span>
             </div>
-            <div style={{background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:8, padding:'14px', fontSize:13, lineHeight:1.7, whiteSpace:'pre-wrap', wordBreak:'break-all', maxHeight:300, overflowY:'auto'}}>
+            <div style={{background:'#f8f9fa',border:'1px solid var(--border)',borderRadius:8,padding:'14px',fontSize:13,lineHeight:1.7,whiteSpace:'pre-wrap',wordBreak:'break-all',maxHeight:300,overflowY:'auto'}}>
               {preview.message}
             </div>
-            <div style={{marginTop:10, fontSize:11, color:'var(--text3)', textAlign:'right'}}>
-              발신번호: {preview.sender}
+            <div style={{marginTop:10,fontSize:11,color:'var(--text3)',textAlign:'right'}}>발신번호: {preview.sender}</div>
+          </div>
+        </div>
+      )}
+
+      {/* 예약내역 내용 팝업 */}
+      {previewSch && (
+        <div style={{position:'fixed',inset:0,zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={() => setPreviewSch(null)}>
+          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.5)'}}/>
+          <div style={{position:'relative',background:'#fff',borderRadius:16,width:'min(420px,95vw)',boxShadow:'0 8px 40px rgba(0,0,0,0.25)',padding:'24px'}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',alignItems:'center',marginBottom:16}}>
+              <div style={{fontSize:16,fontWeight:700}}>예약 문자 내용</div>
+              <button onClick={()=>setPreviewSch(null)} style={{marginLeft:'auto',background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#999'}}>✕</button>
             </div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,fontSize:12,marginBottom:14,paddingBottom:12,borderBottom:'1px solid var(--border)'}}>
+              <span style={{color:'var(--text3)'}}>예약일시</span><strong>{new Date(previewSch.scheduled_at).toLocaleString('ko-KR')}</strong>
+              <span style={{color:'var(--border2)'}}>|</span>
+              <span style={{color:'var(--text3)'}}>수신자</span><strong>{previewSch.receivers?.length}명</strong>
+              <span style={{color:'var(--border2)'}}>|</span>
+              <span style={{display:'inline-block',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:700,...(SCH_STATUS_STYLE[previewSch.status]||{})}}>{SCH_STATUS_STYLE[previewSch.status]?.label||previewSch.status}</span>
+            </div>
+            <div style={{background:'#f8f9fa',border:'1px solid var(--border)',borderRadius:8,padding:'14px',fontSize:13,lineHeight:1.7,whiteSpace:'pre-wrap',wordBreak:'break-all',maxHeight:300,overflowY:'auto'}}>
+              {previewSch.message}
+            </div>
+            <div style={{marginTop:10,fontSize:11,color:'var(--text3)',textAlign:'right'}}>발신번호: {previewSch.sender}</div>
           </div>
         </div>
       )}

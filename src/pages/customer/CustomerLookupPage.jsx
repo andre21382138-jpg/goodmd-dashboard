@@ -40,8 +40,10 @@ export default function CustomerLookupPage({ profile }) {
   const [loadingBulk,   setLoadingBulk]   = useState(false);
   const [testPhone,     setTestPhone]     = useState('');
   const [sendingTest,   setSendingTest]   = useState(false);
-  const [preview,       setPreview]       = useState(false);  // 미리보기 모달
-  const [sendResult,    setSendResult]    = useState(null);   // 전송 결과 { ok, failCount, failed, total }
+  const [preview,       setPreview]       = useState(false);
+  const [sendResult,    setSendResult]    = useState(null);
+  const [isScheduled,   setIsScheduled]   = useState(false);  // 예약발송 토글
+  const [scheduleAt,    setScheduleAt]    = useState('');      // datetime-local 값
 
   // 점포 목록 로드 (profiles에서)
   useEffect(() => {
@@ -216,11 +218,27 @@ export default function CustomerLookupPage({ profile }) {
     [bulkTargets, customers, checkedIds]
   );
 
-  // SMS 발송
+  // SMS 발송 (즉시 or 예약)
   const handleSendSms = async () => {
     if (!smsSender.replace(/\D/g,'')) { toast('발신번호를 입력해주세요', 'err'); return; }
     if (!smsMsg.trim()) { toast('메시지를 입력해주세요', 'err'); return; }
     if (checkedCustomers.length === 0) { toast('수신자를 선택해주세요', 'err'); return; }
+    if (isScheduled) {
+      if (!scheduleAt) { toast('예약 일시를 선택해주세요', 'err'); return; }
+      if (new Date(scheduleAt) <= new Date()) { toast('예약 시간은 현재보다 미래여야 합니다', 'err'); return; }
+      setSending(true);
+      const { error } = await supabase.from('sms_schedules').insert({
+        scheduled_at: new Date(scheduleAt).toISOString(),
+        message: smsMsg,
+        sender: smsSender,
+        receivers: checkedCustomers.map(c => ({ name: c.name, phone: c.phone })),
+      });
+      setSending(false);
+      if (error) { toast(error.message, 'err'); return; }
+      toast(`예약 완료 — ${new Date(scheduleAt).toLocaleString('ko-KR')} 발송 예정`, 'ok');
+      setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); setIsScheduled(false); setScheduleAt(''); setCheckedIds(new Set()); setIsScheduled(false); setScheduleAt('');
+      return;
+    }
     setSending(true);
     try {
       const res = await fetch('/api/send-sms', {
@@ -235,7 +253,6 @@ export default function CustomerLookupPage({ profile }) {
       const result = await res.json();
       if (!res.ok) { toast(result.error || 'SMS 발송 실패', 'err'); }
       else {
-        // sms_logs 저장 (500건씩 배치 insert)
         if (result.details?.length) {
           const sentAt = new Date().toISOString();
           const rows = result.details.map(d => ({
@@ -247,11 +264,7 @@ export default function CustomerLookupPage({ profile }) {
           }
         }
         setSendResult({ ...result, total: checkedCustomers.length });
-        setSmsModal(false);
-        setSmsMsg('');
-        setSmsSender('');
-        setBulkTargets(null);
-        setCheckedIds(new Set());
+        setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); setIsScheduled(false); setScheduleAt(''); setCheckedIds(new Set());
       }
     } catch(e) {
       toast('네트워크 오류: ' + e.message, 'err');
@@ -481,7 +494,7 @@ export default function CustomerLookupPage({ profile }) {
             onClick={e => e.stopPropagation()}>
             <div style={{display:'flex', alignItems:'center', marginBottom:18}}>
               <div style={{fontSize:17, fontWeight:700}}>📨 마케팅 SMS 발송</div>
-              <button onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); } }}
+              <button onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); setIsScheduled(false); setScheduleAt(''); } }}
                 style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999', lineHeight:1}}>✕</button>
             </div>
 
@@ -530,6 +543,27 @@ export default function CustomerLookupPage({ profile }) {
               </span>
             </div>
 
+            {/* 예약 발송 토글 */}
+            <div style={{background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:14}}>
+              <div style={{display:'flex', alignItems:'center', gap:10, marginBottom: isScheduled ? 10 : 0}}>
+                <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, fontWeight:700, color:'#6a1b9a'}}>
+                  <input type="checkbox" checked={isScheduled} onChange={e => { setIsScheduled(e.target.checked); setScheduleAt(''); }}
+                    style={{width:16, height:16, cursor:'pointer', accentColor:'#7b1fa2'}}/>
+                  🕐 예약 발송
+                </label>
+                {isScheduled && <span style={{fontSize:11, color:'#8e24aa'}}>지정한 시간에 자동 발송됩니다</span>}
+              </div>
+              {isScheduled && (
+                <input
+                  type="datetime-local"
+                  value={scheduleAt}
+                  onChange={e => setScheduleAt(e.target.value)}
+                  min={new Date(Date.now() + 60000).toISOString().slice(0,16)}
+                  style={{width:'100%', height:36, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:'var(--radius)', fontSize:13, outline:'none', boxSizing:'border-box', background:'#fff'}}
+                />
+              )}
+            </div>
+
             {/* 테스트 발송 */}
             <div style={{background:'#fffde7', border:'1px dashed #f9a825', borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:14}}>
               <div style={{fontSize:12, fontWeight:700, color:'#f57f17', marginBottom:8}}>🧪 테스트 발송 (본인 번호로 먼저 확인)</div>
@@ -552,12 +586,12 @@ export default function CustomerLookupPage({ profile }) {
 
             <div style={{display:'flex', gap:10}}>
               <button className="btn btn-s" style={{flex:1, justifyContent:'center', height:42}}
-                onClick={() => { setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); }} disabled={sending}>
+                onClick={() => { setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); setIsScheduled(false); setScheduleAt(''); }} disabled={sending}>
                 취소
               </button>
               <button className="btn btn-p" style={{flex:2, justifyContent:'center', height:42, fontWeight:700}}
-                onClick={handleSendSms} disabled={sending || !smsMsg.trim() || !smsSender.replace(/\D/g,'') || msgBytes > 2000}>
-                {sending ? <span className="spinner"/> : `📨 ${checkedCustomers.length}명에게 발송`}
+                onClick={handleSendSms} disabled={sending || !smsMsg.trim() || !smsSender.replace(/\D/g,'') || msgBytes > 2000 || (isScheduled && !scheduleAt)}>
+                {sending ? <span className="spinner"/> : isScheduled ? `🕐 ${checkedCustomers.length}명 예약 등록` : `📨 ${checkedCustomers.length}명에게 발송`}
               </button>
             </div>
           </div>
