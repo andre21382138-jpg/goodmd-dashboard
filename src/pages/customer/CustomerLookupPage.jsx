@@ -28,14 +28,16 @@ export default function CustomerLookupPage({ profile }) {
   const [totalCount, setTotalCount]= useState(0);
   const [hasMore,    setHasMore]   = useState(false); // eslint-disable-line no-unused-vars
 
-  // 체크박스 선택
+  // 체크박스 선택 (현재 페이지)
   const [checkedIds, setCheckedIds] = useState(new Set());
 
   // SMS 모달
-  const [smsModal,   setSmsModal]  = useState(false);
-  const [smsMsg,     setSmsMsg]    = useState('');
-  const [smsSender,  setSmsSender] = useState('');
-  const [sending,    setSending]   = useState(false);
+  const [smsModal,      setSmsModal]      = useState(false);
+  const [smsMsg,        setSmsMsg]        = useState('');
+  const [smsSender,     setSmsSender]     = useState('');
+  const [sending,       setSending]       = useState(false);
+  const [bulkTargets,   setBulkTargets]   = useState(null); // 전체 발송 시 override
+  const [loadingBulk,   setLoadingBulk]   = useState(false);
 
   // 점포 목록 로드 (profiles에서)
   useEffect(() => {
@@ -87,6 +89,32 @@ export default function CustomerLookupPage({ profile }) {
     setLoading(false);
   }, [search, fStore, fBranch, fFrom, fTo, fSms, fNewOnly, fGrade]);
 
+  // 필터 조건 전체 SMS동의 회원 가져오기
+  const fetchAllSmsTargets = useCallback(async () => {
+    setLoadingBulk(true);
+    let q = supabase.from('customers')
+      .select('id, name, phone')
+      .eq('sms_consent', true)
+      .order('joined_at', { ascending: false });
+    if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+    if (fStore)  q = q.eq('store_name', fStore);
+    if (fBranch) q = q.eq('branch_name', fBranch);
+    if (fFrom)   q = q.gte('joined_at', fFrom);
+    if (fTo)     q = q.lte('joined_at', fTo);
+    if (fGrade)  q = q.eq('grade', fGrade);
+    if (fNewOnly) {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      q = q.gte('joined_at', oneYearAgo.toISOString().slice(0,10));
+    }
+    const { data, error } = await q;
+    setLoadingBulk(false);
+    if (error) { toast(error.message, 'err'); return; }
+    if (!data?.length) { toast('SMS동의 회원이 없습니다', 'inf'); return; }
+    setBulkTargets(data);
+    setSmsModal(true);
+  }, [search, fStore, fBranch, fFrom, fTo, fGrade, fNewOnly]);
+
   // 점포 변경시 지점 초기화
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
 
@@ -136,8 +164,11 @@ export default function CustomerLookupPage({ profile }) {
     }
   };
 
-  // 선택된 수신자 목록
-  const checkedCustomers = useMemo(() => customers.filter(c => checkedIds.has(c.id)), [customers, checkedIds]);
+  // 선택된 수신자 목록 (bulkTargets 우선)
+  const checkedCustomers = useMemo(
+    () => bulkTargets ?? customers.filter(c => checkedIds.has(c.id)),
+    [bulkTargets, customers, checkedIds]
+  );
 
   // SMS 발송
   const handleSendSms = async () => {
@@ -165,6 +196,7 @@ export default function CustomerLookupPage({ profile }) {
         setSmsModal(false);
         setSmsMsg('');
         setSmsSender('');
+        setBulkTargets(null);
         setCheckedIds(new Set());
       }
     } catch(e) {
@@ -243,14 +275,24 @@ export default function CustomerLookupPage({ profile }) {
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
             <span className="fresult">총 <b>{totalCount.toLocaleString()}</b>명 · 이 페이지 <b>{customers.length}</b>명 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
-            {checkedIds.size > 0 && (
+            <div style={{display:'flex', gap:8}}>
+              {checkedIds.size > 0 && (
+                <button
+                  className="btn btn-p"
+                  style={{padding:'6px 18px', fontSize:13, fontWeight:700}}
+                  onClick={() => setSmsModal(true)}>
+                  📨 선택 {checkedIds.size}명 문자 발송
+                </button>
+              )}
               <button
-                className="btn btn-p"
+                className="btn btn-s"
                 style={{padding:'6px 18px', fontSize:13, fontWeight:700}}
-                onClick={() => setSmsModal(true)}>
-                📨 선택 {checkedIds.size}명 문자 발송
+                onClick={fetchAllSmsTargets}
+                disabled={loadingBulk}
+                title="현재 필터 조건의 SMS동의 회원 전체에게 발송">
+                {loadingBulk ? <span className="spinner"/> : `📡 필터 전체 일괄발송`}
               </button>
-            )}
+            </div>
           </div>
           <div className="twrap">
             <table>
@@ -380,13 +422,13 @@ export default function CustomerLookupPage({ profile }) {
       {/* SMS 발송 모달 */}
       {smsModal && (
         <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}
-          onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); } }}>
+          onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); } }}>
           <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
           <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(520px,95vw)', boxShadow:'0 8px 40px rgba(0,0,0,0.25)', padding:'24px'}}
             onClick={e => e.stopPropagation()}>
             <div style={{display:'flex', alignItems:'center', marginBottom:18}}>
               <div style={{fontSize:17, fontWeight:700}}>📨 마케팅 SMS 발송</div>
-              <button onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); } }}
+              <button onClick={() => { if (!sending) { setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); } }}
                 style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999', lineHeight:1}}>✕</button>
             </div>
 
@@ -428,7 +470,7 @@ export default function CustomerLookupPage({ profile }) {
 
             <div style={{display:'flex', gap:10}}>
               <button className="btn btn-s" style={{flex:1, justifyContent:'center', height:42}}
-                onClick={() => { setSmsModal(false); setSmsMsg(''); setSmsSender(''); }} disabled={sending}>
+                onClick={() => { setSmsModal(false); setSmsMsg(''); setSmsSender(''); setBulkTargets(null); }} disabled={sending}>
                 취소
               </button>
               <button className="btn btn-p" style={{flex:2, justifyContent:'center', height:42, fontWeight:700}}
