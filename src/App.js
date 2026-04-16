@@ -86,6 +86,8 @@ const GLOBAL_CSS = `
   .sidebar-menu::-webkit-scrollbar-track { background: transparent; }
   .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
   .sidebar-menu::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35); }
+  .flyout-item { display:flex; align-items:center; gap:9px; padding:9px 16px; width:100%; border:none; cursor:pointer; font-size:13px; text-align:left; transition:background 100ms; }
+  .flyout-item:hover { background: #fff3e0 !important; }
   .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 120ms; margin-bottom: 2px; font-size: 13px; font-weight: 600; color: #1a1a1a; border: none; background: none; width: 100%; text-align: left; }
   .sidebar-item:hover { background: rgba(0,0,0,0.12); }
   .sidebar-item.on { background: rgba(0,0,0,0.18); font-weight: 700; color: #1a1a1a; }
@@ -7209,10 +7211,9 @@ function Sidebar({ page, setPage, profile, onLogout }) {
             </div>
             {flyoutItems.map(s => (
               <button key={s.key}
+                className="flyout-item"
                 onClick={() => { setPage(s.key); setFlyoutKey(null); }}
-                style={{display:'flex', alignItems:'center', gap:9, padding:'9px 16px', width:'100%',
-                  border:'none', cursor:'pointer', fontSize:13, textAlign:'left', transition:'background 100ms',
-                  background: page===s.key ? '#fff8e1' : '#fff',
+                style={{background: page===s.key ? '#fff8e1' : '#fff',
                   color: page===s.key ? '#E65100' : '#1a1a1a',
                   fontWeight: page===s.key ? 700 : 500}}>
                 <span style={{fontSize:14}}>{s.icon}</span>{s.label}
