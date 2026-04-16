@@ -38,6 +38,8 @@ export default function CustomerLookupPage({ profile }) {
   const [sending,       setSending]       = useState(false);
   const [bulkTargets,   setBulkTargets]   = useState(null); // 전체 발송 시 override
   const [loadingBulk,   setLoadingBulk]   = useState(false);
+  const [testPhone,     setTestPhone]     = useState('');
+  const [sendingTest,   setSendingTest]   = useState(false);
 
   // 점포 목록 로드 (profiles에서)
   useEffect(() => {
@@ -155,6 +157,33 @@ export default function CustomerLookupPage({ profile }) {
       if (selected?.id === c.id) setSelected(null);
       fetchCustomers();
     }
+  };
+
+  // 테스트 발송 (본인 번호)
+  const handleTestSend = async () => {
+    const phone = testPhone.replace(/\D/g, '');
+    if (phone.length < 10) { toast('휴대폰 번호를 확인해주세요', 'err'); return; }
+    if (!smsSender.replace(/\D/g,'')) { toast('발신번호를 입력해주세요', 'err'); return; }
+    if (!smsMsg.trim()) { toast('메시지를 입력해주세요', 'err'); return; }
+    setSendingTest(true);
+    try {
+      const res = await fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receivers: [{ name: '테스트', phone }],
+          message: smsMsg,
+          sender: smsSender,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) toast(result.error || '테스트 발송 실패', 'err');
+      else if (result.ok === 1) toast(`✅ 테스트 발송 성공 → ${testPhone}`, 'ok');
+      else toast(`테스트 발송 실패: ${result.failed?.[0] || '알 수 없는 오류'}`, 'err');
+    } catch(e) {
+      toast('네트워크 오류: ' + e.message, 'err');
+    }
+    setSendingTest(false);
   };
 
   // 체크박스 토글
@@ -481,6 +510,26 @@ export default function CustomerLookupPage({ profile }) {
             {/* 바이트 카운터 */}
             <div style={{display:'flex', justifyContent:'flex-end', marginBottom:16, fontSize:12, color: msgBytes > 2000 ? 'var(--err, #d32f2f)' : msgBytes > 90 ? '#f57c00' : 'var(--text3)'}}>
               {msgBytes} byte{msgBytes <= 90 ? ` (단문 SMS, 최대 90byte)` : msgBytes <= 2000 ? ` (장문 LMS)` : ` ⚠ 2000byte 초과`}
+            </div>
+
+            {/* 테스트 발송 */}
+            <div style={{background:'#fffde7', border:'1px dashed #f9a825', borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:14}}>
+              <div style={{fontSize:12, fontWeight:700, color:'#f57f17', marginBottom:8}}>🧪 테스트 발송 (본인 번호로 먼저 확인)</div>
+              <div style={{display:'flex', gap:8}}>
+                <input
+                  value={testPhone}
+                  onChange={e => setTestPhone(e.target.value)}
+                  placeholder="010-0000-0000"
+                  style={{flex:1, height:34, padding:'0 10px', border:'1px solid #f9a825', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--mono)', outline:'none'}}
+                />
+                <button
+                  className="btn btn-s"
+                  style={{whiteSpace:'nowrap', padding:'0 14px', height:34, borderColor:'#f9a825', color:'#f57f17', fontWeight:700}}
+                  onClick={handleTestSend}
+                  disabled={sendingTest || !smsMsg.trim() || !smsSender.replace(/\D/g,'')}>
+                  {sendingTest ? <span className="spinner"/> : '테스트 발송'}
+                </button>
+              </div>
             </div>
 
             <div style={{display:'flex', gap:10}}>
