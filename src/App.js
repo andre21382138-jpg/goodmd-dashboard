@@ -7070,32 +7070,26 @@ function Sidebar({ page, setPage, profile, onLogout }) {
     setHasNewNotice(false);
     setPage('notice');
   };
-  const [expanded, setExpanded] = useState(() => {
-    const parentMap = {
-      product_add:    'product_mgmt',
-      stock_center:   'stock_mgmt',
-      stock_store:    'stock_mgmt',
-      stock_safety:   'stock_mgmt',
-      clock_inout:    'attendance',
-      leave_plan:     'attendance',
-      my_attendance:  'attendance',
-      customer_qr:    'customer_reg',
-      customer_doc:   'customer_reg',
-      my_members:     'customer_reg',
-      sales_list:         'sales_view',
-      stock_mgr_view:     'stock_mgmt_mgr',
-      stock_request:      'stock_mgmt_mgr',
-      lecture_sales_view: 'sales_view',
-    };
-    return parentMap[page] ? [parentMap[page]] : [];
-  });
-
-  const toggleExpand = (key) => {
-    setExpanded(p => p.includes(key) ? p.filter(k => k!==key) : [...p, key]);
-  };
+  const [flyoutKey, setFlyoutKey] = useState(null);
+  const [flyoutY,   setFlyoutY]   = useState(0);
 
   const isOn = (key) => page === key;
-  const parentKey = { product_add:'product_mgmt' };
+
+  const handleParentClick = (e, m) => {
+    if (m.sub?.length) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setFlyoutKey(prev => prev === m.key ? null : m.key);
+      setFlyoutY(rect.top);
+      setPage(m.key);
+    } else {
+      setFlyoutKey(null);
+      setPage(m.key);
+    }
+  };
+
+  const allMenus = [...HQ_MENUS, ...MANAGER_MENUS];
+  const flyoutParent = allMenus.find(m => m.key === flyoutKey);
+  const flyoutItems  = flyoutParent?.sub || [];
 
   return (
     <div className="sidebar">
@@ -7128,29 +7122,19 @@ function Sidebar({ page, setPage, profile, onLogout }) {
             <div className="sidebar-section">본사</div>
             {HQ_MENUS.map(m => {
               const hasSub = m.sub && m.sub.length > 0;
-              const isOpen = expanded.includes(m.key);
               const isActive = isOn(m.key) || (hasSub && m.sub.some(s => isOn(s.key)));
+              const isOpen = flyoutKey === m.key;
               return (
-                <div key={m.key}>
-                  <button
-                    className={`sidebar-item ${isActive?'on':''}`}
-                    onClick={() => {
-                      if (hasSub) toggleExpand(m.key);
-                      setPage(m.key);
-                    }}>
-                    <span className="sidebar-item-icon">{m.icon}</span>
-                    {m.label}
-                    {m.key==='attendance_mgmt' && newPlanCount > 0 && (
-                      <span style={{marginLeft:'auto', background:'var(--danger)', color:'#fff', borderRadius:10, padding:'1px 6px', fontSize:9, fontWeight:700}}>NEW</span>
-                    )}
-                    {hasSub && <span className={`sidebar-chevron ${isOpen?'open':''}`}>▼</span>}
-                  </button>
-                  {hasSub && isOpen && m.sub.map(s => (
-                    <button key={s.key} className={`sidebar-sub ${isOn(s.key)?'on':''}`} onClick={() => setPage(s.key)}>
-                      <span className="sidebar-sub-icon">{s.icon}</span>{s.label}
-                    </button>
-                  ))}
-                </div>
+                <button key={m.key}
+                  className={`sidebar-item ${isActive?'on':''}`}
+                  onClick={e => handleParentClick(e, m)}>
+                  <span className="sidebar-item-icon">{m.icon}</span>
+                  {m.label}
+                  {m.key==='attendance_mgmt' && newPlanCount > 0 && (
+                    <span style={{marginLeft:'auto', background:'var(--danger)', color:'#fff', borderRadius:10, padding:'1px 6px', fontSize:9, fontWeight:700}}>NEW</span>
+                  )}
+                  {hasSub && <span className="sidebar-chevron" style={{color: isOpen ? '#1a1a1a' : undefined}}>▶</span>}
+                </button>
               );
             })}
           </>
@@ -7161,22 +7145,16 @@ function Sidebar({ page, setPage, profile, onLogout }) {
             <div className="sidebar-section" style={{marginTop: canSeeMain ? 8 : 0}}>매장</div>
             {MANAGER_MENUS.map(m => {
               const hasSub = m.sub && m.sub.length > 0;
-              const isOpen = expanded.includes(m.key);
               const isActive = page===m.key || (hasSub && m.sub.some(s => page===s.key));
+              const isOpen = flyoutKey === m.key;
               return (
-                <div key={m.key}>
-                  <button className={`sidebar-item ${isActive?'on':''}`}
-                    onClick={() => { if(hasSub) toggleExpand(m.key); else setPage(m.key); }}>
-                    <span className="sidebar-item-icon">{m.icon}</span>
-                    {m.label}
-                    {hasSub && <span className={`sidebar-chevron ${isOpen?'open':''}`}>▼</span>}
-                  </button>
-                  {hasSub && isOpen && m.sub.map(s => (
-                    <button key={s.key} className={`sidebar-sub ${page===s.key?'on':''}`} onClick={() => setPage(s.key)}>
-                      <span className="sidebar-sub-icon">{s.icon}</span>{s.label}
-                    </button>
-                  ))}
-                </div>
+                <button key={m.key}
+                  className={`sidebar-item ${isActive?'on':''}`}
+                  onClick={e => handleParentClick(e, m)}>
+                  <span className="sidebar-item-icon">{m.icon}</span>
+                  {m.label}
+                  {hasSub && <span className="sidebar-chevron" style={{color: isOpen ? '#1a1a1a' : undefined}}>▶</span>}
+                </button>
               );
             })}
           </>
@@ -7219,6 +7197,31 @@ function Sidebar({ page, setPage, profile, onLogout }) {
           </div>
         )}
       </div>
+      {/* 플라이아웃 서브메뉴 */}
+      {flyoutKey && flyoutItems.length > 0 && (
+        <>
+          <div style={{position:'fixed', inset:0, zIndex:199}} onClick={() => setFlyoutKey(null)}/>
+          <div style={{position:'fixed', left:224, top:flyoutY, zIndex:200, background:'#fff',
+            border:'1px solid #e0e0e0', borderRadius:10, boxShadow:'0 6px 24px rgba(0,0,0,0.13)',
+            minWidth:170, padding:'6px 0', overflow:'hidden'}}>
+            <div style={{padding:'6px 14px 6px', fontSize:10, fontWeight:700, color:'#aaa', letterSpacing:1, borderBottom:'1px solid #f0f0f0', marginBottom:4}}>
+              {flyoutParent?.icon} {flyoutParent?.label}
+            </div>
+            {flyoutItems.map(s => (
+              <button key={s.key}
+                onClick={() => { setPage(s.key); setFlyoutKey(null); }}
+                style={{display:'flex', alignItems:'center', gap:9, padding:'9px 16px', width:'100%',
+                  border:'none', cursor:'pointer', fontSize:13, textAlign:'left', transition:'background 100ms',
+                  background: page===s.key ? '#fff8e1' : '#fff',
+                  color: page===s.key ? '#E65100' : '#1a1a1a',
+                  fontWeight: page===s.key ? 700 : 500}}>
+                <span style={{fontSize:14}}>{s.icon}</span>{s.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="sidebar-bottom">
         <button className={`sidebar-item ${page==='help'?'on':''}`} onClick={() => setPage('help')}
           style={{marginBottom:6, width:'100%'}}>
