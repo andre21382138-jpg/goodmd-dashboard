@@ -297,7 +297,7 @@ export default function SalesInputPage({ profile }) {
             </div>
 
             {/* 헤더 라벨 */}
-            <div style={{ display:'grid', gridTemplateColumns:'minmax(200px, 260px) 60px 100px 100px 100px 250px 34px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 250px 34px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
               <div>상품검색</div>
               <div style={{textAlign:'center'}}>수량</div>
               <div style={{textAlign:'center'}}>정상가</div>
@@ -325,7 +325,7 @@ export default function SalesInputPage({ profile }) {
 
               return (
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 8px', marginBottom:6 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'minmax(200px, 260px) 60px 100px 100px 100px 250px 34px 34px', gap:6, alignItems:'center' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 250px 34px 34px', gap:6, alignItems:'center' }}>
                   {/* 상품검색 */}
                   <div style={{ position:'relative' }}>
                     <input
