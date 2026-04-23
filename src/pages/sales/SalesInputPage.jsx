@@ -11,11 +11,26 @@ export default function SalesInputPage({ profile }) {
   const [saving,    setSaving]   = useState(false);
   const [recentSales, setRecent] = useState([]);
 
-  const PAYMENTS = ['카드','현금','증정','시식'];
+  const PAYMENTS = ['카드','현금','증정','시식','적립'];
 
   // 상품 라인 (여러 개)
-  const newLine = () => ({ id: Date.now()+Math.random(), brandId:'', productId:'', productSearch:'', showSuggestions:false, quantity:1, normalPrice:'', discount:'0', price:'', payment:'카드' });
+  const newLine = () => ({
+    id: Date.now()+Math.random(),
+    brandId:'', productId:'', productSearch:'', showSuggestions:false,
+    quantity:1, normalPrice:'', discount:'0', price:'',
+    payment:'카드',
+    pointCustomer:null,  // {id,name,phone,total_points,used_points,grade}
+    pointsUsed:0,
+  });
   const [lines, setLines] = useState([newLine()]);
+
+  // 적립금 사용 모달 (라인별)
+  const [pointsModalLine, setPointsModalLine] = useState(null); // line.id
+  const [pmSearch,   setPmSearch]   = useState('');
+  const [pmResults,  setPmResults]  = useState([]);
+  const [pmSearching,setPmSearching]= useState(false);
+  const [pmCustomer, setPmCustomer] = useState(null);
+  const [pmAmount,   setPmAmount]   = useState('');
 
   // 회원 연결
   const [memberMode,   setMemberMode]   = useState('none');
@@ -70,19 +85,77 @@ export default function SalesInputPage({ profile }) {
       if (field === 'normalPrice' || field === 'discount') {
         const np = Number(field==='normalPrice' ? value : updated.normalPrice) || 0;
         const dc = Number(field==='discount'    ? value : updated.discount)    || 0;
-        updated.price = Math.max(0, np - dc);
+        const pu = Number(updated.pointsUsed) || 0;
+        updated.price = Math.max(0, np - dc - pu);
       }
       if (field === 'price') {
         const np = Number(updated.normalPrice) || 0;
         const sp = Number(value) || 0;
-        updated.discount = String(Math.max(0, np - sp));
+        const pu = Number(updated.pointsUsed) || 0;
+        updated.discount = String(Math.max(0, np - sp - pu));
       }
       return updated;
     }));
   };
 
+  // 적립금사용 직접 적용 (모달 확정)
+  const applyPointsToLine = (lineId, customer, usedAmt) => {
+    setLines(prev => prev.map(l => {
+      if (l.id !== lineId) return l;
+      const np = Number(l.normalPrice) || 0;
+      const dc = Number(l.discount) || 0;
+      const pu = Number(usedAmt) || 0;
+      const newPrice = Math.max(0, np - dc - pu);
+      return { ...l, payment: pu > 0 ? '적립' : l.payment, pointCustomer: pu > 0 ? customer : null, pointsUsed: pu, price: newPrice };
+    }));
+  };
+
   const addLine = () => setLines(prev => [...prev, newLine()]);
   const removeLine = (id) => setLines(prev => prev.filter(l => l.id !== id));
+
+  const openPointsModal = (line) => {
+    if (!line.productId) { toast('먼저 상품을 선택해주세요', 'err'); return; }
+    setPointsModalLine(line.id);
+    setPmCustomer(line.pointCustomer || null);
+    setPmAmount(line.pointsUsed ? String(line.pointsUsed) : '');
+    setPmSearch('');
+    setPmResults([]);
+  };
+  const closePointsModal = () => {
+    setPointsModalLine(null);
+    setPmCustomer(null);
+    setPmSearch(''); setPmResults([]); setPmAmount('');
+  };
+  const searchPointsMember = async () => {
+    if (!pmSearch.trim()) return;
+    setPmSearching(true);
+    const { data } = await supabase.from('customers')
+      .select('*')
+      .or(`name.ilike.%${pmSearch}%,phone.ilike.%${pmSearch}%`)
+      .limit(10);
+    setPmResults(data || []);
+    setPmSearching(false);
+  };
+  const confirmPoints = () => {
+    const line = lines.find(l => l.id === pointsModalLine);
+    if (!line) return;
+    const amt = Number(pmAmount) || 0;
+    if (amt <= 0) { toast('사용 금액을 입력해주세요', 'err'); return; }
+    if (!pmCustomer) { toast('회원을 선택해주세요', 'err'); return; }
+    if (amt > (pmCustomer.total_points || 0)) { toast(`사용가능 적립금(${(pmCustomer.total_points||0).toLocaleString()}원)을 초과합니다`, 'err'); return; }
+    const np = Number(line.normalPrice) || 0;
+    const dc = Number(line.discount) || 0;
+    const maxAllowed = Math.max(0, np - dc);
+    if (amt > maxAllowed) { toast(`상품가(${maxAllowed.toLocaleString()}원)를 초과할 수 없습니다`, 'err'); return; }
+    applyPointsToLine(pointsModalLine, pmCustomer, amt);
+    toast(`${pmCustomer.name} 적립금 ${amt.toLocaleString()}원 사용 적용`, 'ok');
+    closePointsModal();
+  };
+  const clearPoints = () => {
+    applyPointsToLine(pointsModalLine, null, 0);
+    toast('적립금 사용 해제', 'inf');
+    closePointsModal();
+  };
 
   const totalAmt = lines.reduce((s, l) => s + (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0), 0);
 
@@ -128,14 +201,26 @@ export default function SalesInputPage({ profile }) {
       for (const l of validLines) {
         const lineAmt = (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0);
         const linePoints = customerId ? Math.floor(lineAmt * getGrade(customer?.total_purchase||0).rate) : 0;
+        const pointsUsedLine = Number(l.pointsUsed) || 0;
         const { error } = await supabase.from('sales').insert({
           sold_at: soldAt, store_name: profile.department, branch_name: profile.branch,
           brand_id: Number(l.brandId), product_id: Number(l.productId),
           quantity: Number(l.quantity), price: Number(String(l.price).replace(/,/g,'')),
           payment: l.payment || '카드', memo: memo.trim() || null, created_by: profile.id,
           customer_id: customerId, points_earned: linePoints,
+          points_used: pointsUsedLine,
         });
         if (error) throw error;
+
+        // 적립금 사용 회원 계정 업데이트
+        if (pointsUsedLine > 0 && l.pointCustomer?.id) {
+          const newTotalPoints = Math.max(0, (l.pointCustomer.total_points||0) - pointsUsedLine);
+          const newUsedPoints  = (l.pointCustomer.used_points||0) + pointsUsedLine;
+          await supabase.from('customers').update({
+            total_points: newTotalPoints,
+            used_points: newUsedPoints,
+          }).eq('id', l.pointCustomer.id);
+        }
 
         // 매장재고 자동 차감
         const prod = allProducts.find(p => String(p.id) === String(l.productId));
@@ -212,7 +297,7 @@ export default function SalesInputPage({ profile }) {
             </div>
 
             {/* 헤더 라벨 */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 70px 110px 110px 110px 210px 36px 36px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(200px, 260px) 60px 100px 100px 100px 250px 34px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
               <div>상품검색</div>
               <div style={{textAlign:'center'}}>수량</div>
               <div style={{textAlign:'center'}}>정상가</div>
@@ -240,7 +325,7 @@ export default function SalesInputPage({ profile }) {
 
               return (
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 8px', marginBottom:6 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 70px 110px 110px 110px 210px 36px 36px', gap:6, alignItems:'center' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'minmax(200px, 260px) 60px 100px 100px 100px 250px 34px 34px', gap:6, alignItems:'center' }}>
                   {/* 상품검색 */}
                   <div style={{ position:'relative' }}>
                     <input
@@ -284,14 +369,18 @@ export default function SalesInputPage({ profile }) {
                   <input type="number" min={0} value={l.price} onChange={e => updateLine(l.id,'price',e.target.value)} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" required />
                   {/* 결제 */}
                   <div style={{ display:'flex', gap:2 }}>
-                    {PAYMENTS.map(p => (
-                      <button key={p} type="button" onClick={() => updateLine(l.id,'payment',p)}
+                    {PAYMENTS.map(p => {
+                      const isPoint = p === '적립';
+                      const active = l.payment === p || (isPoint && l.pointsUsed > 0);
+                      return (
+                      <button key={p} type="button"
+                        onClick={() => isPoint ? openPointsModal(l) : updateLine(l.id,'payment',p)}
                         style={{ flex:1, height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', padding:0,
-                          borderColor: l.payment===p ? 'var(--accent)' : 'var(--border)',
-                          background: l.payment===p ? '#fff3e0' : '#fff',
-                          color: l.payment===p ? 'var(--accent)' : 'var(--text2)',
-                          fontWeight: l.payment===p ? 700 : 500, fontSize:12 }}>{p}</button>
-                    ))}
+                          borderColor: active ? (isPoint ? '#7b1fa2' : 'var(--accent)') : 'var(--border)',
+                          background: active ? (isPoint ? '#f3e5f5' : '#fff3e0') : '#fff',
+                          color: active ? (isPoint ? '#6a1b9a' : 'var(--accent)') : 'var(--text2)',
+                          fontWeight: active ? 700 : 500, fontSize:12 }}>{p}</button>
+                    )})}
                   </div>
                   {/* + 추가 (마지막 라인에만) */}
                   {isLast ? (
@@ -306,10 +395,15 @@ export default function SalesInputPage({ profile }) {
                       style={{ height:38, width:36, border:'1px solid var(--border)', background:'#fff', color:'var(--danger)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:14, lineHeight:1, padding:0 }}>✕</button>
                   ) : <div/>}
                 </div>
-                {l.productId && lineSubtotal > 0 && (
+                {l.productId && (lineSubtotal > 0 || l.pointsUsed > 0) && (
                   <div style={{ marginTop:6, fontSize:11, textAlign:'right', fontFamily:'var(--mono)', color:'var(--text2)' }}>
                     소계: <strong style={{color:'var(--accent)'}}>{lineSubtotal.toLocaleString()}원</strong>
                     {Number(l.discount) > 0 && <span style={{color:'var(--danger)', marginLeft:8}}>할인 -{(Number(l.quantity)*Number(l.discount)).toLocaleString()}원</span>}
+                    {l.pointsUsed > 0 && l.pointCustomer && (
+                      <span style={{color:'#6a1b9a', marginLeft:8}}>
+                        💳 {l.pointCustomer.name} 적립금 -{Number(l.pointsUsed).toLocaleString()}원 사용
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -452,6 +546,130 @@ export default function SalesInputPage({ profile }) {
           </button>
         </form>
       </div>
+
+      {/* 적립금 사용 모달 */}
+      {pointsModalLine && (() => {
+        const line = lines.find(l => l.id === pointsModalLine);
+        const np = Number(line?.normalPrice)||0, dc = Number(line?.discount)||0;
+        const maxAllowed = Math.max(0, np - dc);
+        return (
+          <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
+            <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(500px,95vw)', boxShadow:'0 8px 40px rgba(0,0,0,0.25)', padding:'24px'}}>
+              <div style={{display:'flex', alignItems:'center', marginBottom:18}}>
+                <div style={{fontSize:17, fontWeight:700, color:'#6a1b9a'}}>💳 적립금 사용</div>
+                <button type="button" onClick={closePointsModal} style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+              </div>
+
+              {!pmCustomer ? (
+                <>
+                  <div style={{fontSize:12, color:'var(--text2)', marginBottom:10}}>회원을 검색하세요 (이름 또는 연락처)</div>
+                  <div style={{display:'flex', gap:8, marginBottom:10}}>
+                    <input value={pmSearch} onChange={e => setPmSearch(e.target.value)}
+                      onKeyDown={e => e.key==='Enter' && (e.preventDefault(), searchPointsMember())}
+                      style={{...inputStyle, flex:1}} placeholder="홍길동 또는 010-1234-5678" autoFocus/>
+                    <button type="button" className="btn btn-s" onClick={searchPointsMember} disabled={pmSearching}>
+                      {pmSearching ? <span className="spinner"/> : '검색'}
+                    </button>
+                  </div>
+                  {pmResults.length > 0 && (
+                    <div style={{ border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'hidden', maxHeight:280, overflowY:'auto' }}>
+                      {pmResults.map(m => (
+                        <div key={m.id} onClick={() => setPmCustomer(m)}
+                          style={{ padding:'10px 12px', cursor:'pointer', borderBottom:'1px solid var(--border)', background:'#fff', fontSize:13 }}
+                          onMouseEnter={e => e.currentTarget.style.background='#f3e5f5'}
+                          onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                          <div style={{display:'flex', alignItems:'center', gap:8}}>
+                            <strong>{m.name}</strong>
+                            <GradeBadge grade={m.grade || '패밀리'}/>
+                            <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)'}}>{m.phone}</span>
+                          </div>
+                          <div style={{fontSize:12, color:'#6a1b9a', marginTop:3, fontWeight:700}}>
+                            사용가능 적립금: {(m.total_points||0).toLocaleString()}원
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {pmResults.length === 0 && pmSearch && !pmSearching && (
+                    <div style={{fontSize:12, color:'var(--text3)'}}>검색 결과가 없습니다</div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* 선택된 회원 */}
+                  <div style={{ background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)', padding:'12px 14px', marginBottom:14 }}>
+                    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
+                      <div style={{display:'flex', alignItems:'center', gap:8}}>
+                        <strong style={{fontSize:14}}>{pmCustomer.name}</strong>
+                        <GradeBadge grade={pmCustomer.grade || '패밀리'}/>
+                        <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)'}}>{pmCustomer.phone}</span>
+                      </div>
+                      <button type="button" className="btn-ghost" onClick={() => setPmCustomer(null)}>변경</button>
+                    </div>
+                    <div style={{fontSize:13, color:'#6a1b9a', fontWeight:700, textAlign:'center', padding:'6px 0', background:'#fff', borderRadius:6}}>
+                      사용가능 적립금: <span style={{fontSize:16}}>{(pmCustomer.total_points||0).toLocaleString()}원</span>
+                    </div>
+                  </div>
+
+                  {/* 금액 입력 */}
+                  <div style={{marginBottom:14}}>
+                    <label style={labelStyle}>사용할 금액 (원)</label>
+                    <input type="number" min={0} value={pmAmount}
+                      max={Math.min(pmCustomer.total_points||0, maxAllowed)}
+                      onChange={e => setPmAmount(e.target.value)}
+                      style={{...inputStyle, fontWeight:700, fontSize:15, textAlign:'right'}}
+                      placeholder="0" autoFocus/>
+                    <div style={{fontSize:11, color:'var(--text3)', marginTop:6, display:'flex', justifyContent:'space-between'}}>
+                      <span>상품 최대: {maxAllowed.toLocaleString()}원</span>
+                      <span>적립금 잔액: {(pmCustomer.total_points||0).toLocaleString()}원</span>
+                    </div>
+                    <div style={{display:'flex', gap:6, marginTop:8}}>
+                      {[1000, 5000, 10000, Math.min(pmCustomer.total_points||0, maxAllowed)].filter((v, i, arr) => v > 0 && arr.indexOf(v) === i).map(amt => (
+                        <button key={amt} type="button"
+                          onClick={() => setPmAmount(String(amt))}
+                          style={{flex:1, height:30, fontSize:11, border:'1px solid var(--border)', borderRadius:6, background:'#fafafa', cursor:'pointer', color:'var(--text2)'}}>
+                          {amt === Math.min(pmCustomer.total_points||0, maxAllowed) ? '전액' : `${amt.toLocaleString()}원`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 사용 후 미리보기 */}
+                  {Number(pmAmount) > 0 && (
+                    <div style={{ background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:14, fontSize:12 }}>
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
+                        <span>상품가</span><strong>{maxAllowed.toLocaleString()}원</strong>
+                      </div>
+                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:4, color:'#6a1b9a'}}>
+                        <span>적립금 사용</span><strong>-{Number(pmAmount).toLocaleString()}원</strong>
+                      </div>
+                      <div style={{display:'flex', justifyContent:'space-between', paddingTop:6, borderTop:'1px solid #ffcc80', color:'var(--accent)', fontWeight:700}}>
+                        <span>최종 판매가</span><strong>{Math.max(0, maxAllowed - Number(pmAmount)).toLocaleString()}원</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{display:'flex', gap:8}}>
+                    {line?.pointsUsed > 0 && (
+                      <button type="button" className="btn btn-s" style={{height:42, padding:'0 14px'}} onClick={clearPoints}>
+                        사용 해제
+                      </button>
+                    )}
+                    <button type="button" className="btn btn-s" style={{flex:1, justifyContent:'center', height:42}} onClick={closePointsModal}>
+                      취소
+                    </button>
+                    <button type="button" className="btn btn-p" style={{flex:1, justifyContent:'center', height:42, fontWeight:700, background:'#7b1fa2', borderColor:'#7b1fa2'}}
+                      onClick={confirmPoints}>
+                      확인
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 최근 입력 내역 */}
       <div className="card">
