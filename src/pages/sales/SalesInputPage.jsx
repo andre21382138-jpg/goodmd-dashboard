@@ -707,19 +707,28 @@ export default function SalesInputPage({ profile }) {
             <tbody>
               {recentSales.length === 0
                 ? <tr><td colSpan={9} className="empty">입력된 판매 내역이 없습니다</td></tr>
-                : recentSales.map(s => (
-                  <tr key={s.id}>
-                    <td className="mono">{s.sold_at}</td>
-                    <td>{s.brand?.name || '-'}</td>
-                    <td>{s.product?.name || '-'}</td>
-                    <td className="r">{s.quantity}</td>
-                    <td className="r">{Number(s.price).toLocaleString()}원</td>
-                    <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9'}}>{s.payment}</span></td>
-                    <td style={{fontSize:12}}>{s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}</td>
-                    <td style={{fontSize:11,color:'var(--text2)'}}>{s.memo || '-'}</td>
+                : recentSales.map(s => {
+                  const fully = (s.returned_qty||0) >= (s.quantity||0);
+                  const partial = (s.returned_qty||0) > 0 && !fully;
+                  const effQ = Math.max(0, (s.quantity||0) - (s.returned_qty||0));
+                  const strike = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                  return (
+                  <tr key={s.id} style={fully ? {background:'#fafafa'} : {}}>
+                    <td className="mono" style={strike}>{s.sold_at}</td>
+                    <td style={strike}>{s.brand?.name || '-'}</td>
+                    <td style={strike}>
+                      {s.product?.name || '-'}
+                      {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
+                      {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}</span>}
+                    </td>
+                    <td className="r" style={strike}>{effQ}</td>
+                    <td className="r" style={strike}>{Number(s.price).toLocaleString()}원</td>
+                    <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9', ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
+                    <td style={{fontSize:12, ...strike}}>{s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}</td>
+                    <td style={{fontSize:11,color:'var(--text2)', ...strike}}>{s.memo || '-'}</td>
                     <td><button className="btn-danger" onClick={() => handleDelete(s.id)}>삭제</button></td>
                   </tr>
-                ))
+                )})
               }
             </tbody>
           </table>

@@ -58,23 +58,24 @@ export default function HomePage({ profile, setPage }) {
       setLoading(true);
       // 1. 매장 매출
       let storeQ = supabase.from('sales')
-        .select('store_name, branch_name, quantity, price')
+        .select('store_name, branch_name, quantity, price, returned_qty')
         .gte('sold_at', monthStart).lte('sold_at', yesterdayStr);
       if (isManager && profile?.department)
         storeQ = storeQ.eq('store_name', profile.department).eq('branch_name', profile.branch);
       const { data: storeData } = await storeQ;
-      const sRows = storeData || [];
+      const sRows = (storeData || []).map(r => ({...r, _eff: Math.max(0,(r.quantity||0)-(r.returned_qty||0))}));
       const sMap = new Map();
       for (const r of sRows) {
+        if (r._eff <= 0) continue; // 완전반품 제외
         const key = `${r.store_name}|||${r.branch_name}`;
         if (!sMap.has(key)) sMap.set(key, {store:r.store_name, branch:r.branch_name, count:0, qty:0, amt:0});
         const e = sMap.get(key);
-        e.count++; e.qty += r.quantity; e.amt += r.price * r.quantity;
+        e.count++; e.qty += r._eff; e.amt += r.price * r._eff;
       }
       setStoreSummary({
-        amt:   sRows.reduce((s,r)=>s+r.price*r.quantity, 0),
-        count: sRows.length,
-        qty:   sRows.reduce((s,r)=>s+r.quantity, 0),
+        amt:   sRows.reduce((s,r)=>s+r.price*r._eff, 0),
+        count: sRows.filter(r => r._eff > 0).length,
+        qty:   sRows.reduce((s,r)=>s+r._eff, 0),
       });
       setStoreRows([...sMap.values()].sort((a,b)=>b.amt-a.amt));
 
@@ -117,14 +118,14 @@ export default function HomePage({ profile, setPage }) {
 
         // 4. 전월 동일기간 통합 매출
         const [{ data: prevSales }, { data: prevLecture }, { data: prevBiz }] = await Promise.all([
-          supabase.from('sales').select('quantity, price')
+          supabase.from('sales').select('quantity, price, returned_qty')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
           supabase.from('lecture_sales').select('quantity, price')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
           supabase.from('biz_sales').select('quantity, supply_price')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
         ]);
-        const prevStore   = (prevSales   ||[]).reduce((s,r)=>s+r.price*r.quantity, 0);
+        const prevStore   = (prevSales   ||[]).reduce((s,r)=>s+r.price*Math.max(0,(r.quantity||0)-(r.returned_qty||0)), 0);
         const prevLect    = (prevLecture ||[]).reduce((s,r)=>s+r.price*r.quantity, 0);
         const prevBizAmt  = (prevBiz     ||[]).reduce((s,r)=>s+r.supply_price*r.quantity, 0);
         setPrevTotalAmt(prevStore + prevLect + prevBizAmt);

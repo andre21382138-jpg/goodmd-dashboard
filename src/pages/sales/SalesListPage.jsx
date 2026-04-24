@@ -12,6 +12,7 @@ export default function SalesListPage({ setPage }) {
   const [fTo,     setFTo]     = useState('');
   const [fKeyword,setFKeyword]= useState('');
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
+  const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
 
   // 날짜 빠른 선택
   const setDateRange = (type) => {
@@ -53,9 +54,16 @@ export default function SalesListPage({ setPage }) {
 
   const stores = useMemo(() => uniq(sales.map(s => s.store_name)), [sales]);
 
-  // 키워드 필터 + 정렬 (클라이언트 사이드)
+  // 실효 수량/금액 (반품 차감)
+  const effQty = (s) => Math.max(0, (s.quantity||0) - (s.returned_qty||0));
+  const effAmt = (s) => effQty(s) * (s.price||0);
+  const isFullyReturned = (s) => (s.returned_qty||0) >= (s.quantity||0);
+  const isPartialReturn = (s) => (s.returned_qty||0) > 0 && !isFullyReturned(s);
+
+  // 키워드 필터 + 반품 필터 + 정렬 (클라이언트 사이드)
   const filtered = useMemo(() => {
     let result = sales;
+    if (!showReturned) result = result.filter(s => !isFullyReturned(s));
     if (fKeyword.trim()) {
       const kw = fKeyword.trim().toLowerCase();
       result = result.filter(s =>
@@ -64,13 +72,14 @@ export default function SalesListPage({ setPage }) {
         (s.memo          || '').toLowerCase().includes(kw)
       );
     }
-    if (sortBy === 'qty_desc') result = [...result].sort((a,b) => b.quantity - a.quantity);
-    if (sortBy === 'amt_desc') result = [...result].sort((a,b) => (b.price*b.quantity) - (a.price*a.quantity));
+    if (sortBy === 'qty_desc') result = [...result].sort((a,b) => effQty(b) - effQty(a));
+    if (sortBy === 'amt_desc') result = [...result].sort((a,b) => effAmt(b) - effAmt(a));
     return result;
-  }, [sales, fKeyword, sortBy]);
+  }, [sales, fKeyword, sortBy, showReturned]);
 
-  const totalQty = useMemo(() => filtered.reduce((s, r) => s + r.quantity, 0), [filtered]);
-  const totalAmt = useMemo(() => filtered.reduce((s, r) => s + r.price * r.quantity, 0), [filtered]);
+  const totalQty = useMemo(() => filtered.reduce((s, r) => s + effQty(r), 0), [filtered]);
+  const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
+  const returnedCount = useMemo(() => sales.filter(isFullyReturned).length, [sales]);
 
   const quickBtnStyle = (active) => ({
     height:34, padding:'0 12px', border:'2px solid', borderRadius:'var(--radius)',
@@ -122,6 +131,11 @@ export default function SalesListPage({ setPage }) {
             <option value="qty_desc">판매건수 높은순</option>
             <option value="amt_desc">매출액 높은순</option>
           </select>
+          <label style={{display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, color:'var(--text2)', cursor:'pointer', padding:'0 8px'}}>
+            <input type="checkbox" checked={showReturned} onChange={e => setShowReturned(e.target.checked)}
+              style={{width:15, height:15, cursor:'pointer'}}/>
+            완전반품 포함 {returnedCount > 0 && <span style={{color:'var(--danger)', fontWeight:700}}>({returnedCount})</span>}
+          </label>
           {(fStore||fBrand||fFrom||fTo||fKeyword) &&
             <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); }}>✕ 초기화</button>}
           <div className="fbar-right">
@@ -142,21 +156,29 @@ export default function SalesListPage({ setPage }) {
               <tbody>
                 {filtered.length === 0
                   ? <tr><td colSpan={11} className="empty">조회된 판매 내역이 없습니다</td></tr>
-                  : filtered.map(s => (
-                    <tr key={s.id}>
-                      <td className="mono">{s.sold_at}</td>
-                      <td><span className="badge badge-dept">{s.store_name}</span></td>
-                      <td><span className="badge badge-store">{s.branch_name}</span></td>
-                      <td style={{fontSize:12}}>{s.seller?.name || '-'}</td>
-                      <td>{s.brand?.name || '-'}</td>
-                      <td>{s.product?.name || '-'}</td>
-                      <td className="r">{s.quantity}</td>
-                      <td className="r">{Number(s.price).toLocaleString()}</td>
-                      <td className="r" style={{fontWeight:600}}>{(s.price * s.quantity).toLocaleString()}</td>
-                      <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>{s.payment}</span></td>
-                      <td style={{fontSize:11,color:'var(--text2)'}}>{s.memo || '-'}</td>
+                  : filtered.map(s => {
+                    const fully = isFullyReturned(s);
+                    const partial = isPartialReturn(s);
+                    const strikeStyle = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                    return (
+                    <tr key={s.id} style={fully ? { background:'#fafafa' } : {}}>
+                      <td className="mono" style={strikeStyle}>{s.sold_at}</td>
+                      <td><span className="badge badge-dept" style={fully?{opacity:0.5}:{}}>{s.store_name}</span></td>
+                      <td><span className="badge badge-store" style={fully?{opacity:0.5}:{}}>{s.branch_name}</span></td>
+                      <td style={{fontSize:12, ...strikeStyle}}>{s.seller?.name || '-'}</td>
+                      <td style={strikeStyle}>{s.brand?.name || '-'}</td>
+                      <td style={strikeStyle}>
+                        {s.product?.name || '-'}
+                        {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
+                        {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}개</span>}
+                      </td>
+                      <td className="r" style={strikeStyle}>{effQty(s)}</td>
+                      <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
+                      <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
+                      <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
+                      <td style={{fontSize:11,color:'var(--text2)', ...strikeStyle}}>{s.memo || '-'}</td>
                     </tr>
-                  ))
+                  )})
                 }
               </tbody>
             </table>

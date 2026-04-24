@@ -70,8 +70,9 @@ export default function MyMembersPage({ profile }) {
   );
 
   const mineCount = useMemo(() => members.filter(m => m.manager_name === profile.name).length, [members, profile.name]);
-  const totalAmt  = useMemo(() => purchases.reduce((s,r) => s + r.price * r.quantity, 0), [purchases]);
-  const totalQty  = useMemo(() => purchases.reduce((s,r) => s + r.quantity, 0), [purchases]);
+  const effQty = (r) => Math.max(0, (r.quantity||0) - (r.returned_qty||0));
+  const totalAmt = useMemo(() => purchases.reduce((s,r) => s + r.price * effQty(r), 0), [purchases]);
+  const totalQty = useMemo(() => purchases.reduce((s,r) => s + effQty(r), 0), [purchases]);
   const consentCount = useMemo(() => members.filter(m => m.sms_consent).length, [members]);
 
   return (
@@ -259,20 +260,29 @@ export default function MyMembersPage({ profile }) {
                     <tbody>
                       {purchases.length === 0
                         ? <tr><td colSpan={8} className="empty">구매 이력이 없습니다</td></tr>
-                        : purchases.map(p => (
-                          <tr key={p.id}>
-                            <td className="mono">{p.sold_at}</td>
-                            <td>{p.brand?.name||'-'}</td>
-                            <td style={{fontSize:12}}>{p.product?.name||'-'}</td>
-                            <td className="r">{p.quantity}</td>
-                            <td className="r">{Number(p.price).toLocaleString()}</td>
-                            <td className="r" style={{fontWeight:600,color:'var(--accent)'}}>{(p.price*p.quantity).toLocaleString()}</td>
-                            <td className="r" style={{color: (p.points_used||0) > 0 ? '#6a1b9a' : 'var(--text3)', fontWeight: (p.points_used||0) > 0 ? 700 : 400, fontFamily:'var(--mono)'}}>
+                        : purchases.map(p => {
+                          const fully = (p.returned_qty||0) >= (p.quantity||0);
+                          const partial = (p.returned_qty||0) > 0 && !fully;
+                          const eff = effQty(p);
+                          const strike = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                          return (
+                          <tr key={p.id} style={fully?{background:'#fafafa'}:{}}>
+                            <td className="mono" style={strike}>{p.sold_at}</td>
+                            <td style={strike}>{p.brand?.name||'-'}</td>
+                            <td style={{fontSize:12, ...strike}}>
+                              {p.product?.name||'-'}
+                              {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
+                              {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {p.returned_qty}</span>}
+                            </td>
+                            <td className="r" style={strike}>{eff}</td>
+                            <td className="r" style={strike}>{Number(p.price).toLocaleString()}</td>
+                            <td className="r" style={{fontWeight:600,color:'var(--accent)', ...strike}}>{(p.price*eff).toLocaleString()}</td>
+                            <td className="r" style={{color: (p.points_used||0) > 0 ? '#6a1b9a' : 'var(--text3)', fontWeight: (p.points_used||0) > 0 ? 700 : 400, fontFamily:'var(--mono)', ...(fully?{opacity:0.5}:{})}}>
                               {(p.points_used||0) > 0 ? `-${Number(p.points_used).toLocaleString()}` : '-'}
                             </td>
-                            <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>{p.payment}</span></td>
+                            <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{p.payment}</span></td>
                           </tr>
-                        ))
+                        )})
                       }
                     </tbody>
                   </table>
