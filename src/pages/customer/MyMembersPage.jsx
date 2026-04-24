@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 
+const PAGE_SIZE = 100;
+
 export default function MyMembersPage({ profile }) {
   const [members,  setMembers]  = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -8,16 +10,29 @@ export default function MyMembersPage({ profile }) {
   const [purchases,setPurchases]= useState([]);
   const [loadingP, setLoadingP] = useState(false);
   const [fSearch,  setFSearch]  = useState('');
-  const [fMine,    setFMine]    = useState(false); // 내 담당만 보기
+  const [fMine,    setFMine]    = useState(false);
+  const [page,     setPage]     = useState(0);
 
+  // Supabase 1000행 제한 우회 — 전체 조회
   const fetchMembers = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('customers')
-      .select('*')
-      .eq('store_name', profile.department)
-      .eq('branch_name', profile.branch)
-      .order('joined_at', { ascending: false });
-    setMembers(data || []);
+    const CHUNK = 1000;
+    let all = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase.from('customers')
+        .select('*')
+        .eq('store_name', profile.department)
+        .eq('branch_name', profile.branch)
+        .order('joined_at', { ascending: false })
+        .range(from, from + CHUNK - 1);
+      if (error) break;
+      if (!data?.length) break;
+      all = all.concat(data);
+      if (data.length < CHUNK) break;
+      from += CHUNK;
+    }
+    setMembers(all);
     setLoading(false);
   }, [profile.department, profile.branch]);
 
@@ -44,6 +59,15 @@ export default function MyMembersPage({ profile }) {
     }
     return r;
   }, [members, fSearch, fMine, profile.name]);
+
+  // 필터 변경 시 페이지 리셋
+  useEffect(() => { setPage(0); }, [fSearch, fMine]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageMembers = useMemo(
+    () => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filtered, page]
+  );
 
   const mineCount = useMemo(() => members.filter(m => m.manager_name === profile.name).length, [members, profile.name]);
 
@@ -95,31 +119,64 @@ export default function MyMembersPage({ profile }) {
           </div>
           {loading ? <div className="empty"><span className="spinner"/></div>
             : filtered.length === 0 ? <div className="empty">등록된 회원이 없습니다</div>
-            : filtered.map(m => (
-              <div key={m.id} onClick={() => handleSelect(m)}
-                style={{
-                  padding:'11px 12px', borderRadius:'var(--radius)', cursor:'pointer', marginBottom:4,
-                  background: selected?.id===m.id ? '#fff8e1' : 'var(--bg3)',
-                  border: `1px solid ${selected?.id===m.id ? '#ffcc80' : 'transparent'}`,
-                }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <strong style={{ fontSize:13 }}>{m.name}</strong>
-                  <span style={{ fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>{m.joined_at}</span>
-                </div>
-                <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:2 }}>{m.phone}</div>
-                <div style={{ display:'flex', gap:6, marginTop:5, alignItems:'center' }}>
-                  {m.manager_name === profile.name
-                    ? <span style={{fontSize:10, fontWeight:700, color:'var(--accent)'}}>👤 내 담당</span>
-                    : m.manager_name
-                      ? <span style={{fontSize:10, color:'var(--text3)'}}>담당: {m.manager_name}</span>
-                      : <span style={{fontSize:10, color:'var(--text3)'}}>담당 미지정</span>
-                  }
-                  <span style={{ fontSize:10, marginLeft:'auto', color: m.sms_consent ? 'var(--success)' : 'var(--text3)', fontWeight:600 }}>
-                    {m.sms_consent ? '✅ SMS동의' : 'SMS미동의'}
-                  </span>
-                </div>
+            : <>
+              <div style={{fontSize:11, color:'var(--text3)', marginBottom:6, textAlign:'right'}}>
+                {filtered.length.toLocaleString()}명 중 {page*PAGE_SIZE+1}-{Math.min((page+1)*PAGE_SIZE, filtered.length)}
               </div>
-            ))
+              {pageMembers.map(m => (
+                <div key={m.id} onClick={() => handleSelect(m)}
+                  style={{
+                    padding:'11px 12px', borderRadius:'var(--radius)', cursor:'pointer', marginBottom:4,
+                    background: selected?.id===m.id ? '#fff8e1' : 'var(--bg3)',
+                    border: `1px solid ${selected?.id===m.id ? '#ffcc80' : 'transparent'}`,
+                  }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <strong style={{ fontSize:13 }}>{m.name}</strong>
+                    <span style={{ fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>{m.joined_at}</span>
+                  </div>
+                  <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:2 }}>{m.phone}</div>
+                  <div style={{ display:'flex', gap:6, marginTop:5, alignItems:'center' }}>
+                    {m.manager_name === profile.name
+                      ? <span style={{fontSize:10, fontWeight:700, color:'var(--accent)'}}>👤 내 담당</span>
+                      : m.manager_name
+                        ? <span style={{fontSize:10, color:'var(--text3)'}}>담당: {m.manager_name}</span>
+                        : <span style={{fontSize:10, color:'var(--text3)'}}>담당 미지정</span>
+                    }
+                    <span style={{ fontSize:10, marginLeft:'auto', color: m.sms_consent ? 'var(--success)' : 'var(--text3)', fontWeight:600 }}>
+                      {m.sms_consent ? '✅ SMS동의' : 'SMS미동의'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {/* 페이지네이션 */}
+              {totalPages > 1 && (() => {
+                const delta = 3;
+                let start = Math.max(0, page - delta);
+                let end   = Math.min(totalPages-1, page + delta);
+                if (end - start < delta*2) { start = Math.max(0, end - delta*2); end = Math.min(totalPages-1, start + delta*2); }
+                const pages = []; for (let i=start; i<=end; i++) pages.push(i);
+                const btn = (active, disabled) => ({
+                  height: 28, minWidth: 28, padding:'0 6px', border:'1px solid', borderRadius:'var(--radius)',
+                  fontSize: 11, fontWeight: active ? 700 : 400, cursor: disabled ? 'default' : 'pointer',
+                  borderColor: active ? 'var(--accent)' : 'var(--border)',
+                  background: active ? '#fff3e0' : '#fff',
+                  color: active ? 'var(--accent)' : disabled ? 'var(--text3)' : 'var(--text2)',
+                  opacity: disabled ? 0.5 : 1,
+                });
+                return (
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'center', gap:3, padding:'12px 0 4px', borderTop:'1px solid var(--border)', marginTop:8, flexWrap:'wrap'}}>
+                    <button style={btn(false, page===0)} disabled={page===0} onClick={() => setPage(0)}>«</button>
+                    <button style={btn(false, page===0)} disabled={page===0} onClick={() => setPage(page-1)}>‹</button>
+                    {start > 0 && <span style={{padding:'0 3px', fontSize:11, color:'var(--text3)'}}>...</span>}
+                    {pages.map(p => <button key={p} style={btn(p===page)} onClick={() => setPage(p)}>{p+1}</button>)}
+                    {end < totalPages-1 && <span style={{padding:'0 3px', fontSize:11, color:'var(--text3)'}}>...</span>}
+                    <button style={btn(false, page===totalPages-1)} disabled={page===totalPages-1} onClick={() => setPage(page+1)}>›</button>
+                    <button style={btn(false, page===totalPages-1)} disabled={page===totalPages-1} onClick={() => setPage(totalPages-1)}>»</button>
+                  </div>
+                );
+              })()}
+            </>
           }
         </div>
 
