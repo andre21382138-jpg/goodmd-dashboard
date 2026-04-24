@@ -265,6 +265,8 @@ const GLOBAL_CSS = `
 function AuthScreen() {
   const [userId, setUserId] = useState('');
   const [pw, setPw]         = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg]         = useState(null);
 
@@ -299,9 +301,26 @@ function AuthScreen() {
           </div>
           <div className="form-group">
             <label>비밀번호</label>
-            <input className="input" type="password" value={pw}
-              onChange={e => setPw(e.target.value)}
-              placeholder="비밀번호" required />
+            <div style={{position:'relative'}}>
+              <input className="input" type={showPw ? 'text' : 'password'} value={pw}
+                onChange={e => setPw(e.target.value)}
+                onKeyDown={e => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                onKeyUp={e => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                onBlur={() => setCapsOn(false)}
+                placeholder="비밀번호" required style={{paddingRight:42}}/>
+              <button type="button" onClick={() => setShowPw(v => !v)}
+                title={showPw ? '비밀번호 숨기기' : '비밀번호 보기'}
+                style={{position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
+                  background:'none', border:'none', cursor:'pointer', fontSize:16, padding:4, lineHeight:1, color:'var(--text3)'}}>
+                {showPw ? '🙈' : '👁️'}
+              </button>
+            </div>
+            {capsOn && (
+              <div style={{marginTop:6, padding:'6px 10px', background:'#fff3e0', border:'1px solid #ffb74d',
+                borderRadius:'var(--radius)', fontSize:12, color:'#e65100', fontWeight:600, display:'flex', alignItems:'center', gap:6}}>
+                ⚠️ Caps Lock이 켜져 있습니다
+              </div>
+            )}
           </div>
           <button className="btn-auth" type="submit" disabled={loading}>
             {loading ? '처리 중...' : '로그인'}
