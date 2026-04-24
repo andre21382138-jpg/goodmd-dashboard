@@ -311,7 +311,12 @@ export default function SalesInputPage({ profile }) {
             {lines.map((l, idx) => {
               const suggestions = l.productSearch && l.productSearch.length >= 1
                 ? allProducts
-                    .filter(p => p.name.toLowerCase().includes(l.productSearch.toLowerCase()))
+                    .filter(p => {
+                      const q = l.productSearch.toLowerCase();
+                      return (p.name||'').toLowerCase().includes(q)
+                          || (p.code||'').toLowerCase().includes(q)
+                          || (p.erp_code||'').toLowerCase().includes(q);
+                    })
                     .sort((a,b) => {
                       const aD = a.name.includes('[단종]') ? 1 : 0;
                       const bD = b.name.includes('[단종]') ? 1 : 0;
@@ -348,12 +353,20 @@ export default function SalesInputPage({ profile }) {
                           return (
                           <div key={p.id}
                             onMouseDown={e => { e.preventDefault(); updateLine(l.id,'productId',String(p.id)); updateLine(l.id,'productSearch',p.name); }}
-                            style={{ padding:'9px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0' }}
+                            style={{ padding:'8px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0' }}
                             onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
                             onMouseLeave={e => e.currentTarget.style.background='#fff'}>
-                            {brand && <span style={{fontSize:11, color:'var(--accent)', fontWeight:700, marginRight:6}}>[{brand.name}]</span>}
-                            {p.name}
-                            <span style={{ fontSize:11, color:'var(--text3)', marginLeft:8, fontFamily:'var(--mono)' }}>{Number(p.price).toLocaleString()}원</span>
+                            <div style={{display:'flex', alignItems:'center'}}>
+                              {brand && <span style={{fontSize:11, color:'var(--accent)', fontWeight:700, marginRight:6}}>[{brand.name}]</span>}
+                              <span>{p.name}</span>
+                              <span style={{ fontSize:11, color:'var(--text3)', marginLeft:'auto', fontFamily:'var(--mono)' }}>{Number(p.price).toLocaleString()}원</span>
+                            </div>
+                            {(p.code || p.erp_code) && (
+                              <div style={{display:'flex', gap:10, marginTop:3, fontSize:10, fontFamily:'var(--mono)', color:'var(--text3)'}}>
+                                {p.code && <span>상품코드: <strong style={{color:'var(--text2)'}}>{p.code}</strong></span>}
+                                {p.erp_code && <span>ERP: <strong style={{color:'var(--text2)'}}>{p.erp_code}</strong></span>}
+                              </div>
+                            )}
                           </div>
                         )})}
                       </div>
