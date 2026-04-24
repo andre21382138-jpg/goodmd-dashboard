@@ -8,16 +8,18 @@ export default function MyMembersPage({ profile }) {
   const [purchases,setPurchases]= useState([]);
   const [loadingP, setLoadingP] = useState(false);
   const [fSearch,  setFSearch]  = useState('');
+  const [fMine,    setFMine]    = useState(false); // 내 담당만 보기
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase.from('customers')
       .select('*')
-      .eq('manager_name', profile.name)
+      .eq('store_name', profile.department)
+      .eq('branch_name', profile.branch)
       .order('joined_at', { ascending: false });
     setMembers(data || []);
     setLoading(false);
-  }, [profile.name]);
+  }, [profile.department, profile.branch]);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
@@ -34,10 +36,16 @@ export default function MyMembersPage({ profile }) {
   const handleSelect = (m) => { setSelected(m); fetchPurchases(m.id); };
 
   const filtered = useMemo(() => {
-    if (!fSearch) return members;
-    const q = fSearch.toLowerCase();
-    return members.filter(m => m.name.toLowerCase().includes(q) || m.phone.includes(q));
-  }, [members, fSearch]);
+    let r = members;
+    if (fMine) r = r.filter(m => m.manager_name === profile.name);
+    if (fSearch) {
+      const q = fSearch.toLowerCase();
+      r = r.filter(m => m.name.toLowerCase().includes(q) || m.phone.includes(q));
+    }
+    return r;
+  }, [members, fSearch, fMine, profile.name]);
+
+  const mineCount = useMemo(() => members.filter(m => m.manager_name === profile.name).length, [members, profile.name]);
 
   const totalAmt = useMemo(() => purchases.reduce((s,r) => s + r.price * r.quantity, 0), [purchases]);
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + r.quantity, 0), [purchases]);
@@ -47,11 +55,12 @@ export default function MyMembersPage({ profile }) {
   return (
     <div>
       {/* 요약 */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:16 }}>
         {[
-          { label:'총 회원수',      value: members.length + '명' },
-          { label:'SMS 동의 회원',  value: consentCount + '명' },
-          { label:'미동의 회원',    value: (members.length - consentCount) + '명' },
+          { label:'매장 전체 회원',  value: members.length + '명' },
+          { label:'내 담당 회원',    value: mineCount + '명' },
+          { label:'SMS 동의',        value: consentCount + '명' },
+          { label:'미동의',          value: (members.length - consentCount) + '명' },
         ].map(s => (
           <div key={s.label} style={{ background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 18px' }}>
             <div style={{ fontSize:10, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>{s.label}</div>
@@ -63,10 +72,26 @@ export default function MyMembersPage({ profile }) {
       <div style={{ display:'grid', gridTemplateColumns: selected ? '320px 1fr' : '1fr', gap:16 }}>
         {/* 회원 목록 */}
         <div className="card" style={{ padding:'16px 18px' }}>
-          <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+          <div style={{ display:'flex', gap:8, marginBottom:10 }}>
             <input className="finput" value={fSearch} onChange={e => setFSearch(e.target.value)}
               placeholder="이름 또는 연락처 검색" style={{ flex:1 }}/>
             {fSearch && <button className="btn-ghost" onClick={() => setFSearch('')}>✕</button>}
+          </div>
+          <div style={{ display:'flex', gap:6, marginBottom:14 }}>
+            <button type="button" onClick={() => setFMine(false)}
+              style={{ flex:1, height:32, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', fontSize:12, fontWeight:700,
+                borderColor: !fMine ? 'var(--accent)' : 'var(--border)',
+                background: !fMine ? '#fff3e0' : '#fff',
+                color: !fMine ? 'var(--accent)' : 'var(--text2)' }}>
+              🏬 매장 전체 ({members.length})
+            </button>
+            <button type="button" onClick={() => setFMine(true)}
+              style={{ flex:1, height:32, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', fontSize:12, fontWeight:700,
+                borderColor: fMine ? 'var(--accent)' : 'var(--border)',
+                background: fMine ? '#fff3e0' : '#fff',
+                color: fMine ? 'var(--accent)' : 'var(--text2)' }}>
+              👤 내 담당 ({mineCount})
+            </button>
           </div>
           {loading ? <div className="empty"><span className="spinner"/></div>
             : filtered.length === 0 ? <div className="empty">등록된 회원이 없습니다</div>
@@ -83,8 +108,12 @@ export default function MyMembersPage({ profile }) {
                 </div>
                 <div style={{ fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', marginTop:2 }}>{m.phone}</div>
                 <div style={{ display:'flex', gap:6, marginTop:5, alignItems:'center' }}>
-                  <span className="badge badge-dept" style={{fontSize:10}}>{m.store_name}</span>
-                  <span className="badge badge-store" style={{fontSize:10}}>{m.branch_name}</span>
+                  {m.manager_name === profile.name
+                    ? <span style={{fontSize:10, fontWeight:700, color:'var(--accent)'}}>👤 내 담당</span>
+                    : m.manager_name
+                      ? <span style={{fontSize:10, color:'var(--text3)'}}>담당: {m.manager_name}</span>
+                      : <span style={{fontSize:10, color:'var(--text3)'}}>담당 미지정</span>
+                  }
                   <span style={{ fontSize:10, marginLeft:'auto', color: m.sms_consent ? 'var(--success)' : 'var(--text3)', fontWeight:600 }}>
                     {m.sms_consent ? '✅ SMS동의' : 'SMS미동의'}
                   </span>
