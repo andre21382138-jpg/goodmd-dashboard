@@ -408,15 +408,23 @@ export default function SalesInputPage({ profile }) {
                       style={{ height:38, width:36, border:'1px solid var(--border)', background:'#fff', color:'var(--danger)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:14, lineHeight:1, padding:0 }}>✕</button>
                   ) : <div/>}
                 </div>
-                {l.productId && (lineSubtotal > 0 || l.pointsUsed > 0) && (
-                  <div style={{ marginTop:6, fontSize:11, textAlign:'right', fontFamily:'var(--mono)', color:'var(--text2)' }}>
-                    소계: <strong style={{color:'var(--accent)'}}>{lineSubtotal.toLocaleString()}원</strong>
-                    {Number(l.discount) > 0 && <span style={{color:'var(--danger)', marginLeft:8}}>할인 -{(Number(l.quantity)*Number(l.discount)).toLocaleString()}원</span>}
-                    {l.pointsUsed > 0 && l.pointCustomer && (
-                      <span style={{color:'#6a1b9a', marginLeft:8}}>
-                        💳 {l.pointCustomer.name} 적립금 -{Number(l.pointsUsed).toLocaleString()}원 사용
-                      </span>
-                    )}
+                {l.productId && (
+                  <div style={{ marginTop:6, fontSize:11, display:'flex', alignItems:'center', gap:10, fontFamily:'var(--mono)' }}>
+                    {/* 좌측: 상품코드 · ERP */}
+                    <div style={{display:'flex', gap:10, color:'var(--text3)'}}>
+                      {selectedProd?.code && <span>상품코드: <strong style={{color:'var(--text2)'}}>{selectedProd.code}</strong></span>}
+                      {selectedProd?.erp_code && <span>ERP: <strong style={{color:'var(--text2)'}}>{selectedProd.erp_code}</strong></span>}
+                    </div>
+                    {/* 우측: 소계 / 할인 / 적립금 */}
+                    <div style={{marginLeft:'auto', textAlign:'right', color:'var(--text2)'}}>
+                      {lineSubtotal > 0 && <>소계: <strong style={{color:'var(--accent)'}}>{lineSubtotal.toLocaleString()}원</strong></>}
+                      {Number(l.discount) > 0 && <span style={{color:'var(--danger)', marginLeft:8}}>할인 -{(Number(l.quantity)*Number(l.discount)).toLocaleString()}원</span>}
+                      {l.pointsUsed > 0 && l.pointCustomer && (
+                        <span style={{color:'#6a1b9a', marginLeft:8}}>
+                          💳 {l.pointCustomer.name} 적립금 -{Number(l.pointsUsed).toLocaleString()}원 사용
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
