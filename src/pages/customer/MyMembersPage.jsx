@@ -254,11 +254,11 @@ export default function MyMembersPage({ profile }) {
                 <div className="twrap">
                   <table>
                     <thead>
-                      <tr><th>구매일</th><th>브랜드</th><th>상품명</th><th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th><th>결제</th></tr>
+                      <tr><th>구매일</th><th>브랜드</th><th>상품명</th><th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th><th className="r">적립금사용</th><th>결제</th></tr>
                     </thead>
                     <tbody>
                       {purchases.length === 0
-                        ? <tr><td colSpan={7} className="empty">구매 이력이 없습니다</td></tr>
+                        ? <tr><td colSpan={8} className="empty">구매 이력이 없습니다</td></tr>
                         : purchases.map(p => (
                           <tr key={p.id}>
                             <td className="mono">{p.sold_at}</td>
@@ -267,6 +267,9 @@ export default function MyMembersPage({ profile }) {
                             <td className="r">{p.quantity}</td>
                             <td className="r">{Number(p.price).toLocaleString()}</td>
                             <td className="r" style={{fontWeight:600,color:'var(--accent)'}}>{(p.price*p.quantity).toLocaleString()}</td>
+                            <td className="r" style={{color: (p.points_used||0) > 0 ? '#6a1b9a' : 'var(--text3)', fontWeight: (p.points_used||0) > 0 ? 700 : 400, fontFamily:'var(--mono)'}}>
+                              {(p.points_used||0) > 0 ? `-${Number(p.points_used).toLocaleString()}` : '-'}
+                            </td>
                             <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>{p.payment}</span></td>
                           </tr>
                         ))

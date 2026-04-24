@@ -11,7 +11,7 @@ export default function SalesInputPage({ profile }) {
   const [saving,    setSaving]   = useState(false);
   const [recentSales, setRecent] = useState([]);
 
-  const PAYMENTS = ['카드','현금','증정','시식','적립'];
+  const PAYMENTS = ['카드','현금','증정','시식','적립금사용'];
 
   // 상품 라인 (여러 개)
   const newLine = () => ({
@@ -106,7 +106,7 @@ export default function SalesInputPage({ profile }) {
       const dc = Number(l.discount) || 0;
       const pu = Number(usedAmt) || 0;
       const newPrice = Math.max(0, np - dc - pu);
-      return { ...l, payment: pu > 0 ? '적립' : l.payment, pointCustomer: pu > 0 ? customer : null, pointsUsed: pu, price: newPrice };
+      return { ...l, payment: pu > 0 ? '적립금사용' : l.payment, pointCustomer: pu > 0 ? customer : null, pointsUsed: pu, price: newPrice };
     }));
   };
 
@@ -297,7 +297,7 @@ export default function SalesInputPage({ profile }) {
             </div>
 
             {/* 헤더 라벨 */}
-            <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 250px 34px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 34px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
               <div>상품검색</div>
               <div style={{textAlign:'center'}}>수량</div>
               <div style={{textAlign:'center'}}>정상가</div>
@@ -325,7 +325,7 @@ export default function SalesInputPage({ profile }) {
 
               return (
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 8px', marginBottom:6 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 250px 34px 34px', gap:6, alignItems:'center' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 34px 34px', gap:6, alignItems:'center' }}>
                   {/* 상품검색 */}
                   <div style={{ position:'relative' }}>
                     <input
@@ -370,16 +370,16 @@ export default function SalesInputPage({ profile }) {
                   {/* 결제 */}
                   <div style={{ display:'flex', gap:2 }}>
                     {PAYMENTS.map(p => {
-                      const isPoint = p === '적립';
+                      const isPoint = p === '적립금사용';
                       const active = l.payment === p || (isPoint && l.pointsUsed > 0);
                       return (
                       <button key={p} type="button"
                         onClick={() => isPoint ? openPointsModal(l) : updateLine(l.id,'payment',p)}
-                        style={{ flex:1, height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', padding:0,
+                        style={{ flex:isPoint ? 1.6 : 1, height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', padding:0,
                           borderColor: active ? (isPoint ? '#7b1fa2' : 'var(--accent)') : 'var(--border)',
                           background: active ? (isPoint ? '#f3e5f5' : '#fff3e0') : '#fff',
                           color: active ? (isPoint ? '#6a1b9a' : 'var(--accent)') : 'var(--text2)',
-                          fontWeight: active ? 700 : 500, fontSize:12 }}>{p}</button>
+                          fontWeight: active ? 700 : 500, fontSize: isPoint ? 11 : 12, whiteSpace:'nowrap' }}>{p}</button>
                     )})}
                   </div>
                   {/* + 추가 (마지막 라인에만) */}
