@@ -18,6 +18,9 @@ export default function HomePage({ profile, setPage }) {
 
   const [storeSummary,   setStoreSummary]   = useState({amt:0,count:0,qty:0});
   const [storeRows,      setStoreRows]      = useState([]);
+  const [dailyRows,      setDailyRows]      = useState([]); // 매니저용 일자별 합계
+  const [dailyDetails,   setDailyDetails]   = useState({}); // { 'YYYY-MM-DD': [items] }
+  const [expandedDate,   setExpandedDate]   = useState(null);
   const [lectureSummary, setLectureSummary] = useState({amt:0,count:0,qty:0});
   const [lectureRows,    setLectureRows]    = useState([]);
   const [bizSummary,     setBizSummary]     = useState({amt:0,count:0,qty:0});
@@ -57,16 +60,22 @@ export default function HomePage({ profile, setPage }) {
     const fetch = async () => {
       setLoading(true);
       // 1. 매장 매출
+      const selectCols = isManager
+        ? '*, brand:brands(name), product:products(name,code), customer:customers(name,phone)'
+        : 'store_name, branch_name, quantity, price, returned_qty';
       let storeQ = supabase.from('sales')
-        .select('store_name, branch_name, quantity, price, returned_qty')
-        .gte('sold_at', monthStart).lte('sold_at', yesterdayStr);
+        .select(selectCols)
+        .gte('sold_at', monthStart).lte('sold_at', yesterdayStr)
+        .order('sold_at', { ascending: false });
       if (isManager && profile?.department)
         storeQ = storeQ.eq('store_name', profile.department).eq('branch_name', profile.branch);
       const { data: storeData } = await storeQ;
       const sRows = (storeData || []).map(r => ({...r, _eff: Math.max(0,(r.quantity||0)-(r.returned_qty||0))}));
+
+      // 본사용: 매장별 합계
       const sMap = new Map();
       for (const r of sRows) {
-        if (r._eff <= 0) continue; // 완전반품 제외
+        if (r._eff <= 0) continue;
         const key = `${r.store_name}|||${r.branch_name}`;
         if (!sMap.has(key)) sMap.set(key, {store:r.store_name, branch:r.branch_name, count:0, qty:0, amt:0});
         const e = sMap.get(key);
@@ -78,6 +87,23 @@ export default function HomePage({ profile, setPage }) {
         qty:   sRows.reduce((s,r)=>s+r._eff, 0),
       });
       setStoreRows([...sMap.values()].sort((a,b)=>b.amt-a.amt));
+
+      // 매니저용: 일자별 합계 + 상세 매핑
+      if (isManager) {
+        const dMap = new Map();
+        const dDetails = {};
+        for (const r of sRows) {
+          if (r._eff <= 0) continue;
+          const d = r.sold_at;
+          if (!dMap.has(d)) dMap.set(d, { date: d, count: 0, qty: 0, amt: 0 });
+          const e = dMap.get(d);
+          e.count++; e.qty += r._eff; e.amt += r.price * r._eff;
+          if (!dDetails[d]) dDetails[d] = [];
+          dDetails[d].push(r);
+        }
+        setDailyRows([...dMap.values()].sort((a,b) => b.date.localeCompare(a.date)));
+        setDailyDetails(dDetails);
+      }
 
       if (canSeeAll) {
         // 2. 강좌 매출
@@ -263,49 +289,150 @@ export default function HomePage({ profile, setPage }) {
         </div>
       )}
 
-      {/* 매장 매출 현황 */}
-      <div className="card" style={{marginBottom:16}}>
-        <div className="card-label">🏬 매장별 당월 누적 판매매출</div>
-        {storeRows.length === 0 ? <div className="empty">이번 달 판매 데이터가 없습니다</div> : (
-          <div className="twrap">
-            <table>
-              <thead>
-                <tr><th>순위</th><th>점포</th><th>지점</th><th className="r">판매건수</th><th className="r">판매수량</th><th className="r">매출금액</th><th style={{minWidth:100}}>비중</th></tr>
-              </thead>
-              <tbody>
-                {storeRows.map((r,i) => {
-                  const pct = storeSummary.amt>0 ? (r.amt/storeSummary.amt*100).toFixed(1) : 0;
-                  return (
-                    <tr key={i}>
-                      <td className="mono" style={{color:'var(--text3)',width:40}}>{i+1}</td>
-                      <td><span className="badge badge-dept">{r.store}</span></td>
-                      <td><span className="badge badge-store">{r.branch}</span></td>
-                      <td className="r">{r.count.toLocaleString()}건</td>
-                      <td className="r">{r.qty.toLocaleString()}개</td>
-                      <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)'}}>{r.amt.toLocaleString()}원</td>
-                      <td>
-                        <div style={{display:'flex',alignItems:'center',gap:6}}>
-                          <div style={{flex:1,height:6,background:'#f0f0f0',borderRadius:3,overflow:'hidden'}}>
-                            <div style={{width:`${pct}%`,height:'100%',background:'var(--sidebar)',borderRadius:3}}/>
+      {/* 매장 매출 현황 (본사: 매장별 / 매니저: 일자별) */}
+      {!isManager && (
+        <div className="card" style={{marginBottom:16}}>
+          <div className="card-label">🏬 매장별 당월 누적 판매매출</div>
+          {storeRows.length === 0 ? <div className="empty">이번 달 판매 데이터가 없습니다</div> : (
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr><th>순위</th><th>점포</th><th>지점</th><th className="r">판매건수</th><th className="r">판매수량</th><th className="r">매출금액</th><th style={{minWidth:100}}>비중</th></tr>
+                </thead>
+                <tbody>
+                  {storeRows.map((r,i) => {
+                    const pct = storeSummary.amt>0 ? (r.amt/storeSummary.amt*100).toFixed(1) : 0;
+                    return (
+                      <tr key={i}>
+                        <td className="mono" style={{color:'var(--text3)',width:40}}>{i+1}</td>
+                        <td><span className="badge badge-dept">{r.store}</span></td>
+                        <td><span className="badge badge-store">{r.branch}</span></td>
+                        <td className="r">{r.count.toLocaleString()}건</td>
+                        <td className="r">{r.qty.toLocaleString()}개</td>
+                        <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)'}}>{r.amt.toLocaleString()}원</td>
+                        <td>
+                          <div style={{display:'flex',alignItems:'center',gap:6}}>
+                            <div style={{flex:1,height:6,background:'#f0f0f0',borderRadius:3,overflow:'hidden'}}>
+                              <div style={{width:`${pct}%`,height:'100%',background:'var(--sidebar)',borderRadius:3}}/>
+                            </div>
+                            <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text2)',minWidth:36}}>{pct}%</span>
                           </div>
-                          <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text2)',minWidth:36}}>{pct}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
-                  <td colSpan={3} style={{padding:'9px 11px',fontWeight:700}}>합계</td>
-                  <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{storeSummary.count.toLocaleString()}건</td>
-                  <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{storeSummary.qty.toLocaleString()}개</td>
-                  <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)',fontSize:14}}>{storeSummary.amt.toLocaleString()}원</td>
-                  <td/>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
+                    <td colSpan={3} style={{padding:'9px 11px',fontWeight:700}}>합계</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{storeSummary.count.toLocaleString()}건</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{storeSummary.qty.toLocaleString()}개</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)',fontSize:14}}>{storeSummary.amt.toLocaleString()}원</td>
+                    <td/>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 매니저: 일자별 판매 + 펼침 상세 */}
+      {isManager && (
+        <div className="card" style={{marginBottom:16}}>
+          <div className="card-label">📅 일자별 판매 매출</div>
+          {dailyRows.length === 0 ? <div className="empty">이번 달 판매 데이터가 없습니다</div> : (
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>날짜</th>
+                    <th className="r">판매건수</th>
+                    <th className="r">판매수량</th>
+                    <th className="r">매출금액</th>
+                    <th style={{textAlign:'center', width:90}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailyRows.map(r => {
+                    const open = expandedDate === r.date;
+                    const items = dailyDetails[r.date] || [];
+                    return (
+                    <React.Fragment key={r.date}>
+                      <tr style={{cursor:'pointer', background: open ? '#fff8e1' : 'transparent'}}
+                        onClick={() => setExpandedDate(open ? null : r.date)}>
+                        <td className="mono" style={{fontWeight:700}}>{r.date}</td>
+                        <td className="r">{r.count.toLocaleString()}건</td>
+                        <td className="r">{r.qty.toLocaleString()}개</td>
+                        <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)'}}>{r.amt.toLocaleString()}원</td>
+                        <td style={{textAlign:'center'}}>
+                          <button className="btn btn-s" style={{padding:'3px 12px', fontSize:11}}
+                            onClick={(e) => { e.stopPropagation(); setExpandedDate(open ? null : r.date); }}>
+                            {open ? '▲ 닫기' : '▼ 조회'}
+                          </button>
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr>
+                          <td colSpan={5} style={{background:'#fafafa', padding:'10px 14px', borderTop:'2px solid var(--accent)'}}>
+                            <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8}}>
+                              📋 {r.date} 판매 내역 ({items.length}건)
+                            </div>
+                            <div className="twrap" style={{background:'#fff', borderRadius:'var(--radius)', border:'1px solid var(--border)'}}>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>브랜드</th>
+                                    <th>상품명</th>
+                                    <th className="r">수량</th>
+                                    <th className="r">단가</th>
+                                    <th className="r">합계</th>
+                                    <th>결제</th>
+                                    <th>고객</th>
+                                    <th>메모</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {items.map(it => {
+                                    const fully = (it.returned_qty||0) >= (it.quantity||0);
+                                    const partial = (it.returned_qty||0) > 0 && !fully;
+                                    const eff = it._eff;
+                                    const strike = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                                    return (
+                                    <tr key={it.id} style={fully?{background:'#fafafa'}:{}}>
+                                      <td style={strike}>{it.brand?.name || '-'}</td>
+                                      <td style={{fontSize:12, ...strike}}>
+                                        {it.product?.name || '-'}
+                                        {fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
+                                        {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {it.returned_qty}</span>}
+                                      </td>
+                                      <td className="r" style={strike}>{eff}</td>
+                                      <td className="r" style={{fontFamily:'var(--mono)', ...strike}}>{Number(it.price).toLocaleString()}원</td>
+                                      <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)', ...strike}}>{(it.price*eff).toLocaleString()}원</td>
+                                      <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{it.payment}</span></td>
+                                      <td style={{fontSize:12}}>{it.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {it.customer.name}</span> : '-'}</td>
+                                      <td style={{fontSize:11,color:'var(--text2)'}}>{it.memo||'-'}</td>
+                                    </tr>
+                                  )})}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )})}
+                  <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
+                    <td style={{padding:'9px 11px',fontWeight:700}}>합계</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{storeSummary.count.toLocaleString()}건</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{storeSummary.qty.toLocaleString()}개</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)',fontSize:14}}>{storeSummary.amt.toLocaleString()}원</td>
+                    <td/>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 강좌 매출 현황 (본사만) */}
       {canSeeAll && (
