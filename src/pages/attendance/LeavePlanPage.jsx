@@ -82,6 +82,15 @@ export default function LeavePlanPage({ profile }) {
     setEditingId(null); setSelDates([]); setMemo('');
   };
 
+  const cancelPlan = async (plan) => {
+    if (!window.confirm(`${plan.target_month} 휴무계획 신청을 취소하시겠습니까?\n\n취소 후 새로 신청할 수 있습니다.`)) return;
+    setSaving(true);
+    const { error } = await supabase.from('leave_plans').delete().eq('id', plan.id);
+    if (error) toast(error.message, 'err');
+    else { toast('휴무계획 신청이 취소되었습니다', 'inf'); cancelEdit(); fetchPlans(); }
+    setSaving(false);
+  };
+
   const handleSubmit = async () => {
     if (!selMember) { toast('근무자를 선택해주세요', 'err'); return; }
     if (selDates.length === 0) { toast('날짜를 하나 이상 선택해주세요', 'err'); return; }
@@ -144,9 +153,15 @@ export default function LeavePlanPage({ profile }) {
               ✅ {nextMonStr} 휴무계획을 제출했습니다.
             </div>
             {pendingNextMonth && (
-              <button className="btn btn-s" onClick={() => startEdit(pendingNextMonth)}>
-                ✏️ 수정하기
-              </button>
+              <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+                <button className="btn btn-s" onClick={() => startEdit(pendingNextMonth)}>
+                  ✏️ 수정하기
+                </button>
+                <button className="btn-danger" style={{padding:'6px 14px', fontSize:12}}
+                  onClick={() => cancelPlan(pendingNextMonth)} disabled={saving}>
+                  🗑️ 신청 취소
+                </button>
+              </div>
             )}
             {confirmedNextMonth && (
               <div style={{fontSize:12, color:'var(--text3)', marginTop:8}}>
@@ -262,8 +277,12 @@ export default function LeavePlanPage({ profile }) {
                     </td>
                     <td>
                       {p.status === 'pending' && (
-                        <button className="btn btn-s" style={{fontSize:11, padding:'3px 8px'}}
-                          onClick={() => startEdit(p)}>수정</button>
+                        <div style={{display:'flex', gap:4}}>
+                          <button className="btn btn-s" style={{fontSize:11, padding:'3px 8px'}}
+                            onClick={() => startEdit(p)}>수정</button>
+                          <button className="btn-danger" style={{fontSize:11, padding:'3px 8px'}}
+                            onClick={() => cancelPlan(p)} disabled={saving}>취소</button>
+                        </div>
                       )}
                     </td>
                   </tr>
