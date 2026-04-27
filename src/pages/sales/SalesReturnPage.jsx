@@ -4,14 +4,14 @@ import { toast, GradeBadge, getGrade } from '../../lib/utils';
 
 export default function SalesReturnPage({ profile }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [fFrom,   setFFrom]   = useState(today);
-  const [fTo,     setFTo]     = useState(today);
-  const [fSearch, setFSearch] = useState('');
-  const [orders,  setOrders]  = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [selected,setSelected]= useState(null);        // 선택된 주문 그룹
-  const [returnMap, setReturnMap] = useState({});      // { saleId: qty }
-  const [saving,  setSaving]  = useState(false);
+  const [fFrom,    setFFrom]    = useState(today);
+  const [fTo,      setFTo]      = useState(today);
+  const [fSearch,  setFSearch]  = useState('');
+  const [orders,   setOrders]   = useState([]);
+  const [loading,  setLoading]  = useState(false);
+  const [expanded, setExpanded] = useState(null);     // 펼쳐진 주문 key
+  const [returnMap, setReturnMap] = useState({});     // { saleId: qty }
+  const [saving,   setSaving]   = useState(false);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -22,7 +22,6 @@ export default function SalesReturnPage({ profile }) {
       .eq('branch_name', profile.branch)
       .order('sold_at', { ascending: false })
       .order('created_at', { ascending: false });
-    // 고객명 검색이 있으면 날짜 필터 무시 (전체 기간 조회)
     if (!hasSearch) {
       if (fFrom) q = q.gte('sold_at', fFrom);
       if (fTo)   q = q.lte('sold_at', fTo);
@@ -30,9 +29,7 @@ export default function SalesReturnPage({ profile }) {
     const { data, error } = await q;
     if (error) { toast(error.message, 'err'); setLoading(false); return; }
 
-    // 미반품 수량이 남은 건만
     const active = (data || []).filter(s => (s.quantity - (s.returned_qty||0)) > 0);
-    // 고객명/연락처 검색
     let filtered = active;
     if (fSearch.trim()) {
       const q2 = fSearch.toLowerCase();
@@ -41,7 +38,6 @@ export default function SalesReturnPage({ profile }) {
         (s.customer?.phone||'').includes(fSearch)
       );
     }
-    // 주문 그룹핑: customer_id + sold_at
     const grouped = {};
     for (const s of filtered) {
       const key = s.customer_id ? `c-${s.customer_id}-${s.sold_at}` : `s-${s.id}`;
@@ -50,54 +46,62 @@ export default function SalesReturnPage({ profile }) {
     }
     const list = Object.values(grouped).sort((a,b) => b.sold_at.localeCompare(a.sold_at));
     setOrders(list);
+    setExpanded(null);
+    setReturnMap({});
     setLoading(false);
   }, [profile.department, profile.branch, fFrom, fTo, fSearch]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // 주문 합계 (표시용)
   const orderTotal = (o) => o.items.reduce((s,i) => {
     const remain = i.quantity - (i.returned_qty||0);
     return s + (i.price * remain);
   }, 0);
 
-  const openReturnModal = (order) => {
+  const orderQty = (o) => o.items.reduce((s,i) => s + (i.quantity - (i.returned_qty||0)), 0);
+
+  const toggleExpand = (order) => {
+    if (expanded === order.key) {
+      setExpanded(null); setReturnMap({});
+    } else {
+      const map = {};
+      for (const i of order.items) map[i.id] = 0;
+      setReturnMap(map);
+      setExpanded(order.key);
+    }
+  };
+
+  const setAllFull = (order) => {
+    const map = {};
+    for (const i of order.items) map[i.id] = i.quantity - (i.returned_qty||0);
+    setReturnMap(map);
+  };
+  const setAllZero = (order) => {
     const map = {};
     for (const i of order.items) map[i.id] = 0;
     setReturnMap(map);
-    setSelected(order);
   };
 
-  const closeModal = () => { setSelected(null); setReturnMap({}); };
+  const expandedOrder = useMemo(() => orders.find(o => o.key === expanded) || null, [orders, expanded]);
 
-  const setAllFull = () => {
-    const map = {};
-    for (const i of selected.items) map[i.id] = i.quantity - (i.returned_qty||0);
-    setReturnMap(map);
-  };
-  const setAllZero = () => {
-    const map = {};
-    for (const i of selected.items) map[i.id] = 0;
-    setReturnMap(map);
-  };
-
-  // 반품 미리보기(현재 선택된 반품 수량 기준)
   const preview = useMemo(() => {
-    if (!selected) return null;
-    let cash = 0, pointsRestore = 0, pointsRevoke = 0;
-    for (const it of selected.items) {
+    if (!expandedOrder) return null;
+    let cash = 0, pointsRestore = 0, pointsRevoke = 0, qtySum = 0;
+    for (const it of expandedOrder.items) {
       const qty = Number(returnMap[it.id] || 0);
       if (qty <= 0) continue;
       const ratio = qty / it.quantity;
       cash += it.price * qty;
       pointsRestore += Math.floor((it.points_used||0) * ratio);
       pointsRevoke  += Math.floor((it.points_earned||0) * ratio);
+      qtySum += qty;
     }
-    return { cash, pointsRestore, pointsRevoke, netPoints: pointsRestore - pointsRevoke };
-  }, [selected, returnMap]);
+    return { cash, pointsRestore, pointsRevoke, qtySum };
+  }, [expandedOrder, returnMap]);
 
   const handleReturn = async () => {
-    const toReturn = selected.items.filter(i => Number(returnMap[i.id] || 0) > 0);
+    if (!expandedOrder) return;
+    const toReturn = expandedOrder.items.filter(i => Number(returnMap[i.id] || 0) > 0);
     if (toReturn.length === 0) { toast('반품할 수량을 입력해주세요', 'err'); return; }
     for (const it of toReturn) {
       const qty = Number(returnMap[it.id]);
@@ -117,13 +121,11 @@ export default function SalesReturnPage({ profile }) {
         const newReturnedQty = (it.returned_qty||0) + qty;
         const fullyReturned = newReturnedQty >= it.quantity;
 
-        // 1. sales 업데이트
         await supabase.from('sales').update({
           returned_qty: newReturnedQty,
           returned_at: fullyReturned ? new Date().toISOString() : it.returned_at,
         }).eq('id', it.id);
 
-        // 2. 매장재고 복구
         if (it.product?.code) {
           const { data: stockRow } = await supabase.from('store_stock')
             .select('id, stock_qty')
@@ -139,10 +141,9 @@ export default function SalesReturnPage({ profile }) {
           }
         }
 
-        // 3. 회원 적립금/누적구매 복구
         if (it.customer_id && it.customer) {
           const ratio = qty / it.quantity;
-          const pointsUsedRefund   = Math.floor((it.points_used||0) * ratio);
+          const pointsUsedRefund    = Math.floor((it.points_used||0) * ratio);
           const pointsEarnedReverse = Math.floor((it.points_earned||0) * ratio);
           const cashRefund = it.price * qty;
 
@@ -160,7 +161,8 @@ export default function SalesReturnPage({ profile }) {
         }
       }
       toast('반품 처리 완료', 'ok');
-      closeModal();
+      setExpanded(null);
+      setReturnMap({});
       fetchOrders();
     } catch (err) {
       toast('반품 실패: ' + err.message, 'err');
@@ -213,152 +215,151 @@ export default function SalesReturnPage({ profile }) {
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{marginBottom:12}}>
             <span className="fresult">총 <b>{orders.length}</b>건의 주문</span>
+            <span style={{fontSize:11, color:'var(--text3)', marginLeft:8}}>(행 클릭 시 상세보기/반품처리 펼쳐짐)</span>
           </div>
           <div className="twrap">
             <table>
               <thead>
                 <tr>
+                  <th style={{width:30}}></th>
                   <th>판매일</th>
                   <th>고객</th>
                   <th>등급</th>
                   <th>연락처</th>
                   <th className="r">상품수</th>
+                  <th className="r">총수량</th>
                   <th className="r">미반품 잔여금액</th>
-                  <th style={{textAlign:'center'}}></th>
                 </tr>
               </thead>
               <tbody>
-                {orders.map(o => (
-                  <tr key={o.key}>
-                    <td className="mono">{o.sold_at}</td>
-                    <td><strong>{o.customer?.name || <span style={{color:'var(--text3)'}}>비회원</span>}</strong></td>
-                    <td>{o.customer?.grade ? <GradeBadge grade={o.customer.grade}/> : '-'}</td>
-                    <td className="mono" style={{fontSize:12}}>{o.customer?.phone || '-'}</td>
-                    <td className="r" style={{fontFamily:'var(--mono)'}}>{o.items.length}개</td>
-                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{orderTotal(o).toLocaleString()}원</td>
-                    <td style={{textAlign:'center'}}>
-                      <button className="btn btn-p" style={{padding:'4px 12px', fontSize:12}} onClick={() => openReturnModal(o)}>
-                        반품 접수
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* 반품 처리 모달 */}
-      {selected && (
-        <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}>
-          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
-          <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(900px,95vw)', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
-            {/* 헤더 */}
-            <div style={{padding:'20px 24px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
-              <div style={{fontSize:17, fontWeight:700}}>↩️ 반품 처리</div>
-              {selected.customer && <>
-                <div style={{fontSize:14, fontWeight:700}}>{selected.customer.name}</div>
-                <GradeBadge grade={selected.customer.grade || '패밀리'}/>
-                <div style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)'}}>{selected.customer.phone}</div>
-              </>}
-              <div style={{fontSize:12, color:'var(--text3)', marginLeft:selected.customer?0:'auto'}}>판매일 {selected.sold_at}</div>
-              <button onClick={closeModal} disabled={saving} style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
-            </div>
-
-            {/* 상품 목록 */}
-            <div style={{padding:'16px 24px'}}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
-                <div style={{fontSize:13, fontWeight:700}}>주문 내역</div>
-                <div style={{display:'flex', gap:6}}>
-                  <button type="button" className="btn btn-s" style={{fontSize:11, padding:'3px 10px'}} onClick={setAllZero}>전체 0</button>
-                  <button type="button" className="btn btn-p" style={{fontSize:11, padding:'3px 10px'}} onClick={setAllFull}>전체 반품</button>
-                </div>
-              </div>
-              <div className="twrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>브랜드</th>
-                      <th>상품명</th>
-                      <th className="r">판매수량</th>
-                      <th className="r">이미반품</th>
-                      <th className="r">잔여</th>
-                      <th className="r">단가</th>
-                      <th className="r">적립금사용</th>
-                      <th style={{textAlign:'center', width:120}}>반품 수량</th>
+                {orders.map(o => {
+                  const open = expanded === o.key;
+                  return (
+                  <React.Fragment key={o.key}>
+                    <tr style={{cursor:'pointer', background: open ? '#fff8e1' : 'transparent'}} onClick={() => toggleExpand(o)}>
+                      <td style={{textAlign:'center', fontWeight:700, color:'var(--accent)'}}>{open ? '▼' : '▶'}</td>
+                      <td className="mono">{o.sold_at}</td>
+                      <td><strong>{o.customer?.name || <span style={{color:'var(--text3)'}}>비회원</span>}</strong></td>
+                      <td>{o.customer?.grade ? <GradeBadge grade={o.customer.grade}/> : '-'}</td>
+                      <td className="mono" style={{fontSize:12}}>{o.customer?.phone || '-'}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)'}}>{o.items.length}개</td>
+                      <td className="r" style={{fontFamily:'var(--mono)'}}>{orderQty(o)}개</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{orderTotal(o).toLocaleString()}원</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {selected.items.map(it => {
-                      const remain = it.quantity - (it.returned_qty||0);
-                      return (
-                      <tr key={it.id}>
-                        <td>{it.brand?.name || '-'}</td>
-                        <td style={{fontSize:12}}>
-                          {it.product?.name || '-'}
-                          {it.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {it.product.code}</div>}
-                        </td>
-                        <td className="r">{it.quantity}</td>
-                        <td className="r" style={{color:'var(--text3)'}}>{it.returned_qty||0}</td>
-                        <td className="r" style={{fontWeight:700}}>{remain}</td>
-                        <td className="r" style={{fontFamily:'var(--mono)'}}>{Number(it.price).toLocaleString()}원</td>
-                        <td className="r" style={{color:(it.points_used||0)>0?'#6a1b9a':'var(--text3)', fontFamily:'var(--mono)'}}>
-                          {(it.points_used||0) > 0 ? `-${Number(it.points_used).toLocaleString()}` : '-'}
-                        </td>
-                        <td style={{textAlign:'center'}}>
-                          <input type="number" min={0} max={remain}
-                            value={returnMap[it.id] || 0}
-                            onChange={e => {
-                              const v = Math.max(0, Math.min(remain, Number(e.target.value)||0));
-                              setReturnMap(prev => ({...prev, [it.id]: v}));
-                            }}
-                            style={{width:80, height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:13, textAlign:'center'}}/>
-                          <span style={{fontSize:11, color:'var(--text3)', marginLeft:4}}>/ {remain}</span>
+                    {open && (
+                      <tr>
+                        <td colSpan={8} style={{background:'#fafafa', padding:'14px 16px', borderTop:'2px solid var(--accent)'}}>
+                          {/* 헤더 */}
+                          <div style={{display:'flex', alignItems:'center', flexWrap:'wrap', gap:10, marginBottom:12}}>
+                            <div style={{fontSize:14, fontWeight:700}}>↩️ 반품 처리</div>
+                            {o.customer && <>
+                              <strong style={{fontSize:13}}>{o.customer.name}</strong>
+                              <GradeBadge grade={o.customer.grade || '패밀리'}/>
+                              <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)'}}>{o.customer.phone}</span>
+                              <span style={{fontSize:12, color:'var(--text3)'}}>·</span>
+                              <span style={{fontSize:12, color:'#6a1b9a', fontWeight:700}}>사용가능 적립금: {(o.customer.total_points||0).toLocaleString()}원</span>
+                            </>}
+                            <div style={{marginLeft:'auto', display:'flex', gap:6}}>
+                              <button type="button" className="btn btn-s" style={{fontSize:11, padding:'3px 10px'}} onClick={() => setAllZero(o)}>전체 0</button>
+                              <button type="button" className="btn btn-p" style={{fontSize:11, padding:'3px 10px'}} onClick={() => setAllFull(o)}>전체 반품</button>
+                            </div>
+                          </div>
+
+                          {/* 상품 목록 */}
+                          <div className="twrap" style={{background:'#fff', borderRadius:'var(--radius)', border:'1px solid var(--border)'}}>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>브랜드</th>
+                                  <th>상품명 (코드)</th>
+                                  <th className="r">판매수량</th>
+                                  <th className="r">이미반품</th>
+                                  <th className="r">잔여</th>
+                                  <th className="r">단가</th>
+                                  <th className="r">합계</th>
+                                  <th className="r">적립금사용</th>
+                                  <th>결제</th>
+                                  <th style={{textAlign:'center', width:130}}>반품 수량</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {o.items.map(it => {
+                                  const remain = it.quantity - (it.returned_qty||0);
+                                  return (
+                                  <tr key={it.id}>
+                                    <td>{it.brand?.name || '-'}</td>
+                                    <td style={{fontSize:12}}>
+                                      <strong>{it.product?.name || '-'}</strong>
+                                      {it.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {it.product.code}</div>}
+                                    </td>
+                                    <td className="r">{it.quantity}</td>
+                                    <td className="r" style={{color:'var(--text3)'}}>{it.returned_qty||0}</td>
+                                    <td className="r" style={{fontWeight:700}}>{remain}</td>
+                                    <td className="r" style={{fontFamily:'var(--mono)'}}>{Number(it.price).toLocaleString()}원</td>
+                                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{(it.price * remain).toLocaleString()}원</td>
+                                    <td className="r" style={{color:(it.points_used||0)>0?'#6a1b9a':'var(--text3)', fontFamily:'var(--mono)'}}>
+                                      {(it.points_used||0) > 0 ? `-${Number(it.points_used).toLocaleString()}` : '-'}
+                                    </td>
+                                    <td>
+                                      <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11}}>
+                                        {it.payment}
+                                      </span>
+                                    </td>
+                                    <td style={{textAlign:'center'}}>
+                                      <input type="number" min={0} max={remain}
+                                        value={returnMap[it.id] || 0}
+                                        onChange={e => {
+                                          const v = Math.max(0, Math.min(remain, Number(e.target.value)||0));
+                                          setReturnMap(prev => ({...prev, [it.id]: v}));
+                                        }}
+                                        style={{width:70, height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:13, textAlign:'center'}}/>
+                                      <span style={{fontSize:11, color:'var(--text3)', marginLeft:4}}>/ {remain}</span>
+                                    </td>
+                                  </tr>
+                                )})}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* 반품 미리보기 + 액션 */}
+                          {preview && (
+                            <div style={{marginTop:12, display:'flex', gap:10, flexWrap:'wrap', alignItems:'stretch'}}>
+                              <div style={{flex:1, minWidth:280, background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px'}}>
+                                <div style={{fontSize:11, fontWeight:700, color:'var(--text2)', marginBottom:6}}>💰 반품 요약</div>
+                                <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, fontSize:12}}>
+                                  <div>
+                                    <div style={{fontSize:10, color:'var(--text3)'}}>환불 금액</div>
+                                    <div style={{fontSize:14, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{preview.cash.toLocaleString()}원</div>
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:10, color:'var(--text3)'}}>복구 적립금</div>
+                                    <div style={{fontSize:14, fontWeight:700, color:'#6a1b9a', fontFamily:'var(--mono)'}}>+{preview.pointsRestore.toLocaleString()}원</div>
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:10, color:'var(--text3)'}}>회수 적립금</div>
+                                    <div style={{fontSize:14, fontWeight:700, color:'var(--danger)', fontFamily:'var(--mono)'}}>-{preview.pointsRevoke.toLocaleString()}원</div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{display:'flex', gap:8, alignItems:'stretch'}}>
+                                <button className="btn btn-s" style={{padding:'0 18px', fontSize:12}}
+                                  onClick={() => { setExpanded(null); setReturnMap({}); }} disabled={saving}>
+                                  접기
+                                </button>
+                                <button className="btn btn-p" style={{padding:'0 22px', fontWeight:700, fontSize:13}}
+                                  onClick={handleReturn} disabled={saving || preview.qtySum === 0}>
+                                  {saving ? <span className="spinner"/> : `↩️ 반품 처리${preview.qtySum > 0 ? ` (${preview.qtySum}개)` : ''}`}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </td>
                       </tr>
-                    )})}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 반품 미리보기 */}
-              {preview && (preview.cash > 0 || preview.pointsRestore > 0) && (
-                <div style={{ marginTop:14, background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'12px 16px' }}>
-                  <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8}}>💰 반품 요약</div>
-                  <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, fontSize:13}}>
-                    <div>
-                      <div style={{fontSize:11, color:'var(--text3)'}}>환불 금액 (현금)</div>
-                      <div style={{fontSize:15, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)', marginTop:2}}>
-                        {preview.cash.toLocaleString()}원
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:11, color:'var(--text3)'}}>복구 적립금</div>
-                      <div style={{fontSize:15, fontWeight:700, color:'#6a1b9a', fontFamily:'var(--mono)', marginTop:2}}>
-                        +{preview.pointsRestore.toLocaleString()}원
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:11, color:'var(--text3)'}}>회수 적립금 (원 적립분)</div>
-                      <div style={{fontSize:15, fontWeight:700, color:'var(--danger)', fontFamily:'var(--mono)', marginTop:2}}>
-                        -{preview.pointsRevoke.toLocaleString()}원
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 액션 */}
-            <div style={{padding:'16px 24px', borderTop:'1px solid var(--border)', display:'flex', gap:10}}>
-              <button className="btn btn-s" style={{flex:1, justifyContent:'center', height:44}} onClick={closeModal} disabled={saving}>
-                취소
-              </button>
-              <button className="btn btn-p" style={{flex:2, justifyContent:'center', height:44, fontWeight:700}} onClick={handleReturn} disabled={saving}>
-                {saving ? <span className="spinner"/> : '↩️ 반품 처리'}
-              </button>
-            </div>
+                    )}
+                  </React.Fragment>
+                )})}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
