@@ -11,6 +11,7 @@ export default function LeavePlanPage({ profile }) {
   const [editingId, setEditingId] = useState(null);
   const [members,   setMembers]   = useState([]);
   const [selMember, setSelMember] = useState(null);
+  const [otherDates,setOtherDates]= useState({}); // { 'YYYY-MM-DD': { name, status } }
 
   useEffect(() => {
     supabase.from('store_members').select('name, display_name, job_title')
@@ -38,10 +39,34 @@ export default function LeavePlanPage({ profile }) {
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
+  // 다른 근무자가 이미 선택한 날짜 (중복 방지)
+  useEffect(() => {
+    if (!selMember || members.length < 2) { setOtherDates({}); return; }
+    supabase.from('leave_plans')
+      .select('manager_name, dates, status')
+      .eq('manager_id', profile.id)
+      .eq('target_month', nextMonStr)
+      .neq('manager_name', selMember.name)
+      .neq('status', 'rejected')
+      .then(({ data }) => {
+        const map = {};
+        for (const p of (data || [])) {
+          for (const d of (p.dates || [])) {
+            map[d] = { name: p.manager_name, status: p.status };
+          }
+        }
+        setOtherDates(map);
+      });
+  }, [selMember, members.length, profile.id, nextMonStr]);
+
   const pendingNextMonth = myPlans.find(p => p.target_month === nextMonStr && p.status === 'pending');
   const confirmedNextMonth = myPlans.find(p => p.target_month === nextMonStr && p.status !== 'pending');
 
   const toggleDate = (dateStr) => {
+    if (otherDates[dateStr]) {
+      toast(`${otherDates[dateStr].name}님이 이미 선택한 날짜입니다`, 'err');
+      return;
+    }
     setSelDates(prev =>
       prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr].sort()
     );
@@ -60,6 +85,8 @@ export default function LeavePlanPage({ profile }) {
   const handleSubmit = async () => {
     if (!selMember) { toast('근무자를 선택해주세요', 'err'); return; }
     if (selDates.length === 0) { toast('날짜를 하나 이상 선택해주세요', 'err'); return; }
+    const conflict = selDates.find(d => otherDates[d]);
+    if (conflict) { toast(`${conflict}: ${otherDates[conflict].name}님이 이미 선택한 날짜입니다`, 'err'); return; }
     setSaving(true);
     if (editingId) {
       const { error } = await supabase.from('leave_plans').update({
@@ -134,6 +161,11 @@ export default function LeavePlanPage({ profile }) {
                 ✏️ 수정 모드 — 날짜를 다시 선택하세요
               </div>
             )}
+            {Object.keys(otherDates).length > 0 && (
+              <div style={{background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)', padding:'8px 12px', marginBottom:12, fontSize:12, color:'#6a1b9a', fontWeight:600}}>
+                🔒 다른 근무자가 이미 선택한 날짜 ({Object.keys(otherDates).length}일)는 선택할 수 없습니다
+              </div>
+            )}
             <div style={{marginBottom:16}}>
               <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:4}}>
                 {dayNames.map((d,i) => (
@@ -152,16 +184,27 @@ export default function LeavePlanPage({ profile }) {
                   const isSat = dow === 6;
                   const isSun = dow === 0;
                   const isSel = selDates.includes(dateStr);
+                  const blocked = otherDates[dateStr];
                   return (
                     <button key={day} onClick={() => toggleDate(dateStr)}
+                      disabled={!!blocked}
+                      title={blocked ? `${blocked.name}님이 이미 선택한 날짜` : ''}
                       style={{
-                        height:38, borderRadius:'var(--radius)', fontSize:13, fontWeight: isSel ? 700 : 400,
-                        cursor:'pointer',
-                        background: isSel ? 'var(--accent)' : '#fff',
-                        color: isSel ? '#fff' : isSun ? '#c62828' : isSat ? '#1565C0' : 'var(--text)',
-                        border: isSel ? 'none' : '1px solid var(--border)',
+                        height:38, borderRadius:'var(--radius)', fontSize:13,
+                        fontWeight: isSel ? 700 : 400,
+                        cursor: blocked ? 'not-allowed' : 'pointer',
+                        background: blocked ? '#f5f5f5' : isSel ? 'var(--accent)' : '#fff',
+                        color: blocked ? '#bdbdbd' : isSel ? '#fff' : isSun ? '#c62828' : isSat ? '#1565C0' : 'var(--text)',
+                        border: blocked ? '1px dashed #bdbdbd' : isSel ? 'none' : '1px solid var(--border)',
+                        textDecoration: blocked ? 'line-through' : 'none',
+                        position:'relative',
                       }}>
                       {day}
+                      {blocked && (
+                        <div style={{position:'absolute', bottom:1, left:0, right:0, fontSize:8, color:'#9e9e9e', fontWeight:600}}>
+                          🔒 {blocked.name}
+                        </div>
+                      )}
                     </button>
                   );
                 })}
