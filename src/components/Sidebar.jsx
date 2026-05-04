@@ -67,12 +67,13 @@ function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
   );
 }
 
-function SidebarClockPanel({ profile }) {
+function SidebarClockPanel({ profile, setPage }) {
   const [members,  setMembers]  = useState([]);
   const [loaded,   setLoaded]   = useState(false);
   const [popup,    setPopup]    = useState(null); // 'in' | 'out'
   const [saving,   setSaving]   = useState(false);
   const [todayMap, setTodayMap] = useState({}); // name → attendance record
+  const [lpReminder, setLpReminder] = useState(null); // {name, display_name} 휴무계획 미제출 알림
 
   const todayStr = () => {
     const d = new Date();
@@ -118,6 +119,20 @@ function SidebarClockPanel({ profile }) {
       if (!error) {
         setTodayMap(prev => ({ ...prev, [member.name]: data }));
         toast(`${member.display_name || member.name} 출근 체크 완료 ✅`, 'ok');
+        // 휴무계획 미제출 체크 (매월 20~25일)
+        const today = new Date();
+        const day = today.getDate();
+        if (day >= 20 && day <= 25) {
+          const nextM = new Date(today.getFullYear(), today.getMonth()+1, 1);
+          const nextMonStr = `${nextM.getFullYear()}-${String(nextM.getMonth()+1).padStart(2,'0')}`;
+          const { data: lp } = await supabase.from('leave_plans')
+            .select('id')
+            .eq('manager_id', profile.id)
+            .eq('manager_name', member.name)
+            .eq('target_month', nextMonStr)
+            .maybeSingle();
+          if (!lp) setLpReminder({ name: member.name, display_name: member.display_name || member.name, target_month: nextMonStr });
+        }
       }
     } else {
       const { data, error } = await supabase.from('attendance')
@@ -142,6 +157,36 @@ function SidebarClockPanel({ profile }) {
       {popup && (
         <ClockModal type={popup} members={members} todayMap={todayMap}
           onConfirm={handleConfirm} onClose={() => setPopup(null)} />
+      )}
+      {lpReminder && (
+        <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:16, padding:'28px 24px', width:380, maxWidth:'90vw', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+            <div style={{textAlign:'center', marginBottom:18}}>
+              <div style={{fontSize:32, marginBottom:8}}>📅</div>
+              <div style={{fontSize:17, fontWeight:700, color:'#111', marginBottom:6}}>
+                {lpReminder.display_name}님,
+              </div>
+              <div style={{fontSize:14, color:'#444', lineHeight:1.5}}>
+                <strong style={{color:'#c62828'}}>{lpReminder.target_month}</strong> 휴무계획을<br/>
+                아직 신청하지 않으셨습니다.
+              </div>
+              <div style={{fontSize:12, color:'#888', marginTop:8}}>
+                지금 신청하러 가시겠습니까?
+              </div>
+            </div>
+            <div style={{display:'flex', gap:8}}>
+              <button onClick={() => setLpReminder(null)}
+                style={{flex:1, height:44, border:'1px solid #e0e0e0', borderRadius:10, background:'#fafafa', fontSize:14, fontWeight:600, color:'#888', cursor:'pointer'}}>
+                나중에
+              </button>
+              <button onClick={() => { setLpReminder(null); if (setPage) setPage('leave_plan'); }}
+                style={{flex:2, height:44, border:'none', borderRadius:10, background:'#c62828', fontSize:14, fontWeight:700, color:'#fff', cursor:'pointer'}}>
+                지금 신청하러 가기
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       <div style={{ padding:'8px', borderBottom:'1px solid rgba(0,0,0,0.1)' }}>
         <div style={{ background:'#fff', borderRadius:8, border:'1px solid rgba(0,0,0,0.08)', padding:'10px 10px 8px' }}>
@@ -260,7 +305,7 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
       </button>
 
       {/* 출퇴근 카드 (매니저 전용) */}
-      {isManager && <SidebarClockPanel profile={profile}/>}
+      {isManager && <SidebarClockPanel profile={profile} setPage={setPage}/>}
 
       <div className="sidebar-menu">
         {/* 본사 메뉴 */}
