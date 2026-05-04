@@ -41,6 +41,18 @@ export default function PurchaseOrderHQPage({ profile }) {
   const [statusLoading, setStatusLoading] = useState(false);
   const [expandedOrder, setExpandedOrder] = useState(null);
 
+  // 상품 추가 (전체 상품)
+  const [allProducts, setAllProducts] = useState([]);
+  const [addSearch,   setAddSearch]   = useState({}); // { storeKey: searchText }
+  const [addSugOpen,  setAddSugOpen]  = useState({}); // { storeKey: bool }
+
+  useEffect(() => {
+    if (tab === 'create' && allProducts.length === 0) {
+      supabase.from('products').select('id, name, code, brand_id').order('name')
+        .then(({ data }) => setAllProducts(data || []));
+    }
+  }, [tab, allProducts.length]);
+
   // ── 1. 지난주 판매 집계 ──
   const fetchAggregation = useCallback(async () => {
     setAggLoading(true);
@@ -92,6 +104,45 @@ export default function PurchaseOrderHQPage({ profile }) {
   };
   const toggleAll = (on) => {
     setAggRows(prev => prev.map(g => ({ ...g, items: g.items.map(it => ({ ...it, checked: on })) })));
+  };
+
+  // 상품 수동 추가
+  const addProductToStore = (storeKey, product) => {
+    setAggRows(prev => prev.map(g => {
+      if (`${g.store}|${g.branch}` !== storeKey) return g;
+      // 이미 있는지 확인
+      const existing = g.items.find(i => i.product_id === product.id);
+      if (existing) {
+        return { ...g, items: g.items.map(i => i.product_id === product.id ? { ...i, checked: true } : i) };
+      }
+      const newItem = {
+        product_id: product.id,
+        name: product.name,
+        code: product.code,
+        sold_qty: 0,
+        hq_qty: 1,
+        checked: true,
+        manual: true,
+      };
+      return { ...g, items: [...g.items, newItem] };
+    }));
+    setAddSearch(prev => ({ ...prev, [storeKey]: '' }));
+    setAddSugOpen(prev => ({ ...prev, [storeKey]: false }));
+  };
+
+  const removeManualItem = (storeKey, pid) => {
+    setAggRows(prev => prev.map(g => {
+      if (`${g.store}|${g.branch}` !== storeKey) return g;
+      return { ...g, items: g.items.filter(i => !(i.product_id === pid && i.manual)) };
+    }));
+  };
+
+  const getSuggestions = (storeKey) => {
+    const q = (addSearch[storeKey] || '').toLowerCase().trim();
+    if (!q) return [];
+    return allProducts
+      .filter(p => (p.name||'').toLowerCase().includes(q) || (p.code||'').toLowerCase().includes(q))
+      .slice(0, 10);
   };
 
   const updateQty = (storeKey, pid, qty) => {
@@ -202,9 +253,10 @@ export default function PurchaseOrderHQPage({ profile }) {
 
               {aggRows.map(g => {
                 const sk = `${g.store}|${g.branch}`;
-                const allOn = g.items.every(i => i.checked);
+                const allOn = g.items.length > 0 && g.items.every(i => i.checked);
+                const sug = getSuggestions(sk);
                 return (
-                <div key={sk} style={{marginBottom:14, border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'hidden'}}>
+                <div key={sk} style={{marginBottom:14, border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'visible'}}>
                   <div style={{background:'#f5f7fa', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid var(--border)'}}>
                     <input type="checkbox" checked={allOn} onChange={() => toggleStore(sk, !allOn)} style={{cursor:'pointer'}}/>
                     <strong>{g.store} · {g.branch}</strong>
@@ -217,6 +269,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                         <th>상품명</th>
                         <th>코드</th>
                         <th className="r">판매수량</th>
+                        <th style={{width:40}}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -227,13 +280,55 @@ export default function PurchaseOrderHQPage({ profile }) {
                               onChange={() => toggleItem(sk, it.product_id)}
                               style={{cursor:'pointer'}}/>
                           </td>
-                          <td>{it.name || '-'}</td>
+                          <td>
+                            {it.name || '-'}
+                            {it.manual && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#1565C0', background:'#e3f2fd', border:'1px solid #90caf9', padding:'1px 6px', borderRadius:3}}>추가</span>}
+                          </td>
                           <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.code || '-'}</td>
-                          <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{it.sold_qty}</td>
+                          <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: it.manual ? 'var(--text3)' : 'var(--text)'}}>
+                            {it.manual ? '-' : it.sold_qty}
+                          </td>
+                          <td style={{textAlign:'center'}}>
+                            {it.manual && (
+                              <button type="button" onClick={() => removeManualItem(sk, it.product_id)}
+                                title="추가 상품 삭제"
+                                style={{background:'none', border:'none', cursor:'pointer', color:'var(--danger)', fontSize:14}}>✕</button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  {/* 상품 추가 영역 */}
+                  <div style={{padding:'10px 14px', borderTop:'1px solid var(--border)', background:'#fafafa', position:'relative'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <span style={{fontSize:11, fontWeight:700, color:'var(--text2)'}}>+ 상품 추가</span>
+                      <div style={{position:'relative', flex:1, maxWidth:360}}>
+                        <input
+                          value={addSearch[sk] || ''}
+                          onChange={e => { setAddSearch(prev => ({...prev, [sk]: e.target.value})); setAddSugOpen(prev => ({...prev, [sk]: true})); }}
+                          onFocus={() => setAddSugOpen(prev => ({...prev, [sk]: true}))}
+                          onBlur={() => setTimeout(() => setAddSugOpen(prev => ({...prev, [sk]: false})), 200)}
+                          placeholder="상품명 또는 상품코드 검색"
+                          style={{width:'100%', height:32, padding:'0 10px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, outline:'none', boxSizing:'border-box', background:'#fff'}}/>
+                        {addSugOpen[sk] && sug.length > 0 && (
+                          <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:'#fff', border:'1px solid var(--border)', borderRadius:4, boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:200, overflowY:'auto', marginTop:2}}>
+                            {sug.map(p => (
+                              <div key={p.id}
+                                onMouseDown={e => { e.preventDefault(); addProductToStore(sk, p); }}
+                                style={{padding:'8px 12px', cursor:'pointer', fontSize:12, borderBottom:'1px solid #f0f0f0'}}
+                                onMouseEnter={e => e.currentTarget.style.background='#f5f7fa'}
+                                onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                                <div>{p.name}</div>
+                                {p.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {p.code}</div>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <span style={{fontSize:10, color:'var(--text3)'}}>※ 지난주 미판매 상품 추가 가능</span>
+                    </div>
+                  </div>
                 </div>
               )})}
             </div>
