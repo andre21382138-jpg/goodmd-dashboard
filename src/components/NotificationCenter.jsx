@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-const POLL_INTERVAL = 30000;
+const POLL_INTERVAL = 60000; // 1분 보조 폴링 (Realtime 보완용)
 
 const COLOR = {
   blue:   { border:'#1565C0', light:'#e3f2fd' },
@@ -126,8 +126,22 @@ export default function NotificationCenter({ profile, setPage }) {
 
   useEffect(() => {
     fetchDismissed(); buildNotifs();
+    // 1분 보조 폴링
     const id = setInterval(() => { fetchDismissed(); buildNotifs(); }, POLL_INTERVAL);
-    return () => clearInterval(id);
+    // Realtime 구독: purchase_orders, leave_plans 변경 즉시 반응
+    const channel = supabase
+      .channel('notif-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_orders' }, () => {
+        buildNotifs();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_plans' }, () => {
+        buildNotifs();
+      })
+      .subscribe();
+    return () => {
+      clearInterval(id);
+      supabase.removeChannel(channel);
+    };
   }, [fetchDismissed, buildNotifs]);
 
   const activeNotifs   = notifs.filter(n => !dismissedKeys.has(n.key) && !closedKeys.has(n.key));
