@@ -43,8 +43,7 @@ export const HQ_MENUS = [
   { key: 'stock_mgmt', icon: '📦', label: '재고관리', sub: [
     { key: 'stock_center', icon: '🏭', label: '센터재고' },
     { key: 'stock_store',  icon: '🏬', label: '매장재고' },
-    { key: 'stock_safety', icon: '🛡️', label: '안전재고' },
-    { key: 'purchase_hq',  icon: '📋', label: '발주 관리' },
+    { key: 'purchase_hq',  icon: '📋', label: '발주관리' },
   ]},
   { key: 'incentive',      icon: '💰', label: '급여관리' },
   { key: 'attendance_mgmt',icon: '🗓️', label: '근태관리' },

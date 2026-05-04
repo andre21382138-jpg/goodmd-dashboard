@@ -24,7 +24,6 @@ import ManagerMgmtPage from './pages/admin/ManagerMgmtPage';
 import CenterStockPage from './pages/stock/CenterStockPage';
 import StockMgmtPage from './pages/stock/StockMgmtPage';
 import StoreStockPage from './pages/stock/StoreStockPage';
-import SafetyCheckPage from './pages/stock/SafetyCheckPage';
 import StockRequestPage from './pages/stock/StockRequestPage';
 import UploadPage from './pages/stock/UploadPage';
 import UploadHistoryPage from './pages/stock/UploadHistoryPage';
@@ -423,7 +422,6 @@ export default function App() {
     stock_mgmt:     '재고관리',
     stock_center:   '센터재고',
     stock_store:    '매장재고',
-    stock_safety:   '안전재고',
     manager_mgmt:   '매니저 현황',
     incentive:      '급여관리',
     member_mgmt:    '회원 조회',
@@ -435,7 +433,7 @@ export default function App() {
     sales_input:    '판매 입력',
     sales_return:   '반품 접수',
     mgr_sales_view: '매출 조회',
-    purchase_hq:    '발주 관리',
+    purchase_hq:    '발주관리',
     purchase_check: '발주 확인',
     customer_input: '회원 등록',
     customer_qr:    'QR 가입',
@@ -482,7 +480,6 @@ export default function App() {
             {page === 'stock_mgmt'     && canSeeMain && <StockMgmtPage/>}
             {page === 'stock_center'   && canSeeMain && <CenterStockPage/>}
             {page === 'stock_store'    && canSeeMain && <StoreStockPage profile={profile}/>}
-            {page === 'stock_safety'   && canSeeMain && <SafetyCheckPage profile={profile}/>}
             {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
