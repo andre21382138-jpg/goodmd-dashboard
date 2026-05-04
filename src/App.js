@@ -3,6 +3,7 @@ import { supabase } from './lib/supabase';
 import { useStyle, toast, Toasts } from './lib/utils';
 import NoticePage from './pages/notice/NoticePage';
 import Sidebar from './components/Sidebar';
+import NotificationCenter from './components/NotificationCenter';
 import HomePage from './pages/home/HomePage';
 import CustomerQRPage from './pages/customer/CustomerQRPage';
 import CustomerDocPage from './pages/customer/CustomerDocPage';
@@ -458,6 +459,7 @@ export default function App() {
   return (
     <>
       <Toasts/>
+      <NotificationCenter profile={profile} setPage={setPage}/>
       <div className="app-layout">
         <Sidebar page={page} setPage={setPage} profile={profile} onLogout={handleLogout}/>
         <div className="content">
