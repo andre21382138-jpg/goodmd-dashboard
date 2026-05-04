@@ -13,6 +13,8 @@ import SmsHistoryPage from './pages/customer/SmsHistoryPage';
 import SalesInputPage from './pages/sales/SalesInputPage';
 import SalesReturnPage from './pages/sales/SalesReturnPage';
 import MgrSalesViewPage from './pages/sales/MgrSalesViewPage';
+import PurchaseOrderHQPage from './pages/order/PurchaseOrderHQPage';
+import PurchaseOrderMgrPage from './pages/order/PurchaseOrderMgrPage';
 import SalesListPage from './pages/sales/SalesListPage';
 import LectureSalesPage from './pages/sales/LectureSalesPage';
 import BizSalesPage from './pages/sales/BizSalesPage';
@@ -433,6 +435,8 @@ export default function App() {
     sales_input:    '판매 입력',
     sales_return:   '반품 접수',
     mgr_sales_view: '매출 조회',
+    purchase_hq:    '발주 관리',
+    purchase_check: '발주 확인',
     customer_input: '회원 등록',
     customer_qr:    'QR 가입',
     customer_doc:   '서류 가입',
@@ -490,6 +494,8 @@ export default function App() {
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
             {page === 'sales_return'   && (isManager || isAdmin || isHQ) && <SalesReturnPage profile={profile}/>}
             {page === 'mgr_sales_view' && (isManager || isAdmin || isHQ) && <MgrSalesViewPage profile={profile}/>}
+            {page === 'purchase_hq'    && (isAdmin || isHQ) && <PurchaseOrderHQPage profile={profile}/>}
+            {page === 'purchase_check' && (isManager || isAdmin || isHQ) && <PurchaseOrderMgrPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'customer_qr'    && (isManager || isAdmin || isHQ) && <CustomerQRPage profile={profile}/>}
             {page === 'customer_doc'   && (isManager || isAdmin || isHQ) && <CustomerDocPage profile={profile}/>}

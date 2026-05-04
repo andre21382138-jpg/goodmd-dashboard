@@ -44,6 +44,7 @@ export const HQ_MENUS = [
     { key: 'stock_center', icon: '🏭', label: '센터재고' },
     { key: 'stock_store',  icon: '🏬', label: '매장재고' },
     { key: 'stock_safety', icon: '🛡️', label: '안전재고' },
+    { key: 'purchase_hq',  icon: '📋', label: '발주 관리' },
   ]},
   { key: 'incentive',      icon: '💰', label: '급여관리' },
   { key: 'attendance_mgmt',icon: '🗓️', label: '근태관리' },
@@ -66,6 +67,7 @@ export const MANAGER_MENUS = [
   { key: 'stock_mgmt_mgr', icon: '📦', label: '재고 관리', sub: [
     { key: 'stock_mgr_view', icon: '📊', label: '재고 현황' },
     { key: 'stock_request',  icon: '📋', label: '재고 요청' },
+    { key: 'purchase_check', icon: '📋', label: '발주 확인' },
   ]},
   { key: 'attendance',     icon: '🗓️', label: '근태 관리', sub: [
     { key: 'my_attendance', icon: '📊', label: '근무 현황' },
