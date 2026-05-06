@@ -13,6 +13,10 @@ export default function SalesListPage({ setPage }) {
   const [fKeyword,setFKeyword]= useState('');
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'product'
+  const [aggSortBy, setAggSortBy] = useState('amt_desc'); // 'amt_desc' | 'qty_desc' | 'count_desc' | 'name'
+  const [drillProduct, setDrillProduct] = useState(null); // {key, product_id, product_name, brand_name, count, qty, amt} | null
+  const [drillTab,     setDrillTab]     = useState('store'); // 'store' | 'date'
 
   // 날짜 빠른 선택
   const setDateRange = (type) => {
@@ -81,6 +85,92 @@ export default function SalesListPage({ setPage }) {
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
   const returnedCount = useMemo(() => sales.filter(isFullyReturned).length, [sales]);
 
+  // 상품별 집계 (filtered 기준)
+  const productAgg = useMemo(() => {
+    const map = new Map();
+    for (const s of filtered) {
+      const key = s.product_id ?? `name:${s.product?.name || '-'}`;
+      const eq = effQty(s);
+      const ea = effAmt(s);
+      const cur = map.get(key);
+      if (cur) {
+        cur.count += 1;
+        cur.qty   += eq;
+        cur.amt   += ea;
+      } else {
+        map.set(key, {
+          key,
+          product_id: s.product_id,
+          product_name: s.product?.name || '-',
+          brand_name:   s.brand?.name   || '-',
+          count: 1,
+          qty:   eq,
+          amt:   ea,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [filtered]);
+
+  const productAggSorted = useMemo(() => {
+    const arr = [...productAgg];
+    if (aggSortBy === 'amt_desc')   arr.sort((a,b) => b.amt - a.amt);
+    if (aggSortBy === 'qty_desc')   arr.sort((a,b) => b.qty - a.qty);
+    if (aggSortBy === 'count_desc') arr.sort((a,b) => b.count - a.count);
+    if (aggSortBy === 'name')       arr.sort((a,b) => a.product_name.localeCompare(b.product_name, 'ko'));
+    return arr;
+  }, [productAgg, aggSortBy]);
+
+  const aggTotalCount = useMemo(() => productAgg.reduce((s,r) => s + r.count, 0), [productAgg]);
+  const aggTotalQty   = useMemo(() => productAgg.reduce((s,r) => s + r.qty,   0), [productAgg]);
+  const aggTotalAmt   = useMemo(() => productAgg.reduce((s,r) => s + r.amt,   0), [productAgg]);
+  const truncated     = sales.length === 500;
+
+  const drillRows = useMemo(() => {
+    if (!drillProduct) return [];
+    return filtered.filter(s => {
+      if (drillProduct.product_id != null) return s.product_id === drillProduct.product_id;
+      return (s.product?.name || '-') === drillProduct.product_name;
+    });
+  }, [filtered, drillProduct]);
+
+  const drillByStore = useMemo(() => {
+    const map = new Map();
+    for (const s of drillRows) {
+      const k = `${s.store_name || '-'}|${s.branch_name || '-'}`;
+      const eq = effQty(s);
+      const ea = effAmt(s);
+      const cur = map.get(k);
+      if (cur) { cur.count += 1; cur.qty += eq; cur.amt += ea; }
+      else map.set(k, { store_name: s.store_name || '-', branch_name: s.branch_name || '-', count:1, qty:eq, amt:ea });
+    }
+    return Array.from(map.values()).sort((a,b) => b.amt - a.amt);
+  }, [drillRows]);
+
+  const drillByDate = useMemo(() => {
+    const map = new Map();
+    for (const s of drillRows) {
+      const k = s.sold_at;
+      const eq = effQty(s);
+      const ea = effAmt(s);
+      const cur = map.get(k);
+      if (cur) { cur.count += 1; cur.qty += eq; cur.amt += ea; }
+      else map.set(k, { sold_at: k, count:1, qty:eq, amt:ea });
+    }
+    return Array.from(map.values()).sort((a,b) => String(a.sold_at).localeCompare(String(b.sold_at)));
+  }, [drillRows]);
+
+  useEffect(() => {
+    if (!drillProduct) return;
+    const onKey = (e) => { if (e.key === 'Escape') setDrillProduct(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drillProduct]);
+
+  useEffect(() => {
+    if (viewMode !== 'product') setDrillProduct(null);
+  }, [viewMode]);
+
   const quickBtnStyle = (active) => ({
     height:34, padding:'0 12px', border:'2px solid', borderRadius:'var(--radius)',
     fontSize:12, fontWeight:700, cursor:'pointer',
@@ -108,7 +198,29 @@ export default function SalesListPage({ setPage }) {
     <div>
       {setPage && <SalesTabNav current="sales_list" setPage={setPage}/>}
       <div className="card">
-        <div className="card-label">판매내역 조회</div>
+        <div style={{display:'flex', gap:8, marginBottom:12}}>
+          <button
+            style={{
+              height:36, padding:'0 16px', border:'2px solid',
+              borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+              borderColor: viewMode==='list' ? 'var(--accent)' : 'var(--border)',
+              background:  viewMode==='list' ? '#fff3e0' : '#fff',
+              color:       viewMode==='list' ? 'var(--accent)' : 'var(--text2)',
+            }}
+            onClick={() => { setViewMode('list'); setSortBy('date'); }}
+          >📋 판매내역</button>
+          <button
+            style={{
+              height:36, padding:'0 16px', border:'2px solid',
+              borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+              borderColor: viewMode==='product' ? 'var(--accent)' : 'var(--border)',
+              background:  viewMode==='product' ? '#fff3e0' : '#fff',
+              color:       viewMode==='product' ? 'var(--accent)' : 'var(--text2)',
+            }}
+            onClick={() => { setViewMode('product'); setAggSortBy('amt_desc'); }}
+          >📊 상품별 집계</button>
+        </div>
+        <div className="card-label">{viewMode === 'list' ? '판매내역 조회' : '상품별 집계'}</div>
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
           <select className="fsel" value={fStore} onChange={e => setFStore(e.target.value)}>
             <option value="">전체 점포</option>
@@ -126,23 +238,39 @@ export default function SalesListPage({ setPage }) {
           <button style={quickBtnStyle(isLastMonth)}  onClick={() => setDateRange('lastmonth')}>전월</button>
           <input className="finput" value={fKeyword} onChange={e => setFKeyword(e.target.value)}
             placeholder="🔍 상품명·브랜드·메모 검색" style={{height:34, minWidth:180}} />
-          <select className="fsel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            <option value="date">최신순</option>
-            <option value="qty_desc">판매건수 높은순</option>
-            <option value="amt_desc">매출액 높은순</option>
-          </select>
+          {viewMode === 'list' ? (
+            <select className="fsel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="date">최신순</option>
+              <option value="qty_desc">판매건수 높은순</option>
+              <option value="amt_desc">매출액 높은순</option>
+            </select>
+          ) : (
+            <select className="fsel" value={aggSortBy} onChange={e => setAggSortBy(e.target.value)}>
+              <option value="amt_desc">매출액 높은순</option>
+              <option value="qty_desc">수량 높은순</option>
+              <option value="count_desc">판매건수 높은순</option>
+              <option value="name">상품명순</option>
+            </select>
+          )}
           <label style={{display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, color:'var(--text2)', cursor:'pointer', padding:'0 8px'}}>
             <input type="checkbox" checked={showReturned} onChange={e => setShowReturned(e.target.checked)}
               style={{width:15, height:15, cursor:'pointer'}}/>
             완전반품 포함 {returnedCount > 0 && <span style={{color:'var(--danger)', fontWeight:700}}>({returnedCount})</span>}
           </label>
           {(fStore||fBrand||fFrom||fTo||fKeyword) &&
-            <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); }}>✕ 초기화</button>}
+            <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
           <div className="fbar-right">
-            <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+            {viewMode === 'list' ? (
+              <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+            ) : (
+              <span className="fresult">
+                <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
+                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 500건 한도 도달 - 기간/필터를 좁혀주세요</span>}
+              </span>
+            )}
           </div>
         </div>
-        {loading ? <div className="empty"><span className="spinner"/></div> : (
+        {loading ? <div className="empty"><span className="spinner"/></div> : viewMode === 'list' ? (
           <div className="twrap">
             <table>
               <thead>
@@ -183,8 +311,150 @@ export default function SalesListPage({ setPage }) {
               </tbody>
             </table>
           </div>
+        ) : (
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>브랜드</th>
+                  <th>상품명</th>
+                  <th className="r">판매건수</th>
+                  <th className="r">총 수량</th>
+                  <th className="r">총 매출액</th>
+                  <th>상세</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productAggSorted.length === 0
+                  ? <tr><td colSpan={6} className="empty">조회된 상품이 없습니다</td></tr>
+                  : productAggSorted.map(p => (
+                    <tr key={p.key}>
+                      <td>{p.brand_name}</td>
+                      <td style={{fontWeight:600}}>{p.product_name}</td>
+                      <td className="r">{p.count.toLocaleString()}</td>
+                      <td className="r">{p.qty.toLocaleString()}</td>
+                      <td className="r" style={{fontWeight:600}}>{p.amt.toLocaleString()}</td>
+                      <td>
+                        <button
+                          style={{height:26, padding:'0 8px', fontSize:11, fontWeight:600, border:'1px solid var(--border)', borderRadius:4, background:'#fff', cursor:'pointer', marginRight:4}}
+                          onClick={() => { setDrillProduct(p); setDrillTab('store'); }}
+                        >🏬 점포별</button>
+                        <button
+                          style={{height:26, padding:'0 8px', fontSize:11, fontWeight:600, border:'1px solid var(--border)', borderRadius:4, background:'#fff', cursor:'pointer'}}
+                          onClick={() => { setDrillProduct(p); setDrillTab('date'); }}
+                        >📅 날짜별</button>
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
+      {drillProduct && (
+        <div
+          style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
+          onClick={() => setDrillProduct(null)}
+        >
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}}/>
+          <div
+            style={{position:'relative', background:'#fff', borderRadius:16, width:'min(880px,95vw)', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div style={{padding:'20px 24px 16px', borderBottom:'1px solid var(--border)'}}>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
+                <div>
+                  <div style={{fontSize:18, fontWeight:700}}>{drillProduct.product_name}</div>
+                  <div style={{fontSize:12, color:'var(--text2)', marginTop:4}}>
+                    {drillProduct.brand_name}
+                    {(fFrom || fTo) && <span style={{marginLeft:10}}>· {fFrom || '~'} ~ {fTo || '~'}</span>}
+                    <span style={{marginLeft:10}}>· {drillProduct.count.toLocaleString()}건 · {drillProduct.qty.toLocaleString()}개 · {drillProduct.amt.toLocaleString()}원</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDrillProduct(null)}
+                  style={{height:32, padding:'0 12px', border:'1px solid var(--border)', borderRadius:6, background:'#fff', fontSize:12, fontWeight:600, cursor:'pointer'}}
+                >✕ 닫기</button>
+              </div>
+              <div style={{display:'flex', gap:8, marginTop:14}}>
+                <button
+                  style={{
+                    height:32, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+                    borderColor: drillTab==='store' ? 'var(--accent)' : 'var(--border)',
+                    background:  drillTab==='store' ? '#fff3e0' : '#fff',
+                    color:       drillTab==='store' ? 'var(--accent)' : 'var(--text2)',
+                  }}
+                  onClick={() => setDrillTab('store')}
+                >🏬 점포별</button>
+                <button
+                  style={{
+                    height:32, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+                    borderColor: drillTab==='date' ? 'var(--accent)' : 'var(--border)',
+                    background:  drillTab==='date' ? '#fff3e0' : '#fff',
+                    color:       drillTab==='date' ? 'var(--accent)' : 'var(--text2)',
+                  }}
+                  onClick={() => setDrillTab('date')}
+                >📅 날짜별</button>
+              </div>
+            </div>
+            {/* 본문 */}
+            <div style={{padding:'16px 24px 24px'}}>
+              {drillTab === 'store' ? (
+                <div className="twrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>점포</th><th>지점</th>
+                        <th className="r">판매건수</th><th className="r">수량</th><th className="r">매출액</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drillByStore.length === 0
+                        ? <tr><td colSpan={5} className="empty">데이터 없음</td></tr>
+                        : drillByStore.map(r => (
+                          <tr key={`${r.store_name}|${r.branch_name}`}>
+                            <td><span className="badge badge-dept">{r.store_name}</span></td>
+                            <td><span className="badge badge-store">{r.branch_name}</span></td>
+                            <td className="r">{r.count.toLocaleString()}</td>
+                            <td className="r">{r.qty.toLocaleString()}</td>
+                            <td className="r" style={{fontWeight:600}}>{r.amt.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="twrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>날짜</th>
+                        <th className="r">판매건수</th><th className="r">수량</th><th className="r">매출액</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drillByDate.length === 0
+                        ? <tr><td colSpan={4} className="empty">데이터 없음</td></tr>
+                        : drillByDate.map(r => (
+                          <tr key={r.sold_at}>
+                            <td className="mono">{r.sold_at}</td>
+                            <td className="r">{r.count.toLocaleString()}</td>
+                            <td className="r">{r.qty.toLocaleString()}</td>
+                            <td className="r" style={{fontWeight:600}}>{r.amt.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
