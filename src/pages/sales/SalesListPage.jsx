@@ -167,6 +167,10 @@ export default function SalesListPage({ setPage }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [drillProduct]);
 
+  useEffect(() => {
+    if (viewMode !== 'product') setDrillProduct(null);
+  }, [viewMode]);
+
   const quickBtnStyle = (active) => ({
     height:34, padding:'0 12px', border:'2px solid', borderRadius:'var(--radius)',
     fontSize:12, fontWeight:700, cursor:'pointer',
