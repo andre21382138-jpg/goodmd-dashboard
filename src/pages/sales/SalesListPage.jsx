@@ -13,6 +13,7 @@ export default function SalesListPage({ setPage }) {
   const [fKeyword,setFKeyword]= useState('');
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'product'
 
   // 날짜 빠른 선택
   const setDateRange = (type) => {
@@ -108,7 +109,29 @@ export default function SalesListPage({ setPage }) {
     <div>
       {setPage && <SalesTabNav current="sales_list" setPage={setPage}/>}
       <div className="card">
-        <div className="card-label">판매내역 조회</div>
+        <div style={{display:'flex', gap:8, marginBottom:12}}>
+          <button
+            style={{
+              height:36, padding:'0 16px', border:'2px solid',
+              borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+              borderColor: viewMode==='list' ? 'var(--accent)' : 'var(--border)',
+              background:  viewMode==='list' ? '#fff3e0' : '#fff',
+              color:       viewMode==='list' ? 'var(--accent)' : 'var(--text2)',
+            }}
+            onClick={() => setViewMode('list')}
+          >📋 판매내역</button>
+          <button
+            style={{
+              height:36, padding:'0 16px', border:'2px solid',
+              borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+              borderColor: viewMode==='product' ? 'var(--accent)' : 'var(--border)',
+              background:  viewMode==='product' ? '#fff3e0' : '#fff',
+              color:       viewMode==='product' ? 'var(--accent)' : 'var(--text2)',
+            }}
+            onClick={() => setViewMode('product')}
+          >📊 상품별 집계</button>
+        </div>
+        <div className="card-label">{viewMode === 'list' ? '판매내역 조회' : '상품별 집계'}</div>
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
           <select className="fsel" value={fStore} onChange={e => setFStore(e.target.value)}>
             <option value="">전체 점포</option>
@@ -142,7 +165,7 @@ export default function SalesListPage({ setPage }) {
             <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
           </div>
         </div>
-        {loading ? <div className="empty"><span className="spinner"/></div> : (
+        {loading ? <div className="empty"><span className="spinner"/></div> : viewMode === 'list' ? (
           <div className="twrap">
             <table>
               <thead>
@@ -183,6 +206,8 @@ export default function SalesListPage({ setPage }) {
               </tbody>
             </table>
           </div>
+        ) : (
+          <div className="empty">상품별 집계 (구현 예정)</div>
         )}
       </div>
     </div>
