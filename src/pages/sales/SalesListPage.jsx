@@ -14,6 +14,7 @@ export default function SalesListPage({ setPage }) {
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'product'
+  const [aggSortBy, setAggSortBy] = useState('amt_desc'); // 'amt_desc' | 'qty_desc' | 'count_desc' | 'name'
 
   // 날짜 빠른 선택
   const setDateRange = (type) => {
@@ -81,6 +82,47 @@ export default function SalesListPage({ setPage }) {
   const totalQty = useMemo(() => filtered.reduce((s, r) => s + effQty(r), 0), [filtered]);
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
   const returnedCount = useMemo(() => sales.filter(isFullyReturned).length, [sales]);
+
+  // 상품별 집계 (filtered 기준)
+  const productAgg = useMemo(() => {
+    const map = new Map();
+    for (const s of filtered) {
+      const key = s.product_id ?? `name:${s.product?.name || '(미상)'}`;
+      const eq = effQty(s);
+      const ea = effAmt(s);
+      const cur = map.get(key);
+      if (cur) {
+        cur.count += 1;
+        cur.qty   += eq;
+        cur.amt   += ea;
+      } else {
+        map.set(key, {
+          key,
+          product_id: s.product_id,
+          product_name: s.product?.name || '(미상)',
+          brand_name:   s.brand?.name   || '-',
+          count: 1,
+          qty:   eq,
+          amt:   ea,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [filtered]);
+
+  const productAggSorted = useMemo(() => {
+    const arr = [...productAgg];
+    if (aggSortBy === 'amt_desc')   arr.sort((a,b) => b.amt - a.amt);
+    if (aggSortBy === 'qty_desc')   arr.sort((a,b) => b.qty - a.qty);
+    if (aggSortBy === 'count_desc') arr.sort((a,b) => b.count - a.count);
+    if (aggSortBy === 'name')       arr.sort((a,b) => a.product_name.localeCompare(b.product_name, 'ko'));
+    return arr;
+  }, [productAgg, aggSortBy]);
+
+  const aggTotalCount = useMemo(() => productAgg.reduce((s,r) => s + r.count, 0), [productAgg]);
+  const aggTotalQty   = useMemo(() => productAgg.reduce((s,r) => s + r.qty,   0), [productAgg]);
+  const aggTotalAmt   = useMemo(() => productAgg.reduce((s,r) => s + r.amt,   0), [productAgg]);
+  const truncated     = sales.length === 500;
 
   const quickBtnStyle = (active) => ({
     height:34, padding:'0 12px', border:'2px solid', borderRadius:'var(--radius)',
