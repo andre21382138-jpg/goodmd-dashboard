@@ -15,6 +15,8 @@ export default function SalesListPage({ setPage }) {
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'product'
   const [aggSortBy, setAggSortBy] = useState('amt_desc'); // 'amt_desc' | 'qty_desc' | 'count_desc' | 'name'
+  const [drillProduct, setDrillProduct] = useState(null); // {key, product_id, product_name, brand_name, count, qty, amt} | null
+  const [drillTab,     setDrillTab]     = useState('store'); // 'store' | 'date'
 
   // 날짜 빠른 선택
   const setDateRange = (type) => {
@@ -123,6 +125,47 @@ export default function SalesListPage({ setPage }) {
   const aggTotalQty   = useMemo(() => productAgg.reduce((s,r) => s + r.qty,   0), [productAgg]);
   const aggTotalAmt   = useMemo(() => productAgg.reduce((s,r) => s + r.amt,   0), [productAgg]);
   const truncated     = sales.length === 500;
+
+  const drillRows = useMemo(() => {
+    if (!drillProduct) return [];
+    return filtered.filter(s => {
+      if (drillProduct.product_id != null) return s.product_id === drillProduct.product_id;
+      return (s.product?.name || '-') === drillProduct.product_name;
+    });
+  }, [filtered, drillProduct]);
+
+  const drillByStore = useMemo(() => {
+    const map = new Map();
+    for (const s of drillRows) {
+      const k = `${s.store_name || '-'}|${s.branch_name || '-'}`;
+      const eq = effQty(s);
+      const ea = effAmt(s);
+      const cur = map.get(k);
+      if (cur) { cur.count += 1; cur.qty += eq; cur.amt += ea; }
+      else map.set(k, { store_name: s.store_name || '-', branch_name: s.branch_name || '-', count:1, qty:eq, amt:ea });
+    }
+    return Array.from(map.values()).sort((a,b) => b.amt - a.amt);
+  }, [drillRows]);
+
+  const drillByDate = useMemo(() => {
+    const map = new Map();
+    for (const s of drillRows) {
+      const k = s.sold_at;
+      const eq = effQty(s);
+      const ea = effAmt(s);
+      const cur = map.get(k);
+      if (cur) { cur.count += 1; cur.qty += eq; cur.amt += ea; }
+      else map.set(k, { sold_at: k, count:1, qty:eq, amt:ea });
+    }
+    return Array.from(map.values()).sort((a,b) => String(a.sold_at).localeCompare(String(b.sold_at)));
+  }, [drillRows]);
+
+  useEffect(() => {
+    if (!drillProduct) return;
+    const onKey = (e) => { if (e.key === 'Escape') setDrillProduct(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drillProduct]);
 
   const quickBtnStyle = (active) => ({
     height:34, padding:'0 12px', border:'2px solid', borderRadius:'var(--radius)',
@@ -290,11 +333,11 @@ export default function SalesListPage({ setPage }) {
                       <td>
                         <button
                           style={{height:26, padding:'0 8px', fontSize:11, fontWeight:600, border:'1px solid var(--border)', borderRadius:4, background:'#fff', cursor:'pointer', marginRight:4}}
-                          onClick={() => { /* 다음 Task에서 연결 */ }}
+                          onClick={() => { setDrillProduct(p); setDrillTab('store'); }}
                         >🏬 점포별</button>
                         <button
                           style={{height:26, padding:'0 8px', fontSize:11, fontWeight:600, border:'1px solid var(--border)', borderRadius:4, background:'#fff', cursor:'pointer'}}
-                          onClick={() => { /* 다음 Task에서 연결 */ }}
+                          onClick={() => { setDrillProduct(p); setDrillTab('date'); }}
                         >📅 날짜별</button>
                       </td>
                     </tr>
@@ -305,6 +348,109 @@ export default function SalesListPage({ setPage }) {
           </div>
         )}
       </div>
+      {drillProduct && (
+        <div
+          style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
+          onClick={() => setDrillProduct(null)}
+        >
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}}/>
+          <div
+            style={{position:'relative', background:'#fff', borderRadius:16, width:'min(880px,95vw)', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div style={{padding:'20px 24px 16px', borderBottom:'1px solid var(--border)'}}>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
+                <div>
+                  <div style={{fontSize:18, fontWeight:700}}>{drillProduct.product_name}</div>
+                  <div style={{fontSize:12, color:'var(--text2)', marginTop:4}}>
+                    {drillProduct.brand_name}
+                    {(fFrom || fTo) && <span style={{marginLeft:10}}>· {fFrom || '~'} ~ {fTo || '~'}</span>}
+                    <span style={{marginLeft:10}}>· {drillProduct.count.toLocaleString()}건 · {drillProduct.qty.toLocaleString()}개 · {drillProduct.amt.toLocaleString()}원</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDrillProduct(null)}
+                  style={{height:32, padding:'0 12px', border:'1px solid var(--border)', borderRadius:6, background:'#fff', fontSize:12, fontWeight:600, cursor:'pointer'}}
+                >✕ 닫기</button>
+              </div>
+              <div style={{display:'flex', gap:8, marginTop:14}}>
+                <button
+                  style={{
+                    height:32, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+                    borderColor: drillTab==='store' ? 'var(--accent)' : 'var(--border)',
+                    background:  drillTab==='store' ? '#fff3e0' : '#fff',
+                    color:       drillTab==='store' ? 'var(--accent)' : 'var(--text2)',
+                  }}
+                  onClick={() => setDrillTab('store')}
+                >🏬 점포별</button>
+                <button
+                  style={{
+                    height:32, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+                    borderColor: drillTab==='date' ? 'var(--accent)' : 'var(--border)',
+                    background:  drillTab==='date' ? '#fff3e0' : '#fff',
+                    color:       drillTab==='date' ? 'var(--accent)' : 'var(--text2)',
+                  }}
+                  onClick={() => setDrillTab('date')}
+                >📅 날짜별</button>
+              </div>
+            </div>
+            {/* 본문 */}
+            <div style={{padding:'16px 24px 24px'}}>
+              {drillTab === 'store' ? (
+                <div className="twrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>점포</th><th>지점</th>
+                        <th className="r">판매건수</th><th className="r">수량</th><th className="r">매출액</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drillByStore.length === 0
+                        ? <tr><td colSpan={5} className="empty">데이터 없음</td></tr>
+                        : drillByStore.map(r => (
+                          <tr key={`${r.store_name}|${r.branch_name}`}>
+                            <td><span className="badge badge-dept">{r.store_name}</span></td>
+                            <td><span className="badge badge-store">{r.branch_name}</span></td>
+                            <td className="r">{r.count.toLocaleString()}</td>
+                            <td className="r">{r.qty.toLocaleString()}</td>
+                            <td className="r" style={{fontWeight:600}}>{r.amt.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="twrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>날짜</th>
+                        <th className="r">판매건수</th><th className="r">수량</th><th className="r">매출액</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drillByDate.length === 0
+                        ? <tr><td colSpan={4} className="empty">데이터 없음</td></tr>
+                        : drillByDate.map(r => (
+                          <tr key={r.sold_at}>
+                            <td className="mono">{r.sold_at}</td>
+                            <td className="r">{r.count.toLocaleString()}</td>
+                            <td className="r">{r.qty.toLocaleString()}</td>
+                            <td className="r" style={{fontWeight:600}}>{r.amt.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
