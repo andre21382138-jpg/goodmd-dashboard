@@ -95,7 +95,7 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
     row.height = 18;
     row.eachCell((cell, ci) => {
       cell.font = { name: 'Malgun Gothic', size: 10 };
-      // 짝수 행 옅은 배경
+      // i가 홀수 인덱스(2/4/6번째 행) 옅은 배경
       if (i % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8E1' } };
       // 정렬
       if (ci === 3) cell.alignment = { horizontal: 'center', vertical: 'middle' }; // 매출일자
@@ -127,6 +127,7 @@ export default function SalesListPage({ setPage }) {
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'product'
+  const [exporting, setExporting] = useState(false);
   const [aggSortBy, setAggSortBy] = useState('amt_desc'); // 'amt_desc' | 'qty_desc' | 'count_desc' | 'name'
   const [drillProduct, setDrillProduct] = useState(null); // {key, product_id, product_name, brand_name, count, qty, amt} | null
   const [drillTab,     setDrillTab]     = useState('store'); // 'store' | 'date'
@@ -197,6 +198,19 @@ export default function SalesListPage({ setPage }) {
   const totalQty = useMemo(() => filtered.reduce((s, r) => s + effQty(r), 0), [filtered]);
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
   const returnedCount = useMemo(() => sales.filter(isFullyReturned).length, [sales]);
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const n = await exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword });
+      toast(`엑셀 다운로드 완료 (${n.toLocaleString()}건)`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // 상품별 집계 (filtered 기준)
   const productAgg = useMemo(() => {
@@ -374,7 +388,26 @@ export default function SalesListPage({ setPage }) {
             <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
-              <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+              <>
+                <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={exporting}
+                  title="현재 필터 조건으로 매출raw 양식 엑셀 다운로드"
+                  style={{
+                    marginLeft: 10, height: 30, padding: '0 12px',
+                    border: '1px solid var(--accent)', borderRadius: 'var(--radius)',
+                    background: exporting ? '#fafafa' : '#fff3e0',
+                    color: 'var(--accent)', fontSize: 12, fontWeight: 700,
+                    cursor: exporting ? 'not-allowed' : 'pointer',
+                    opacity: exporting ? 0.7 : 1,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  {exporting ? <span className="spinner"/> : '📥'} 엑셀 다운로드
+                </button>
+              </>
             ) : (
               <span className="fresult">
                 <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
