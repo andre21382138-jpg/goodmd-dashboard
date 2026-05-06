@@ -419,6 +419,20 @@ export default function SalesInputPage({ profile }) {
                       style={{ height:38, width:36, border:'1px solid var(--border)', background:'#fff', color:'var(--danger)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:14, lineHeight:1, padding:0 }}>✕</button>
                   ) : <div/>}
                 </div>
+                {/* 1개당 단가 (수량 > 1일 때) */}
+                {l.productId && Number(l.quantity) > 1 && (
+                  <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 34px 34px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+                    <div/><div/>
+                    <div style={{textAlign:'right', paddingRight:4}}>
+                      {Number(l.normalPrice) > 0 && <>1개당 {Math.round(Number(l.normalPrice)).toLocaleString()}원</>}
+                    </div>
+                    <div/>
+                    <div style={{textAlign:'right', paddingRight:4, color:'var(--accent)'}}>
+                      {Number(l.price) > 0 && <>1개당 {Math.round(Number(l.price)).toLocaleString()}원</>}
+                    </div>
+                    <div/><div/><div/>
+                  </div>
+                )}
                 {l.productId && (
                   <div style={{ marginTop:6, fontSize:11, display:'flex', alignItems:'center', gap:10, fontFamily:'var(--mono)' }}>
                     {/* 좌측: 상품코드 · ERP */}
