@@ -1,7 +1,121 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, uniq } from '../../lib/utils';
+import { toast, uniq, dlBlob } from '../../lib/utils';
 import SalesTabNav from './SalesTabNav';
+
+async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
+  // 1) 페이징 fetch (Supabase 1000건 limit 회피)
+  const PAGE = 1000;
+  let all = [], start = 0;
+  while (true) {
+    let q = supabase.from('sales')
+      .select('id, sold_at, store_name, branch_name, payment, quantity, returned_qty, price, brand:brands(name), product:products(code, name, cost)')
+      .order('sold_at', { ascending: true })
+      .order('id',      { ascending: true });
+    if (fStore) q = q.eq('store_name', fStore);
+    if (fBrand) q = q.eq('brand_id', fBrand);
+    if (fFrom)  q = q.gte('sold_at', fFrom);
+    if (fTo)    q = q.lte('sold_at', fTo);
+    const { data, error } = await q.range(start, start + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    start += PAGE;
+  }
+
+  // 2) 클라이언트 필터: 완전반품 제외 + 키워드 매칭
+  const kw = (fKeyword || '').trim().toLowerCase();
+  const rows = all.filter(s => {
+    const eff = Math.max(0, (s.quantity || 0) - (s.returned_qty || 0));
+    if (eff === 0) return false; // 완전반품 제외
+    if (!kw) return true;
+    return ((s.product?.name || '').toLowerCase().includes(kw)
+         || (s.brand?.name   || '').toLowerCase().includes(kw));
+  });
+
+  // 3) payment 매핑
+  const mapType = (p) => {
+    if (p === '증정') return '증정';
+    if (p === '시식') return '샘플';
+    return '정상'; // 카드/현금/적립금사용/기타
+  };
+
+  // 4) ExcelJS 워크북 생성
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('매출raw');
+  ws.columns = [
+    { width: 6 },   // A 선택
+    { width: 8 },   // B 순번
+    { width: 12 },  // C 매출일자
+    { width: 16 },  // D 그룹
+    { width: 16 },  // E 매장
+    { width: 10 },  // F 전표유형
+    { width: 18 },  // G 상품코드
+    { width: 36 },  // H 상품명
+    { width: 10 },  // I 매출수량
+    { width: 14 },  // J 최종금액
+    { width: 12 },  // K 원가
+    { width: 14 },  // L 최종원가
+    { width: 12 },  // M 원가율(헤더 없음)
+  ];
+  const headerRow = ws.addRow(['선택','순번','매출일자','그룹','매장','전표유형','상품코드','상품명','매출수량','최종금액','원가','최종원가','']);
+  headerRow.height = 26;
+  headerRow.eachCell(cell => {
+    cell.font = { bold: true, name: 'Malgun Gothic', size: 10, color: { argb: 'FF1A1A1A' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD600' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+
+  // 5) 데이터 행
+  rows.forEach((s, i) => {
+    const effQty = Math.max(0, (s.quantity || 0) - (s.returned_qty || 0));
+    const finalAmount = effQty * (Number(s.price) || 0);
+    const cost = (s.product && s.product.cost != null) ? Number(s.product.cost) : null;
+    const finalCost = cost != null ? cost * effQty : null;
+    const ratio = (cost != null && finalAmount > 0) ? (finalCost / finalAmount) : null;
+    const dateObj = s.sold_at ? new Date(s.sold_at + 'T00:00:00') : null;
+
+    // NOTE: 외부 양식 D=그룹(=DB store_name 백화점), E=매장(=DB branch_name 지점)
+    const row = ws.addRow([
+      '0',
+      i + 1,
+      dateObj,
+      s.store_name || '',
+      s.branch_name || '',
+      mapType(s.payment),
+      s.product?.code || '',
+      s.product?.name || '',
+      effQty,
+      finalAmount,
+      cost != null ? cost : '',
+      finalCost != null ? finalCost : '',
+      ratio != null ? ratio : '',
+    ]);
+    row.height = 18;
+    row.eachCell((cell, ci) => {
+      cell.font = { name: 'Malgun Gothic', size: 10 };
+      // i가 홀수 인덱스(2/4/6번째 행) 옅은 배경
+      if (i % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8E1' } };
+      // 정렬
+      if (ci === 3) cell.alignment = { horizontal: 'center', vertical: 'middle' }; // 매출일자
+      else if (ci >= 9 && ci <= 13) cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      else cell.alignment = { horizontal: 'left', vertical: 'middle' };
+      // 서식
+      if (ci === 3 && dateObj) cell.numFmt = 'yyyy-mm-dd';
+      if (ci >= 9 && ci <= 12)  cell.numFmt = '#,##0';
+      if (ci === 13 && ratio != null) cell.numFmt = '0.0000';
+    });
+  });
+
+  // 6) 파일명 + 다운로드
+  const fname = `매장매출_${fFrom || '시작없음'}_${fTo || '종료없음'}.xlsx`;
+  const finalName = (!fFrom && !fTo) ? '매장매출_전체.xlsx' : fname;
+  const buf = await wb.xlsx.writeBuffer();
+  dlBlob(buf, finalName);
+  return rows.length;
+}
 
 export default function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
@@ -14,6 +128,7 @@ export default function SalesListPage({ setPage }) {
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'product'
+  const [exporting, setExporting] = useState(false);
   const [aggSortBy, setAggSortBy] = useState('amt_desc'); // 'amt_desc' | 'qty_desc' | 'count_desc' | 'name'
   const [drillProduct, setDrillProduct] = useState(null); // {key, product_id, product_name, brand_name, count, qty, amt} | null
   const [drillTab,     setDrillTab]     = useState('store'); // 'store' | 'date'
@@ -84,6 +199,19 @@ export default function SalesListPage({ setPage }) {
   const totalQty = useMemo(() => filtered.reduce((s, r) => s + effQty(r), 0), [filtered]);
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
   const returnedCount = useMemo(() => sales.filter(isFullyReturned).length, [sales]);
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const n = await exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword });
+      toast(`엑셀 다운로드 완료 (${n.toLocaleString()}건)`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // 상품별 집계 (filtered 기준)
   const productAgg = useMemo(() => {
@@ -261,7 +389,26 @@ export default function SalesListPage({ setPage }) {
             <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
-              <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+              <>
+                <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={exporting}
+                  title="현재 필터 조건으로 매출raw 양식 엑셀 다운로드"
+                  style={{
+                    marginLeft: 10, height: 30, padding: '0 12px',
+                    border: '1px solid var(--accent)', borderRadius: 'var(--radius)',
+                    background: exporting ? '#fafafa' : '#fff3e0',
+                    color: 'var(--accent)', fontSize: 12, fontWeight: 700,
+                    cursor: exporting ? 'not-allowed' : 'pointer',
+                    opacity: exporting ? 0.7 : 1,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  {exporting ? <span className="spinner"/> : '📥'} 엑셀 다운로드
+                </button>
+              </>
             ) : (
               <span className="fresult">
                 <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
