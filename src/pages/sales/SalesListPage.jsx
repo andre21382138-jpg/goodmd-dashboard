@@ -77,6 +77,7 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
     const ratio = (cost != null && finalAmount > 0) ? (finalCost / finalAmount) : null;
     const dateObj = s.sold_at ? new Date(s.sold_at + 'T00:00:00') : null;
 
+    // NOTE: 외부 양식 D=그룹(=DB store_name 백화점), E=매장(=DB branch_name 지점)
     const row = ws.addRow([
       '0',
       i + 1,
