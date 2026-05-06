@@ -83,16 +83,23 @@ export default function SalesInputPage({ profile }) {
         updated.showSuggestions = false;
       }
       if (field === 'normalPrice' || field === 'discount') {
-        const np = Number(field==='normalPrice' ? value : updated.normalPrice) || 0;
-        const dc = Number(field==='discount'    ? value : updated.discount)    || 0;
-        const pu = Number(updated.pointsUsed) || 0;
+        const effQty = Math.max(Number(updated.quantity) || 0, 1);
+        const inputUnit = (Number(value) || 0) / effQty;
+        if (field === 'normalPrice') updated.normalPrice = inputUnit;
+        else                          updated.discount    = inputUnit;
+        const np = Number(updated.normalPrice) || 0;
+        const dc = Number(updated.discount)    || 0;
+        const pu = Number(updated.pointsUsed)  || 0;
         updated.price = Math.max(0, np - dc - pu);
       }
       if (field === 'price') {
+        const effQty = Math.max(Number(updated.quantity) || 0, 1);
+        const inputUnit = (Number(value) || 0) / effQty;
+        updated.price = inputUnit;
         const np = Number(updated.normalPrice) || 0;
-        const sp = Number(value) || 0;
+        const sp = Number(updated.price) || 0;
         const pu = Number(updated.pointsUsed) || 0;
-        updated.discount = String(Math.max(0, np - sp - pu));
+        updated.discount = Math.max(0, np - sp - pu);
       }
       return updated;
     }));
@@ -326,6 +333,10 @@ export default function SalesInputPage({ profile }) {
                 : [];
               const selectedProd = allProducts.find(p => String(p.id) === String(l.productId));
               const lineSubtotal = (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0);
+              const effQtyDisplay = Math.max(Number(l.quantity) || 0, 1);
+              const totalNormal   = Number(l.normalPrice) ? Number(l.normalPrice) * effQtyDisplay : '';
+              const totalDiscount = Number(l.discount)    ? Number(l.discount)    * effQtyDisplay : '';
+              const totalPrice    = Number(l.price)       ? Number(l.price)       * effQtyDisplay : '';
               const isLast = idx === lines.length - 1;
 
               return (
@@ -374,12 +385,12 @@ export default function SalesInputPage({ profile }) {
                   </div>
                   {/* 수량 */}
                   <input type="number" min={1} value={l.quantity} onChange={e => updateLine(l.id,'quantity',e.target.value)} style={{...inputStyle, textAlign:'center'}} required />
-                  {/* 정상가 */}
-                  <input type="number" min={0} value={l.normalPrice} onChange={e => updateLine(l.id,'normalPrice',e.target.value)} style={{...inputStyle, textAlign:'right'}} placeholder="0" />
-                  {/* 할인금액 */}
-                  <input type="number" min={0} value={l.discount} onChange={e => updateLine(l.id,'discount',e.target.value)} style={{...inputStyle, textAlign:'right', color:'var(--danger)'}} placeholder="0" />
-                  {/* 판매가 */}
-                  <input type="number" min={0} value={l.price} onChange={e => updateLine(l.id,'price',e.target.value)} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" required />
+                  {/* 정상가 (수량 × 단가) */}
+                  <input type="number" min={0} value={totalNormal} onChange={e => updateLine(l.id,'normalPrice',e.target.value)} style={{...inputStyle, textAlign:'right'}} placeholder="0" />
+                  {/* 할인금액 (수량 × 단가) */}
+                  <input type="number" min={0} value={totalDiscount} onChange={e => updateLine(l.id,'discount',e.target.value)} style={{...inputStyle, textAlign:'right', color:'var(--danger)'}} placeholder="0" />
+                  {/* 판매가 (수량 × 단가) */}
+                  <input type="number" min={0} value={totalPrice} onChange={e => updateLine(l.id,'price',e.target.value)} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" required />
                   {/* 결제 */}
                   <div style={{ display:'flex', gap:2 }}>
                     {PAYMENTS.map(p => {
