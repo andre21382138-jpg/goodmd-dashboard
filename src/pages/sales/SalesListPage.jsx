@@ -87,7 +87,7 @@ export default function SalesListPage({ setPage }) {
   const productAgg = useMemo(() => {
     const map = new Map();
     for (const s of filtered) {
-      const key = s.product_id ?? `name:${s.product?.name || '(미상)'}`;
+      const key = s.product_id ?? `name:${s.product?.name || '-'}`;
       const eq = effQty(s);
       const ea = effAmt(s);
       const cur = map.get(key);
@@ -99,7 +99,7 @@ export default function SalesListPage({ setPage }) {
         map.set(key, {
           key,
           product_id: s.product_id,
-          product_name: s.product?.name || '(미상)',
+          product_name: s.product?.name || '-',
           brand_name:   s.brand?.name   || '-',
           count: 1,
           qty:   eq,
