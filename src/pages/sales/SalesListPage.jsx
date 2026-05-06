@@ -191,11 +191,20 @@ export default function SalesListPage({ setPage }) {
           <button style={quickBtnStyle(isLastMonth)}  onClick={() => setDateRange('lastmonth')}>전월</button>
           <input className="finput" value={fKeyword} onChange={e => setFKeyword(e.target.value)}
             placeholder="🔍 상품명·브랜드·메모 검색" style={{height:34, minWidth:180}} />
-          <select className="fsel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            <option value="date">최신순</option>
-            <option value="qty_desc">판매건수 높은순</option>
-            <option value="amt_desc">매출액 높은순</option>
-          </select>
+          {viewMode === 'list' ? (
+            <select className="fsel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="date">최신순</option>
+              <option value="qty_desc">판매건수 높은순</option>
+              <option value="amt_desc">매출액 높은순</option>
+            </select>
+          ) : (
+            <select className="fsel" value={aggSortBy} onChange={e => setAggSortBy(e.target.value)}>
+              <option value="amt_desc">매출액 높은순</option>
+              <option value="qty_desc">수량 높은순</option>
+              <option value="count_desc">판매건수 높은순</option>
+              <option value="name">상품명순</option>
+            </select>
+          )}
           <label style={{display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, color:'var(--text2)', cursor:'pointer', padding:'0 8px'}}>
             <input type="checkbox" checked={showReturned} onChange={e => setShowReturned(e.target.checked)}
               style={{width:15, height:15, cursor:'pointer'}}/>
@@ -204,7 +213,14 @@ export default function SalesListPage({ setPage }) {
           {(fStore||fBrand||fFrom||fTo||fKeyword) &&
             <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); }}>✕ 초기화</button>}
           <div className="fbar-right">
-            <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+            {viewMode === 'list' ? (
+              <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
+            ) : (
+              <span className="fresult">
+                <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
+                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 결과 500건 초과 - 기간을 좁혀주세요</span>}
+              </span>
+            )}
           </div>
         </div>
         {loading ? <div className="empty"><span className="spinner"/></div> : viewMode === 'list' ? (
@@ -249,7 +265,44 @@ export default function SalesListPage({ setPage }) {
             </table>
           </div>
         ) : (
-          <div className="empty">상품별 집계 (구현 예정)</div>
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>브랜드</th>
+                  <th>상품명</th>
+                  <th className="r">판매건수</th>
+                  <th className="r">총 수량</th>
+                  <th className="r">총 매출액</th>
+                  <th>상세</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productAggSorted.length === 0
+                  ? <tr><td colSpan={6} className="empty">조회된 상품이 없습니다</td></tr>
+                  : productAggSorted.map(p => (
+                    <tr key={p.key}>
+                      <td>{p.brand_name}</td>
+                      <td style={{fontWeight:600}}>{p.product_name}</td>
+                      <td className="r">{p.count.toLocaleString()}</td>
+                      <td className="r">{p.qty.toLocaleString()}</td>
+                      <td className="r" style={{fontWeight:600}}>{p.amt.toLocaleString()}</td>
+                      <td>
+                        <button
+                          style={{height:26, padding:'0 8px', fontSize:11, fontWeight:600, border:'1px solid var(--border)', borderRadius:4, background:'#fff', cursor:'pointer', marginRight:4}}
+                          onClick={() => { /* 다음 Task에서 연결 */ }}
+                        >🏬 점포별</button>
+                        <button
+                          style={{height:26, padding:'0 8px', fontSize:11, fontWeight:600, border:'1px solid var(--border)', borderRadius:4, background:'#fff', cursor:'pointer'}}
+                          onClick={() => { /* 다음 Task에서 연결 */ }}
+                        >📅 날짜별</button>
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
