@@ -207,7 +207,7 @@ export default function SalesListPage({ setPage }) {
               background:  viewMode==='list' ? '#fff3e0' : '#fff',
               color:       viewMode==='list' ? 'var(--accent)' : 'var(--text2)',
             }}
-            onClick={() => setViewMode('list')}
+            onClick={() => { setViewMode('list'); setSortBy('date'); }}
           >📋 판매내역</button>
           <button
             style={{
@@ -217,7 +217,7 @@ export default function SalesListPage({ setPage }) {
               background:  viewMode==='product' ? '#fff3e0' : '#fff',
               color:       viewMode==='product' ? 'var(--accent)' : 'var(--text2)',
             }}
-            onClick={() => setViewMode('product')}
+            onClick={() => { setViewMode('product'); setAggSortBy('amt_desc'); }}
           >📊 상품별 집계</button>
         </div>
         <div className="card-label">{viewMode === 'list' ? '판매내역 조회' : '상품별 집계'}</div>
@@ -258,7 +258,7 @@ export default function SalesListPage({ setPage }) {
             완전반품 포함 {returnedCount > 0 && <span style={{color:'var(--danger)', fontWeight:700}}>({returnedCount})</span>}
           </label>
           {(fStore||fBrand||fFrom||fTo||fKeyword) &&
-            <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); }}>✕ 초기화</button>}
+            <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
               <span className="fresult"><b>{filtered.length.toLocaleString()}</b>건 · <b>{totalQty.toLocaleString()}</b>개 · <b>{totalAmt.toLocaleString()}</b>원</span>
