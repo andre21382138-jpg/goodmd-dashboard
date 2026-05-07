@@ -41,34 +41,39 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
     return '정상'; // 카드/현금/적립금사용/기타
   };
 
-  // 4) ExcelJS 워크북 생성
+  // 4) ExcelJS 워크북 생성 (외부 매출raw 양식과 일치)
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('매출raw');
   ws.columns = [
-    { width: 6 },   // A 선택
-    { width: 8 },   // B 순번
-    { width: 12 },  // C 매출일자
-    { width: 16 },  // D 그룹
-    { width: 16 },  // E 매장
-    { width: 10 },  // F 전표유형
-    { width: 18 },  // G 상품코드
-    { width: 36 },  // H 상품명
-    { width: 10 },  // I 매출수량
-    { width: 14 },  // J 최종금액
-    { width: 12 },  // K 원가
-    { width: 14 },  // L 최종원가
-    { width: 12 },  // M 원가율(헤더 없음)
+    { width: 4 },      // A 선택
+    { width: 10.85 },  // B 순번
+    { width: 11.28 },  // C 매출일자
+    { width: 14.85 },  // D 그룹
+    { width: 20.14 },  // E 매장
+    { width: 12.43 },  // F 전표유형
+    { width: 17 },     // G 상품코드
+    { width: 52.85 },  // H 상품명
+    { width: 7.85 },   // I 매출수량
+    { width: 12.85 },  // J 최종금액
+    { width: 16.43 },  // K 원가
+    { width: 16 },     // L 최종원가
+    { width: 14.43 },  // M 원가율(헤더 없음)
   ];
-  const headerRow = ws.addRow(['선택','순번','매출일자','그룹','매장','전표유형','상품코드','상품명','매출수량','최종금액','원가','최종원가','']);
-  headerRow.height = 26;
-  headerRow.eachCell(cell => {
-    cell.font = { bold: true, name: 'Malgun Gothic', size: 10, color: { argb: 'FF1A1A1A' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD600' } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  const headerRow = ws.addRow(['선택','순번','매출일자','그룹','매장','전표\n유형','상품코드','상품명','매출\n수량','최종금액','원가','최종원가','']);
+  headerRow.height = 23.45;
+  headerRow.eachCell((cell, ci) => {
+    if (ci === 12) cell.font = { bold: true, name: '맑은 고딕', size: 10 };
+    else if (ci === 13) cell.font = { name: 'Arial', size: 10 };
+    else cell.font = { bold: true, name: 'Gulim', size: 9 };
+    if (ci === 10) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+    const center = (ci === 6 || ci === 7 || ci === 10 || ci === 11 || ci === 12);
+    cell.alignment = center
+      ? { horizontal: 'center', vertical: 'middle', wrapText: true }
+      : { vertical: 'middle', wrapText: true };
   });
 
-  // 5) 데이터 행
+  // 5) 데이터 행 (행 높이/배경 미지정, Gulim 9 / Arial 10)
   rows.forEach((s, i) => {
     const effQty = Math.max(0, (s.quantity || 0) - (s.returned_qty || 0));
     const finalAmount = effQty * (Number(s.price) || 0);
@@ -76,6 +81,8 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
     const finalCost = cost != null ? cost * effQty : null;
     const ratio = (cost != null && finalAmount > 0) ? (finalCost / finalAmount) : null;
     const dateObj = s.sold_at ? new Date(s.sold_at + 'T00:00:00') : null;
+    const codeStr = s.product?.code || '';
+    const codeValue = /^\d+$/.test(codeStr) ? Number(codeStr) : codeStr;
 
     // NOTE: 외부 양식 D=그룹(=DB store_name 백화점), E=매장(=DB branch_name 지점)
     const row = ws.addRow([
@@ -85,7 +92,7 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
       s.store_name || '',
       s.branch_name || '',
       mapType(s.payment),
-      s.product?.code || '',
+      codeValue,
       s.product?.name || '',
       effQty,
       finalAmount,
@@ -93,19 +100,15 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
       finalCost != null ? finalCost : '',
       ratio != null ? ratio : '',
     ]);
-    row.height = 18;
     row.eachCell((cell, ci) => {
-      cell.font = { name: 'Malgun Gothic', size: 10 };
-      // i가 홀수 인덱스(2/4/6번째 행) 옅은 배경
-      if (i % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8E1' } };
-      // 정렬
-      if (ci === 3) cell.alignment = { horizontal: 'center', vertical: 'middle' }; // 매출일자
-      else if (ci >= 9 && ci <= 13) cell.alignment = { horizontal: 'right', vertical: 'middle' };
-      else cell.alignment = { horizontal: 'left', vertical: 'middle' };
-      // 서식
-      if (ci === 3 && dateObj) cell.numFmt = 'yyyy-mm-dd';
-      if (ci >= 9 && ci <= 12)  cell.numFmt = '#,##0';
-      if (ci === 13 && ratio != null) cell.numFmt = '0.0000';
+      cell.font = (ci >= 11) ? { name: 'Arial', size: 10 } : { name: 'Gulim', size: 9 };
+      if (ci === 1)  cell.numFmt = '@';
+      if (ci === 3 && dateObj) cell.numFmt = '[$-412]yyyy-mm-dd';
+      if (ci === 7)  cell.numFmt = '0_);[Red](0)';
+      if (ci === 9 || ci === 10) cell.numFmt = '#,##0';
+      if (ci === 11) cell.numFmt = '#,##0_ ';
+      if (ci === 12) cell.numFmt = '#,##0_ ;[Red]-#,##0 ';
+      if (ci === 13 && ratio != null) cell.numFmt = '0%';
     });
   });
 
