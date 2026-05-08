@@ -153,6 +153,7 @@ export default function PurchaseOrderHQPage({ profile }) {
   // 발주 현황
   const [orders,        setOrders]        = useState([]);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [exporting,     setExporting]     = useState(false);
   const [expandedOrder, setExpandedOrder] = useState(null);
 
   // 상품 추가 (전체 상품)
@@ -317,6 +318,58 @@ export default function PurchaseOrderHQPage({ profile }) {
   }, []);
 
   useEffect(() => { if (tab === 'status') fetchOrders(); }, [tab, fetchOrders]);
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      // 미리 조회해서 미설정 매장 확인
+      const { data: previewOrders, error: pErr } = await supabase.from('purchase_orders')
+        .select('store_name, branch_name')
+        .in('status', ['requested', 'rerequested'])
+        .is('exported_at', null);
+      if (pErr) throw pErr;
+      if (!previewOrders || previewOrders.length === 0) {
+        toast('다운로드 대상 발주가 없습니다', 'inf');
+        setExporting(false);
+        return;
+      }
+
+      const { data: addrs } = await supabase.from('store_addresses').select('*');
+      const addrMap = new Map();
+      for (const a of (addrs || [])) addrMap.set(`${a.store_name}|${a.branch_name}`, a);
+      const missing = [];
+      const seen = new Set();
+      for (const o of previewOrders) {
+        const k = `${o.store_name}|${o.branch_name}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const a = addrMap.get(k);
+        const ok = !!(a && a.shopping_mall_id && a.postal_code && a.address && a.recipient_phone);
+        if (!ok) missing.push(`${o.store_name} / ${o.branch_name}`);
+      }
+      if (missing.length > 0) {
+        const sample = missing.slice(0, 5).join('\n  ');
+        const more = missing.length > 5 ? `\n  ... 외 ${missing.length - 5}개` : '';
+        const ok = window.confirm(
+          `⚠️ ${missing.length}개 매장 마스터 정보 미설정\n  ${sample}${more}\n\n빈 셀로 다운로드하시겠습니까?`
+        );
+        if (!ok) {
+          toast('매장 정보 → 매장주소정보 메뉴에서 보충 후 재시도해주세요', 'inf');
+          setExporting(false);
+          return;
+        }
+      }
+
+      const { count } = await exportPurchaseOrders();
+      toast(`매장발주 ${count}건 다운로드 완료`, 'ok');
+      fetchOrders();
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const inputStyle = { height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, background:'#fff', outline:'none' };
 
@@ -501,9 +554,15 @@ export default function PurchaseOrderHQPage({ profile }) {
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
             <div className="card-label" style={{margin:0}}>📊 발주 현황</div>
-            <button className="btn btn-s" onClick={fetchOrders} disabled={statusLoading}>
-              {statusLoading ? <span className="spinner"/> : '🔄 새로고침'}
-            </button>
+            <div style={{display:'flex', gap:8}}>
+              <button className="btn btn-p" onClick={handleExport} disabled={exporting}
+                title="매장 발주요청 + 미출하 발주를 한 번에 묶어 매장발주 양식 xlsx 다운로드">
+                {exporting ? <span className="spinner"/> : '📥'} 매장발주 엑셀 다운로드
+              </button>
+              <button className="btn btn-s" onClick={fetchOrders} disabled={statusLoading}>
+                {statusLoading ? <span className="spinner"/> : '🔄 새로고침'}
+              </button>
+            </div>
           </div>
           {statusLoading ? <div className="empty"><span className="spinner"/></div>
             : orders.length === 0 ? <div className="empty">발주 내역이 없습니다</div>
@@ -538,6 +597,13 @@ export default function PurchaseOrderHQPage({ profile }) {
                         <td style={{textAlign:'center'}}>
                           <span style={{display:'inline-block', padding:'2px 10px', borderRadius:4, fontSize:11, fontWeight:700,
                             background:st.bg, color:st.color, border:`1px solid ${st.border}`}}>{st.label}</span>
+                          {o.exported_at && (
+                            <span style={{display:'inline-block', marginLeft:6, padding:'2px 8px', borderRadius:4, fontSize:10, fontWeight:700,
+                              background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7'}}
+                              title={`출하됨: ${new Date(o.exported_at).toLocaleString('ko-KR')}`}>
+                              ✓ 출하됨
+                            </span>
+                          )}
                         </td>
                         <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{new Date(o.updated_at||o.created_at).toLocaleString('ko-KR', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
                       </tr>
