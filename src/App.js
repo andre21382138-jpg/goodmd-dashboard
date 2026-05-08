@@ -428,7 +428,8 @@ export default function App() {
     incentive:      '급여관리',
     member_mgmt:    '회원 조회',
     sms_history:    '문자 내역',
-    store_info:     '매장 정보',
+    store_info:     '매장주소정보',
+    purchase_status: '발주현황',
     sales_view:          '매출조회',
     sales_list:          '매장 매출',
     biz_sales_view:      '특판 매출',
@@ -436,7 +437,7 @@ export default function App() {
     sales_input:    '판매 입력',
     sales_return:   '반품 접수',
     mgr_sales_view: '매출 조회',
-    purchase_hq:    '발주관리',
+    purchase_hq:    '발주진행',
     purchase_check: '발주 확인',
     customer_input: '회원 등록',
     customer_qr:    'QR 가입',
@@ -497,6 +498,12 @@ export default function App() {
             {page === 'sales_return'   && (isManager || isAdmin || isHQ) && <SalesReturnPage profile={profile}/>}
             {page === 'mgr_sales_view' && (isManager || isAdmin || isHQ) && <MgrSalesViewPage profile={profile}/>}
             {page === 'purchase_hq'    && (isAdmin || isHQ) && <PurchaseOrderHQPage profile={profile}/>}
+            {page === 'purchase_status' && canSeeMain && (
+              <div className="card">
+                <div className="card-label">발주현황</div>
+                <div className="empty">📊 발주현황 — 구현 예정<br/><span style={{fontSize:11, color:'var(--text3)'}}>발주 이력·상태 조회 페이지가 곧 들어옵니다.</span></div>
+              </div>
+            )}
             {page === 'purchase_check' && (isManager || isAdmin || isHQ) && <PurchaseOrderMgrPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'customer_qr'    && (isManager || isAdmin || isHQ) && <CustomerQRPage profile={profile}/>}
