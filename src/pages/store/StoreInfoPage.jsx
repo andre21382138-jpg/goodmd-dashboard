@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { STORE_MAP, STORE_NAMES } from '../../lib/constants';
 import { toast } from '../../lib/utils';
@@ -11,6 +12,7 @@ export default function StoreInfoPage() {
   const [editing,    setEditing]    = useState(null);  // {key, store_name, branch_name, ...} | null
   const [eForm,      setEForm]      = useState({ shopping_mall_id:'', postal_code:'', address:'', recipient_phone:'' });
   const [saving,     setSaving]     = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const fetchAddresses = useCallback(async () => {
     setLoading(true);
@@ -53,6 +55,47 @@ export default function StoreInfoPage() {
     toast('저장 완료', 'ok');
     closeEdit();
     fetchAddresses();
+  };
+
+  const handleImport = async (file) => {
+    if (!file) return;
+    setImporting(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const REQUIRED_COLS = ['백화점', '점포', '쇼핑몰ID'];
+      if (rows.length === 0) { toast('엑셀에 데이터 행이 없습니다', 'err'); setImporting(false); return; }
+      const sample = rows[0];
+      for (const c of REQUIRED_COLS) {
+        if (!(c in sample)) { toast(`필수 헤더 누락: ${c}`, 'err'); setImporting(false); return; }
+      }
+      let inserted = 0, errors = 0;
+      for (const row of rows) {
+        const sn = String(row['백화점'] || '').trim();
+        const bn = String(row['점포'] || '').trim();
+        const sid = String(row['쇼핑몰ID'] || '').trim();
+        if (!sn || !bn || !sid) { errors++; continue; }
+        const payload = {
+          store_name:       sn,
+          branch_name:      bn,
+          shopping_mall_id: sid,
+          postal_code:      String(row['우편번호'] || '').trim() || null,
+          address:          String(row['주소'] || '').trim() || null,
+          recipient_phone:  String(row['수취인전화'] || row['수취인 전화'] || '').trim() || null,
+          updated_at:       new Date().toISOString(),
+        };
+        const { error } = await supabase.from('store_addresses')
+          .upsert(payload, { onConflict: 'store_name,branch_name' });
+        if (error) errors++; else inserted++;
+      }
+      toast(`완료: ${inserted}건 처리 / ${errors}건 오류`, errors > 0 ? 'err' : 'ok');
+      fetchAddresses();
+    } catch (err) {
+      toast('파일 처리 실패: ' + err.message, 'err');
+    }
+    setImporting(false);
   };
 
   useEffect(() => {
@@ -120,6 +163,13 @@ export default function StoreInfoPage() {
             <b style={{marginLeft:6, color:'var(--success)'}}>{completeCount}</b> 등록 ·
             <b style={{marginLeft:6, color:'var(--danger)'}}>{allRows.length - completeCount}</b> 미설정
           </span>
+          <label className="btn btn-s" style={{cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.6 : 1}}>
+            {importing ? <span className="spinner"/> : '📥'} 엑셀 일괄 import
+            <input type="file" accept=".xlsx,.xls"
+              onChange={e => { if (e.target.files?.[0]) { handleImport(e.target.files[0]); e.target.value=''; } }}
+              disabled={importing}
+              style={{display:'none'}}/>
+          </label>
         </div>
       </div>
       {loading ? <div className="empty"><span className="spinner"/></div> : (
