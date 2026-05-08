@@ -335,7 +335,8 @@ export default function PurchaseOrderHQPage({ profile }) {
         return;
       }
 
-      const { data: addrs } = await supabase.from('store_addresses').select('*');
+      const { data: addrs, error: aErr } = await supabase.from('store_addresses').select('*');
+      if (aErr) throw aErr;
       const addrMap = new Map();
       for (const a of (addrs || [])) addrMap.set(`${a.store_name}|${a.branch_name}`, a);
       const missing = [];
