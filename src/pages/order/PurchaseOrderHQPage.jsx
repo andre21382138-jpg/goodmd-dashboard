@@ -194,7 +194,7 @@ export default function PurchaseOrderHQPage({ profile }) {
   const fetchOrders = useCallback(async () => {
     setStatusLoading(true);
     const { data, error } = await supabase.from('purchase_orders')
-      .select('*, items:purchase_order_items(*, product:products(name, code))')
+      .select('*, items:purchase_order_items(*, product:products(name, code, erp_code))')
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) toast(error.message, 'err');

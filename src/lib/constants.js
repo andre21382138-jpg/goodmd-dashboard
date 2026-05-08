@@ -83,3 +83,13 @@ export const ADMIN_MENUS = [
   { key: 'admin',  icon: '🔐', label: '사용자 관리' },
   { key: 'notice', icon: '📢', label: '공지 사항' },
 ];
+
+// ════════════════════════════════════════════════════════
+// 발주서 양식 상수
+// ════════════════════════════════════════════════════════
+export const ORDER_CONSTANTS = {
+  TRACKING_LABEL: '유통2팀',
+  CHANNEL: '기타_유통2팀_매장발주',
+  ORDERER_NAME: '한국생활건강(팔레오본사)',
+  ORDERER_PHONE: '070-5117-5677',
+};
