@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast } from '../../lib/utils';
+import { toast, dlBlob } from '../../lib/utils';
+import { ORDER_CONSTANTS } from '../../lib/constants';
 
 const STATUS_LABEL = {
   sent:        { label:'발송',        color:'#1565C0', bg:'#e3f2fd', border:'#90caf9' },
@@ -8,6 +9,119 @@ const STATUS_LABEL = {
   rerequested: { label:'재요청',      color:'#bf360c', bg:'#fbe9e7', border:'#ffab91' },
   received:    { label:'입고완료',    color:'#6a1b9a', bg:'#f3e5f5', border:'#ce93d8' },
 };
+
+async function exportPurchaseOrders() {
+  // 1) 다운로드 대상 발주 fetch
+  const { data: orders, error: oErr } = await supabase.from('purchase_orders')
+    .select('id, store_name, branch_name, items:purchase_order_items(id, product_id, hq_qty, store_qty, product:products(name, erp_code, code))')
+    .in('status', ['requested', 'rerequested'])
+    .is('exported_at', null)
+    .order('store_name', { ascending: true })
+    .order('branch_name', { ascending: true });
+  if (oErr) throw oErr;
+  if (!orders || orders.length === 0) {
+    return { count: 0, missingMaster: [] };
+  }
+
+  // 2) store_addresses fetch
+  const { data: addrs, error: aErr } = await supabase.from('store_addresses').select('*');
+  if (aErr) throw aErr;
+  const addrMap = new Map();
+  for (const a of (addrs || [])) {
+    addrMap.set(`${a.store_name}|${a.branch_name}`, a);
+  }
+
+  // 3) 마스터 정보 미설정 매장 식별
+  const missingMaster = [];
+  for (const o of orders) {
+    const key = `${o.store_name}|${o.branch_name}`;
+    const a = addrMap.get(key);
+    const ok = !!(a && a.shopping_mall_id && a.postal_code && a.address && a.recipient_phone);
+    if (!ok) missingMaster.push(`${o.store_name} / ${o.branch_name}`);
+  }
+
+  // 4) 라인 펼치기 (매장 정렬 후 각 발주의 items도 product name 정렬)
+  const lines = [];
+  for (const o of orders) {
+    const items = [...(o.items || [])].sort((a, b) =>
+      (a.product?.name || '').localeCompare(b.product?.name || ''));
+    for (const it of items) {
+      lines.push({ order: o, item: it });
+    }
+  }
+
+  // 5) 발송일 + 주문번호 생성
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const yyyymmdd = `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;
+  const yyyy_mm_dd = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+
+  // 6) ExcelJS 워크북 생성
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('매장발주');
+  const HEADERS = ['발송일','송장번호','주문번호','채널','매장명','수취인명','결제금액','주문수량','상품명','옵션','품명','수취인명','우편번호','주소','수취인 천화번호1','수취인 전화번호2','배송메세지','상품번호','주문자명','주문자 연락처1','주문자 연락처2','수수료','수수료액','공란','사방넷 주문번호','주문일','주문자 ID','물류바코드(88코드)','송장전송일','ERP코드','수량'];
+  const headerRow = ws.addRow(HEADERS);
+  headerRow.eachCell(cell => {
+    cell.font = { bold: true, size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  });
+
+  // 7) 라인 별 행 추가
+  lines.forEach((ln, idx) => {
+    const o = ln.order;
+    const it = ln.item;
+    const a = addrMap.get(`${o.store_name}|${o.branch_name}`) || {};
+    const qty = (it.store_qty != null) ? Number(it.store_qty) : Number(it.hq_qty || 0);
+    const orderNo = `${yyyymmdd}-${String(idx + 1).padStart(4, '0')}`;
+    const erp = it.product?.erp_code || '';
+    const productName = it.product?.name || '';
+    const mallId = a.shopping_mall_id || '';
+    ws.addRow([
+      today,                              // A 발송일
+      ORDER_CONSTANTS.TRACKING_LABEL,     // B 송장번호
+      orderNo,                            // C 주문번호
+      ORDER_CONSTANTS.CHANNEL,            // D 채널
+      mallId,                             // E 매장명
+      mallId,                             // F 수취인명
+      0,                                  // G 결제금액
+      1,                                  // H 주문수량
+      '',                                 // I 상품명
+      '',                                 // J 옵션
+      productName,                        // K 품명
+      mallId,                             // L 수취인명
+      a.postal_code || '',                // M 우편번호
+      a.address || '',                    // N 주소
+      a.recipient_phone || '',            // O 수취인 천화번호1
+      '',                                 // P 수취인 전화번호2
+      '',                                 // Q 배송메세지
+      '',                                 // R 상품번호
+      ORDER_CONSTANTS.ORDERER_NAME,       // S 주문자명
+      ORDER_CONSTANTS.ORDERER_PHONE,      // T 주문자 연락처1
+      ORDER_CONSTANTS.ORDERER_PHONE,      // U 주문자 연락처2
+      '', '', '', '', '', '', '', '',     // V~AC
+      erp,                                // AD ERP코드
+      qty,                                // AE 수량
+    ]);
+  });
+
+  // 8) 발송일 셀 서식
+  ws.getColumn(1).numFmt = 'yyyy-mm-dd';
+
+  // 9) 저장 + 다운로드
+  const buf = await wb.xlsx.writeBuffer();
+  dlBlob(buf, `매장발주_${yyyy_mm_dd}.xlsx`);
+
+  // 10) 다운로드된 발주들의 exported_at 일괄 update
+  const orderIds = orders.map(o => o.id);
+  const { error: uErr } = await supabase.from('purchase_orders')
+    .update({ exported_at: new Date().toISOString() })
+    .in('id', orderIds);
+  if (uErr) throw uErr;
+
+  return { count: orderIds.length, missingMaster };
+}
 
 const fmt = (d) => {
   const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
