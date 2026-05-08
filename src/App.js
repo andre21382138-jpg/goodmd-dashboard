@@ -29,6 +29,7 @@ import StockRequestPage from './pages/stock/StockRequestPage';
 import UploadPage from './pages/stock/UploadPage';
 import UploadHistoryPage from './pages/stock/UploadHistoryPage';
 import ProductMgmtPage from './pages/product/ProductMgmtPage';
+import StoreInfoPage from './pages/store/StoreInfoPage';
 import ClockInOutPage from './pages/attendance/ClockInOutPage';
 import MyAttendancePage from './pages/attendance/MyAttendancePage';
 import LeavePlanPage from './pages/attendance/LeavePlanPage';
@@ -427,6 +428,7 @@ export default function App() {
     incentive:      '급여관리',
     member_mgmt:    '회원 조회',
     sms_history:    '문자 내역',
+    store_info:     '매장 정보',
     sales_view:          '매출조회',
     sales_list:          '매장 매출',
     biz_sales_view:      '특판 매출',
@@ -486,6 +488,7 @@ export default function App() {
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
+            {page === 'store_info'     && canSeeMain && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
             {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage}/>}
