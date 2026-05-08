@@ -14,6 +14,7 @@ export const STORE_MAP = {
   '영남실업':     ['영남실업'],
   '동화상사':     ['동화상사'],
   '창원지점(박경원님)': ['창원지점(박경원님)'],
+  '중소기업명품마루': ['중소기업명품마루대구점','중소기업명품마루서울역점'],
 };
 export const STORE_NAMES = Object.keys(STORE_MAP);
 
