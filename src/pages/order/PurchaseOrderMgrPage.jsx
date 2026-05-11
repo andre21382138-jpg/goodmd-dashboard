@@ -53,15 +53,18 @@ export default function PurchaseOrderMgrPage({ profile }) {
     const q = (searchQ || '').trim();
     if (q.length < 2) { setSearchResults([]); setSearchLoading(false); return; }
     setSearchLoading(true);
+    let cancelled = false;
     const timer = setTimeout(async () => {
-      const { data } = await supabase.from('products')
+      const { data, error } = await supabase.from('products')
         .select('id, name, code')
         .or(`name.ilike.%${q}%,code.ilike.%${q}%`)
         .limit(10);
+      if (cancelled) return;
+      if (error) toast(error.message, 'err');
       setSearchResults(data || []);
       setSearchLoading(false);
     }, 300);
-    return () => clearTimeout(timer);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [searchQ]);
 
   const toggleExpand = (o) => {
