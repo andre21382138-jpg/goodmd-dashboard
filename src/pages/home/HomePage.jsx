@@ -26,6 +26,7 @@ export default function HomePage({ profile, setPage }) {
   const [bizSummary,     setBizSummary]     = useState({amt:0,count:0,qty:0});
   const [bizRows,        setBizRows]        = useState([]);
   const [prevTotalAmt,   setPrevTotalAmt]   = useState(0);
+  const [prevMonthsSales,setPrevMonthsSales]= useState([]); // 매니저용 최근 3개월
   const [loading,        setLoading]        = useState(true);
   const [showBanner,     setShowBanner]     = useState(false);
 
@@ -103,6 +104,35 @@ export default function HomePage({ profile, setPage }) {
         }
         setDailyRows([...dMap.values()].sort((a,b) => b.date.localeCompare(a.date)));
         setDailyDetails(dDetails);
+
+        // 매니저용: 최근 3개월 매출 (월단위, 자기 매장만)
+        if (profile?.department) {
+          const months = [];
+          for (let i = 3; i >= 1; i--) {
+            const d = new Date(year, now.getMonth() - i, 1);
+            const y = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const lastDay = new Date(y, d.getMonth() + 1, 0).getDate();
+            months.push({
+              key: `${y}-${mm}`,
+              label: `${parseInt(mm, 10)}월`,
+              start: `${y}-${mm}-01`,
+              end: `${y}-${mm}-${String(lastDay).padStart(2, '0')}`,
+            });
+          }
+          const { data: prev3Data } = await supabase.from('sales')
+            .select('sold_at, quantity, price, returned_qty')
+            .eq('store_name', profile.department).eq('branch_name', profile.branch)
+            .gte('sold_at', months[0].start).lte('sold_at', months[months.length-1].end);
+          const monthAmt = new Map(months.map(m => [m.key, 0]));
+          for (const r of (prev3Data || [])) {
+            const key = (r.sold_at || '').slice(0, 7);
+            if (!monthAmt.has(key)) continue;
+            const eff = Math.max(0, (r.quantity||0) - (r.returned_qty||0));
+            monthAmt.set(key, monthAmt.get(key) + (r.price||0) * eff);
+          }
+          setPrevMonthsSales(months.map(m => ({ label: m.label, amt: monthAmt.get(m.key) || 0 })));
+        }
       }
 
       if (canSeeAll) {
@@ -275,7 +305,7 @@ export default function HomePage({ profile, setPage }) {
 
       {/* 매니저: 기존 4개 요약 카드 */}
       {isManager && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:12 }}>
           {[
             { label:'총 매출금액', value: storeSummary.amt.toLocaleString()+'원', big:true },
             { label:'판매 건수',   value: storeSummary.count.toLocaleString()+'건' },
@@ -284,6 +314,24 @@ export default function HomePage({ profile, setPage }) {
             <div key={s.label} style={{ background:'#fff', border: s.big?'2px solid var(--sidebar)':'1px solid var(--border)', borderRadius:'var(--radius)', padding:'16px 20px' }}>
               <div style={{ fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:8 }}>{s.label}</div>
               <div style={{ fontSize: s.big?26:22, fontWeight:700, color: s.big?'var(--accent)':'var(--text)', fontFamily:'var(--mono)', lineHeight:1 }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 매니저: 최근 3개월 매출 (월단위, 한 줄) */}
+      {isManager && prevMonthsSales.length > 0 && (
+        <div style={{
+          background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)',
+          padding:'12px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:24, flexWrap:'wrap'
+        }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'var(--text3)', letterSpacing:0.3 }}>📅 최근 3개월 매출</div>
+          {prevMonthsSales.map((m, i) => (
+            <div key={i} style={{ display:'flex', alignItems:'baseline', gap:6 }}>
+              <span style={{ fontSize:12, color:'var(--text2)', fontWeight:600 }}>{m.label}</span>
+              <span style={{ fontFamily:'var(--mono)', fontSize:15, fontWeight:700, color: m.amt > 0 ? 'var(--text)' : 'var(--text3)' }}>
+                {m.amt.toLocaleString()}원
+              </span>
             </div>
           ))}
         </div>
