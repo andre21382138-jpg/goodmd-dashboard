@@ -237,8 +237,8 @@ export default function PurchaseOrderMgrPage({ profile }) {
   return (
     <div>
       <div className="tabs">
-        <button className={`tab ${tab==='check'?'on':''}`} onClick={() => { setTab('check'); setExpanded(null); }}>발주 확인</button>
-        <button className={`tab ${tab==='receive'?'on':''}`} onClick={() => { setTab('receive'); setExpanded(null); }}>입고 확인</button>
+        <button className={`tab ${tab==='check'?'on':''}`} onClick={() => { setTab('check'); setExpanded(null); setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null); }}>발주 확인</button>
+        <button className={`tab ${tab==='receive'?'on':''}`} onClick={() => { setTab('receive'); setExpanded(null); setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null); }}>입고 확인</button>
       </div>
 
       <div className="card" style={{padding:'16px 20px'}}>
