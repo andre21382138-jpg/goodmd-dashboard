@@ -289,23 +289,26 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
       <button
         onClick={() => setPage('home')}
         style={{
-          display:'flex', alignItems:'center', gap:10, padding:'0 18px',
+          display:'flex', alignItems:'center', gap:10, padding: isAdmin ? '10px 18px' : '0 18px',
           background: page==='home' ? 'rgba(0,0,0,0.08)' : 'transparent',
           border:'none', borderBottom:'1px solid rgba(0,0,0,0.1)',
           cursor:'pointer', width:'100%', textAlign:'left', transition:'background 120ms',
-          height:'52px', flexShrink:0,
+          height: isAdmin ? 'auto' : '52px', flexShrink:0,
         }}
         onMouseEnter={e => { if(page!=='home') e.currentTarget.style.background='rgba(0,0,0,0.05)'; }}
         onMouseLeave={e => { if(page!=='home') e.currentTarget.style.background='transparent'; }}
       >
-        <span style={{ fontSize:22 }}>🏬</span>
+        {!isAdmin && <span style={{ fontSize:22 }}>🏬</span>}
         <div>
           {isAdmin ? (
             <>
-              <div style={{ fontSize:11, fontWeight:600, color:'var(--sidebar-text)', opacity:0.85, lineHeight:1.2 }}>
-                서비스 이용기간 : 2027. 04. 09 까지
+              <div style={{ fontSize:10, fontWeight:600, color:'var(--sidebar-text)', opacity:0.75, lineHeight:1.3, letterSpacing:0.2 }}>
+                서비스이용기간
               </div>
-              <div style={{ fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2, marginTop:2 }}>
+              <div style={{ fontFamily:'var(--mono)', fontSize:12, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.3 }}>
+                2027. 04. 09까지
+              </div>
+              <div style={{ fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.3, marginTop:2 }}>
                 (주)한국생활건강
               </div>
             </>
