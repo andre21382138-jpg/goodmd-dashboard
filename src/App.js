@@ -290,14 +290,12 @@ function AuthScreen() {
   return (
     <div className="auth-wrap">
       {/* 제공자 로고 워터마크 (좌측 상단) */}
-      <div style={{
-        position:'fixed', top:14, left:18, zIndex:1,
-        fontSize:11, fontWeight:700, color:'#1a1a1a',
-        opacity:0.35, letterSpacing:0.3,
-        fontFamily:'var(--mono)', userSelect:'none', pointerEvents:'none',
-      }}>
-        (주)한국스마트물류
-      </div>
+      <img src="/logo-ksl.jpg" alt="한국스마트물류"
+        style={{
+          position:'fixed', top:14, left:18, zIndex:1,
+          height:28, width:'auto',
+          opacity:0.55, userSelect:'none', pointerEvents:'none',
+        }}/>
       <div className="auth-box">
         <div className="auth-logo">
           <div className="auth-logo-icon">🏬</div>
