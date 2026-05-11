@@ -416,10 +416,10 @@ export default function PurchaseOrderMgrPage({ profile }) {
                                             <button type="button"
                                               disabled={!selProduct || !(Number(addQty)>0)}
                                               onClick={() => handleAddItem(o)}
-                                              style={{height:30, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4,
+                                              style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:4,
                                                 background: (selProduct && Number(addQty)>0) ? 'var(--accent)' : '#fff',
                                                 color: (selProduct && Number(addQty)>0) ? '#fff' : 'var(--text3)',
-                                                fontSize:11, fontWeight:700,
+                                                fontSize:12, fontWeight:700, whiteSpace:'nowrap', flexShrink:0, minWidth:62,
                                                 cursor: (selProduct && Number(addQty)>0) ? 'pointer' : 'not-allowed'}}>
                                               + 추가
                                             </button>
