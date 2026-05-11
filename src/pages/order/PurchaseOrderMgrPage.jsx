@@ -330,7 +330,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
                                             <input type="number" min={0} value={a.qty}
                                               onChange={e => handleAddedQtyChange(a.tempId, e.target.value)}
                                               style={{width:80, height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:13, textAlign:'right', fontWeight:700}}/>
-                                            <button onClick={() => handleRemoveAddedItem(a.tempId)}
+                                            <button type="button" onClick={() => handleRemoveAddedItem(a.tempId)}
                                               title="삭제"
                                               style={{height:30, width:30, border:'1px solid var(--border)', borderRadius:4, background:'#fff', cursor:'pointer', fontSize:14, color:'var(--text3)'}}>
                                               ✕
