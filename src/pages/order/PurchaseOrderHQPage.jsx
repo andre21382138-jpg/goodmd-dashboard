@@ -7,6 +7,7 @@ const STATUS_LABEL = {
   sent:        { label:'발송',        color:'#1565C0', bg:'#e3f2fd', border:'#90caf9' },
   requested:   { label:'발주요청',    color:'#2e7d32', bg:'#e8f5e9', border:'#a5d6a7' },
   rerequested: { label:'재요청',      color:'#bf360c', bg:'#fbe9e7', border:'#ffab91' },
+  confirmed:   { label:'확정',        color:'#bf360c', bg:'#fff3e0', border:'#ffcc80' },
   received:    { label:'입고완료',    color:'#6a1b9a', bg:'#f3e5f5', border:'#ce93d8' },
 };
 
@@ -14,7 +15,7 @@ async function exportPurchaseOrders() {
   // 1) 다운로드 대상 발주 fetch
   const { data: orders, error: oErr } = await supabase.from('purchase_orders')
     .select('id, store_name, branch_name, items:purchase_order_items(id, product_id, hq_qty, store_qty, product:products(name, erp_code, code))')
-    .in('status', ['requested', 'rerequested'])
+    .eq('status', 'confirmed')
     .is('exported_at', null)
     .order('store_name', { ascending: true })
     .order('branch_name', { ascending: true });
@@ -155,6 +156,8 @@ export default function PurchaseOrderHQPage({ profile }) {
   const [statusLoading, setStatusLoading] = useState(false);
   const [exporting,     setExporting]     = useState(false);
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [confirmEditMap, setConfirmEditMap] = useState({}); // { itemId: qty }
+  const [confirming, setConfirming] = useState(false);
 
   // 상품 추가 (전체 상품)
   const [allProducts, setAllProducts] = useState([]);
@@ -326,7 +329,7 @@ export default function PurchaseOrderHQPage({ profile }) {
       // 미리 조회해서 미설정 매장 확인
       const { data: previewOrders, error: pErr } = await supabase.from('purchase_orders')
         .select('store_name, branch_name')
-        .in('status', ['requested', 'rerequested'])
+        .eq('status', 'confirmed')
         .is('exported_at', null);
       if (pErr) throw pErr;
       if (!previewOrders || previewOrders.length === 0) {
@@ -370,6 +373,54 @@ export default function PurchaseOrderHQPage({ profile }) {
     } finally {
       setExporting(false);
     }
+  };
+
+  const toggleExpandWithEdit = (o) => {
+    if (expandedOrder === o.id) {
+      setExpandedOrder(null);
+      setConfirmEditMap({});
+    } else {
+      // 편집 가능 상태인 경우 input 초기값 채우기
+      if (o.status === 'requested' || o.status === 'rerequested') {
+        const em = {};
+        for (const it of (o.items||[])) {
+          em[it.id] = it.store_qty != null ? it.store_qty : it.hq_qty;
+        }
+        setConfirmEditMap(em);
+      } else {
+        setConfirmEditMap({});
+      }
+      setExpandedOrder(o.id);
+    }
+  };
+
+  const handleConfirm = async (order) => {
+    const items = order.items || [];
+    if (items.length === 0) { toast('항목이 없습니다', 'err'); return; }
+    if (!window.confirm(`발주를 확정하시겠습니까?\n\n총 ${items.length}개 상품, ${items.reduce((s,i) => s + (Number(confirmEditMap[i.id])||0), 0)}개 수량으로 확정됩니다.`)) return;
+    setConfirming(true);
+    try {
+      // 각 item hq_qty 업데이트
+      for (const it of items) {
+        const newQty = Math.max(0, Number(confirmEditMap[it.id]) || 0);
+        const { error } = await supabase.from('purchase_order_items')
+          .update({ hq_qty: newQty })
+          .eq('id', it.id);
+        if (error) throw error;
+      }
+      // order status 'confirmed'로
+      const { error: oErr } = await supabase.from('purchase_orders')
+        .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+        .eq('id', order.id);
+      if (oErr) throw oErr;
+      toast('발주 확정 완료', 'ok');
+      setExpandedOrder(null);
+      setConfirmEditMap({});
+      fetchOrders();
+    } catch (err) {
+      toast('확정 실패: ' + (err.message || err), 'err');
+    }
+    setConfirming(false);
   };
 
   const inputStyle = { height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, background:'#fff', outline:'none' };
@@ -557,7 +608,7 @@ export default function PurchaseOrderHQPage({ profile }) {
             <div className="card-label" style={{margin:0}}>📊 발주 현황</div>
             <div style={{display:'flex', gap:8}}>
               <button className="btn btn-p" onClick={handleExport} disabled={exporting}
-                title="매장 발주요청 + 미출하 발주를 한 번에 묶어 매장발주 양식 xlsx 다운로드">
+                title="확정된 미출하 발주를 한 번에 묶어 매장발주 양식 xlsx 다운로드">
                 {exporting ? <span className="spinner"/> : '📥'} 매장발주 엑셀 다운로드
               </button>
               <button className="btn btn-s" onClick={fetchOrders} disabled={statusLoading}>
@@ -588,7 +639,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                     return (
                     <React.Fragment key={o.id}>
                       <tr style={{cursor:'pointer', background: open ? '#f8f9fa' : 'transparent'}}
-                        onClick={() => setExpandedOrder(open ? null : o.id)}>
+                        onClick={() => toggleExpandWithEdit(o)}>
                         <td style={{textAlign:'center', color:'var(--text2)'}}>{open ? '▼' : '▶'}</td>
                         <td className="mono" style={{fontSize:11}}>{new Date(o.created_at).toLocaleDateString('ko-KR')}</td>
                         <td><span className="badge badge-dept">{o.store_name}</span></td>
@@ -616,50 +667,75 @@ export default function PurchaseOrderHQPage({ profile }) {
                                 💬 매장 메모: {o.store_note}
                               </div>
                             )}
-                            <div className="twrap">
-                              <table>
-                                <thead>
-                                  <tr>
-                                    <th>상품명</th><th>코드</th>
-                                    <th className="r">판매수량</th>
-                                    <th className="r">본사 발주</th>
-                                    <th className="r">매장 요청</th>
-                                    <th className="r">변동</th>
-                                    <th className="r">입고확인</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {(o.items||[]).map(it => {
-                                    const finalQty = it.store_qty != null ? it.store_qty : it.hq_qty;
-                                    const diff = it.store_qty != null ? (it.store_qty - it.hq_qty) : 0;
-                                    return (
-                                    <tr key={it.id}>
-                                      <td>{it.product?.name||'-'}</td>
-                                      <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.product?.code||'-'}</td>
-                                      <td className="r" style={{color:'var(--text3)'}}>{it.sold_qty}</td>
-                                      <td className="r" style={{fontFamily:'var(--mono)'}}>{it.hq_qty}</td>
-                                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight: it.store_qty != null ? 700 : 400, color: it.store_qty != null ? 'var(--accent)' : 'var(--text3)'}}>
-                                        {it.store_qty != null ? it.store_qty : '-'}
-                                      </td>
-                                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text3)'}}>
-                                        {diff > 0 ? `+${diff}` : diff < 0 ? diff : '-'}
-                                      </td>
-                                      <td className="r" style={{fontFamily:'var(--mono)'}}>
-                                        {it.received_qty != null
-                                          ? <span style={{color: it.received_ok ? 'var(--success)' : 'var(--danger)', fontWeight:700}}>
-                                              {it.received_qty} {it.received_ok ? '✅' : '❌'}
-                                            </span>
-                                          : '-'}
-                                      </td>
+                            {(() => {
+                              const editable = o.status === 'requested' || o.status === 'rerequested';
+                              return (
+                              <>
+                              <div className="twrap">
+                                <table>
+                                  <thead>
+                                    <tr>
+                                      <th>상품명</th><th>코드</th>
+                                      <th className="r">판매수량</th>
+                                      <th className="r">본사 발주</th>
+                                      <th className="r">매장 요청</th>
+                                      <th className="r">변동</th>
+                                      {editable
+                                        ? <th className="r" style={{color:'var(--accent)'}}>확정 수량</th>
+                                        : <th className="r">입고확인</th>}
                                     </tr>
-                                  )})}
-                                </tbody>
-                              </table>
-                            </div>
-                            <div style={{marginTop:8, fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)', textAlign:'right'}}>
-                              본사 발주 합계: {(o.items||[]).reduce((s,i)=>s+i.hq_qty,0)}개 ·
-                              매장 요청 합계: {(o.items||[]).reduce((s,i)=>s+(i.store_qty != null ? i.store_qty : i.hq_qty),0)}개
-                            </div>
+                                  </thead>
+                                  <tbody>
+                                    {(o.items||[]).map(it => {
+                                      const diff = it.store_qty != null ? (it.store_qty - it.hq_qty) : 0;
+                                      return (
+                                      <tr key={it.id}>
+                                        <td>{it.product?.name||'-'}</td>
+                                        <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.product?.code||'-'}</td>
+                                        <td className="r" style={{color:'var(--text3)'}}>{it.sold_qty}</td>
+                                        <td className="r" style={{fontFamily:'var(--mono)'}}>{it.hq_qty}</td>
+                                        <td className="r" style={{fontFamily:'var(--mono)', fontWeight: it.store_qty != null ? 700 : 400, color: it.store_qty != null ? 'var(--accent)' : 'var(--text3)'}}>
+                                          {it.store_qty != null ? it.store_qty : '-'}
+                                        </td>
+                                        <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text3)'}}>
+                                          {diff > 0 ? `+${diff}` : diff < 0 ? diff : '-'}
+                                        </td>
+                                        <td className="r" style={{fontFamily:'var(--mono)'}}>
+                                          {editable ? (
+                                            <input type="number" min={0}
+                                              value={confirmEditMap[it.id] != null ? confirmEditMap[it.id] : ''}
+                                              onChange={e => {
+                                                const v = Math.max(0, Number(e.target.value)||0);
+                                                setConfirmEditMap(prev => ({...prev, [it.id]: v}));
+                                              }}
+                                              style={{width:80, height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:13, textAlign:'right', fontWeight:700, color:'var(--accent)'}}/>
+                                          ) : (
+                                            it.received_qty != null
+                                              ? <span style={{color: it.received_ok ? 'var(--success)' : 'var(--danger)', fontWeight:700}}>
+                                                  {it.received_qty} {it.received_ok ? '✅' : '❌'}
+                                                </span>
+                                              : '-'
+                                          )}
+                                        </td>
+                                      </tr>
+                                    )})}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <div style={{marginTop:8, fontSize:11, fontFamily:'var(--mono)', color:'var(--text3)', textAlign:'right'}}>
+                                본사 발주 합계: {(o.items||[]).reduce((s,i)=>s+i.hq_qty,0)}개 ·
+                                매장 요청 합계: {(o.items||[]).reduce((s,i)=>s+(i.store_qty != null ? i.store_qty : i.hq_qty),0)}개
+                              </div>
+                              {editable && (
+                                <div style={{marginTop:10, display:'flex', justifyContent:'flex-end', gap:8}}>
+                                  <button className="btn btn-p" onClick={() => handleConfirm(o)} disabled={confirming}
+                                    style={{padding:'0 20px', height:36, fontSize:13, fontWeight:700}}>
+                                    {confirming ? <span className="spinner"/> : `✓ 확정 (${(o.items||[]).reduce((s,i) => s + (Number(confirmEditMap[i.id])||0), 0)}개)`}
+                                  </button>
+                                </div>
+                              )}
+                              </>
+                            );})()}
                           </td>
                         </tr>
                       )}

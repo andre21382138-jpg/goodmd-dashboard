@@ -6,6 +6,7 @@ const STATUS_LABEL = {
   sent:        { label:'본사 발송',    color:'#1565C0', bg:'#e3f2fd', border:'#90caf9' },
   requested:   { label:'발주요청 완료', color:'#2e7d32', bg:'#e8f5e9', border:'#a5d6a7' },
   rerequested: { label:'재요청 보냄',   color:'#bf360c', bg:'#fbe9e7', border:'#ffab91' },
+  confirmed:   { label:'본사 확정',     color:'#bf360c', bg:'#fff3e0', border:'#ffcc80' },
   received:    { label:'입고 완료',    color:'#6a1b9a', bg:'#f3e5f5', border:'#ce93d8' },
 };
 
@@ -22,8 +23,8 @@ export default function PurchaseOrderMgrPage({ profile }) {
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     const filterStatuses = tab === 'check'
-      ? ['sent','requested','rerequested']
-      : ['requested','rerequested','received'];
+      ? ['sent']
+      : ['confirmed','received'];
     const { data, error } = await supabase.from('purchase_orders')
       .select('*, items:purchase_order_items(*, product:products(name, code))')
       .eq('store_name',  profile.department)
@@ -115,6 +116,26 @@ export default function PurchaseOrderMgrPage({ profile }) {
         }).eq('id', it.id);
       });
       await Promise.all(itemUpdates);
+
+      // 매장재고 +received_qty 반영 (판매입력의 차감 로직의 거울)
+      for (const it of (order.items||[])) {
+        const r = recvMap[it.id] || { qty: 0 };
+        const recv = Number(r.qty) || 0;
+        if (recv <= 0 || !it.product?.code || it.received_qty != null) continue;
+        const { data: stockRow } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name',  profile.department)
+          .eq('branch_name', profile.branch)
+          .eq('product_code', it.product.code)
+          .maybeSingle();
+        if (stockRow) {
+          await supabase.from('store_stock').update({
+            stock_qty: (stockRow.stock_qty || 0) + recv,
+            updated_at: new Date().toISOString(),
+          }).eq('id', stockRow.id);
+        }
+      }
+
       const { error } = await supabase.from('purchase_orders').update({
         status: 'received',
         received_at: new Date().toISOString(),
@@ -122,24 +143,6 @@ export default function PurchaseOrderMgrPage({ profile }) {
         updated_at: new Date().toISOString(),
       }).eq('id', order.id);
       if (error) throw error;
-      // 매장재고 자동 가산
-      for (const it of (order.items||[])) {
-        const r = recvMap[it.id]; if (!r) continue;
-        const code = it.product?.code; if (!code) continue;
-        const recvQty = Number(r.qty) || 0; if (recvQty <= 0) continue;
-        const { data: stockRow } = await supabase.from('store_stock')
-          .select('id, stock_qty')
-          .eq('store_name',  profile.department)
-          .eq('branch_name', profile.branch)
-          .eq('product_code', code)
-          .maybeSingle();
-        if (stockRow) {
-          await supabase.from('store_stock').update({
-            stock_qty: (stockRow.stock_qty||0) + recvQty,
-            updated_at: new Date().toISOString(),
-          }).eq('id', stockRow.id);
-        }
-      }
       toast('입고 확인 완료 (매장재고 자동 반영)', 'ok');
       setExpanded(null); setRecvMap({});
       fetchOrders();
