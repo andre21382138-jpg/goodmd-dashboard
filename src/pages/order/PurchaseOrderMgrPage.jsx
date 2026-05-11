@@ -121,7 +121,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
       for (const it of (order.items||[])) {
         const r = recvMap[it.id] || { qty: 0 };
         const recv = Number(r.qty) || 0;
-        if (recv <= 0 || !it.product?.code) continue;
+        if (recv <= 0 || !it.product?.code || it.received_qty != null) continue;
         const { data: stockRow } = await supabase.from('store_stock')
           .select('id, stock_qty')
           .eq('store_name',  profile.department)
