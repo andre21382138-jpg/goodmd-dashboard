@@ -289,12 +289,13 @@ function AuthScreen() {
 
   return (
     <div className="auth-wrap">
-      {/* 제공자 로고 워터마크 (좌측 상단) */}
+      {/* 제공자 로고 (좌측 상단) */}
       <img src="/logo-ksl.jpg" alt="한국스마트물류"
         style={{
-          position:'fixed', top:14, left:18, zIndex:1,
-          height:28, width:'auto',
-          opacity:0.55, userSelect:'none', pointerEvents:'none',
+          position:'fixed', top:18, left:22, zIndex:1,
+          height:52, width:'auto',
+          mixBlendMode:'multiply',
+          userSelect:'none', pointerEvents:'none',
         }}/>
       <div className="auth-box">
         <div className="auth-logo">
