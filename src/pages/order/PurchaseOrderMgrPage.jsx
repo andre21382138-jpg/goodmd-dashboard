@@ -48,6 +48,22 @@ export default function PurchaseOrderMgrPage({ profile }) {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
+  // 상품 검색 (debounce 300ms)
+  useEffect(() => {
+    const q = (searchQ || '').trim();
+    if (q.length < 2) { setSearchResults([]); setSearchLoading(false); return; }
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      const { data } = await supabase.from('products')
+        .select('id, name, code')
+        .or(`name.ilike.%${q}%,code.ilike.%${q}%`)
+        .limit(10);
+      setSearchResults(data || []);
+      setSearchLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQ]);
+
   const toggleExpand = (o) => {
     if (expanded === o.id) {
       setExpanded(null); setEditMap({}); setMemoMap({}); setRecvMap({});
