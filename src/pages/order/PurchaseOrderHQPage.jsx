@@ -191,6 +191,13 @@ export default function PurchaseOrderHQPage({ profile }) {
       }
     }
 
+    // 센터재고 fetch → product_id 별 합산
+    const { data: centerRows } = await supabase.from('center_stock').select('product_id, quantity');
+    const centerStockMap = new Map(); // product_id → total quantity
+    for (const c of (centerRows || [])) {
+      centerStockMap.set(c.product_id, (centerStockMap.get(c.product_id) || 0) + (c.quantity || 0));
+    }
+
     // 집계: store+branch+product_id 별로 effQty 합산
     const map = new Map();
     for (const r of (data || [])) {
@@ -210,7 +217,8 @@ export default function PurchaseOrderHQPage({ profile }) {
         .sort((a,b) => (a.name||'').localeCompare(b.name||''))
         .map(it => {
           const alreadyOrdered = orderedKeys.has(`${grp.store}|${grp.branch}|${it.product_id}`);
-          return { ...it, hq_qty: it.sold_qty, checked: !alreadyOrdered, alreadyOrdered };
+          const center_stock = centerStockMap.get(it.product_id) || 0;
+          return { ...it, hq_qty: it.sold_qty, checked: !alreadyOrdered, alreadyOrdered, center_stock };
         });
       result.push({ store: grp.store, branch: grp.branch, items });
     }
@@ -261,6 +269,7 @@ export default function PurchaseOrderHQPage({ profile }) {
         checked: true,
         manual: true,
         alreadyOrdered: false,
+        center_stock: 0,
       };
       return { ...g, items: [...g.items, newItem] };
     }));
@@ -515,6 +524,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                         <th style={{width:36}}></th>
                         <th>상품명</th>
                         <th>코드</th>
+                        <th className="r" style={{width:80}}>센터재고</th>
                         <th className="r">판매수량</th>
                         <th style={{width:40}}></th>
                       </tr>
@@ -537,6 +547,9 @@ export default function PurchaseOrderHQPage({ profile }) {
                             {it.alreadyOrdered && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>📋 발주 완료</span>}
                           </td>
                           <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.code || '-'}</td>
+                          <td className="r" style={{fontFamily:'var(--mono)', color: (it.center_stock || 0) === 0 ? 'var(--text3)' : 'var(--text)'}}>
+                            {(it.center_stock || 0).toLocaleString()}
+                          </td>
                           <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: it.manual ? 'var(--text3)' : 'var(--text)'}}>
                             {it.manual ? '-' : it.sold_qty}
                           </td>
