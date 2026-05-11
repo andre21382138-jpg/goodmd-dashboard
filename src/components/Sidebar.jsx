@@ -285,14 +285,6 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
 
   return (
     <div className="sidebar">
-      {/* 제공자 로고 워터마크 */}
-      <div style={{
-        padding:'6px 18px 0', fontSize:10, fontWeight:700,
-        color:'var(--sidebar-text)', opacity:0.35, letterSpacing:0.2,
-        fontFamily:'var(--mono)', userSelect:'none',
-      }}>
-        (주)한국스마트물류
-      </div>
       {/* 홈 버튼 */}
       <button
         onClick={() => setPage('home')}
