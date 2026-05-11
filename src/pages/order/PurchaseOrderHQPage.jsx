@@ -736,7 +736,15 @@ export default function PurchaseOrderHQPage({ profile }) {
                                       const diff = it.store_qty != null ? (it.store_qty - it.hq_qty) : 0;
                                       return (
                                       <tr key={it.id}>
-                                        <td>{it.product?.name||'-'}</td>
+                                        <td>
+                                          {it.product?.name||'-'}
+                                          {((it.hq_qty || 0) === 0 && (it.store_qty || 0) > 0) && (
+                                            <span style={{marginLeft:6, fontSize:10, fontWeight:700, padding:'1px 6px',
+                                              background:'#fff3e0', color:'#bf360c', border:'1px solid #ffcc80', borderRadius:3}}>
+                                              🆕 매장 추가
+                                            </span>
+                                          )}
+                                        </td>
                                         <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.product?.code||'-'}</td>
                                         <td className="r" style={{color:'var(--text3)'}}>{it.sold_qty}</td>
                                         <td className="r" style={{fontFamily:'var(--mono)'}}>{it.hq_qty}</td>
