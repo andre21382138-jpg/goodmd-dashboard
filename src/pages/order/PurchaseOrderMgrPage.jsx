@@ -27,7 +27,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
   const [searchResults,  setSearchResults]  = useState([]);
   const [searchOpen,     setSearchOpen]     = useState(false);
   const [searchLoading,  setSearchLoading]  = useState(false);
-  const [newQty,         setNewQty]         = useState('');
+  const [addQty,         setAddQty]         = useState('');
   const [selProduct,     setSelProduct]     = useState(null);
 
   const fetchOrders = useCallback(async () => {
@@ -51,7 +51,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
   const toggleExpand = (o) => {
     if (expanded === o.id) {
       setExpanded(null); setEditMap({}); setMemoMap({}); setRecvMap({});
-      setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setNewQty(''); setSelProduct(null);
+      setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null);
     } else {
       const em = {};
       const rm = {};
@@ -63,7 +63,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
       setRecvMap(rm);
       setMemoMap({ [o.id]: o.store_note || '' });
       setExpanded(o.id);
-      setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setNewQty(''); setSelProduct(null);
+      setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null);
     }
   };
 

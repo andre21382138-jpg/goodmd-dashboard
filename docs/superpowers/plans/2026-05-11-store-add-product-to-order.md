@@ -64,7 +64,7 @@ const [searchQ,        setSearchQ]        = useState('');
 const [searchResults,  setSearchResults]  = useState([]);
 const [searchOpen,     setSearchOpen]     = useState(false);
 const [searchLoading,  setSearchLoading]  = useState(false);
-const [newQty,         setNewQty]         = useState('');
+const [addQty,         setAddQty]         = useState('');
 const [selProduct,     setSelProduct]     = useState(null);
 ```
 
@@ -97,7 +97,7 @@ const toggleExpand = (o) => {
 const toggleExpand = (o) => {
   if (expanded === o.id) {
     setExpanded(null); setEditMap({}); setMemoMap({}); setRecvMap({});
-    setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setNewQty(''); setSelProduct(null);
+    setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null);
   } else {
     const em = {};
     const rm = {};
@@ -109,7 +109,7 @@ const toggleExpand = (o) => {
     setRecvMap(rm);
     setMemoMap({ [o.id]: o.store_note || '' });
     setExpanded(o.id);
-    setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setNewQty(''); setSelProduct(null);
+    setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null);
   }
 };
 ```
@@ -126,7 +126,7 @@ git add src/pages/order/PurchaseOrderMgrPage.jsx
 git commit -m "$(cat <<'EOF'
 feat(order/mgr): 매장 추가상품을 위한 state 추가
 
-addedItems, search UI 상태(searchQ/Results/Open/Loading, newQty, selProduct)를
+addedItems, search UI 상태(searchQ/Results/Open/Loading, addQty, selProduct)를
 도입하고 펼침 토글 시 초기화. UI 영향 없음.
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
@@ -202,7 +202,7 @@ EOF
 // 매장이 입력행에서 상품 + 수량 골라 "+ 추가" 누름
 const handleAddItem = (order) => {
   if (!selProduct) { toast('상품을 선택하세요', 'err'); return; }
-  const qty = Number(newQty) || 0;
+  const qty = Number(addQty) || 0;
   if (qty <= 0) { toast('수량을 입력하세요', 'err'); return; }
   // 중복 검사: 기존 본사 라인 + 이미 추가된 라인
   const inOrder = (order.items||[]).some(it => it.product_id === selProduct.id);
@@ -216,7 +216,7 @@ const handleAddItem = (order) => {
     qty,
   }]);
   // 입력 리셋
-  setSearchQ(''); setSearchResults([]); setSearchOpen(false); setNewQty(''); setSelProduct(null);
+  setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null);
 };
 
 const handleRemoveAddedItem = (tempId) => {
@@ -398,18 +398,18 @@ EOF
       </td>
       <td className="r">
         <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}>
-          <input type="number" min={1} value={newQty}
+          <input type="number" min={1} value={addQty}
             placeholder="수량"
-            onChange={e => setNewQty(e.target.value)}
+            onChange={e => setAddQty(e.target.value)}
             style={{width:60, height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, textAlign:'right'}}/>
           <button type="button"
-            disabled={!selProduct || !(Number(newQty)>0)}
+            disabled={!selProduct || !(Number(addQty)>0)}
             onClick={() => handleAddItem(o)}
             style={{height:30, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4,
-              background: (selProduct && Number(newQty)>0) ? 'var(--accent)' : '#fff',
-              color: (selProduct && Number(newQty)>0) ? '#fff' : 'var(--text3)',
+              background: (selProduct && Number(addQty)>0) ? 'var(--accent)' : '#fff',
+              color: (selProduct && Number(addQty)>0) ? '#fff' : 'var(--text3)',
               fontSize:11, fontWeight:700,
-              cursor: (selProduct && Number(newQty)>0) ? 'pointer' : 'not-allowed'}}>
+              cursor: (selProduct && Number(addQty)>0) ? 'pointer' : 'not-allowed'}}>
             + 추가
           </button>
         </div>
@@ -748,7 +748,7 @@ Expected: `main -> main` 푸시 성공. Vercel 자동 배포 트리거.
 **Placeholder scan:** 없음. 모든 step에 실제 코드 / 명령 / 기대 결과.
 
 **Type / 이름 일관성:**
-- `addedItems` (배열), `searchQ`/`searchResults`/`searchOpen`/`searchLoading`, `newQty`, `selProduct` — Task 1~6 일관 사용
+- `addedItems` (배열), `searchQ`/`searchResults`/`searchOpen`/`searchLoading`, `addQty`, `selProduct` — Task 1~6 일관 사용
 - `handleAddItem`/`handleRemoveAddedItem`/`handleAddedQtyChange` — Task 3 정의, Task 4/5/6 호출
 - 식별 규칙 `hq_qty=0 AND store_qty>0` — Task 5/6 insert와 Task 7 표시에서 일치
 - temp id 형식 `tmp_${Date.now()}_${i}` — Task 3 발급, Task 4 key/삭제에서 일치
