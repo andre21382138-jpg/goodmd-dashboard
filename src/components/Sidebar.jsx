@@ -300,7 +300,18 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
       >
         <span style={{ fontSize:22 }}>🏬</span>
         <div>
-          <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 관리시스템</div>
+          {isAdmin ? (
+            <>
+              <div style={{ fontSize:11, fontWeight:600, color:'var(--sidebar-text)', opacity:0.85, lineHeight:1.2 }}>
+                서비스 이용기간 : 2027. 04. 09 까지
+              </div>
+              <div style={{ fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2, marginTop:2 }}>
+                (주)한국생활건강
+              </div>
+            </>
+          ) : (
+            <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 관리시스템</div>
+          )}
         </div>
       </button>
 
