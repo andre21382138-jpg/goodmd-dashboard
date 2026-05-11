@@ -86,6 +86,34 @@ export default function PurchaseOrderMgrPage({ profile }) {
     }
   };
 
+  // 매장이 입력행에서 상품 + 수량 골라 "+ 추가" 누름
+  const handleAddItem = (order) => {
+    if (!selProduct) { toast('상품을 선택하세요', 'err'); return; }
+    const qty = Number(addQty) || 0;
+    if (qty <= 0) { toast('수량을 입력하세요', 'err'); return; }
+    // 중복 검사: 기존 본사 라인 + 이미 추가된 라인
+    const inOrder = (order.items||[]).some(it => it.product_id === selProduct.id);
+    const inAdded = addedItems.some(a => a.product_id === selProduct.id);
+    if (inOrder || inAdded) { toast('이미 발주 목록에 있는 상품입니다', 'err'); return; }
+    setAddedItems(prev => [...prev, {
+      tempId: `tmp_${Date.now()}_${prev.length}`,
+      product_id: selProduct.id,
+      name: selProduct.name,
+      code: selProduct.code,
+      qty,
+    }]);
+    // 입력 리셋
+    setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null);
+  };
+
+  const handleRemoveAddedItem = (tempId) => {
+    setAddedItems(prev => prev.filter(a => a.tempId !== tempId));
+  };
+
+  const handleAddedQtyChange = (tempId, qty) => {
+    setAddedItems(prev => prev.map(a => a.tempId === tempId ? { ...a, qty: Math.max(0, Number(qty)||0) } : a));
+  };
+
   // 그대로 발주요청 (본사 수량 그대로)
   const handleRequestAsIs = async (order) => {
     if (!window.confirm('본사 발주 수량 그대로 발주요청 하시겠습니까?')) return;
