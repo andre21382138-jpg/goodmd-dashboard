@@ -312,6 +312,96 @@ export default function PurchaseOrderMgrPage({ profile }) {
                                         </td>
                                       </tr>
                                     )})}
+                                    {/* 매장이 추가한 상품들 (state, 아직 DB 저장 전) */}
+                                    {o.status === 'sent' && addedItems.map(a => (
+                                      <tr key={a.tempId} style={{background:'#fffde7'}}>
+                                        <td>
+                                          {a.name}
+                                          <span style={{marginLeft:6, fontSize:10, fontWeight:700, padding:'1px 6px',
+                                            background:'#fff3e0', color:'#bf360c', border:'1px solid #ffcc80', borderRadius:3}}>
+                                            🆕 매장추가
+                                          </span>
+                                        </td>
+                                        <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{a.code || '-'}</td>
+                                        <td className="r" style={{color:'var(--text3)'}}>-</td>
+                                        <td className="r" style={{color:'var(--text3)'}}>-</td>
+                                        <td className="r">
+                                          <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}>
+                                            <input type="number" min={0} value={a.qty}
+                                              onChange={e => handleAddedQtyChange(a.tempId, e.target.value)}
+                                              style={{width:80, height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:13, textAlign:'right', fontWeight:700}}/>
+                                            <button onClick={() => handleRemoveAddedItem(a.tempId)}
+                                              title="삭제"
+                                              style={{height:30, width:30, border:'1px solid var(--border)', borderRadius:4, background:'#fff', cursor:'pointer', fontSize:14, color:'var(--text3)'}}>
+                                              ✕
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    {/* 입력행: 검색 + 수량 + + 추가 (sent 상태일 때만) */}
+                                    {o.status === 'sent' && (
+                                      <tr style={{background:'#fafafa'}}>
+                                        <td colSpan={4} style={{padding:'10px 8px'}}>
+                                          <div style={{display:'flex', alignItems:'center', gap:8, position:'relative'}}>
+                                            <span style={{fontSize:12, fontWeight:700, color:'var(--text2)'}}>+ 상품 추가</span>
+                                            <div style={{flex:1, position:'relative'}}>
+                                              <input type="text"
+                                                value={searchQ}
+                                                placeholder="상품명 또는 코드 검색 (2글자 이상)"
+                                                onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); setSelProduct(null); }}
+                                                onFocus={() => setSearchOpen(true)}
+                                                style={{width:'100%', height:30, padding:'0 10px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, boxSizing:'border-box'}}/>
+                                              {searchOpen && searchQ.trim().length >= 2 && (
+                                                <div style={{position:'absolute', top:32, left:0, right:0, zIndex:10,
+                                                  background:'#fff', border:'1px solid var(--border)', borderRadius:4,
+                                                  maxHeight:200, overflowY:'auto', boxShadow:'0 2px 8px rgba(0,0,0,0.08)'}}>
+                                                  {searchLoading ? (
+                                                    <div style={{padding:'8px 12px', fontSize:11, color:'var(--text3)'}}>검색 중...</div>
+                                                  ) : searchResults.length === 0 ? (
+                                                    <div style={{padding:'8px 12px', fontSize:11, color:'var(--text3)'}}>검색 결과 없음</div>
+                                                  ) : searchResults.map(p => {
+                                                    const dup = (o.items||[]).some(it => it.product_id === p.id) || addedItems.some(a => a.product_id === p.id);
+                                                    return (
+                                                      <button key={p.id} type="button"
+                                                        disabled={dup}
+                                                        onClick={() => { setSelProduct(p); setSearchQ(`${p.name} (${p.code||'-'})`); setSearchOpen(false); }}
+                                                        style={{display:'block', width:'100%', textAlign:'left', padding:'6px 12px',
+                                                          border:'none', background: dup ? '#f5f5f5' : '#fff',
+                                                          color: dup ? 'var(--text3)' : 'var(--text)',
+                                                          cursor: dup ? 'not-allowed' : 'pointer', fontSize:12,
+                                                          borderBottom:'1px solid var(--border)'}}>
+                                                        {p.name}
+                                                        <span style={{marginLeft:8, fontFamily:'var(--mono)', fontSize:10, color:'var(--text3)'}}>{p.code || '-'}</span>
+                                                        {dup && <span style={{marginLeft:8, fontSize:10, color:'var(--danger)'}}>이미 있음</span>}
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="r">
+                                          <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6}}>
+                                            <input type="number" min={1} value={addQty}
+                                              placeholder="수량"
+                                              onChange={e => setAddQty(e.target.value)}
+                                              style={{width:60, height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, textAlign:'right'}}/>
+                                            <button type="button"
+                                              disabled={!selProduct || !(Number(addQty)>0)}
+                                              onClick={() => handleAddItem(o)}
+                                              style={{height:30, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4,
+                                                background: (selProduct && Number(addQty)>0) ? 'var(--accent)' : '#fff',
+                                                color: (selProduct && Number(addQty)>0) ? '#fff' : 'var(--text3)',
+                                                fontSize:11, fontWeight:700,
+                                                cursor: (selProduct && Number(addQty)>0) ? 'pointer' : 'not-allowed'}}>
+                                              + 추가
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
                                   </tbody>
                                 </table>
                               </div>
