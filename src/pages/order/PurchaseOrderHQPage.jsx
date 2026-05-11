@@ -179,6 +179,18 @@ export default function PurchaseOrderHQPage({ profile }) {
       .select('store_name, branch_name, product_id, quantity, returned_qty, product:products(name,code)')
       .gte('sold_at', fFrom).lte('sold_at', fTo);
     if (error) { toast(error.message, 'err'); setAggLoading(false); return; }
+
+    // 같은 주에 이미 발주된 라인 fetch → 중복 발주 방지용
+    const { data: existing } = await supabase.from('purchase_orders')
+      .select('store_name, branch_name, items:purchase_order_items(product_id)')
+      .eq('week_start', fFrom).eq('week_end', fTo);
+    const orderedKeys = new Set();
+    for (const o of (existing || [])) {
+      for (const it of (o.items || [])) {
+        orderedKeys.add(`${o.store_name}|${o.branch_name}|${it.product_id}`);
+      }
+    }
+
     // 집계: store+branch+product_id 별로 effQty 합산
     const map = new Map();
     for (const r of (data || [])) {
@@ -196,7 +208,10 @@ export default function PurchaseOrderHQPage({ profile }) {
     for (const grp of map.values()) {
       const items = [...grp.items.values()]
         .sort((a,b) => (a.name||'').localeCompare(b.name||''))
-        .map(it => ({ ...it, hq_qty: it.sold_qty, checked: true }));
+        .map(it => {
+          const alreadyOrdered = orderedKeys.has(`${grp.store}|${grp.branch}|${it.product_id}`);
+          return { ...it, hq_qty: it.sold_qty, checked: !alreadyOrdered, alreadyOrdered };
+        });
       result.push({ store: grp.store, branch: grp.branch, items });
     }
     result.sort((a,b) => `${a.store}${a.branch}`.localeCompare(`${b.store}${b.branch}`));
@@ -211,17 +226,17 @@ export default function PurchaseOrderHQPage({ profile }) {
   const toggleItem = (storeKey, pid) => {
     setAggRows(prev => prev.map(g => {
       if (`${g.store}|${g.branch}` !== storeKey) return g;
-      return { ...g, items: g.items.map(it => it.product_id === pid ? { ...it, checked: !it.checked } : it) };
+      return { ...g, items: g.items.map(it => (it.product_id === pid && !it.alreadyOrdered) ? { ...it, checked: !it.checked } : it) };
     }));
   };
   const toggleStore = (storeKey, on) => {
     setAggRows(prev => prev.map(g => {
       if (`${g.store}|${g.branch}` !== storeKey) return g;
-      return { ...g, items: g.items.map(it => ({ ...it, checked: on })) };
+      return { ...g, items: g.items.map(it => it.alreadyOrdered ? it : { ...it, checked: on }) };
     }));
   };
   const toggleAll = (on) => {
-    setAggRows(prev => prev.map(g => ({ ...g, items: g.items.map(it => ({ ...it, checked: on })) })));
+    setAggRows(prev => prev.map(g => ({ ...g, items: g.items.map(it => it.alreadyOrdered ? it : { ...it, checked: on }) })));
   };
 
   // 상품 수동 추가
@@ -231,6 +246,10 @@ export default function PurchaseOrderHQPage({ profile }) {
       // 이미 있는지 확인
       const existing = g.items.find(i => i.product_id === product.id);
       if (existing) {
+        if (existing.alreadyOrdered) {
+          toast('이미 같은 주에 발주된 상품입니다', 'inf');
+          return g;
+        }
         return { ...g, items: g.items.map(i => i.product_id === product.id ? { ...i, checked: true } : i) };
       }
       const newItem = {
@@ -241,6 +260,7 @@ export default function PurchaseOrderHQPage({ profile }) {
         hq_qty: 1,
         checked: true,
         manual: true,
+        alreadyOrdered: false,
       };
       return { ...g, items: [...g.items, newItem] };
     }));
@@ -273,7 +293,7 @@ export default function PurchaseOrderHQPage({ profile }) {
   // ── 2. 발주 진행 (DB insert) ──
   const handleSubmitOrders = async () => {
     const checkedGroups = aggRows
-      .map(g => ({ ...g, items: g.items.filter(i => i.checked && i.hq_qty > 0) }))
+      .map(g => ({ ...g, items: g.items.filter(i => i.checked && i.hq_qty > 0 && !i.alreadyOrdered) }))
       .filter(g => g.items.length > 0);
     if (checkedGroups.length === 0) { toast('발주할 상품이 없습니다', 'err'); return; }
     if (!window.confirm(`${checkedGroups.length}개 매장에 발주를 진행하시겠습니까?\n총 상품 종류: ${checkedGroups.reduce((s,g)=>s+g.items.length,0)}개`)) return;
@@ -472,14 +492,22 @@ export default function PurchaseOrderHQPage({ profile }) {
 
               {aggRows.map(g => {
                 const sk = `${g.store}|${g.branch}`;
-                const allOn = g.items.length > 0 && g.items.every(i => i.checked);
+                const selectable = g.items.filter(i => !i.alreadyOrdered);
+                const allOn = selectable.length > 0 && selectable.every(i => i.checked);
+                const orderedCount = g.items.filter(i => i.alreadyOrdered).length;
                 const sug = getSuggestions(sk);
                 return (
                 <div key={sk} style={{marginBottom:14, border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'visible'}}>
                   <div style={{background:'#f5f7fa', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid var(--border)'}}>
-                    <input type="checkbox" checked={allOn} onChange={() => toggleStore(sk, !allOn)} style={{cursor:'pointer'}}/>
+                    <input type="checkbox" checked={allOn} disabled={selectable.length === 0}
+                      onChange={() => toggleStore(sk, !allOn)} style={{cursor: selectable.length === 0 ? 'not-allowed' : 'pointer'}}/>
                     <strong>{g.store} · {g.branch}</strong>
                     <span style={{fontSize:11, color:'var(--text3)'}}>{g.items.length}개 상품</span>
+                    {orderedCount > 0 && (
+                      <span style={{fontSize:11, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 8px', borderRadius:3}}>
+                        📋 발주 완료 {orderedCount}건
+                      </span>
+                    )}
                   </div>
                   <table>
                     <thead>
@@ -493,22 +521,27 @@ export default function PurchaseOrderHQPage({ profile }) {
                     </thead>
                     <tbody>
                       {g.items.map(it => (
-                        <tr key={it.product_id}>
+                        <tr key={it.product_id} style={it.alreadyOrdered ? {background:'#fafafa', opacity:0.7} : undefined}>
                           <td style={{textAlign:'center'}}>
-                            <input type="checkbox" checked={it.checked}
-                              onChange={() => toggleItem(sk, it.product_id)}
-                              style={{cursor:'pointer'}}/>
+                            {it.alreadyOrdered ? (
+                              <span title="이미 같은 주에 발주된 라인" style={{fontSize:14}}>📋</span>
+                            ) : (
+                              <input type="checkbox" checked={it.checked}
+                                onChange={() => toggleItem(sk, it.product_id)}
+                                style={{cursor:'pointer'}}/>
+                            )}
                           </td>
                           <td>
                             {it.name || '-'}
                             {it.manual && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#1565C0', background:'#e3f2fd', border:'1px solid #90caf9', padding:'1px 6px', borderRadius:3}}>추가</span>}
+                            {it.alreadyOrdered && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>📋 발주 완료</span>}
                           </td>
                           <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.code || '-'}</td>
                           <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: it.manual ? 'var(--text3)' : 'var(--text)'}}>
                             {it.manual ? '-' : it.sold_qty}
                           </td>
                           <td style={{textAlign:'center'}}>
-                            {it.manual && (
+                            {it.manual && !it.alreadyOrdered && (
                               <button type="button" onClick={() => removeManualItem(sk, it.product_id)}
                                 title="추가 상품 삭제"
                                 style={{background:'none', border:'none', cursor:'pointer', color:'var(--danger)', fontSize:14}}>✕</button>
