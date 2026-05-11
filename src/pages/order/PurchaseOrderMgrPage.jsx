@@ -11,14 +11,24 @@ const STATUS_LABEL = {
 };
 
 export default function PurchaseOrderMgrPage({ profile }) {
-  const [tab, setTab] = useState('check'); // 'check' | 'receive'
+  const [tab, setTab] = useState('check');
   const [orders,    setOrders]    = useState([]);
   const [loading,   setLoading]   = useState(false);
   const [expanded,  setExpanded]  = useState(null);
-  const [editMap,   setEditMap]   = useState({});  // { itemId: qty }
-  const [memoMap,   setMemoMap]   = useState({});  // { orderId: note }
-  const [recvMap,   setRecvMap]   = useState({});  // { itemId: { qty, ok } }
+  const [editMap,   setEditMap]   = useState({});
+  const [memoMap,   setMemoMap]   = useState({});
+  const [recvMap,   setRecvMap]   = useState({});
   const [saving,    setSaving]    = useState(false);
+  // 매장이 펼침 영역에서 추가한 상품들 (펼침 닫으면 초기화)
+  // [{ tempId, product_id, name, code, qty }]
+  const [addedItems, setAddedItems] = useState([]);
+  // 상품 검색 UI 상태
+  const [searchQ,        setSearchQ]        = useState('');
+  const [searchResults,  setSearchResults]  = useState([]);
+  const [searchOpen,     setSearchOpen]     = useState(false);
+  const [searchLoading,  setSearchLoading]  = useState(false);
+  const [newQty,         setNewQty]         = useState('');
+  const [selProduct,     setSelProduct]     = useState(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -41,6 +51,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
   const toggleExpand = (o) => {
     if (expanded === o.id) {
       setExpanded(null); setEditMap({}); setMemoMap({}); setRecvMap({});
+      setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setNewQty(''); setSelProduct(null);
     } else {
       const em = {};
       const rm = {};
@@ -52,6 +63,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
       setRecvMap(rm);
       setMemoMap({ [o.id]: o.store_note || '' });
       setExpanded(o.id);
+      setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setNewQty(''); setSelProduct(null);
     }
   };
 
