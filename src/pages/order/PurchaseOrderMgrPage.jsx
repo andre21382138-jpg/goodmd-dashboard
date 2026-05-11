@@ -151,14 +151,27 @@ export default function PurchaseOrderMgrPage({ profile }) {
 
   // 수량 수정 후 재요청
   const handleRerequest = async (order) => {
-    if (!window.confirm('수정한 수량으로 재요청 하시겠습니까?\n\n본사가 매장에 직접 연락하여 수량을 확정합니다.')) return;
+    const addedCount = addedItems.length;
+    const msg = addedCount > 0
+      ? `수정한 수량 + 매장 추가 ${addedCount}개 상품을 재요청 하시겠습니까?\n\n본사 확정 후 진행됩니다.`
+      : '수정한 수량으로 재요청 하시겠습니까?\n\n본사 확정 후 진행됩니다.';
+    if (!window.confirm(msg)) return;
     setSaving(true);
     try {
       const itemUpdates = (order.items||[]).map(it => {
         const newQty = Number(editMap[it.id]) || 0;
         return supabase.from('purchase_order_items').update({ store_qty: newQty }).eq('id', it.id);
       });
-      await Promise.all(itemUpdates);
+      const itemInserts = addedItems
+        .filter(a => Number(a.qty) > 0)
+        .map(a => supabase.from('purchase_order_items').insert({
+          purchase_order_id: order.id,
+          product_id: a.product_id,
+          sold_qty: 0,
+          hq_qty: 0,
+          store_qty: Number(a.qty) || 0,
+        }));
+      await Promise.all([...itemUpdates, ...itemInserts]);
       const { error } = await supabase.from('purchase_orders').update({
         status: 'rerequested',
         store_note: memoMap[order.id] || null,
@@ -166,7 +179,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
       }).eq('id', order.id);
       if (error) throw error;
       toast('재요청 보냄', 'ok');
-      setExpanded(null); setEditMap({}); setMemoMap({});
+      setExpanded(null); setEditMap({}); setMemoMap({}); setAddedItems([]);
       fetchOrders();
     } catch (err) { toast('처리 실패: ' + err.message, 'err'); }
     setSaving(false);
