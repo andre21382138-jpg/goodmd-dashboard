@@ -292,7 +292,7 @@ function AuthScreen() {
       <div className="auth-box">
         <div className="auth-logo">
           <div className="auth-logo-icon">🏬</div>
-          <div className="auth-logo-text">(주)한국스마트물류</div>
+          <div className="auth-logo-text">(주)한국생활건강</div>
         </div>
         <div className="auth-sub">온라인/오프라인 주문수집 &amp; 결산 &amp; 발주관리</div>
 
