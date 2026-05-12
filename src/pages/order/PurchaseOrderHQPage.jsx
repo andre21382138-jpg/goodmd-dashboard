@@ -11,14 +11,20 @@ const STATUS_LABEL = {
   received:    { label:'입고완료',    color:'#6a1b9a', bg:'#f3e5f5', border:'#ce93d8' },
 };
 
-async function exportPurchaseOrders() {
+async function exportPurchaseOrders({ orderIds = null } = {}) {
   // 1) 다운로드 대상 발주 fetch
-  const { data: orders, error: oErr } = await supabase.from('purchase_orders')
+  //    - orderIds=null (기본): status='confirmed' AND exported_at IS NULL (배치 다운로드)
+  //    - orderIds=[...] : 해당 ID만 (재다운로드) — exported_at 무관
+  let q = supabase.from('purchase_orders')
     .select('id, store_name, branch_name, items:purchase_order_items(id, product_id, hq_qty, store_qty, product:products(name, erp_code, code))')
-    .eq('status', 'confirmed')
-    .is('exported_at', null)
     .order('store_name', { ascending: true })
     .order('branch_name', { ascending: true });
+  if (orderIds && orderIds.length > 0) {
+    q = q.in('id', orderIds);
+  } else {
+    q = q.eq('status', 'confirmed').is('exported_at', null);
+  }
+  const { data: orders, error: oErr } = await q;
   if (oErr) throw oErr;
   if (!orders || orders.length === 0) {
     return { count: 0, missingMaster: [] };
@@ -115,13 +121,13 @@ async function exportPurchaseOrders() {
   dlBlob(buf, `매장발주_${yyyy_mm_dd}.xlsx`);
 
   // 10) 다운로드된 발주들의 exported_at 일괄 update
-  const orderIds = orders.map(o => o.id);
+  const downloadedIds = orders.map(o => o.id);
   const { error: uErr } = await supabase.from('purchase_orders')
     .update({ exported_at: new Date().toISOString() })
-    .in('id', orderIds);
+    .in('id', downloadedIds);
   if (uErr) throw uErr;
 
-  return { count: orderIds.length, missingMaster };
+  return { count: downloadedIds.length, missingMaster };
 }
 
 const fmt = (d) => {
@@ -350,6 +356,29 @@ export default function PurchaseOrderHQPage({ profile }) {
   }, []);
 
   useEffect(() => { if (tab === 'status') fetchOrders(); }, [tab, fetchOrders]);
+
+  const handleReexport = async (orderId) => {
+    const ok = window.confirm(
+      '⚠️ 재다운로드 경고\n\n' +
+      '이 발주는 이미 한 번 다운로드되어 외부 시스템에 발주가 진행 중일 수 있습니다.\n' +
+      '재다운로드 파일을 다시 업로드하면 이중 발주가 발생합니다.\n\n' +
+      '꼭 필요한 경우에만 진행하세요.\n\n' +
+      '재다운로드 하시겠습니까?'
+    );
+    if (!ok) return;
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { count } = await exportPurchaseOrders({ orderIds: [orderId] });
+      if (count > 0) toast(`재다운로드 완료 (${count}건)`, 'ok');
+      else toast('재다운로드 실패: 발주를 찾을 수 없습니다', 'err');
+      fetchOrders();
+    } catch (err) {
+      toast('재다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleExport = async () => {
     if (exporting) return;
@@ -696,11 +725,15 @@ export default function PurchaseOrderHQPage({ profile }) {
                           <span style={{display:'inline-block', padding:'2px 10px', borderRadius:4, fontSize:11, fontWeight:700,
                             background:st.bg, color:st.color, border:`1px solid ${st.border}`}}>{st.label}</span>
                           {o.exported_at && (
-                            <span style={{display:'inline-block', marginLeft:6, padding:'2px 8px', borderRadius:4, fontSize:10, fontWeight:700,
-                              background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7'}}
-                              title={`출하됨: ${new Date(o.exported_at).toLocaleString('ko-KR')}`}>
-                              ✓ 출하됨
-                            </span>
+                            <button type="button"
+                              onClick={(e) => { e.stopPropagation(); handleReexport(o.id); }}
+                              disabled={exporting}
+                              title={`출하됨: ${new Date(o.exported_at).toLocaleString('ko-KR')}\n클릭하여 재다운로드`}
+                              style={{display:'inline-block', marginLeft:6, padding:'2px 8px', borderRadius:4, fontSize:10, fontWeight:700,
+                                background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7',
+                                cursor: exporting ? 'not-allowed' : 'pointer', fontFamily:'inherit'}}>
+                              ✓ 출하됨 🔄
+                            </button>
                           )}
                         </td>
                         <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{new Date(o.updated_at||o.created_at).toLocaleString('ko-KR', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
