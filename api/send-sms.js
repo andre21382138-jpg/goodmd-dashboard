@@ -25,9 +25,46 @@ const ERR = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { receivers, message, sender } = req.body;
+  const { receivers, message, sender, kind } = req.body;
   if (!receivers?.length || !message?.trim()) {
     return res.status(400).json({ error: '수신자 또는 메시지가 없습니다' });
+  }
+
+  // 광고성(kind가 'marketing_'으로 시작) — sms_consent=true 회원만 통과
+  let filteredReceivers = receivers;
+  let filteredOut = 0;
+  if (kind && kind.startsWith('marketing_')) {
+    const phones = receivers.map(r => String(r.phone || '').replace(/\D/g, '')).filter(Boolean);
+    if (phones.length > 0) {
+      const SUPABASE_URL = process.env.SUPABASE_URL;
+      const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        const phoneFilter = phones.map(p => `phone.eq.${p}`).join(',');
+        const url = `${SUPABASE_URL}/rest/v1/customers?or=(${phoneFilter})&select=phone,sms_consent`;
+        try {
+          const r = await fetch(url, {
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+          });
+          const rows = await r.json();
+          const consentMap = new Map();
+          for (const row of (Array.isArray(rows) ? rows : [])) {
+            consentMap.set(String(row.phone || '').replace(/\D/g, ''), row.sms_consent === true);
+          }
+          filteredReceivers = receivers.filter(rcv => {
+            const digits = String(rcv.phone || '').replace(/\D/g, '');
+            return consentMap.get(digits) === true;
+          });
+          filteredOut = receivers.length - filteredReceivers.length;
+        } catch (e) {
+          // 동의 조회 실패 시 안전하게 발송 차단 (광고성은 보수적)
+          return res.status(500).json({ error: '수신동의 확인 실패. 발송 중단.' });
+        }
+      }
+    }
+  }
+
+  if (filteredReceivers.length === 0) {
+    return res.json({ ok: 0, failCount: 0, failed: [], details: [], filteredOut });
   }
 
   const { MUNJANARA_USERID, MUNJANARA_PASSWD } = process.env;
@@ -72,8 +109,8 @@ export default async function handler(req, res) {
   const details = []; // { name, phone, status }
 
   // BATCH 단위로 병렬 발송
-  for (let i = 0; i < receivers.length; i += BATCH) {
-    const chunk = receivers.slice(i, i + BATCH);
+  for (let i = 0; i < filteredReceivers.length; i += BATCH) {
+    const chunk = filteredReceivers.slice(i, i + BATCH);
     const results = await Promise.allSettled(chunk.map(sendOne));
     for (const r of results) {
       const v = r.status === 'fulfilled' ? r.value : { ok: false, name: '?', phone: '?', status: '수신오류' };
@@ -85,5 +122,5 @@ export default async function handler(req, res) {
   const failCount = details.filter(d => d.status !== '정상수신').length;
   const failed = details.filter(d => d.status !== '정상수신').map(d => `${d.name}(${d.status})`);
 
-  res.json({ ok: okCount, failCount, failed, details });
+  res.json({ ok: okCount, failCount, failed, details, filteredOut });
 }
