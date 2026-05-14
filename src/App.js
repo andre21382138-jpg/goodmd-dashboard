@@ -11,6 +11,7 @@ import CustomerLookupPage from './pages/customer/CustomerLookupPage';
 import CustomerInputPage from './pages/customer/CustomerInputPage';
 import MyMembersPage from './pages/customer/MyMembersPage';
 import SmsHistoryPage from './pages/customer/SmsHistoryPage';
+import SmsUnsubscribeSyncPage from './pages/customer/SmsUnsubscribeSyncPage';
 import SalesInputPage from './pages/sales/SalesInputPage';
 import SalesReturnPage from './pages/sales/SalesReturnPage';
 import MgrSalesViewPage from './pages/sales/MgrSalesViewPage';
@@ -69,12 +70,40 @@ const GLOBAL_CSS = `
   html, body, #root { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
 
   /* ── AUTH ── */
-  .auth-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #f8f8f8; }
-  .auth-box { width: 380px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 36px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
-  .auth-logo { text-align: center; margin-bottom: 6px; }
-  .auth-logo-icon { font-size: 36px; }
+  .auth-wrap { display: flex; min-height: 100vh; background: #f8f8f8; }
+  .auth-hero { flex: 7; min-width: 0; background: linear-gradient(135deg, #0d2238 0%, #1a4d4f 55%, #2e7d32 100%); color: #fff; display: flex; flex-direction: column; padding: 40px 56px; position: relative; overflow: hidden; }
+  .auth-hero::before { content: ''; position: absolute; right: -120px; bottom: -120px; width: 480px; height: 480px; background: radial-gradient(circle, rgba(255,214,0,0.18) 0%, transparent 60%); pointer-events: none; }
+  .auth-hero-logo { height: 48px; width: auto; background: #fff; padding: 6px 12px; border-radius: 8px; align-self: flex-start; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+  .auth-hero-content { flex: 1; display: flex; flex-direction: column; justify-content: center; max-width: 720px; position: relative; z-index: 1; }
+  .auth-hero-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 2px; opacity: 0.75; margin-bottom: 12px; color: #fdd835; }
+  .auth-hero-headline { font-size: 44px; font-weight: 800; line-height: 1.15; margin-bottom: 18px; letter-spacing: -1px; }
+  .auth-hero-accent { color: #fdd835; }
+  .auth-hero-desc { font-size: 15px; line-height: 1.7; opacity: 0.85; margin-bottom: 36px; max-width: 560px; }
+  .auth-hero-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; max-width: 640px; }
+  .auth-hero-feature { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 18px 16px; }
+  .auth-hero-feature-icon { font-size: 26px; margin-bottom: 6px; }
+  .auth-hero-feature-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+  .auth-hero-feature-desc { font-size: 12px; opacity: 0.72; }
+  .auth-hero-badge { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: rgba(255,214,0,0.15); border: 1px solid rgba(255,214,0,0.5); border-radius: 99px; font-size: 13px; font-weight: 700; color: #fdd835; align-self: flex-start; }
+  .auth-hero-footer { position: absolute; bottom: 24px; left: 56px; font-size: 11px; opacity: 0.55; letter-spacing: 0.3px; }
+  .auth-panel { flex: 3; min-width: 360px; background: #fff; display: flex; align-items: center; justify-content: center; padding: 40px; }
+  .auth-panel-inner { width: 100%; max-width: 320px; }
+  .auth-box { width: 100%; }
+  .auth-tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid var(--border); }
+  .auth-tab { flex: 1; padding: 12px 8px; background: none; border: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 120ms; }
+  .auth-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .auth-logo { text-align: left; margin-bottom: 6px; }
+  .auth-logo-icon { font-size: 28px; }
   .auth-logo-text { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
-  .auth-sub { text-align: center; font-size: 13px; color: var(--text2); margin-bottom: 28px; }
+  .auth-sub { text-align: left; font-size: 12px; color: var(--text2); margin-bottom: 20px; }
+  @media (max-width: 1024px) {
+    .auth-wrap { flex-direction: column; }
+    .auth-hero { flex: none; padding: 28px; min-height: auto; }
+    .auth-hero-headline { font-size: 28px; }
+    .auth-hero-features { grid-template-columns: 1fr; max-width: none; }
+    .auth-hero-footer { position: static; margin-top: 16px; }
+    .auth-panel { min-width: 0; padding: 28px; }
+  }
   .auth-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 24px; }
   .auth-tab { flex: 1; padding: 8px; background: none; border: none; font-family: var(--sans); font-size: 14px; font-weight: 500; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 120ms; }
   .auth-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
@@ -267,6 +296,68 @@ const GLOBAL_CSS = `
 // AUTH SCREEN
 // ════════════════════════════════════════════════════════
 function AuthScreen() {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'signup-success'
+
+  return (
+    <div className="auth-wrap">
+      {/* LEFT: 서비스 소개 hero */}
+      <div className="auth-hero">
+        <img src="/logo-ksl.jpg" alt="한국스마트물류" className="auth-hero-logo"/>
+        <div className="auth-hero-content">
+          <div className="auth-hero-eyebrow">3PL · INTEGRATED ORDER MANAGEMENT</div>
+          <h1 className="auth-hero-headline">
+            주문수집부터 발주까지<br/>
+            <span className="auth-hero-accent">한 곳에서 한 번에.</span>
+          </h1>
+          <p className="auth-hero-desc">
+            온라인 주문수집과 자체 ERP 발주·재고관리를 통합한 3PL 솔루션.<br/>
+            고객사 맞춤 커스텀까지, <b>한국스마트물류</b>가 함께합니다.
+          </p>
+          <div className="auth-hero-features">
+            <div className="auth-hero-feature">
+              <div className="auth-hero-feature-icon">📦</div>
+              <div className="auth-hero-feature-title">주문수집</div>
+              <div className="auth-hero-feature-desc">오픈마켓 자동 연동</div>
+            </div>
+            <div className="auth-hero-feature">
+              <div className="auth-hero-feature-icon">📊</div>
+              <div className="auth-hero-feature-title">결산·정산</div>
+              <div className="auth-hero-feature-desc">매출·수수료 자동화</div>
+            </div>
+            <div className="auth-hero-feature">
+              <div className="auth-hero-feature-icon">🚚</div>
+              <div className="auth-hero-feature-title">발주·물류</div>
+              <div className="auth-hero-feature-desc">재고 통합관리</div>
+            </div>
+          </div>
+          <div className="auth-hero-badge">
+            ⭐ 고객사 맞춤 커스텀 지원
+          </div>
+        </div>
+        <div className="auth-hero-footer">
+          © (주)한국스마트물류 · KOREA SMART LOGISTICS
+        </div>
+      </div>
+
+      {/* RIGHT: 로그인 / 회원가입 패널 */}
+      <div className="auth-panel">
+        <div className="auth-panel-inner">
+          {mode === 'login' && <LoginForm onGoSignup={() => setMode('signup')}/>}
+          {mode === 'signup' && (
+            <SignupForm
+              onBack={() => setMode('login')}
+              onSuccess={() => setMode('signup-success')}/>
+          )}
+          {mode === 'signup-success' && (
+            <SignupSuccess onBack={() => setMode('login')}/>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoginForm({ onGoSignup }) {
   const [userId, setUserId] = useState('');
   const [pw, setPw]         = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -288,58 +379,144 @@ function AuthScreen() {
   };
 
   return (
-    <div className="auth-wrap">
-      {/* 제공자 로고 (좌측 상단) */}
-      <img src="/logo-ksl.jpg" alt="한국스마트물류"
-        style={{
-          position:'fixed', top:18, left:22, zIndex:1,
-          height:52, width:'auto',
-          mixBlendMode:'multiply',
-          userSelect:'none', pointerEvents:'none',
-        }}/>
-      <div className="auth-box">
-        <div className="auth-logo">
-          <div className="auth-logo-icon">🏬</div>
-          <div className="auth-logo-text">(주)한국생활건강</div>
+    <div className="auth-box">
+      <div style={{fontSize:20, fontWeight:800, color:'var(--text)', marginBottom:4, letterSpacing:-0.3}}>로그인</div>
+      <div className="auth-sub">계정으로 로그인하세요.</div>
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>아이디</label>
+          <input className="input" type="text" value={userId}
+            onChange={e => setUserId(e.target.value)}
+            placeholder="예) KBH0001" required autoCapitalize="none" />
         </div>
-        <div className="auth-sub">온라인/오프라인 주문수집 &amp; 결산 &amp; 발주관리</div>
-
-        <form onSubmit={handleSubmit} style={{marginTop:24}}>
-          <div className="form-group">
-            <label>아이디</label>
-            <input className="input" type="text" value={userId}
-              onChange={e => setUserId(e.target.value)}
-              placeholder="예) KBH0001" required autoCapitalize="none" />
+        <div className="form-group">
+          <label>비밀번호</label>
+          <div style={{position:'relative'}}>
+            <input className="input" type={showPw ? 'text' : 'password'} value={pw}
+              onChange={e => setPw(e.target.value)}
+              onKeyDown={e => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
+              onKeyUp={e => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
+              onBlur={() => setCapsOn(false)}
+              placeholder="비밀번호" required style={{paddingRight:42}}/>
+            <button type="button" onClick={() => setShowPw(v => !v)}
+              title={showPw ? '비밀번호 숨기기' : '비밀번호 보기'}
+              style={{position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
+                background:'none', border:'none', cursor:'pointer', fontSize:16, padding:4, lineHeight:1, color:'var(--text3)'}}>
+              {showPw ? '🙈' : '👁️'}
+            </button>
           </div>
-          <div className="form-group">
-            <label>비밀번호</label>
-            <div style={{position:'relative'}}>
-              <input className="input" type={showPw ? 'text' : 'password'} value={pw}
-                onChange={e => setPw(e.target.value)}
-                onKeyDown={e => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                onKeyUp={e => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                onBlur={() => setCapsOn(false)}
-                placeholder="비밀번호" required style={{paddingRight:42}}/>
-              <button type="button" onClick={() => setShowPw(v => !v)}
-                title={showPw ? '비밀번호 숨기기' : '비밀번호 보기'}
-                style={{position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
-                  background:'none', border:'none', cursor:'pointer', fontSize:16, padding:4, lineHeight:1, color:'var(--text3)'}}>
-                {showPw ? '🙈' : '👁️'}
-              </button>
+          {capsOn && (
+            <div style={{marginTop:6, padding:'6px 10px', background:'#fff3e0', border:'1px solid #ffb74d',
+              borderRadius:'var(--radius)', fontSize:12, color:'#e65100', fontWeight:600, display:'flex', alignItems:'center', gap:6}}>
+              ⚠️ Caps Lock이 켜져 있습니다
             </div>
-            {capsOn && (
-              <div style={{marginTop:6, padding:'6px 10px', background:'#fff3e0', border:'1px solid #ffb74d',
-                borderRadius:'var(--radius)', fontSize:12, color:'#e65100', fontWeight:600, display:'flex', alignItems:'center', gap:6}}>
-                ⚠️ Caps Lock이 켜져 있습니다
-              </div>
-            )}
-          </div>
-          <button className="btn-auth" type="submit" disabled={loading}>
+          )}
+        </div>
+        <div style={{display:'flex', gap:8, marginTop:8, alignItems:'stretch'}}>
+          <button className="btn-auth" type="submit" disabled={loading} style={{flex:1, marginTop:0}}>
             {loading ? '처리 중...' : '로그인'}
           </button>
-        </form>
-        {msg && <div className="auth-msg err">{msg}</div>}
+          <button type="button" onClick={onGoSignup}
+            style={{flex:1, height:40, boxSizing:'border-box', background:'#fff', color:'var(--text)', border:'1px solid var(--border)',
+              borderRadius:'var(--radius)', fontSize:14, fontWeight:600, cursor:'pointer', transition:'all 120ms'}}
+            onMouseEnter={e => { e.currentTarget.style.background='#fafafa'; e.currentTarget.style.borderColor='var(--text3)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background='#fff'; e.currentTarget.style.borderColor='var(--border)'; }}>
+            회원가입
+          </button>
+        </div>
+      </form>
+      {msg && <div className="auth-msg err">{msg}</div>}
+    </div>
+  );
+}
+
+function SignupForm({ onBack, onSuccess }) {
+  const [form, setForm] = useState({
+    company: '', businessNo: '', userId: '', pw: '', contactName: '', phone: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState(null);
+  const set = (k) => (e) => setForm(prev => ({ ...prev, [k]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErr(null);
+    // 간단한 클라이언트 검증
+    if (!form.company.trim() || !form.businessNo.trim() || !form.userId.trim()
+        || !form.pw.trim() || !form.contactName.trim() || !form.phone.trim()) {
+      setErr('모든 항목을 입력해주세요.'); return;
+    }
+    if (form.pw.length < 6) { setErr('비밀번호는 6자 이상이어야 합니다.'); return; }
+    setSubmitting(true);
+    try {
+      // TODO(persistence): 실제 배포 시 signup_requests 테이블에 insert
+      // await supabase.from('signup_requests').insert({ ... });
+      await new Promise(r => setTimeout(r, 400)); // 미리보기: UX용 짧은 지연
+      onSuccess();
+    } catch (e2) { setErr('제출 실패: ' + e2.message); }
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="auth-box">
+      <div style={{fontSize:20, fontWeight:800, color:'var(--text)', marginBottom:4, letterSpacing:-0.3}}>회원가입 요청</div>
+      <div className="auth-sub">담당자가 확인 후 회신드립니다.</div>
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>상호</label>
+          <input className="input" value={form.company} onChange={set('company')} placeholder="예) (주)홍길동상사"/>
+        </div>
+        <div className="form-group">
+          <label>사업자등록번호</label>
+          <input className="input" value={form.businessNo} onChange={set('businessNo')} placeholder="000-00-00000"/>
+        </div>
+        <div className="form-group">
+          <label>아이디</label>
+          <input className="input" value={form.userId} onChange={set('userId')} placeholder="영문/숫자" autoCapitalize="none"/>
+        </div>
+        <div className="form-group">
+          <label>비밀번호</label>
+          <input className="input" type="password" value={form.pw} onChange={set('pw')} placeholder="6자 이상"/>
+        </div>
+        <div className="form-group">
+          <label>담당자명</label>
+          <input className="input" value={form.contactName} onChange={set('contactName')} placeholder="홍길동"/>
+        </div>
+        <div className="form-group">
+          <label>연락처</label>
+          <input className="input" value={form.phone} onChange={set('phone')} placeholder="010-1234-5678"/>
+        </div>
+        {err && <div className="auth-msg err">{err}</div>}
+        <div style={{display:'flex', gap:8, marginTop:8, alignItems:'stretch'}}>
+          <button type="button" onClick={onBack}
+            style={{flex:1, height:40, boxSizing:'border-box', background:'#fff', color:'var(--text2)', border:'1px solid var(--border)',
+              borderRadius:'var(--radius)', fontSize:14, fontWeight:600, cursor:'pointer'}}>
+            취소
+          </button>
+          <button className="btn-auth" type="submit" disabled={submitting} style={{flex:1.4, marginTop:0}}>
+            {submitting ? '제출 중...' : '제출'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function SignupSuccess({ onBack }) {
+  return (
+    <div className="auth-box" style={{textAlign:'center'}}>
+      <div style={{fontSize:48, marginBottom:14}}>✉️</div>
+      <div style={{fontSize:18, fontWeight:800, color:'var(--text)', marginBottom:8}}>가입 요청이 접수되었습니다</div>
+      <div style={{fontSize:13, color:'var(--text2)', lineHeight:1.8, marginBottom:24}}>
+        담당자가 영업일 기준 1~2일 내 검토 후<br/>
+        등록하신 연락처로 회신드립니다.<br/>
+        감사합니다.
       </div>
+      <button type="button" onClick={onBack}
+        style={{width:'100%', height:40, background:'var(--sidebar)', color:'var(--sidebar-text)',
+          border:'none', borderRadius:'var(--radius)', fontSize:14, fontWeight:600, cursor:'pointer'}}>
+        로그인 화면으로
+      </button>
     </div>
   );
 }
@@ -436,6 +613,7 @@ export default function App() {
     incentive:      '급여관리',
     member_mgmt:    '회원 조회',
     sms_history:    '문자 내역',
+    sms_unsubscribe_sync: '수신거부 동기화',
     store_info:     '매장주소정보',
     purchase_status: '발주현황',
     sales_view:          '매출조회',
@@ -497,6 +675,7 @@ export default function App() {
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
+            {page === 'sms_unsubscribe_sync' && canSeeMain && <SmsUnsubscribeSyncPage/>}
             {page === 'store_info'     && canSeeMain && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
