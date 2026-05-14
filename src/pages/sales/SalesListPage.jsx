@@ -203,6 +203,16 @@ export default function SalesListPage({ setPage }) {
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
   const returnedCount = useMemo(() => sales.filter(isFullyReturned).length, [sales]);
 
+  // 택배 발송 통계 (반품 차감 후)
+  const deliveryCount = useMemo(
+    () => filtered.filter(r => r.delivery_requested && effQty(r) > 0).length,
+    [filtered]
+  );
+  const deliveryAmt = useMemo(
+    () => filtered.filter(r => r.delivery_requested).reduce((s, r) => s + effAmt(r), 0),
+    [filtered]
+  );
+
   const handleExport = async () => {
     if (exporting) return;
     setExporting(true);
@@ -328,6 +338,21 @@ export default function SalesListPage({ setPage }) {
   return (
     <div>
       {setPage && <SalesTabNav current="sales_list" setPage={setPage}/>}
+      {viewMode === 'list' && deliveryCount > 0 && (
+        <div style={{
+          background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)',
+          padding:'12px 18px', marginBottom:12,
+          display:'flex', alignItems:'center', gap:14, flexWrap:'wrap'
+        }}>
+          <span style={{fontSize:13, fontWeight:700, color:'#e65100', letterSpacing:0.3}}>🚚 택배발송</span>
+          <span style={{fontFamily:'var(--mono)', fontSize:16, fontWeight:700, color:'#bf360c'}}>
+            {deliveryAmt.toLocaleString()}원
+          </span>
+          <span style={{fontSize:12, color:'var(--text2)'}}>
+            ({deliveryCount.toLocaleString()}건)
+          </span>
+        </div>
+      )}
       <div className="card">
         <div style={{display:'flex', gap:8, marginBottom:12}}>
           <button
@@ -447,6 +472,7 @@ export default function SalesListPage({ setPage }) {
                       <td style={strikeStyle}>{s.brand?.name || '-'}</td>
                       <td style={strikeStyle}>
                         {s.product?.name || '-'}
+                        {s.delivery_requested && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>🚚 택배</span>}
                         {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
                         {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}개</span>}
                       </td>
