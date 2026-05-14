@@ -49,10 +49,12 @@ export default async function handler(req, res) {
   targetConsentDate.setDate(targetConsentDate.getDate() + 14);
   targetConsentDate.setFullYear(targetConsentDate.getFullYear() - 1);
   const targetConsentDateStr = targetConsentDate.toISOString().slice(0, 10);
+  const targetNextDate = new Date(targetConsentDate); targetNextDate.setDate(targetNextDate.getDate() + 1);
+  const targetNextDateStr = targetNextDate.toISOString().slice(0, 10);
 
   // 안내 대상 회원 fetch
   const noticeRes = await sb(
-    `/customers?sms_consent=eq.true&sms_consent_at=gte.${targetConsentDateStr}T00:00:00&sms_consent_at=lt.${targetConsentDateStr}T23:59:59&phone=not.is.null&select=id,name,phone,sms_consent_at`
+    `/customers?sms_consent=eq.true&sms_consent_at=gte.${targetConsentDateStr}T00:00:00%2B09:00&sms_consent_at=lt.${targetNextDateStr}T00:00:00%2B09:00&phone=not.is.null&select=id,name,phone,sms_consent_at`
   );
   const noticeMembers = await noticeRes.json();
 
@@ -88,7 +90,8 @@ export default async function handler(req, res) {
       if (sentPhones.has(phoneDigits)) continue;
       const expireDate = new Date(m.sms_consent_at);
       expireDate.setFullYear(expireDate.getFullYear() + 1);
-      const expireStr = expireDate.toISOString().slice(0, 10);
+      // KST 기준 날짜로 표시 (UTC → KST 변환 후 ISO date 슬라이스)
+      const expireStr = new Date(expireDate.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
       const body = buildMarketingRenewalMessage(m.name, expireStr);
       inserts.push({
         scheduled_at: sendAtUtc,
@@ -114,9 +117,11 @@ export default async function handler(req, res) {
   const expireToday = new Date(nowKst);
   expireToday.setFullYear(expireToday.getFullYear() - 1);
   const expireTodayStr = expireToday.toISOString().slice(0, 10);
+  const expireTomorrow = new Date(expireToday); expireTomorrow.setDate(expireTomorrow.getDate() + 1);
+  const expireTomorrowStr = expireTomorrow.toISOString().slice(0, 10);
 
   const extendRes = await sb(
-    `/customers?sms_consent=eq.true&sms_consent_at=gte.${expireTodayStr}T00:00:00&sms_consent_at=lt.${expireTodayStr}T23:59:59`,
+    `/customers?sms_consent=eq.true&sms_consent_at=gte.${expireTodayStr}T00:00:00%2B09:00&sms_consent_at=lt.${expireTomorrowStr}T00:00:00%2B09:00`,
     {
       method: 'PATCH',
       body: JSON.stringify({ sms_consent_at: new Date().toISOString() }),
