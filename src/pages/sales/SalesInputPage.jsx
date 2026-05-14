@@ -6,7 +6,6 @@ export default function SalesInputPage({ profile }) {
   const today = new Date().toISOString().slice(0, 10);
   const [soldAt,    setSoldAt]   = useState(today);
   const [memo,      setMemo]     = useState('');
-  const [deliveryRequested, setDeliveryRequested] = useState(false);
   const [brands,    setBrands]   = useState([]);
   const [allProducts, setAllProducts] = useState([]); // 전체 상품
   const [saving,    setSaving]   = useState(false);
@@ -20,6 +19,7 @@ export default function SalesInputPage({ profile }) {
     brandId:'', productId:'', productSearch:'', showSuggestions:false,
     quantity:1, normalPrice:'', discount:'0', price:'',
     payment:'카드',
+    delivery:false,
     pointCustomer:null,  // {id,name,phone,total_points,used_points,grade}
     pointsUsed:0,
   });
@@ -168,7 +168,7 @@ export default function SalesInputPage({ profile }) {
   const totalAmt = lines.reduce((s, l) => s + (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0), 0);
 
   const resetForm = () => {
-    setLines([newLine()]); setMemo(''); setDeliveryRequested(false);
+    setLines([newLine()]); setMemo('');
     setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName('');
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
@@ -217,7 +217,7 @@ export default function SalesInputPage({ profile }) {
           payment: l.payment || '카드', memo: memo.trim() || null, created_by: profile.id,
           customer_id: customerId, points_earned: linePoints,
           points_used: pointsUsedLine,
-          delivery_requested: deliveryRequested,
+          delivery_requested: !!l.delivery,
         });
         if (error) throw error;
 
@@ -306,13 +306,14 @@ export default function SalesInputPage({ profile }) {
             </div>
 
             {/* 헤더 라벨 */}
-            <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 34px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 34px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
               <div>상품검색</div>
               <div style={{textAlign:'center'}}>수량</div>
               <div style={{textAlign:'center'}}>정상가</div>
               <div style={{textAlign:'center'}}>할인금액</div>
               <div style={{textAlign:'center'}}>판매가</div>
               <div style={{textAlign:'center'}}>결제</div>
+              <div style={{textAlign:'center'}}>택배</div>
               <div></div>
               <div></div>
             </div>
@@ -343,7 +344,7 @@ export default function SalesInputPage({ profile }) {
 
               return (
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 8px', marginBottom:6 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 34px 34px', gap:6, alignItems:'center' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 34px 34px', gap:6, alignItems:'center' }}>
                   {/* 상품검색 */}
                   <div style={{ position:'relative' }}>
                     <input
@@ -408,6 +409,20 @@ export default function SalesInputPage({ profile }) {
                           fontWeight: active ? 700 : 500, fontSize: isPoint ? 11 : 12, whiteSpace:'nowrap' }}>{p}</button>
                     )})}
                   </div>
+                  {/* 택배 체크박스 */}
+                  <label title="택배 발송 요청" style={{
+                    display:'flex', alignItems:'center', justifyContent:'center', gap:4,
+                    height:38, border:'1px solid', borderRadius:'var(--radius)', cursor:'pointer',
+                    borderColor: l.delivery ? '#e65100' : 'var(--border)',
+                    background: l.delivery ? '#fff3e0' : '#fff',
+                    color: l.delivery ? '#e65100' : 'var(--text2)',
+                    fontWeight: l.delivery ? 700 : 500, fontSize:12,
+                  }}>
+                    <input type="checkbox" checked={!!l.delivery}
+                      onChange={e => updateLine(l.id, 'delivery', e.target.checked)}
+                      style={{width:14, height:14, cursor:'pointer', margin:0}}/>
+                    택배
+                  </label>
                   {/* + 추가 (마지막 라인에만) */}
                   {isLast ? (
                     <button type="button" onClick={addLine}
@@ -423,7 +438,7 @@ export default function SalesInputPage({ profile }) {
                 </div>
                 {/* 1개당 단가 (수량 > 1일 때) */}
                 {l.productId && Number(l.quantity) > 1 && (
-                  <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 34px 34px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 34px 34px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
                     <div/><div/>
                     <div style={{textAlign:'right', paddingRight:4}}>
                       {Number(l.normalPrice) > 0 && <>1개당 {Math.round(Number(l.normalPrice)).toLocaleString()}원</>}
@@ -432,7 +447,7 @@ export default function SalesInputPage({ profile }) {
                     <div style={{textAlign:'right', paddingRight:4, color:'var(--accent)'}}>
                       {Number(l.price) > 0 && <>1개당 {Math.round(Number(l.price)).toLocaleString()}원</>}
                     </div>
-                    <div/><div/><div/>
+                    <div/><div/><div/><div/>
                   </div>
                 )}
                 {l.productId && (
@@ -471,20 +486,6 @@ export default function SalesInputPage({ profile }) {
             <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10 }}>📝 메모</div>
             <input value={memo} onChange={e => setMemo(e.target.value)} style={inputStyle} placeholder="특이사항 입력... (선택)" />
           </div>
-
-          {/* 택배 요청 섹션 */}
-          <label style={{display:'flex', alignItems:'center', gap:10, cursor:'pointer',
-            padding:'12px 16px', border:'1px solid var(--border)', borderRadius:'var(--radius)',
-            marginBottom:14,
-            background: deliveryRequested ? '#fff8e1' : '#f8f9fa'}}>
-            <input type="checkbox" checked={deliveryRequested}
-              onChange={e => setDeliveryRequested(e.target.checked)}
-              style={{width:18, height:18, cursor:'pointer'}}/>
-            <span style={{fontSize:13, fontWeight:700}}>🚚 택배 요청</span>
-            <span style={{fontSize:11, color:'var(--text3)', marginLeft:'auto'}}>
-              고객이 택배 발송을 요청한 경우 체크
-            </span>
-          </label>
 
           {/* 회원적립 섹션 */}
           <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
