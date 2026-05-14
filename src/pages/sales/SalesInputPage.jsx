@@ -6,6 +6,7 @@ export default function SalesInputPage({ profile }) {
   const today = new Date().toISOString().slice(0, 10);
   const [soldAt,    setSoldAt]   = useState(today);
   const [memo,      setMemo]     = useState('');
+  const [deliveryRequested, setDeliveryRequested] = useState(false);
   const [brands,    setBrands]   = useState([]);
   const [allProducts, setAllProducts] = useState([]); // 전체 상품
   const [saving,    setSaving]   = useState(false);
@@ -167,7 +168,7 @@ export default function SalesInputPage({ profile }) {
   const totalAmt = lines.reduce((s, l) => s + (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0), 0);
 
   const resetForm = () => {
-    setLines([newLine()]); setMemo('');
+    setLines([newLine()]); setMemo(''); setDeliveryRequested(false);
     setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName('');
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
@@ -216,6 +217,7 @@ export default function SalesInputPage({ profile }) {
           payment: l.payment || '카드', memo: memo.trim() || null, created_by: profile.id,
           customer_id: customerId, points_earned: linePoints,
           points_used: pointsUsedLine,
+          delivery_requested: deliveryRequested,
         });
         if (error) throw error;
 
@@ -469,6 +471,20 @@ export default function SalesInputPage({ profile }) {
             <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10 }}>📝 메모</div>
             <input value={memo} onChange={e => setMemo(e.target.value)} style={inputStyle} placeholder="특이사항 입력... (선택)" />
           </div>
+
+          {/* 택배 요청 섹션 */}
+          <label style={{display:'flex', alignItems:'center', gap:10, cursor:'pointer',
+            padding:'12px 16px', border:'1px solid var(--border)', borderRadius:'var(--radius)',
+            marginBottom:14,
+            background: deliveryRequested ? '#fff8e1' : '#f8f9fa'}}>
+            <input type="checkbox" checked={deliveryRequested}
+              onChange={e => setDeliveryRequested(e.target.checked)}
+              style={{width:18, height:18, cursor:'pointer'}}/>
+            <span style={{fontSize:13, fontWeight:700}}>🚚 택배 요청</span>
+            <span style={{fontSize:11, color:'var(--text3)', marginLeft:'auto'}}>
+              고객이 택배 발송을 요청한 경우 체크
+            </span>
+          </label>
 
           {/* 회원적립 섹션 */}
           <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
