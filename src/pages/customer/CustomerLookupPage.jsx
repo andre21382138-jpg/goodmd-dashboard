@@ -8,6 +8,26 @@ function byteLen(str) {
   return len;
 }
 
+function consentStatus(c) {
+  if (!c.sms_consent_at) {
+    return { label: c.sms_consent ? '동의 (만료일 미설정)' : '미동의', color:'#666', tone:'gray' };
+  }
+  const consentDate = new Date(c.sms_consent_at);
+  const expiry = new Date(consentDate); expiry.setFullYear(expiry.getFullYear() + 1);
+  const today = new Date();
+  const daysToExpiry = Math.ceil((expiry - today) / (1000*60*60*24));
+  if (!c.sms_consent) {
+    return { label: '🚫 거부', color:'#c62828', tone:'red', expireStr: expiry.toISOString().slice(0,10), daysToExpiry };
+  }
+  if (daysToExpiry <= 14 && daysToExpiry > 0) {
+    return { label: `⏳ ${daysToExpiry}일 후 만료`, color:'#e65100', tone:'orange', expireStr: expiry.toISOString().slice(0,10), daysToExpiry };
+  }
+  if (daysToExpiry <= 0) {
+    return { label: '만료됨', color:'#c62828', tone:'red', expireStr: expiry.toISOString().slice(0,10), daysToExpiry };
+  }
+  return { label: `✅ 동의`, color:'#2e7d32', tone:'green', expireStr: expiry.toISOString().slice(0,10), daysToExpiry };
+}
+
 export default function CustomerLookupPage({ profile }) {
   const isManager = profile?.job_title === '매니저';
   const [search,     setSearch]    = useState('');
@@ -150,6 +170,51 @@ export default function CustomerLookupPage({ profile }) {
   };
 
   const handleSelect = (c) => { setSelected(c); fetchPurchases(c.id); };
+
+  const handleToggleConsent = async (customer) => {
+    if (customer.sms_consent) {
+      // 동의 → 거부 처리
+      const ok = window.confirm(
+        `${customer.name}님의 마케팅 수신동의를 거부 처리합니다.\n\n` +
+        '⚠️ 시스템 DB만 업데이트되며, 실제 SMS 차단은\n' +
+        '회원이 0808092009로 직접 거부 통화하거나\n' +
+        '운영자가 문자나라 대시보드에서 수동 등록해야\n' +
+        '적용됩니다.\n\n진행하시겠습니까?'
+      );
+      if (!ok) return;
+      const { error } = await supabase.from('customers').update({
+        sms_consent: false,
+        sms_unsubscribed_at: new Date().toISOString(),
+      }).eq('id', customer.id);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('거부 처리 완료', 'ok');
+      fetchCustomers();
+      if (selected?.id === customer.id) {
+        setSelected({ ...selected, sms_consent: false, sms_unsubscribed_at: new Date().toISOString() });
+      }
+    } else {
+      // 거부 → 동의 (재동의)
+      const ok = window.confirm(
+        `${customer.name}님의 마케팅 수신동의를 다시 활성화합니다.\n\n` +
+        '⚠️ 회원이 직접 매장에서 동의 의사를 명시적으로\n' +
+        '표현한 경우에만 진행해주세요.\n\n' +
+        '· 동의일 = 오늘\n· 만료일 = 1년 후\n\n진행하시겠습니까?'
+      );
+      if (!ok) return;
+      const newConsentAt = new Date().toISOString();
+      const { error } = await supabase.from('customers').update({
+        sms_consent: true,
+        sms_consent_at: newConsentAt,
+        sms_unsubscribed_at: null,
+      }).eq('id', customer.id);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('동의 처리 완료', 'ok');
+      fetchCustomers();
+      if (selected?.id === customer.id) {
+        setSelected({ ...selected, sms_consent: true, sms_consent_at: newConsentAt, sms_unsubscribed_at: null });
+      }
+    }
+  };
 
   const withdrawCustomer = async (c, e) => {
     e.stopPropagation();
@@ -420,10 +485,19 @@ export default function CustomerLookupPage({ profile }) {
                     <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', whiteSpace:'nowrap'}}>{(c.purchase_qty||0)}개</td>
                     <td className="r" style={{fontSize:12, fontFamily:'var(--mono)', fontWeight:600, whiteSpace:'nowrap'}}>{(c.total_purchase||0).toLocaleString()}원</td>
                     <td style={{textAlign:'center'}}>
-                      {c.sms_consent
-                        ? <span style={{color:'var(--success)', fontWeight:700, fontSize:12}}>✅ 동의</span>
-                        : <span style={{color:'var(--text3)', fontSize:12}}>미동의</span>
-                      }
+                      {(() => {
+                        const st = consentStatus(c);
+                        return (
+                          <span style={{
+                            display:'inline-block', padding:'2px 8px', borderRadius:4, fontSize:10, fontWeight:700,
+                            background: st.tone==='green' ? '#e8f5e9' : st.tone==='orange' ? '#fff3e0' : st.tone==='red' ? '#ffebee' : '#f5f5f5',
+                            color: st.color,
+                            border: `1px solid ${st.tone==='green' ? '#a5d6a7' : st.tone==='orange' ? '#ffcc80' : st.tone==='red' ? '#ef9a9a' : '#ddd'}`,
+                          }} title={st.expireStr ? `만료일: ${st.expireStr}` : ''}>
+                            {st.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td>
                       <button
@@ -730,9 +804,12 @@ export default function CustomerLookupPage({ profile }) {
                 <span className="badge badge-store">{selected.branch_name}</span>
                 {selected.manager_name && (<><span style={{color:'var(--border2)'}}>|</span><span style={{color:'var(--text3)'}}>담당</span><strong style={{color:'var(--accent)'}}>{selected.manager_name}</strong></>)}
                 <span style={{color:'var(--border2)'}}>|</span>
-                {selected.sms_consent
-                  ? <span style={{color:'var(--success)', fontWeight:700}}>✅ SMS동의</span>
-                  : <span style={{color:'var(--text3)'}}>SMS미동의</span>}
+                {(() => {
+                  const st = consentStatus(selected);
+                  return (
+                    <span style={{color: st.color, fontWeight:700}}>{st.label}</span>
+                  );
+                })()}
               </div>
               {/* 통계 카드 */}
               <div style={{display:'flex', gap:8, marginBottom:16, flexWrap:'wrap'}}>
@@ -751,6 +828,38 @@ export default function CustomerLookupPage({ profile }) {
                     </div>
                   </div>
                 ))}
+              </div>
+              {/* 마케팅 수신동의 관리 */}
+              <div style={{padding:'12px 14px', border:'1px solid var(--border)', borderRadius:6, marginBottom:16, background:'#fafafa'}}>
+                <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:0.3}}>마케팅 수신동의 관리</div>
+                {(() => {
+                  const st = consentStatus(selected);
+                  return (
+                    <>
+                      <div style={{fontSize:13, marginBottom:6}}>
+                        상태 : <span style={{color: st.color, fontWeight:700}}>{st.label}</span>
+                        {st.expireStr && <span style={{marginLeft:10, color:'var(--text3)', fontSize:11}}>만료일: {st.expireStr}</span>}
+                      </div>
+                      {selected.sms_consent_at && (
+                        <div style={{fontSize:11, color:'var(--text3)', marginBottom:4}}>
+                          동의일: {String(selected.sms_consent_at).slice(0,10)}
+                        </div>
+                      )}
+                      {selected.sms_unsubscribed_at && (
+                        <div style={{fontSize:11, color:'var(--text3)', marginBottom:8}}>
+                          거부일: {String(selected.sms_unsubscribed_at).slice(0,10)}
+                        </div>
+                      )}
+                      <button type="button" onClick={() => handleToggleConsent(selected)}
+                        style={{height:30, padding:'0 14px', borderRadius:4, fontSize:12, fontWeight:700, cursor:'pointer',
+                          border: selected.sms_consent ? '1px solid #ef9a9a' : '1px solid #a5d6a7',
+                          background: selected.sms_consent ? '#fff' : '#e8f5e9',
+                          color: selected.sms_consent ? '#c62828' : '#2e7d32'}}>
+                        {selected.sms_consent ? '거부 처리' : '동의 처리'}
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
               {/* 구매 이력 */}
               <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>구매 이력</div>
