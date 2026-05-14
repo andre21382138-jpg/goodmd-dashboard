@@ -441,7 +441,7 @@ export default function SalesInputPage({ profile }) {
                     <button type="button" onClick={() => removeLine(l.id)}
                       title="삭제"
                       style={{ height:38, width:36, border:'1px solid var(--border)', background:'#fff', color:'var(--danger)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:14, lineHeight:1, padding:0 }}>✕</button>
-                  ) : <div/>}
+                  )}
                 </div>
                 {/* 1개당 단가 (수량 > 1일 때) */}
                 {l.productId && Number(l.quantity) > 1 && (
