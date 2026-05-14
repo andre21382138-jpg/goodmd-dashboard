@@ -4,6 +4,26 @@ import { GradeBadge } from '../../lib/utils';
 
 const PAGE_SIZE = 100;
 
+function consentStatus(c) {
+  if (!c.sms_consent_at) {
+    return { label: c.sms_consent ? '동의 (만료일 미설정)' : '미동의', color:'#666', tone:'gray' };
+  }
+  const consentDate = new Date(c.sms_consent_at);
+  const expiry = new Date(consentDate); expiry.setFullYear(expiry.getFullYear() + 1);
+  const today = new Date();
+  const daysToExpiry = Math.ceil((expiry - today) / (1000*60*60*24));
+  if (!c.sms_consent) {
+    return { label: '🚫 거부', color:'#c62828', tone:'red', expireStr: expiry.toISOString().slice(0,10), daysToExpiry };
+  }
+  if (daysToExpiry <= 14 && daysToExpiry > 0) {
+    return { label: `⏳ ${daysToExpiry}일 후 만료`, color:'#e65100', tone:'orange', expireStr: expiry.toISOString().slice(0,10), daysToExpiry };
+  }
+  if (daysToExpiry <= 0) {
+    return { label: '만료됨', color:'#c62828', tone:'red', expireStr: expiry.toISOString().slice(0,10), daysToExpiry };
+  }
+  return { label: `✅ 동의`, color:'#2e7d32', tone:'green', expireStr: expiry.toISOString().slice(0,10), daysToExpiry };
+}
+
 export default function MyMembersPage({ profile }) {
   const [members,  setMembers]  = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -156,10 +176,19 @@ export default function MyMembersPage({ profile }) {
                         }
                       </td>
                       <td style={{textAlign:'center'}}>
-                        {m.sms_consent
-                          ? <span style={{color:'var(--success)', fontWeight:700, fontSize:11}}>✅</span>
-                          : <span style={{color:'var(--text3)', fontSize:11}}>미동의</span>
-                        }
+                        {(() => {
+                          const st = consentStatus(m);
+                          return (
+                            <span style={{
+                              display:'inline-block', padding:'2px 6px', borderRadius:4, fontSize:10, fontWeight:700,
+                              background: st.tone==='green' ? '#e8f5e9' : st.tone==='orange' ? '#fff3e0' : st.tone==='red' ? '#ffebee' : '#f5f5f5',
+                              color: st.color,
+                              border: `1px solid ${st.tone==='green' ? '#a5d6a7' : st.tone==='orange' ? '#ffcc80' : st.tone==='red' ? '#ef9a9a' : '#ddd'}`,
+                            }} title={st.expireStr ? `만료일: ${st.expireStr}` : ''}>
+                              {st.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}
