@@ -53,6 +53,7 @@ export default function MgrSalesViewPage({ profile }) {
     const dMap = new Map();
     const dDetails = {};
     let totC = 0, totQ = 0, totA = 0;
+    let delC = 0, delA = 0;
     for (const r of sales) {
       if (r._eff <= 0) continue;
       const d = r.sold_at;
@@ -62,9 +63,10 @@ export default function MgrSalesViewPage({ profile }) {
       if (!dDetails[d]) dDetails[d] = [];
       dDetails[d].push(r);
       totC++; totQ += r._eff; totA += r.price * r._eff;
+      if (r.delivery_requested) { delC++; delA += r.price * r._eff; }
     }
     const list = [...dMap.values()].sort((a,b) => b.date.localeCompare(a.date));
-    return { dailyRows: list, dailyDetails: dDetails, totals: { count: totC, qty: totQ, amt: totA } };
+    return { dailyRows: list, dailyDetails: dDetails, totals: { count: totC, qty: totQ, amt: totA, deliveryCount: delC, deliveryAmt: delA } };
   }, [sales]);
 
   const isToday     = fFrom === todayStr   && fTo === todayStr;
@@ -110,15 +112,22 @@ export default function MgrSalesViewPage({ profile }) {
 
       {/* 요약 */}
       {sales.length > 0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:12 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:12 }}>
           {[
             { label:'기간 매출', value: totals.amt.toLocaleString()+'원', color:'var(--accent)', big:true },
             { label:'판매 건수', value: totals.count.toLocaleString()+'건' },
             { label:'판매 수량', value: totals.qty.toLocaleString()+'개' },
+            { label:'🚚 택배발송', value: totals.deliveryAmt.toLocaleString()+'원 ('+totals.deliveryCount.toLocaleString()+'건)', color:'#e65100', borderColor:'#ffcc80' },
           ].map(s => (
-            <div key={s.label} style={{ background:'#fff', border: s.big?'2px solid var(--sidebar)':'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 18px' }}>
+            <div key={s.label} style={{
+              background:'#fff',
+              border: s.big ? '2px solid var(--sidebar)'
+                    : s.borderColor ? `2px solid ${s.borderColor}`
+                    : '1px solid var(--border)',
+              borderRadius:'var(--radius)', padding:'14px 18px'
+            }}>
               <div style={{ fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:6 }}>{s.label}</div>
-              <div style={{ fontSize:s.big?22:18, fontWeight:700, color: s.color || 'var(--text)', fontFamily:'var(--mono)', lineHeight:1 }}>{s.value}</div>
+              <div style={{ fontSize:s.big?22:14, fontWeight:700, color: s.color || 'var(--text)', fontFamily:'var(--mono)', lineHeight:1.3 }}>{s.value}</div>
             </div>
           ))}
         </div>
@@ -197,6 +206,7 @@ export default function MgrSalesViewPage({ profile }) {
                                     <td style={{fontSize:12, ...strike}}>
                                       <strong>{it.product?.name || '-'}</strong>
                                       {it.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {it.product.code}</div>}
+                                      {it.delivery_requested && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>🚚 택배</span>}
                                       {fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
                                       {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {it.returned_qty}</span>}
                                     </td>
