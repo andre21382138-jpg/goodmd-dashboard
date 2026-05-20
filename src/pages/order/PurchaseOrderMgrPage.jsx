@@ -75,7 +75,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
     setLoadingTransfers(false);
   }, [profile.department, profile.branch]);
 
-  useEffect(() => { if (tab === 'transfer') fetchTransfers(); }, [tab, fetchTransfers]);
+  useEffect(() => { if (tab === 'receive') fetchTransfers(); }, [tab, fetchTransfers]);
 
   // 상품 검색 (debounce 300ms)
   useEffect(() => {
@@ -316,10 +316,8 @@ export default function PurchaseOrderMgrPage({ profile }) {
       <div className="tabs">
         <button className={`tab ${tab==='check'?'on':''}`} onClick={() => { setTab('check'); setExpanded(null); setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null); }}>발주 확인</button>
         <button className={`tab ${tab==='receive'?'on':''}`} onClick={() => { setTab('receive'); setExpanded(null); setAddedItems([]); setSearchQ(''); setSearchResults([]); setSearchOpen(false); setAddQty(''); setSelProduct(null); }}>입고 확인</button>
-        <button className={`tab ${tab==='transfer'?'on':''}`} onClick={() => { setTab('transfer'); setExpanded(null); }}>재고이동 입고</button>
       </div>
 
-      {tab !== 'transfer' && (
       <div className="card" style={{padding:'16px 20px'}}>
         <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12, fontFamily:'var(--mono)' }}>
           📍 {profile.department} · {profile.branch}
@@ -626,20 +624,9 @@ export default function PurchaseOrderMgrPage({ profile }) {
           </div>
         }
       </div>
-      )}
 
-      {tab === 'transfer' && (
-        <div className="card" style={{padding:'16px 20px'}}>
-          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12, fontFamily:'var(--mono)' }}>
-            📍 {profile.department} · {profile.branch}
-          </div>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
-            <span className="fresult">다른 매장에서 도착한 재고이동</span>
-            <button className="btn btn-s" onClick={fetchTransfers} disabled={loadingTransfers}>
-              {loadingTransfers ? <span className="spinner"/> : '🔄 새로고침'}
-            </button>
-          </div>
-
+      {tab === 'receive' && (
+        <div className="card" style={{padding:'16px 20px', marginTop:12}}>
           {/* 도착 대기 */}
           <div style={{fontSize:13, fontWeight:700, marginBottom:10}}>📥 입고 대기 ({pendingTransfers.length}건)</div>
           {loadingTransfers ? <div className="empty"><span className="spinner"/></div>
