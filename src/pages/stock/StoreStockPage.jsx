@@ -13,6 +13,12 @@ export default function StoreStockPage({ profile }) {
   const [branches, setBranches] = useState([]);
   const [editing,  setEditing]  = useState({});
   const [saving,   setSaving]   = useState({});
+  const [transferModal, setTransferModal] = useState(null); // 선택된 stock 행
+  const [transferTo, setTransferTo] = useState('');         // "store_name|branch_name"
+  const [transferQty, setTransferQty] = useState(1);
+  const [transferMemo, setTransferMemo] = useState('');
+  const [transferProcessing, setTransferProcessing] = useState(false);
+  const [allBranches, setAllBranches] = useState([]); // [{store_name, branch_name}]
 
   useEffect(() => {
     supabase.from('store_stock').select('store_name').then(({data}) => {
@@ -41,6 +47,24 @@ export default function StoreStockPage({ profile }) {
 
   useEffect(() => { fetchStocks(); }, [fetchStocks]);
 
+  // 점간이동 대상 매장 목록 fetch
+  useEffect(() => {
+    if (isManager) return; // 매니저는 점간이동 안 함
+    supabase.from('store_stock').select('store_name, branch_name').then(({data}) => {
+      const seen = new Set();
+      const list = [];
+      for (const r of (data||[])) {
+        const k = `${r.store_name}|${r.branch_name}`;
+        if (!seen.has(k) && r.store_name && r.branch_name) {
+          seen.add(k);
+          list.push({ store_name: r.store_name, branch_name: r.branch_name });
+        }
+      }
+      list.sort((a,b) => a.store_name.localeCompare(b.store_name) || a.branch_name.localeCompare(b.branch_name));
+      setAllBranches(list);
+    });
+  }, [isManager]);
+
   const filtered = useMemo(() => {
     if (!fSearch.trim()) return stocks;
     const kw = fSearch.trim().toLowerCase();
@@ -66,6 +90,69 @@ export default function StoreStockPage({ profile }) {
   };
 
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
+
+  const openTransfer = (s) => {
+    setTransferModal(s);
+    setTransferTo('');
+    setTransferQty(1);
+    setTransferMemo('');
+  };
+  const closeTransfer = () => {
+    setTransferModal(null);
+    setTransferTo('');
+    setTransferQty(1);
+    setTransferMemo('');
+  };
+  const confirmTransfer = async () => {
+    if (!transferModal) return;
+    if (!transferTo) { toast('대상 매장을 선택해주세요', 'err'); return; }
+    const qty = Number(transferQty) || 0;
+    if (qty <= 0) { toast('수량을 입력해주세요', 'err'); return; }
+    if (qty > (transferModal.stock_qty||0)) { toast('현재 재고를 초과합니다', 'err'); return; }
+    const [toStore, toBranch] = transferTo.split('|');
+    if (toStore === transferModal.store_name && toBranch === transferModal.branch_name) {
+      toast('동일 매장으로 이동할 수 없습니다', 'err'); return;
+    }
+    setTransferProcessing(true);
+    try {
+      // 1) 출처 재고 차감
+      const newQty = (transferModal.stock_qty||0) - qty;
+      const { error: stockErr } = await supabase.from('store_stock')
+        .update({ stock_qty: newQty, updated_at: new Date().toISOString() })
+        .eq('id', transferModal.id);
+      if (stockErr) throw stockErr;
+
+      // 2) store_transfers insert
+      const { error: txErr } = await supabase.from('store_transfers').insert({
+        from_store_name: transferModal.store_name,
+        from_branch_name: transferModal.branch_name,
+        to_store_name: toStore,
+        to_branch_name: toBranch,
+        product_id: transferModal.product_id,
+        quantity: qty,
+        status: 'dispatched',
+        dispatched_by: profile.id,
+        memo: transferMemo.trim() || null,
+      });
+      if (txErr) throw txErr;
+
+      // 3) 매칭되는 pending order_requests fulfilled
+      await supabase.from('order_requests')
+        .update({ status: 'fulfilled', updated_at: new Date().toISOString() })
+        .eq('store_name', toStore)
+        .eq('branch_name', toBranch)
+        .eq('product_id', transferModal.product_id)
+        .eq('status', 'pending');
+
+      toast(`${toStore} ${toBranch}으로 ${qty}개 이동 완료`, 'ok');
+      closeTransfer();
+      fetchStocks();
+    } catch (err) {
+      toast('처리 실패: ' + (err.message || err), 'err');
+    } finally {
+      setTransferProcessing(false);
+    }
+  };
 
   return (
     <div>
@@ -104,7 +191,7 @@ export default function StoreStockPage({ profile }) {
                 <tr>
                   <th>점포</th><th>지점</th><th>상품코드</th><th>상품명</th>
                   <th className="r">재고수량</th>
-                  {!isManager && <th style={{width:120, textAlign:'center'}}>수정</th>}
+                  {!isManager && <th style={{width:180, textAlign:'center'}}>수정/이동</th>}
                 </tr>
               </thead>
               <tbody>
@@ -143,8 +230,20 @@ export default function StoreStockPage({ profile }) {
                                 onClick={()=>cancelEdit(s.id)}>취소</button>
                             </div>
                           ) : (
-                            <button className="btn btn-s" style={{height:26,padding:'0 10px',fontSize:11}}
-                              onClick={()=>startEdit(s.id, s.stock_qty||0)}>수정</button>
+                            <div style={{display:'flex', gap:4, justifyContent:'center'}}>
+                              <button className="btn btn-s" style={{height:26,padding:'0 10px',fontSize:11}}
+                                onClick={()=>startEdit(s.id, s.stock_qty||0)}>수정</button>
+                              <button type="button"
+                                onClick={() => openTransfer(s)}
+                                disabled={(s.stock_qty||0) <= 0}
+                                style={{height:26, padding:'0 10px', fontSize:11, fontWeight:700,
+                                  border:'1px solid #1565C0', borderRadius:'var(--radius)',
+                                  background:(s.stock_qty||0) <= 0 ? '#fafafa' : '#e3f2fd',
+                                  color:(s.stock_qty||0) <= 0 ? 'var(--text3)' : '#1565C0',
+                                  cursor:(s.stock_qty||0) <= 0 ? 'not-allowed' : 'pointer'}}>
+                                🔁 재고이동
+                              </button>
+                            </div>
                           )}
                         </td>
                       )}
@@ -156,6 +255,71 @@ export default function StoreStockPage({ profile }) {
           </div>
         )}
       </div>
+      {/* 재고이동 모달 */}
+      {transferModal && (
+        <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
+          onClick={closeTransfer}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, width:'min(480px, 92vw)', padding:'22px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>
+              🔁 재고이동
+            </div>
+            <div style={{fontSize:12, color:'var(--text2)', marginBottom:16, paddingBottom:12, borderBottom:'1px solid var(--border)'}}>
+              <span className="badge badge-dept">{transferModal.store_name}</span>{' '}
+              <span className="badge badge-store">{transferModal.branch_name}</span>
+              <div style={{marginTop:6, fontSize:13, color:'var(--text)'}}>
+                <strong>{transferModal.product_name}</strong>
+                <span style={{marginLeft:8, color:'var(--text3)'}}>(현재 재고: {transferModal.stock_qty||0}개)</span>
+              </div>
+            </div>
+
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:4}}>대상 매장 *</label>
+              <select value={transferTo} onChange={e => setTransferTo(e.target.value)}
+                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, background:'#fff'}}>
+                <option value="">매장 선택</option>
+                {allBranches
+                  .filter(b => !(b.store_name === transferModal.store_name && b.branch_name === transferModal.branch_name))
+                  .map(b => (
+                    <option key={`${b.store_name}|${b.branch_name}`} value={`${b.store_name}|${b.branch_name}`}>
+                      {b.store_name} {b.branch_name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:4}}>이동 수량 *</label>
+              <input type="number" min={1} max={transferModal.stock_qty||0} value={transferQty}
+                onChange={e => setTransferQty(e.target.value)}
+                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13}}/>
+            </div>
+
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:4}}>메모</label>
+              <input value={transferMemo} onChange={e => setTransferMemo(e.target.value)}
+                placeholder="선택"
+                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13}}/>
+            </div>
+
+            <div style={{padding:'10px 12px', background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:6, fontSize:12, color:'#e65100', marginBottom:14}}>
+              ⚠️ 확인 즉시 <strong>{transferModal.store_name} {transferModal.branch_name}</strong> 재고가 차감됩니다. C매장 매니저에게 별도 연락하여 출고 안내가 필요합니다.
+            </div>
+
+            <div style={{display:'flex', gap:8, justifyContent:'flex-end'}}>
+              <button type="button" onClick={closeTransfer}
+                style={{height:38, padding:'0 18px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer'}}>
+                취소
+              </button>
+              <button type="button" onClick={confirmTransfer} disabled={transferProcessing}
+                style={{height:38, padding:'0 18px', border:'none', borderRadius:'var(--radius)', background:'#1565C0', color:'#fff', fontSize:13, fontWeight:700, cursor:transferProcessing?'not-allowed':'pointer', opacity:transferProcessing?0.6:1}}>
+                {transferProcessing ? '처리 중...' : '재고이동 확정'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
