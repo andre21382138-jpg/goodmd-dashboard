@@ -83,6 +83,20 @@ export default function NotificationCenter({ profile, setPage }) {
     }
 
     if (canHQ) {
+      // 매장 새 재고요청
+      const { data: stockReq } = await supabase.from('order_requests')
+        .select('id, store_name, branch_name, product:products(name)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      if (stockReq?.length > 0) {
+        const sampleNames = stockReq.slice(0, 3).map(r => `${r.store_name} ${r.branch_name}`).join(', ');
+        list.push({
+          key: `stock_request_pending`, color:'blue', icon:'📋',
+          title:`새 재고요청 ${stockReq.length}건`,
+          msg: stockReq.length <= 3 ? sampleNames : `${sampleNames} 외 ${stockReq.length - 3}건`,
+          page:'stock_store',
+        });
+      }
       // 매장 발주요청
       const { data: req } = await supabase.from('purchase_orders')
         .select('id, store_name, branch_name, items:purchase_order_items(id)')
@@ -135,6 +149,9 @@ export default function NotificationCenter({ profile, setPage }) {
         buildNotifs();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_plans' }, () => {
+        buildNotifs();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_requests' }, () => {
         buildNotifs();
       })
       .subscribe();
