@@ -174,10 +174,21 @@ export default function StockRequestPage({ profile }) {
                       <td>
                         <span style={{
                           padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600,
-                          background: r.status==='approved'?'#e8f5e9':r.status==='rejected'?'#ffebee':'#fff3e0',
-                          color: r.status==='approved'?'var(--success)':r.status==='rejected'?'var(--danger)':'#E65100',
+                          background:
+                            r.status==='approved' ? '#e8f5e9'
+                            : r.status==='fulfilled' ? '#e8f5e9'
+                            : r.status==='rejected' ? '#ffebee'
+                            : '#fff3e0',
+                          color:
+                            r.status==='approved' ? 'var(--success)'
+                            : r.status==='fulfilled' ? 'var(--success)'
+                            : r.status==='rejected' ? 'var(--danger)'
+                            : '#E65100',
                         }}>
-                          {r.status==='approved'?'승인':r.status==='rejected'?'반려':'대기'}
+                          {r.status==='approved' ? '승인'
+                           : r.status==='fulfilled' ? '✅ 완료'
+                           : r.status==='rejected' ? '반려'
+                           : '대기'}
                         </span>
                       </td>
                       <td className="mono" style={{fontSize:11}}>{new Date(r.created_at).toLocaleDateString('ko-KR')}</td>
