@@ -300,30 +300,11 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
       >
         {!isAdmin && <span style={{ fontSize:22 }}>🏬</span>}
         <div style={{ width:'100%' }}>
-          {isAdmin ? (() => {
-            const expiry = new Date('2027-04-09');
-            const today = new Date();
-            const daysLeft = Math.max(0, Math.ceil((expiry - today) / (1000*60*60*24)));
-            return (
-              <>
-                <div style={{ fontSize:15, fontWeight:800, color:'var(--sidebar-text)', lineHeight:1.2, letterSpacing:-0.3 }}>
-                  (주)한국생활건강
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:6 }}>
-                  <span style={{
-                    display:'inline-flex', alignItems:'center', gap:3,
-                    fontSize:9, fontWeight:800, color:'#1b5e20',
-                    background:'#c8e6c9', padding:'2px 7px', borderRadius:10,
-                    letterSpacing:0.3, lineHeight:1.2,
-                    border:'1px solid #a5d6a7',
-                  }}>● 구독중</span>
-                  <span style={{ fontFamily:'var(--mono)', fontSize:10, fontWeight:600, color:'var(--sidebar-text)', opacity:0.7 }}>
-                    ~27.04.09 · D-{daysLeft}
-                  </span>
-                </div>
-              </>
-            );
-          })() : (
+          {isAdmin ? (
+            <div style={{ fontSize:15, fontWeight:800, color:'var(--sidebar-text)', lineHeight:1.2, letterSpacing:-0.3 }}>
+              (주)한국생활건강
+            </div>
+          ) : (
             <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 관리시스템</div>
           )}
         </div>
