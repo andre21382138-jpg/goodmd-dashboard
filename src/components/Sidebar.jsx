@@ -289,11 +289,11 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
       <button
         onClick={() => setPage('home')}
         style={{
-          display:'flex', alignItems:'center', gap:10, padding: isAdmin ? '10px 18px' : '0 18px',
+          display:'flex', alignItems:'center', gap:10, padding:'0 18px',
           background: page==='home' ? 'rgba(0,0,0,0.08)' : 'transparent',
           border:'none', borderBottom:'1px solid rgba(0,0,0,0.1)',
           cursor:'pointer', width:'100%', textAlign:'left', transition:'background 120ms',
-          height: isAdmin ? 'auto' : '52px', flexShrink:0,
+          height:'52px', flexShrink:0,
         }}
         onMouseEnter={e => { if(page!=='home') e.currentTarget.style.background='rgba(0,0,0,0.05)'; }}
         onMouseLeave={e => { if(page!=='home') e.currentTarget.style.background='transparent'; }}
