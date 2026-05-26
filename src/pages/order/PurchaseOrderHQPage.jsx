@@ -652,13 +652,22 @@ export default function PurchaseOrderHQPage({ profile }) {
                   </div>
                   <table>
                     <thead>
-                      <tr><th>상품명</th><th>코드</th><th className="r">판매수량</th><th className="r" style={{width:130}}>발주수량</th></tr>
+                      <tr>
+                        <th>상품명</th>
+                        <th>코드</th>
+                        <th className="r" style={{width:80}}>센터재고</th>
+                        <th className="r">판매수량</th>
+                        <th className="r" style={{width:130}}>발주수량</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {checkedItems.map(it => (
                         <tr key={it.product_id}>
                           <td>{it.name}</td>
                           <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.code || '-'}</td>
+                          <td className="r" style={{fontFamily:'var(--mono)', color: (it.center_stock || 0) === 0 ? 'var(--text3)' : 'var(--text)'}}>
+                            {(it.center_stock || 0).toLocaleString()}
+                          </td>
                           <td className="r" style={{color:'var(--text3)'}}>{it.sold_qty}</td>
                           <td className="r">
                             <input type="number" min={0} value={it.hq_qty}
