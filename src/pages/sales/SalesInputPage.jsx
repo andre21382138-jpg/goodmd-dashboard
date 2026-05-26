@@ -830,12 +830,12 @@ export default function SalesInputPage({ profile }) {
               <tr>
                 <th>판매일</th><th>브랜드</th><th>상품명</th>
                 <th className="r">수량</th><th className="r">판매가</th>
-                <th>결제</th><th>고객</th><th>메모</th><th></th>
+                <th>결제</th><th>출고방식</th><th>고객</th><th>메모</th><th></th>
               </tr>
             </thead>
             <tbody>
               {recentSales.length === 0
-                ? <tr><td colSpan={9} className="empty">입력된 판매 내역이 없습니다</td></tr>
+                ? <tr><td colSpan={10} className="empty">입력된 판매 내역이 없습니다</td></tr>
                 : recentSales.map(s => {
                   const fully = (s.returned_qty||0) >= (s.quantity||0);
                   const partial = (s.returned_qty||0) > 0 && !fully;
@@ -853,12 +853,14 @@ export default function SalesInputPage({ profile }) {
                     <td className="r" style={strike}>{effQ}</td>
                     <td className="r" style={strike}>{Number(s.price).toLocaleString()}원</td>
                     <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9', ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
+                    <td style={strike}>
+                      {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
+                      {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
+                      {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                      {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                    </td>
                     <td style={{fontSize:12, ...strike}}>
                       {s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}
-                      {(!s.delivery_type || s.delivery_type === 'none') && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
-                      {s.delivery_type === 'store' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
-                      {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
-                      {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                     </td>
                     <td style={{fontSize:11,color:'var(--text2)', ...strike}}>{s.memo || '-'}</td>
                     <td><button className="btn-danger" onClick={() => handleDelete(s.id)}>삭제</button></td>
