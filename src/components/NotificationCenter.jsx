@@ -83,6 +83,19 @@ export default function NotificationCenter({ profile, setPage }) {
     }
 
     if (canHQ) {
+      // 본사 택배발송 대기
+      const { count: pendingDelivery } = await supabase.from('sales')
+        .select('id', { count: 'exact', head: true })
+        .eq('delivery_type', 'hq')
+        .eq('delivery_status', 'pending');
+      if (pendingDelivery && pendingDelivery > 0) {
+        list.push({
+          key: `hq_delivery_pending`, color:'orange', icon:'📦',
+          title:`택배 발송요청 ${pendingDelivery}건`,
+          msg:'본사 발송 처리 대기 중',
+          page:'hq_delivery_request',
+        });
+      }
       // 매장 새 재고요청
       const { data: stockReq } = await supabase.from('order_requests')
         .select('id, store_name, branch_name, product:products(name)')
@@ -152,6 +165,12 @@ export default function NotificationCenter({ profile, setPage }) {
         buildNotifs();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_requests' }, () => {
+        buildNotifs();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sales' }, () => {
+        buildNotifs();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sales' }, () => {
         buildNotifs();
       })
       .subscribe();
