@@ -5,6 +5,8 @@ import { toast } from '../lib/utils';
 
 function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
   const [selMember, setSelMember] = useState(null);
+  const [customMode, setCustomMode] = useState(false);
+  const [customName, setCustomName] = useState('');
   const label = type === 'in' ? '출근' : '퇴근';
   const color = type === 'in' ? '#2E7D32' : '#C62828';
 
@@ -15,11 +17,31 @@ function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
     return rec && !rec.clock_out;                // 출근했고 퇴근 안 한 사람만
   });
 
+  // 퇴근 시 기타근무자(매장 등록 X) 중 오늘 출근 기록된 사람 추가 표시
+  const customOutTargets = type === 'out'
+    ? Object.values(todayMap)
+        .filter(r => r && !r.clock_out && !members.some(m => m.name === r.manager_name))
+        .map(r => ({ name: r.manager_name, display_name: r.manager_name, job_title: '기타근무자', isCustom: true }))
+    : [];
+  const availableAll = [...available, ...customOutTargets];
+
+  const isCustomSelected = selMember?.isCustom === '__new__';
+
+  const handleConfirmClick = () => {
+    if (isCustomSelected) {
+      const n = customName.trim();
+      if (!n) return;
+      onConfirm({ name: n, display_name: n, job_title: '기타근무자', isCustom: true });
+    } else if (selMember) {
+      onConfirm(selMember);
+    }
+  };
+
   return (
     <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={onClose}>
       <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)' }}/>
-      <div style={{ position:'relative', background:'#fff', borderRadius:16, padding:'28px 24px', width:320, maxWidth:'90vw', boxShadow:'0 8px 40px rgba(0,0,0,0.2)' }}
+      <div style={{ position:'relative', background:'#fff', borderRadius:16, padding:'28px 24px', width:340, maxWidth:'90vw', boxShadow:'0 8px 40px rgba(0,0,0,0.2)' }}
         onClick={e => e.stopPropagation()}>
         {/* 타이틀 */}
         <div style={{ textAlign:'center', marginBottom:20 }}>
@@ -29,24 +51,53 @@ function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
         </div>
 
         {/* 근무자 버튼 */}
-        {available.length === 0 ? (
+        {availableAll.length === 0 && type === 'in' ? null : availableAll.length === 0 ? (
           <div style={{ textAlign:'center', padding:'16px 0', fontSize:13, color:'#999' }}>
-            {type === 'in' ? '모든 근무자가 이미 출근 체크했습니다' : '퇴근 체크할 근무자가 없습니다'}
+            퇴근 체크할 근무자가 없습니다
           </div>
         ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:20 }}>
-            {available.map(m => (
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:14 }}>
+            {availableAll.map(m => (
               <button key={m.name} type="button"
-                onClick={() => setSelMember(selMember?.name === m.name ? null : m)}
+                onClick={() => { setSelMember(selMember?.name === m.name ? null : m); setCustomMode(false); }}
                 style={{ height:56, border:'2px solid', borderRadius:10, fontSize:15, fontWeight:700, cursor:'pointer', transition:'all 120ms',
-                  borderColor: selMember?.name === m.name ? color : '#e0e0e0',
-                  background: selMember?.name === m.name ? (type==='in'?'#e8f5e9':'#ffebee') : '#fafafa',
-                  color: selMember?.name === m.name ? color : '#555',
+                  borderColor: selMember?.name === m.name && !isCustomSelected ? color : '#e0e0e0',
+                  background: selMember?.name === m.name && !isCustomSelected ? (type==='in'?'#e8f5e9':'#ffebee') : '#fafafa',
+                  color: selMember?.name === m.name && !isCustomSelected ? color : '#555',
                 }}>
                 {m.display_name || m.name}
-                <div style={{ fontSize:11, fontWeight:400, marginTop:3, color: selMember?.name===m.name ? color : '#999' }}>{m.job_title}</div>
+                <div style={{ fontSize:11, fontWeight:400, marginTop:3, color: selMember?.name===m.name && !isCustomSelected ? color : '#999' }}>
+                  {m.job_title}
+                </div>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* 출근 시에만 기타근무자(직접 입력) 옵션 노출 */}
+        {type === 'in' && (
+          <div style={{ marginBottom:18 }}>
+            {!customMode ? (
+              <button type="button"
+                onClick={() => { setCustomMode(true); setSelMember({ name:'', isCustom:'__new__' }); }}
+                style={{ width:'100%', height:44, border:'1px dashed #999', borderRadius:10, background:'#fafafa', fontSize:13, fontWeight:600, color:'#555', cursor:'pointer' }}>
+                + 기타근무자 (직접 입력)
+              </button>
+            ) : (
+              <div style={{ padding:'12px 14px', border:`2px solid ${color}`, borderRadius:10, background:type==='in'?'#e8f5e9':'#ffebee' }}>
+                <div style={{ fontSize:11, fontWeight:700, color:'#333', marginBottom:6 }}>기타근무자 이름</div>
+                <input value={customName}
+                  onChange={e => setCustomName(e.target.value)}
+                  placeholder="예: 홍길동 (대체 근무자)"
+                  autoFocus
+                  style={{ width:'100%', height:38, padding:'0 10px', border:'1px solid #ccc', borderRadius:6, fontSize:14, outline:'none' }}/>
+                <button type="button"
+                  onClick={() => { setCustomMode(false); setCustomName(''); setSelMember(null); }}
+                  style={{ marginTop:8, background:'none', border:'none', cursor:'pointer', fontSize:11, color:'#888', textDecoration:'underline' }}>
+                  취소
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -56,10 +107,17 @@ function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
             style={{ flex:1, height:44, border:'1px solid #e0e0e0', borderRadius:10, background:'#fafafa', fontSize:14, fontWeight:600, color:'#888', cursor:'pointer' }}>
             취소
           </button>
-          <button onClick={() => selMember && onConfirm(selMember)}
-            disabled={!selMember}
-            style={{ flex:2, height:44, border:'none', borderRadius:10, background: selMember ? color : '#e0e0e0', fontSize:14, fontWeight:700, color: selMember ? '#fff' : '#bbb', cursor: selMember ? 'pointer' : 'default', transition:'all 120ms' }}>
-            {selMember ? `${selMember.display_name || selMember.name} ${label} 확인` : `${label} 확인`}
+          <button onClick={handleConfirmClick}
+            disabled={!selMember || (isCustomSelected && !customName.trim())}
+            style={{ flex:2, height:44, border:'none', borderRadius:10,
+              background: (selMember && (!isCustomSelected || customName.trim())) ? color : '#e0e0e0',
+              fontSize:14, fontWeight:700,
+              color: (selMember && (!isCustomSelected || customName.trim())) ? '#fff' : '#bbb',
+              cursor: (selMember && (!isCustomSelected || customName.trim())) ? 'pointer' : 'default',
+              transition:'all 120ms' }}>
+            {isCustomSelected && customName.trim() ? `${customName.trim()} ${label} 확인`
+              : selMember && !isCustomSelected ? `${selMember.display_name || selMember.name} ${label} 확인`
+              : `${label} 확인`}
           </button>
         </div>
       </div>
@@ -105,20 +163,31 @@ function SidebarClockPanel({ profile, setPage }) {
     fetchToday();
   }, [profile.id, fetchToday]);
 
+  // 퇴근 시 요일별 고정 시각 — 월~목 20:00, 금~일 20:30
+  const getClockOutIso = () => {
+    const d = new Date();
+    const dow = d.getDay(); // 0=일,1=월,...,5=금,6=토
+    const minute = (dow === 0 || dow === 5 || dow === 6) ? 30 : 0;
+    d.setHours(20, minute, 0, 0);
+    return d.toISOString();
+  };
+
   const handleConfirm = async (member) => {
     if (saving) return;
     setSaving(true);
-    const now = new Date().toISOString();
+    const nowIn = new Date().toISOString();
     const rec = todayMap[member.name];
     if (popup === 'in') {
       const { data, error } = await supabase.from('attendance').insert({
         manager_id: profile.id, manager_name: member.name,
         store_name: profile.department, branch_name: profile.branch,
-        work_date: todayStr(), clock_in: now,
+        work_date: todayStr(), clock_in: nowIn,
       }).select().single();
       if (!error) {
         setTodayMap(prev => ({ ...prev, [member.name]: data }));
         toast(`${member.display_name || member.name} 출근 체크 완료 ✅`, 'ok');
+        // 기타근무자는 등록된 매니저가 아니라 휴무계획 미제출 알림 대상 아님
+        if (member.isCustom) { setSaving(false); setPopup(null); return; }
         // 휴무계획 미제출 체크 (매월 15~20일)
         const today = new Date();
         const day = today.getDate();
@@ -135,8 +204,10 @@ function SidebarClockPanel({ profile, setPage }) {
         }
       }
     } else {
+      // 퇴근 — 요일별 고정 시각으로 저장
+      const clockOut = getClockOutIso();
       const { data, error } = await supabase.from('attendance')
-        .update({ clock_out: now }).eq('id', rec.id).select().single();
+        .update({ clock_out: clockOut }).eq('id', rec.id).select().single();
       if (!error) {
         setTodayMap(prev => ({ ...prev, [member.name]: data }));
         toast(`${member.display_name || member.name} 퇴근 체크 완료 ✅`, 'ok');
@@ -209,19 +280,35 @@ function SidebarClockPanel({ profile, setPage }) {
               {anyOut && !canOut ? '✅ 퇴근' : '퇴근'}
             </button>
           </div>
-          {/* 근무자별 현황 */}
+          {/* 근무자별 현황 — 등록된 매니저 + 오늘 체크된 기타근무자 */}
           <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-            {members.map(m => {
-              const rec = todayMap[m.name];
+            {(() => {
+              const regularNames = new Set(members.map(m => m.name));
+              const customRecs = Object.values(todayMap).filter(r => r && !regularNames.has(r.manager_name));
               return (
-                <div key={m.name} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontFamily:'var(--mono)' }}>
-                  <span style={{ fontWeight:700, color:'#666', minWidth:40 }}>{m.display_name || m.name}</span>
-                  {rec?.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>↑{fmt(rec.clock_in)}</span>}
-                  {rec?.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>↓{fmt(rec.clock_out)}</span>}
-                  {!rec && <span style={{ color:'#ccc' }}>미체크</span>}
-                </div>
+                <>
+                  {members.map(m => {
+                    const rec = todayMap[m.name];
+                    return (
+                      <div key={m.name} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontFamily:'var(--mono)' }}>
+                        <span style={{ fontWeight:700, color:'#666', minWidth:40 }}>{m.display_name || m.name}</span>
+                        {rec?.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>↑{fmt(rec.clock_in)}</span>}
+                        {rec?.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>↓{fmt(rec.clock_out)}</span>}
+                        {!rec && <span style={{ color:'#ccc' }}>미체크</span>}
+                      </div>
+                    );
+                  })}
+                  {customRecs.map(r => (
+                    <div key={r.id} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontFamily:'var(--mono)' }}>
+                      <span style={{ fontWeight:700, color:'#888', minWidth:40 }}>{r.manager_name}</span>
+                      <span style={{ fontSize:8, color:'#888' }}>(기타)</span>
+                      {r.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>↑{fmt(r.clock_in)}</span>}
+                      {r.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>↓{fmt(r.clock_out)}</span>}
+                    </div>
+                  ))}
+                </>
               );
-            })}
+            })()}
           </div>
         </div>
       </div>
