@@ -12,6 +12,7 @@ import CustomerInputPage from './pages/customer/CustomerInputPage';
 import MyMembersPage from './pages/customer/MyMembersPage';
 import SmsHistoryPage from './pages/customer/SmsHistoryPage';
 import SmsUnsubscribeSyncPage from './pages/customer/SmsUnsubscribeSyncPage';
+import HQDeliveryRequestPage from './pages/customer/HQDeliveryRequestPage';
 import SalesInputPage from './pages/sales/SalesInputPage';
 import SalesReturnPage from './pages/sales/SalesReturnPage';
 import MgrSalesViewPage from './pages/sales/MgrSalesViewPage';
@@ -614,6 +615,7 @@ export default function App() {
     member_mgmt:    '회원 조회',
     sms_history:    '문자 내역',
     sms_unsubscribe_sync: '수신거부 동기화',
+    hq_delivery_request: '택배요청',
     store_info:     '매장주소정보',
     purchase_status: '발주현황',
     sales_view:          '매출조회',
@@ -676,6 +678,7 @@ export default function App() {
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
             {page === 'sms_unsubscribe_sync' && canSeeMain && <SmsUnsubscribeSyncPage/>}
+            {page === 'hq_delivery_request' && canSeeMain && <HQDeliveryRequestPage profile={profile}/>}
             {page === 'store_info'     && canSeeMain && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
