@@ -453,12 +453,12 @@ export default function SalesListPage({ setPage }) {
                   <th>판매일</th><th>점포</th><th>지점</th><th>매니저</th>
                   <th>브랜드</th><th>상품명</th>
                   <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
-                  <th>결제</th><th>메모</th>
+                  <th>결제</th><th>출고방식</th><th>메모</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0
-                  ? <tr><td colSpan={11} className="empty">조회된 판매 내역이 없습니다</td></tr>
+                  ? <tr><td colSpan={12} className="empty">조회된 판매 내역이 없습니다</td></tr>
                   : filtered.map(s => {
                     const fully = isFullyReturned(s);
                     const partial = isPartialReturn(s);
@@ -472,9 +472,6 @@ export default function SalesListPage({ setPage }) {
                       <td style={strikeStyle}>{s.brand?.name || '-'}</td>
                       <td style={strikeStyle}>
                         {s.product?.name || '-'}
-                        {s.delivery_type === 'store' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
-                        {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
-                        {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                         {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
                         {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}개</span>}
                       </td>
@@ -482,6 +479,12 @@ export default function SalesListPage({ setPage }) {
                       <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
                       <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
                       <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
+                      <td style={strikeStyle}>
+                        {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
+                        {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
+                        {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                        {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                      </td>
                       <td style={{fontSize:11,color:'var(--text2)', ...strikeStyle}}>{s.memo || '-'}</td>
                     </tr>
                   )})
