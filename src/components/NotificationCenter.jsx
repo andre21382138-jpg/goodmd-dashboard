@@ -64,14 +64,14 @@ export default function NotificationCenter({ profile, setPage }) {
           page:'purchase_check',
         });
       }
-      // 3. 휴무계획 마감 임박
-      if (today >= 20 && today <= 25) {
+      // 3. 휴무계획 마감 임박 (매월 15~20일)
+      if (today >= 15 && today <= 20) {
         const nextM = new Date(now.getFullYear(), now.getMonth()+1, 1);
         const nextMonStr = `${nextM.getFullYear()}-${String(nextM.getMonth()+1).padStart(2,'0')}`;
         const { data: lp } = await supabase.from('leave_plans')
           .select('id').eq('manager_id', profile.id).eq('target_month', nextMonStr).maybeSingle();
         if (!lp) {
-          const daysLeft = 25 - today;
+          const daysLeft = 20 - today;
           list.push({
             key: `leave_due_${nextMonStr}`, color:'red', icon:'🔴',
             title:'휴무계획 마감 임박',

@@ -97,7 +97,7 @@ export default function HelpPage({ profile }) {
     },
     attendance: {
       icon:'🗓️', label:'근태관리', desc:'매니저별 출퇴근 기록과 휴무 계획을 관리합니다.',
-      steps:['전체 매니저 출퇴근 현황 월별 조회','휴무계획: 매니저가 제출한 다음달 휴무계획 승인/반려','매월 20~25일 미제출 매니저에게 대시보드 알림 자동 표시'],
+      steps:['전체 매니저 출퇴근 현황 월별 조회','휴무계획: 매니저가 제출한 다음달 휴무계획 승인/반려','매월 15~20일 미제출 매니저에게 대시보드 알림 자동 표시'],
       component: <AttendanceMgmtPage/>, previewScale:0.52, previewHeight:420,
     },
     member_mgmt: {
@@ -147,7 +147,7 @@ export default function HelpPage({ profile }) {
     },
     attendance_mgr: {
       icon:'🗓️', label:'근태 관리', desc:'출퇴근 체크와 다음달 휴무계획을 제출합니다.',
-      steps:['출퇴근: 사이드바 하단 [출근]/[퇴근] 버튼 → 근무자 선택 → 확인','근무현황: 내 월별 출퇴근 기록 조회','휴무신청: 다음달 희망 휴무일 선택 후 제출 (매월 25일까지)'],
+      steps:['출퇴근: 사이드바 하단 [출근]/[퇴근] 버튼 → 근무자 선택 → 확인','근무현황: 내 월별 출퇴근 기록 조회','휴무신청: 다음달 희망 휴무일 선택 후 제출 (매월 20일까지)'],
       component: <MyAttendancePage profile={previewProfile}/>, previewScale:0.52, previewHeight:420,
     },
   };

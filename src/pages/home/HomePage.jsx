@@ -44,10 +44,10 @@ export default function HomePage({ profile, setPage }) {
   const isAdmin   = profile?.role === 'admin';
   const canSeeAll = isAdmin || isHQ;
   const today = now.getDate();
-  const isReminderPeriod = today >= 20 && today <= 25;
+  const isReminderPeriod = today >= 15 && today <= 20;
   const nextM = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const nextMonStr = `${nextM.getFullYear()}-${String(nextM.getMonth()+1).padStart(2,'0')}`;
-  const daysLeft = 25 - today;
+  const daysLeft = 20 - today;
 
   useEffect(() => {
     if (!isManager || !isReminderPeriod) return;
@@ -223,7 +223,7 @@ export default function HomePage({ profile, setPage }) {
               {nextMonStr.replace('-','년 ').replace('-','월')} 휴무계획을 아직 제출하지 않았습니다
             </div>
             <div style={{ fontSize:12, color:'#b71c1c' }}>
-              제출 마감일: {now.getMonth()+1}월 25일 · 오늘 포함 {daysLeft + 1}일 남았습니다
+              제출 마감일: {now.getMonth()+1}월 20일 · 오늘 포함 {daysLeft + 1}일 남았습니다
             </div>
           </div>
           <button onClick={() => { setShowBanner(false); setPage && setPage('leave_plan'); }}

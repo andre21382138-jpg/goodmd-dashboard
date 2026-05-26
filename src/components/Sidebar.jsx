@@ -119,10 +119,10 @@ function SidebarClockPanel({ profile, setPage }) {
       if (!error) {
         setTodayMap(prev => ({ ...prev, [member.name]: data }));
         toast(`${member.display_name || member.name} 출근 체크 완료 ✅`, 'ok');
-        // 휴무계획 미제출 체크 (매월 20~25일)
+        // 휴무계획 미제출 체크 (매월 15~20일)
         const today = new Date();
         const day = today.getDate();
-        if (day >= 20 && day <= 25) {
+        if (day >= 15 && day <= 20) {
           const nextM = new Date(today.getFullYear(), today.getMonth()+1, 1);
           const nextMonStr = `${nextM.getFullYear()}-${String(nextM.getMonth()+1).padStart(2,'0')}`;
           const { data: lp } = await supabase.from('leave_plans')
