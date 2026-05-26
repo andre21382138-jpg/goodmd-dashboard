@@ -47,17 +47,16 @@ export default function SalesInputPage({ profile }) {
 
   const searchMembers = async () => {
     const q = memberSearch.trim();
-    if (!q) return;
+    if (!/^\d{4}$/.test(q)) {
+      toast('휴대폰 뒷 4자리(숫자)를 입력해주세요', 'err');
+      return;
+    }
     setSearching(true);
-    // 4자리 숫자만 입력하면 휴대폰 뒷자리 검색 (예: "5678" → 010-1234-5678 매칭)
-    // 그 외엔 이름/전화 부분 일치 검색
-    const filter = /^\d{4}$/.test(q)
-      ? `phone.ilike.%${q}`
-      : `name.ilike.%${q}%,phone.ilike.%${q}%`;
+    // 휴대폰 뒷 4자리 매칭 (예: "5678" → 010-1234-5678 매칭)
     const { data } = await supabase.from('customers')
       .select('*')
-      .or(filter)
-      .limit(20);
+      .ilike('phone', `%${q}`)
+      .limit(50);
     setMemberResults(data || []);
     setSearching(false);
   };
@@ -142,16 +141,16 @@ export default function SalesInputPage({ profile }) {
   };
   const searchPointsMember = async () => {
     const q = pmSearch.trim();
-    if (!q) return;
+    if (!/^\d{4}$/.test(q)) {
+      toast('휴대폰 뒷 4자리(숫자)를 입력해주세요', 'err');
+      return;
+    }
     setPmSearching(true);
-    // 4자리 숫자만 입력하면 휴대폰 뒷자리 검색 (예: "5678" → 010-1234-5678 매칭)
-    const filter = /^\d{4}$/.test(q)
-      ? `phone.ilike.%${q}`
-      : `name.ilike.%${q}%,phone.ilike.%${q}%`;
+    // 휴대폰 뒷 4자리 매칭
     const { data } = await supabase.from('customers')
       .select('*')
-      .or(filter)
-      .limit(20);
+      .ilike('phone', `%${q}`)
+      .limit(50);
     setPmResults(data || []);
     setPmSearching(false);
   };
@@ -531,9 +530,11 @@ export default function SalesInputPage({ profile }) {
             {memberMode === 'search' && (
               <div style={{ background:'#f0f7ff', border:'1px solid #90caf9', borderRadius:'var(--radius)', padding:14 }}>
                 <div style={{ display:'flex', gap:8, marginBottom:10 }}>
-                  <input value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
+                  <input value={memberSearch}
+                    onChange={e => setMemberSearch(e.target.value.replace(/\D/g, '').slice(0, 4))}
                     onKeyDown={e => e.key==='Enter' && (e.preventDefault(), searchMembers())}
-                    style={{...inputStyle, flex:1}} placeholder="이름, 전체 연락처, 또는 휴대폰 뒷 4자리 (예: 5678)" />
+                    inputMode="numeric" maxLength={4}
+                    style={{...inputStyle, flex:1}} placeholder="휴대폰 뒷 4자리 (예: 5678)" />
                   <button type="button" className="btn btn-s" onClick={searchMembers} disabled={searching}>
                     {searching ? <span className="spinner"/> : '검색'}
                   </button>
@@ -645,11 +646,13 @@ export default function SalesInputPage({ profile }) {
 
               {!pmCustomer ? (
                 <>
-                  <div style={{fontSize:12, color:'var(--text2)', marginBottom:10}}>회원을 검색하세요 (이름, 전체 연락처, 또는 휴대폰 뒷 4자리)</div>
+                  <div style={{fontSize:12, color:'var(--text2)', marginBottom:10}}>회원 휴대폰 뒷 4자리를 입력하세요</div>
                   <div style={{display:'flex', gap:8, marginBottom:10}}>
-                    <input value={pmSearch} onChange={e => setPmSearch(e.target.value)}
+                    <input value={pmSearch}
+                      onChange={e => setPmSearch(e.target.value.replace(/\D/g, '').slice(0, 4))}
                       onKeyDown={e => e.key==='Enter' && (e.preventDefault(), searchPointsMember())}
-                      style={{...inputStyle, flex:1}} placeholder="홍길동 / 010-1234-5678 / 5678" autoFocus/>
+                      inputMode="numeric" maxLength={4}
+                      style={{...inputStyle, flex:1}} placeholder="휴대폰 뒷 4자리 (예: 5678)" autoFocus/>
                     <button type="button" className="btn btn-s" onClick={searchPointsMember} disabled={pmSearching}>
                       {pmSearching ? <span className="spinner"/> : '검색'}
                     </button>
