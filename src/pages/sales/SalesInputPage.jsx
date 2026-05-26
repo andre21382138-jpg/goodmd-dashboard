@@ -46,12 +46,18 @@ export default function SalesInputPage({ profile }) {
   const [managerName, setManagerName] = useState('');
 
   const searchMembers = async () => {
-    if (!memberSearch.trim()) return;
+    const q = memberSearch.trim();
+    if (!q) return;
     setSearching(true);
+    // 4자리 숫자만 입력하면 휴대폰 뒷자리 검색 (예: "5678" → 010-1234-5678 매칭)
+    // 그 외엔 이름/전화 부분 일치 검색
+    const filter = /^\d{4}$/.test(q)
+      ? `phone.ilike.%${q}`
+      : `name.ilike.%${q}%,phone.ilike.%${q}%`;
     const { data } = await supabase.from('customers')
       .select('*')
-      .or(`name.ilike.%${memberSearch}%,phone.ilike.%${memberSearch}%`)
-      .limit(10);
+      .or(filter)
+      .limit(20);
     setMemberResults(data || []);
     setSearching(false);
   };
@@ -522,7 +528,7 @@ export default function SalesInputPage({ profile }) {
                 <div style={{ display:'flex', gap:8, marginBottom:10 }}>
                   <input value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
                     onKeyDown={e => e.key==='Enter' && (e.preventDefault(), searchMembers())}
-                    style={{...inputStyle, flex:1}} placeholder="이름 또는 연락처로 검색" />
+                    style={{...inputStyle, flex:1}} placeholder="이름, 전체 연락처, 또는 휴대폰 뒷 4자리 (예: 5678)" />
                   <button type="button" className="btn btn-s" onClick={searchMembers} disabled={searching}>
                     {searching ? <span className="spinner"/> : '검색'}
                   </button>
