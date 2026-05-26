@@ -157,7 +157,7 @@ export default function SalesListPage({ setPage }) {
   const fetchSales = useCallback(async () => {
     setLoading(true);
     let q = supabase.from('sales')
-      .select('*, brand:brands(name), product:products(name), seller:profiles(name,department,branch)')
+      .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch)')
       .order('sold_at', { ascending: false });
     if (fStore) q = q.eq('store_name', fStore);
     if (fBrand) q = q.eq('brand_id', fBrand);
@@ -472,9 +472,9 @@ export default function SalesListPage({ setPage }) {
                       <td style={strikeStyle}>{s.brand?.name || '-'}</td>
                       <td style={strikeStyle}>
                         {s.product?.name || '-'}
-                        {s.delivery_type === 'store' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>🚚 매장발송</span>}
-                        {s.delivery_type === 'hq' && s.delivery_status === 'pending' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>📦 본사발송 대기</span>}
-                        {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>✅ 본사발송 완료</span>}
+                        {s.delivery_type === 'store' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
+                        {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                        {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                         {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
                         {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}개</span>}
                       </td>
