@@ -6,6 +6,11 @@ export default function SalesInputPage({ profile }) {
   const today = new Date().toISOString().slice(0, 10);
   const [soldAt,    setSoldAt]   = useState(today);
   const [memo,      setMemo]     = useState('');
+  // 본사발송 요청 배송지 정보 (한 거래에 본사요청 라인이 1개 이상이면 사용)
+  const [recipName,    setRecipName]    = useState('');
+  const [recipPhone,   setRecipPhone]   = useState('');
+  const [recipAddr,    setRecipAddr]    = useState('');
+  const [deliveryNotes,setDeliveryNotes]= useState('');
   const [brands,    setBrands]   = useState([]);
   const [allProducts, setAllProducts] = useState([]); // 전체 상품
   const [saving,    setSaving]   = useState(false);
@@ -19,7 +24,7 @@ export default function SalesInputPage({ profile }) {
     brandId:'', productId:'', productSearch:'', showSuggestions:false,
     quantity:1, normalPrice:'', discount:'0', price:'',
     payment:'카드',
-    delivery:false,
+    delivery:'none',  // 'none' | 'store' | 'hq'
     pointCustomer:null,  // {id,name,phone,total_points,used_points,grade}
     pointsUsed:0,
   });
@@ -179,6 +184,7 @@ export default function SalesInputPage({ profile }) {
 
   const resetForm = () => {
     setLines([newLine()]); setMemo('');
+    setRecipName(''); setRecipPhone(''); setRecipAddr(''); setDeliveryNotes('');
     setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName('');
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
@@ -212,6 +218,16 @@ export default function SalesInputPage({ profile }) {
         customer = custData;
       }
 
+      // 본사발송 요청 라인이 있으면 배송지 필수 검증
+      const hasHqRequest = validLines.some(l => l.delivery === 'hq');
+      if (hasHqRequest) {
+        if (!recipName.trim() || !recipPhone.trim() || !recipAddr.trim()) {
+          toast('본사 발송 요청 배송지(받는사람·연락처·주소)를 모두 입력해주세요', 'err');
+          setSaving(false);
+          return;
+        }
+      }
+
       // 이번 판매 총액
       const saleTotal = validLines.reduce((s,l) => s + (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0), 0);
 
@@ -220,6 +236,20 @@ export default function SalesInputPage({ profile }) {
         const lineAmt = (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0);
         const linePoints = customerId ? Math.floor(lineAmt * getGrade(customer?.total_purchase||0).rate) : 0;
         const pointsUsedLine = Number(l.pointsUsed) || 0;
+        const dType = l.delivery || 'none';
+        const deliveryFields = dType === 'hq'
+          ? {
+              delivery_type: 'hq',
+              delivery_status: 'pending',
+              recipient_name: recipName.trim(),
+              recipient_phone: recipPhone.trim(),
+              recipient_address: recipAddr.trim(),
+              delivery_notes: deliveryNotes.trim() || null,
+              delivery_requested: true,
+            }
+          : dType === 'store'
+          ? { delivery_type: 'store', delivery_requested: true }
+          : { delivery_type: 'none', delivery_requested: false };
         const { error } = await supabase.from('sales').insert({
           sold_at: soldAt, store_name: profile.department, branch_name: profile.branch,
           brand_id: Number(l.brandId), product_id: Number(l.productId),
@@ -227,7 +257,7 @@ export default function SalesInputPage({ profile }) {
           payment: l.payment || '카드', memo: memo.trim() || null, created_by: profile.id,
           customer_id: customerId, points_earned: linePoints,
           points_used: pointsUsedLine,
-          delivery_requested: !!l.delivery,
+          ...deliveryFields,
         });
         if (error) throw error;
 
@@ -318,8 +348,8 @@ export default function SalesInputPage({ profile }) {
             {/* 헤더 라벨 */}
             {(() => {
               const cols = lines.length > 1
-                ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 72px 34px'
-                : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 72px';
+                ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px'
+                : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px';
               return (
                 <div style={{ display:'grid', gridTemplateColumns: cols, gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
                   <div>상품검색</div>
@@ -361,7 +391,7 @@ export default function SalesInputPage({ profile }) {
 
               return (
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 8px', marginBottom:6 }}>
-                <div style={{ display:'grid', gridTemplateColumns: lines.length > 1 ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 72px 34px' : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 72px', gap:6, alignItems:'center' }}>
+                <div style={{ display:'grid', gridTemplateColumns: lines.length > 1 ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px' : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px', gap:6, alignItems:'center' }}>
                   {/* 상품검색 */}
                   <div style={{ position:'relative' }}>
                     <input
@@ -426,20 +456,24 @@ export default function SalesInputPage({ profile }) {
                           fontWeight: active ? 700 : 500, fontSize: isPoint ? 11 : 12, whiteSpace:'nowrap' }}>{p}</button>
                     )})}
                   </div>
-                  {/* 택배 체크박스 */}
-                  <label title="택배 발송 요청" style={{
-                    display:'flex', alignItems:'center', justifyContent:'center', gap:4,
-                    height:38, border:'1px solid', borderRadius:'var(--radius)', cursor:'pointer',
-                    borderColor: l.delivery ? '#e65100' : 'var(--border)',
-                    background: l.delivery ? '#fff3e0' : '#fff',
-                    color: l.delivery ? '#e65100' : 'var(--text2)',
-                    fontWeight: l.delivery ? 700 : 500, fontSize:12,
-                  }}>
-                    <input type="checkbox" checked={!!l.delivery}
-                      onChange={e => updateLine(l.id, 'delivery', e.target.checked)}
-                      style={{width:14, height:14, cursor:'pointer', margin:0}}/>
-                    택배
-                  </label>
+                  {/* 택배 종류 드롭다운 */}
+                  <select value={l.delivery || 'none'}
+                    onChange={e => updateLine(l.id, 'delivery', e.target.value)}
+                    title="택배 발송 종류"
+                    style={{
+                      height:38, padding:'0 6px',
+                      border:'1px solid',
+                      borderRadius:'var(--radius)', cursor:'pointer',
+                      borderColor: l.delivery === 'none' || !l.delivery ? 'var(--border)' : '#e65100',
+                      background: l.delivery === 'none' || !l.delivery ? '#fff' : '#fff3e0',
+                      color: l.delivery === 'none' || !l.delivery ? 'var(--text2)' : '#e65100',
+                      fontWeight: l.delivery === 'none' || !l.delivery ? 500 : 700, fontSize:12,
+                      outline:'none', appearance:'auto'
+                    }}>
+                    <option value="none">없음</option>
+                    <option value="store">매장발송</option>
+                    <option value="hq">본사요청</option>
+                  </select>
                   {/* 추가 (마지막 라인에만) */}
                   {isLast ? (
                     <button type="button" onClick={addLine}
@@ -455,7 +489,7 @@ export default function SalesInputPage({ profile }) {
                 </div>
                 {/* 1개당 단가 (수량 > 1일 때) */}
                 {l.productId && Number(l.quantity) > 1 && (
-                  <div style={{ display:'grid', gridTemplateColumns: lines.length > 1 ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 72px 34px' : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 60px 72px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+                  <div style={{ display:'grid', gridTemplateColumns: lines.length > 1 ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px' : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
                     <div/><div/>
                     <div style={{textAlign:'right', paddingRight:4}}>
                       {Number(l.normalPrice) > 0 && <>1개당 {Math.round(Number(l.normalPrice)).toLocaleString()}원</>}
@@ -504,6 +538,37 @@ export default function SalesInputPage({ profile }) {
             <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10 }}>📝 메모</div>
             <input value={memo} onChange={e => setMemo(e.target.value)} style={inputStyle} placeholder="특이사항 입력... (선택)" />
           </div>
+
+          {/* 본사 발송 배송지 (본사요청 라인이 있을 때만 표시) */}
+          {lines.some(l => l.delivery === 'hq') && (
+            <div style={{ background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#e65100', marginBottom:10 }}>
+                📦 본사 발송 배송지 정보 *
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                <div>
+                  <label style={labelStyle}>받는사람 *</label>
+                  <input value={recipName} onChange={e => setRecipName(e.target.value)}
+                    style={inputStyle} placeholder="예: 홍길동" />
+                </div>
+                <div>
+                  <label style={labelStyle}>연락처 *</label>
+                  <input value={recipPhone} onChange={e => setRecipPhone(e.target.value)}
+                    style={inputStyle} placeholder="010-1234-5678" />
+                </div>
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <label style={labelStyle}>주소 *</label>
+                <input value={recipAddr} onChange={e => setRecipAddr(e.target.value)}
+                  style={inputStyle} placeholder="예: 서울 강남구 ..." />
+              </div>
+              <div>
+                <label style={labelStyle}>요청사항</label>
+                <input value={deliveryNotes} onChange={e => setDeliveryNotes(e.target.value)}
+                  style={inputStyle} placeholder="예: 부재 시 경비실에 (선택)" />
+              </div>
+            </div>
+          )}
 
           {/* 회원적립 섹션 */}
           <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
