@@ -109,53 +109,68 @@ export default function HQDeliveryRequestPage({ profile }) {
               {tab === 'pending' ? '발송 대기 중인 요청이 없습니다' : '발송 완료 이력이 없습니다'}
             </div>
           : (
-          <div style={{display:'flex', flexDirection:'column', gap:14}}>
-            {groups.map(g => {
-              const isProc = processing === g.key;
-              return (
-                <div key={g.key} style={{
-                  border:'1px solid #ffcc80', borderRadius:'var(--radius)',
-                  background:'#fffaf0', padding:'14px 18px'
-                }}>
-                  <div style={{marginBottom:10}}>
-                    <div style={{fontSize:15, fontWeight:700, color:'var(--text)'}}>
-                      📦 {g.recipient_name} <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)', marginLeft:6}}>{g.recipient_phone}</span>
-                    </div>
-                    <div style={{fontSize:12, color:'var(--text2)', marginTop:3}}>📍 {g.recipient_address}</div>
-                    {g.delivery_notes && (
-                      <div style={{fontSize:11, color:'var(--text3)', marginTop:3}}>💬 {g.delivery_notes}</div>
-                    )}
-                  </div>
-                  <div style={{display:'flex', alignItems:'center', gap:8, fontSize:11, color:'var(--text3)', marginBottom:8}}>
-                    <span className="badge badge-dept">{g.store_name}</span>
-                    <span className="badge badge-store">{g.branch_name}</span>
-                    <span className="mono">{g.sold_at}</span>
-                    {tab === 'dispatched' && g.dispatched_at && (
-                      <span style={{marginLeft:'auto', color:'var(--success)'}}>
-                        ✅ 발송완료: {new Date(g.dispatched_at).toLocaleString('ko-KR')}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{background:'#fff', border:'1px solid var(--border)', borderRadius:6, padding:'8px 12px', marginBottom: tab==='pending' ? 12 : 0}}>
-                    {g.items.map(it => (
-                      <div key={it.id} style={{display:'flex', alignItems:'center', gap:8, fontSize:12, padding:'3px 0'}}>
-                        <span style={{flex:1}}>{it.product?.name || '-'}</span>
-                        <span className="mono" style={{color:'var(--text3)', fontSize:11}}>{it.product?.code || '-'}</span>
-                        <span style={{fontFamily:'var(--mono)', fontWeight:700}}>×{it.quantity}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {tab === 'pending' && (
-                    <div style={{display:'flex', justifyContent:'flex-end'}}>
-                      <button className="btn btn-p" onClick={() => handleDispatch(g)} disabled={isProc}
-                        style={{padding:'0 18px', height:36, fontWeight:700, fontSize:13}}>
-                        {isProc ? <span className="spinner"/> : '✓ 발송처리'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>날짜</th>
+                  <th>매장</th>
+                  <th>상품명</th>
+                  <th className="r" style={{width:60}}>수량</th>
+                  <th>받는사람</th>
+                  <th>주소</th>
+                  <th>연락처</th>
+                  <th>요청사항</th>
+                  <th style={{textAlign:'center', width:130}}>
+                    {tab === 'pending' ? '작업' : '발송일'}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.flatMap((g, gIdx) => {
+                  const isProc = processing === g.key;
+                  // 그룹 시각적 구분: 짝수 그룹 흰색, 홀수 그룹 매우 옅은 노랑
+                  const groupBg = gIdx % 2 === 0 ? '#fff' : '#fffdf5';
+                  return g.items.map((it, iIdx) => (
+                    <tr key={it.id} style={{background: groupBg}}>
+                      <td className="mono" style={{fontSize:11}}>{iIdx === 0 ? g.sold_at : ''}</td>
+                      <td style={{fontSize:11}}>
+                        {iIdx === 0 ? (
+                          <><span className="badge badge-dept">{g.store_name}</span> <span className="badge badge-store">{g.branch_name}</span></>
+                        ) : ''}
+                      </td>
+                      <td style={{fontSize:12}}>{it.product?.name || '-'}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{it.quantity}</td>
+                      <td style={{fontSize:12, fontWeight: iIdx === 0 ? 700 : 400}}>
+                        {iIdx === 0 ? g.recipient_name : ''}
+                      </td>
+                      <td style={{fontSize:11, color:'var(--text2)'}}>
+                        {iIdx === 0 ? g.recipient_address : ''}
+                      </td>
+                      <td className="mono" style={{fontSize:11, color:'var(--text2)'}}>
+                        {iIdx === 0 ? g.recipient_phone : ''}
+                      </td>
+                      <td style={{fontSize:11, color:'var(--text3)'}}>
+                        {iIdx === 0 ? (g.delivery_notes || '-') : ''}
+                      </td>
+                      <td style={{textAlign:'center'}}>
+                        {iIdx === 0 && tab === 'pending' && (
+                          <button className="btn btn-p" onClick={() => handleDispatch(g)} disabled={isProc}
+                            style={{padding:'0 14px', height:30, fontWeight:700, fontSize:12}}>
+                            {isProc ? <span className="spinner"/> : '✓ 발송처리'}
+                          </button>
+                        )}
+                        {iIdx === 0 && tab === 'dispatched' && g.dispatched_at && (
+                          <span style={{fontSize:11, color:'var(--success)', fontWeight:600}}>
+                            {new Date(g.dispatched_at).toLocaleDateString('ko-KR')}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ));
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
