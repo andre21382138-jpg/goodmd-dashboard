@@ -1,6 +1,90 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast } from '../../lib/utils';
+import { toast, dlBlob } from '../../lib/utils';
+import { ORDER_CONSTANTS } from '../../lib/constants';
+
+// 31-컬럼 발주 양식 헤더 (sample: 매장발주_26.05.21_전송건.xls)
+const DELIVERY_HEADERS = [
+  '발송일','송장번호','주문번호','채널','매장명','수취인명','결제금액','주문수량',
+  '상품명','옵션','품명','수취인명','','주소','수취인 천화번호1','수취인 전화번호2',
+  '배송메세지','상품번호','주문자명','주문자 연락처1','주문자 연락처2','수수료','수수료액','공란',
+  '사방넷주문번호','주문일','주문자 ID','물류바코드(88코드)','송장전송일','ERP코드','수량'
+];
+
+async function exportDeliveryRequests(groups) {
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('택배요청');
+
+  // 헤더 행
+  ws.addRow(DELIVERY_HEADERS);
+
+  // 오늘 날짜 YYYYMMDD (주문번호 prefix)
+  const now = new Date();
+  const ymd = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  const yymmdd = `${String(now.getFullYear()).slice(-2)}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+
+  // 그룹의 각 라인을 한 행씩 추가, 라인별로 -NNNN 부여
+  let seq = 0;
+  for (const g of groups) {
+    const storeFull = `${g.store_name || ''}${g.branch_name || ''}`;
+    for (const it of g.items) {
+      seq += 1;
+      const orderNo = `${ymd}-${String(seq).padStart(4,'0')}`;
+      const soldDate = g.sold_at ? new Date(g.sold_at) : null;
+      ws.addRow([
+        soldDate,                                  // 0  발송일
+        '',                                        // 1  송장번호
+        orderNo,                                   // 2  주문번호
+        ORDER_CONSTANTS.CHANNEL,                   // 3  채널
+        storeFull,                                 // 4  매장명
+        g.recipient_name || '',                    // 5  수취인명
+        0,                                         // 6  결제금액
+        1,                                         // 7  주문수량
+        '',                                        // 8  상품명
+        '',                                        // 9  옵션
+        it.product?.name || '',                    // 10 품명
+        g.recipient_name || '',                    // 11 수취인명
+        '',                                        // 12 (우편번호 자리, 빈)
+        g.recipient_address || '',                 // 13 주소
+        g.recipient_phone || '',                   // 14 수취인 천화번호1
+        '',                                        // 15 수취인 전화번호2
+        g.delivery_notes || '',                    // 16 배송메세지
+        '',                                        // 17 상품번호
+        g.recipient_name || '',                    // 18 주문자명 (사용자 스펙: 받는사람)
+        ORDER_CONSTANTS.ORDERER_PHONE,             // 19 주문자 연락처1
+        ORDER_CONSTANTS.ORDERER_PHONE,             // 20 주문자 연락처2
+        '',                                        // 21 수수료
+        '',                                        // 22 수수료액
+        '',                                        // 23 공란
+        '',                                        // 24 사방넷주문번호
+        '',                                        // 25 주문일
+        '',                                        // 26 주문자 ID
+        '',                                        // 27 물류바코드(88코드)
+        '',                                        // 28 송장전송일
+        it.product?.code || '',                    // 29 ERP코드 (현재 product.code 사용 — 별도 erp_code 컬럼 있으면 그쪽으로 교체)
+        it.quantity || 0,                          // 30 수량
+      ]);
+    }
+  }
+
+  // 발송일 컬럼 날짜 서식
+  ws.getColumn(1).numFmt = 'yyyy-mm-dd';
+
+  // 컬럼 폭 자동
+  ws.columns.forEach((col, idx) => {
+    let max = 8;
+    col.eachCell({ includeEmpty: false }, cell => {
+      const v = cell.value == null ? '' : String(cell.value);
+      if (v.length > max) max = Math.min(40, v.length + 2);
+    });
+    col.width = Math.max(max, 8);
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  dlBlob(buf, `택배요청_${yymmdd}_전송건.xlsx`);
+  return seq;
+}
 
 function groupKey(s) {
   return `${s.sold_at}|${s.recipient_phone || ''}|${s.customer_id || ''}|${s.store_name}|${s.branch_name}`;
@@ -93,15 +177,31 @@ export default function HQDeliveryRequestPage({ profile }) {
       </div>
 
       <div className="card" style={{padding:'16px 20px'}}>
-        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, gap:8, flexWrap:'wrap'}}>
           <span className="fresult">
             {tab === 'pending'
               ? <>발송 대기 중인 본사 택배 요청 — <b>{groups.length}</b>건</>
               : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>(최근 50건만 표시)</span></>}
           </span>
-          <button className="btn btn-s" onClick={fetchData} disabled={loading}>
-            {loading ? <span className="spinner"/> : '🔄 새로고침'}
-          </button>
+          <div style={{display:'flex', gap:8}}>
+            {tab === 'pending' && groups.length > 0 && (
+              <button type="button" onClick={async () => {
+                try {
+                  const count = await exportDeliveryRequests(groups);
+                  toast(`엑셀 다운로드 완료 (${count}건)`, 'ok');
+                } catch (e) {
+                  toast('다운로드 실패: ' + (e.message || e), 'err');
+                }
+              }}
+                title="현재 발송 대기 건 전체를 매장발주 양식(.xlsx)으로 다운로드"
+                style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6}}>
+                📥 엑셀 다운로드
+              </button>
+            )}
+            <button className="btn btn-s" onClick={fetchData} disabled={loading}>
+              {loading ? <span className="spinner"/> : '🔄 새로고침'}
+            </button>
+          </div>
         </div>
 
         {loading ? <div className="empty"><span className="spinner"/></div>
