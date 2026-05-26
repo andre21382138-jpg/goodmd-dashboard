@@ -88,14 +88,16 @@ export default function HQDeliveryRequestPage({ profile }) {
           📦 발송 대기
         </button>
         <button className={`tab ${tab==='dispatched'?'on':''}`} onClick={() => setTab('dispatched')}>
-          ✅ 발송 완료 (최근 50건)
+          ✅ 발송 완료
         </button>
       </div>
 
       <div className="card" style={{padding:'16px 20px'}}>
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
           <span className="fresult">
-            {tab === 'pending' ? '발송 대기 중인 본사 택배 요청' : '최근 발송 완료 건'} — <b>{groups.length}</b>건
+            {tab === 'pending'
+              ? <>발송 대기 중인 본사 택배 요청 — <b>{groups.length}</b>건</>
+              : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>(최근 50건만 표시)</span></>}
           </span>
           <button className="btn btn-s" onClick={fetchData} disabled={loading}>
             {loading ? <span className="spinner"/> : '🔄 새로고침'}
