@@ -496,7 +496,7 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
               <button key={s.key}
                 className="flyout-item"
                 onClick={() => { setPage(s.key); setFlyoutKey(null); }}
-                style={{background: page===s.key ? '#fff8e1' : '#fff',
+                style={{background: page===s.key ? '#e8f5e9' : '#fff',
                   color: page===s.key ? '#E65100' : '#1a1a1a',
                   fontWeight: page===s.key ? 700 : 500}}>
                 <span style={{fontSize:14}}>{s.icon}</span>{s.label}

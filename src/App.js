@@ -52,9 +52,9 @@ const GLOBAL_CSS = `
     --bg3:     #f0f0f0;
     --border:  #e0e0e0;
     --border2: #cccccc;
-    --sidebar: #FFD600;
-    --sidebar-hover: #FFC200;
-    --sidebar-active: #FF8F00;
+    --sidebar: #AED581;
+    --sidebar-hover: #9CCC65;
+    --sidebar-active: #558B2F;
     --sidebar-text: #1a1a1a;
     --accent:  #FF8F00;
     --accent2: #1565C0;
@@ -145,7 +145,7 @@ const GLOBAL_CSS = `
   .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
   .sidebar-menu::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35); }
   .flyout-item { display:flex; align-items:center; gap:9px; padding:9px 16px; width:100%; border:none; cursor:pointer; font-size:13px; text-align:left; transition:background 100ms; }
-  .flyout-item:hover { background: #fff3e0 !important; }
+  .flyout-item:hover { background: #e8f5e9 !important; }
   .sidebar-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 6px; cursor: pointer; transition: background 120ms; margin-bottom: 2px; font-size: 13px; font-weight: 600; color: #1a1a1a; border: none; background: none; width: 100%; text-align: left; }
   .sidebar-item:hover { background: rgba(0,0,0,0.12); }
   .sidebar-item.on { background: rgba(0,0,0,0.18); font-weight: 700; color: #1a1a1a; }
