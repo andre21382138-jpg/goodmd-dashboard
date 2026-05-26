@@ -847,16 +847,19 @@ export default function SalesInputPage({ profile }) {
                     <td style={strike}>{s.brand?.name || '-'}</td>
                     <td style={strike}>
                       {s.product?.name || '-'}
-                      {s.delivery_type === 'store' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
-                      {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
-                      {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                       {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
                       {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}</span>}
                     </td>
                     <td className="r" style={strike}>{effQ}</td>
                     <td className="r" style={strike}>{Number(s.price).toLocaleString()}원</td>
                     <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9', ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
-                    <td style={{fontSize:12, ...strike}}>{s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}</td>
+                    <td style={{fontSize:12, ...strike}}>
+                      {s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}
+                      {(!s.delivery_type || s.delivery_type === 'none') && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
+                      {s.delivery_type === 'store' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
+                      {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                      {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && !fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                    </td>
                     <td style={{fontSize:11,color:'var(--text2)', ...strike}}>{s.memo || '-'}</td>
                     <td><button className="btn-danger" onClick={() => handleDelete(s.id)}>삭제</button></td>
                   </tr>
