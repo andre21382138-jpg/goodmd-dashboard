@@ -7,10 +7,38 @@ export default function SalesInputPage({ profile }) {
   const [soldAt,    setSoldAt]   = useState(today);
   const [memo,      setMemo]     = useState('');
   // 본사발송 요청 배송지 정보 (한 거래에 본사요청 라인이 1개 이상이면 사용)
-  const [recipName,    setRecipName]    = useState('');
-  const [recipPhone,   setRecipPhone]   = useState('');
-  const [recipAddr,    setRecipAddr]    = useState('');
-  const [deliveryNotes,setDeliveryNotes]= useState('');
+  const [recipName,       setRecipName]       = useState('');
+  const [recipPhone,      setRecipPhone]      = useState('');
+  const [recipAddr,       setRecipAddr]       = useState('');       // (우편번호) 도로명 (검색으로 자동 채움)
+  const [recipAddrDetail, setRecipAddrDetail] = useState('');       // 상세주소 (직접 입력)
+  const [deliveryNotes,   setDeliveryNotes]   = useState('');
+
+  // 다음(카카오) 우편번호 검색
+  const openAddrSearch = () => {
+    const launch = () => {
+      // eslint-disable-next-line no-new, new-cap
+      new window.daum.Postcode({
+        oncomplete: (data) => {
+          const addr = data.roadAddress || data.jibunAddress || '';
+          const zip = data.zonecode ? `(${data.zonecode}) ` : '';
+          setRecipAddr(`${zip}${addr}`);
+          setTimeout(() => {
+            const el = document.getElementById('recip-addr-detail');
+            if (el) el.focus();
+          }, 0);
+        },
+      }).open();
+    };
+    if (window.daum?.Postcode) {
+      launch();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+      script.onload  = launch;
+      script.onerror = () => toast('주소 검색 서비스 로드 실패', 'err');
+      document.body.appendChild(script);
+    }
+  };
   const [brands,    setBrands]   = useState([]);
   const [allProducts, setAllProducts] = useState([]); // 전체 상품
   const [saving,    setSaving]   = useState(false);
@@ -256,7 +284,7 @@ export default function SalesInputPage({ profile }) {
 
   const resetForm = () => {
     setLines([newLine()]); setMemo('');
-    setRecipName(''); setRecipPhone(''); setRecipAddr(''); setDeliveryNotes('');
+    setRecipName(''); setRecipPhone(''); setRecipAddr(''); setRecipAddrDetail(''); setDeliveryNotes('');
     setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName('');
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
@@ -315,7 +343,7 @@ export default function SalesInputPage({ profile }) {
               delivery_status: 'pending',
               recipient_name: recipName.trim(),
               recipient_phone: recipPhone.trim(),
-              recipient_address: recipAddr.trim(),
+              recipient_address: (recipAddr.trim() + (recipAddrDetail.trim() ? ' ' + recipAddrDetail.trim() : '')).trim(),
               delivery_notes: deliveryNotes.trim() || null,
               delivery_requested: true,
             }
@@ -623,8 +651,17 @@ export default function SalesInputPage({ profile }) {
               </div>
               <div style={{ marginBottom:10 }}>
                 <label style={labelStyle}>주소 *</label>
-                <input value={recipAddr} onChange={e => setRecipAddr(e.target.value)}
-                  style={inputStyle} placeholder="예: 서울 강남구 ..." />
+                <div style={{ display:'flex', gap:6 }}>
+                  <input value={recipAddr} onChange={e => setRecipAddr(e.target.value)}
+                    style={{...inputStyle, flex:1}} placeholder="🔍 주소검색 버튼 또는 직접 입력" />
+                  <button type="button" onClick={openAddrSearch}
+                    title="다음(카카오) 우편번호 검색"
+                    style={{ height:38, padding:'0 14px', border:'1px solid var(--accent)', background:'#fff3e0', color:'var(--accent)', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                    🔍 주소검색
+                  </button>
+                </div>
+                <input id="recip-addr-detail" value={recipAddrDetail} onChange={e => setRecipAddrDetail(e.target.value)}
+                  style={{...inputStyle, marginTop:6}} placeholder="상세주소 (동·호수 등, 선택)" />
               </div>
               <div>
                 <label style={labelStyle}>요청사항</label>
