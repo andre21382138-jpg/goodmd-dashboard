@@ -77,6 +77,27 @@ export default function BizSalesPage({ profile, setPage }) {
     setShowSug(false);
   };
 
+  const handleAddCompany = async () => {
+    const raw = window.prompt('새 업체 이름을 입력하세요:');
+    if (!raw) return;
+    const name = raw.trim();
+    if (!name) return;
+    if (companies.some(c => c.name === name)) {
+      toast(`'${name}' 업체는 이미 등록되어 있습니다`, 'err');
+      const exist = companies.find(c => c.name === name);
+      if (exist) setCompanyId(String(exist.id));
+      return;
+    }
+    const { data, error } = await supabase.from('biz_companies')
+      .insert({ name })
+      .select()
+      .single();
+    if (error) { toast(error.message, 'err'); return; }
+    toast(`'${name}' 추가 완료`, 'ok');
+    setCompanies(prev => [...prev, data].sort((a,b) => a.name.localeCompare(b.name)));
+    setCompanyId(String(data.id));
+  };
+
   const handleSubmit = async () => {
     if (!companyId) { toast('업체를 선택해주세요', 'err'); return; }
     if (!productId) { toast('상품을 선택해주세요', 'err'); return; }
@@ -135,10 +156,17 @@ export default function BizSalesPage({ profile, setPage }) {
             </div>
             <div>
               <label style={labelStyle}>업체 <span style={{color:'var(--danger)'}}>*</span></label>
-              <select value={companyId} onChange={e=>setCompanyId(e.target.value)} style={inputStyle}>
-                <option value="">-- 업체 선택 --</option>
-                {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div style={{display:'flex', gap:6}}>
+                <select value={companyId} onChange={e=>setCompanyId(e.target.value)} style={{...inputStyle, flex:1}}>
+                  <option value="">-- 업체 선택 --</option>
+                  {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button type="button" onClick={handleAddCompany}
+                  title="신규업체 추가"
+                  style={{height:36, padding:'0 12px', border:'1px solid var(--accent)', background:'#fff3e0', color:'var(--accent)', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                  + 신규
+                </button>
+              </div>
             </div>
             <div>
               <label style={labelStyle}>브랜드</label>

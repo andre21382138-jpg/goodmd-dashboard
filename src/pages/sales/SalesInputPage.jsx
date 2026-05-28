@@ -94,6 +94,10 @@ export default function SalesInputPage({ profile }) {
             toast(`등록되지 않은 코드: ${code}`, 'err');
             return;
           }
+          if (prod.is_sales_stopped) {
+            toast(`'${prod.name}'은(는) 판매중지된 상품입니다`, 'err');
+            return;
+          }
           setLines(prev => {
             const idx = prev.findIndex(l => String(l.productId) === String(prod.id));
             if (idx >= 0) {
@@ -429,6 +433,7 @@ export default function SalesInputPage({ profile }) {
             {lines.map((l, idx) => {
               const suggestions = l.productSearch && l.productSearch.length >= 1
                 ? allProducts
+                    .filter(p => !p.is_sales_stopped)
                     .filter(p => {
                       const q = l.productSearch.toLowerCase();
                       return (p.name||'').toLowerCase().includes(q)

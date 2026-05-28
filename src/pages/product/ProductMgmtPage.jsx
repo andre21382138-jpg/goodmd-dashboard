@@ -59,6 +59,17 @@ export default function ProductMgmtPage({ subPage }) {
     else { toast('삭제 완료', 'inf'); fetchAll(); }
   };
 
+  const toggleSalesStop = async (p) => {
+    const next = !p.is_sales_stopped;
+    const msg = next
+      ? `'${p.name}'을(를) 판매중지 하시겠습니까?\n매장에서 더 이상 판매할 수 없게 됩니다.`
+      : `'${p.name}'을(를) 판매재개 하시겠습니까?`;
+    if (!window.confirm(msg)) return;
+    const { error } = await supabase.from('products').update({ is_sales_stopped: next }).eq('id', p.id);
+    if (error) toast(error.message, 'err');
+    else { toast(next ? '판매중지 처리' : '판매재개 처리', 'ok'); fetchAll(); }
+  };
+
   const deleteBrand = async (id) => {
     if (!window.confirm('브랜드와 해당 상품이 모두 삭제됩니다. 계속하시겠습니까?')) return;
     const { error } = await supabase.from('brands').delete().eq('id', id);
@@ -242,19 +253,19 @@ export default function ProductMgmtPage({ subPage }) {
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th className="r">원가</th><th className="r">판매가</th><th style={{width:100, textAlign:'center'}}>수정</th><th></th></tr></thead>
+                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th className="r">원가</th><th className="r">판매가</th><th style={{width:100, textAlign:'center'}}>수정</th><th style={{width:90, textAlign:'center'}}>판매상태</th><th></th></tr></thead>
                 <tbody>
                   {filteredProducts.length === 0
-                    ? <tr><td colSpan={8} className="empty">등록된 상품이 없습니다</td></tr>
+                    ? <tr><td colSpan={9} className="empty">등록된 상품이 없습니다</td></tr>
                     : filteredProducts.map(p => {
                       const isEditing = !!editing[p.id];
                       const ed = editing[p.id] || {};
                       return (
-                        <tr key={p.id} style={{background: isEditing ? '#fffde7' : ''}}>
+                        <tr key={p.id} style={{background: isEditing ? '#fffde7' : (p.is_sales_stopped ? '#fafafa' : '')}}>
                           <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.code || '-'}</td>
                           <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.erp_code || '-'}</td>
                           <td><span className="badge badge-dept">{p.brand?.name}</span></td>
-                          <td style={{fontWeight:600}}>{p.name}</td>
+                          <td style={{fontWeight:600, color: p.is_sales_stopped ? 'var(--text3)' : undefined, textDecoration: p.is_sales_stopped ? 'line-through' : undefined}}>{p.name}</td>
                           <td className="r">
                             {isEditing
                               ? <input type="number" value={ed.cost} onChange={e => setEditing(prev=>({...prev,[p.id]:{...prev[p.id],cost:e.target.value}}))}
@@ -280,6 +291,16 @@ export default function ProductMgmtPage({ subPage }) {
                             ) : (
                               <button className="btn btn-s" style={{height:26, padding:'0 10px', fontSize:11}} onClick={() => startEdit(p)}>수정</button>
                             )}
+                          </td>
+                          <td style={{textAlign:'center'}}>
+                            <button type="button" onClick={() => toggleSalesStop(p)}
+                              title={p.is_sales_stopped ? '판매재개' : '판매중지'}
+                              style={{height:26, padding:'0 10px', fontSize:11, fontWeight:700, border:'1px solid', borderRadius:'var(--radius)', cursor:'pointer',
+                                borderColor: p.is_sales_stopped ? 'var(--success)' : 'var(--danger)',
+                                background:  p.is_sales_stopped ? '#e8f5e9' : '#ffebee',
+                                color:       p.is_sales_stopped ? 'var(--success)' : 'var(--danger)'}}>
+                              {p.is_sales_stopped ? '판매재개' : '판매중지'}
+                            </button>
                           </td>
                           <td><button className="btn-danger" onClick={() => deleteProduct(p.id)}>삭제</button></td>
                         </tr>
