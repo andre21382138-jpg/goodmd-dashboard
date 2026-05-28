@@ -60,12 +60,17 @@ export default function BizSalesPage({ profile, setPage }) {
 
   useEffect(() => { if (tab==='list') fetchSales(); }, [fetchSales, tab]);
 
-  // 상품 자동완성
+  // 상품 자동완성 (상품명·상품코드·ERP코드 검색)
   const prodPool = brandId ? allProds.filter(p=>String(p.brand_id)===String(brandId)) : allProds;
   const suggestions = productSearch
-    ? prodPool.filter(p=>p.name.toLowerCase().includes(productSearch.toLowerCase()))
-        .sort((a,b)=>(a.name.includes('[단종]')?1:0)-(b.name.includes('[단종]')?1:0))
-        .slice(0,10)
+    ? prodPool.filter(p => {
+        const q = productSearch.toLowerCase();
+        return (p.name || '').toLowerCase().includes(q)
+            || (p.code || '').toLowerCase().includes(q)
+            || (p.erp_code || '').toLowerCase().includes(q);
+      })
+      .sort((a,b)=>(a.name.includes('[단종]')?1:0)-(b.name.includes('[단종]')?1:0))
+      .slice(0,10)
     : [];
   const selProd = allProds.find(p=>String(p.id)===String(productId));
 
@@ -190,12 +195,20 @@ export default function BizSalesPage({ profile, setPage }) {
                     const br = brands.find(b=>b.id===p.brand_id);
                     return (
                       <div key={p.id} onMouseDown={e=>{e.preventDefault();selectProd(p);}}
-                        style={{padding:'9px 12px',cursor:'pointer',fontSize:13,borderBottom:'1px solid #f0f0f0'}}
+                        style={{padding:'8px 12px',cursor:'pointer',fontSize:13,borderBottom:'1px solid #f0f0f0'}}
                         onMouseEnter={e=>e.currentTarget.style.background='#fffde7'}
                         onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
-                        {!brandId && br && <span style={{fontSize:11,color:'var(--accent)',fontWeight:700,marginRight:6}}>[{br.name}]</span>}
-                        {p.name}
-                        <span style={{fontSize:11,color:'var(--text3)',marginLeft:8,fontFamily:'var(--mono)'}}>{Number(p.price).toLocaleString()}원</span>
+                        <div style={{display:'flex', alignItems:'center'}}>
+                          {!brandId && br && <span style={{fontSize:11,color:'var(--accent)',fontWeight:700,marginRight:6}}>[{br.name}]</span>}
+                          <span>{p.name}</span>
+                          <span style={{fontSize:11,color:'var(--text3)',marginLeft:'auto',fontFamily:'var(--mono)'}}>{Number(p.price).toLocaleString()}원</span>
+                        </div>
+                        {(p.code || p.erp_code) && (
+                          <div style={{display:'flex', gap:10, marginTop:3, fontSize:10, fontFamily:'var(--mono)', color:'var(--text3)'}}>
+                            {p.code && <span>상품코드: <strong style={{color:'var(--text2)'}}>{p.code}</strong></span>}
+                            {p.erp_code && <span>ERP: <strong style={{color:'var(--text2)'}}>{p.erp_code}</strong></span>}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
