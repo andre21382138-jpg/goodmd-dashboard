@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge, getGrade, formatPhone } from '../../lib/utils';
 
@@ -70,6 +70,71 @@ export default function SalesInputPage({ profile }) {
     supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || []));
     supabase.from('products').select('*').order('name').then(({ data }) => setAllProducts(data || []));
   }, []);
+
+  // 바코드 스캐너 (페이지 내 한정)
+  // - HID 키보드 방식 스캐너: 빠른 연속 keystroke + Enter
+  // - input/textarea/select 포커스 중에는 비활성 (직접 타이핑 보호)
+  // - 매칭: products.code === 스캔코드
+  // - 같은 상품 재스캔 → 수량 +1, 첫 빈 라인이 있으면 채움, 없으면 새 라인 추가
+  const scanBufRef = useRef({ chars: '', lastTime: 0, startTime: 0 });
+  useEffect(() => {
+    const handler = (e) => {
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      const now = Date.now();
+      const buf = scanBufRef.current;
+      if (e.key === 'Enter') {
+        const code = buf.chars.trim();
+        const elapsed = now - buf.startTime;
+        buf.chars = '';
+        if (code.length >= 3 && elapsed < 800) {
+          e.preventDefault();
+          const prod = allProducts.find(p => String(p.code || '').trim() === code);
+          if (!prod) {
+            toast(`등록되지 않은 코드: ${code}`, 'err');
+            return;
+          }
+          setLines(prev => {
+            const idx = prev.findIndex(l => String(l.productId) === String(prod.id));
+            if (idx >= 0) {
+              const updated = [...prev];
+              const newQty = (Number(updated[idx].quantity) || 0) + 1;
+              updated[idx] = { ...updated[idx], quantity: newQty };
+              return updated;
+            }
+            const fill = {
+              brandId: String(prod.brand_id || ''),
+              productId: String(prod.id),
+              productSearch: prod.name || '',
+              showSuggestions: false,
+              normalPrice: prod.price || '',
+              discount: '0',
+              price: prod.price || '',
+              quantity: 1,
+            };
+            const emptyIdx = prev.findIndex(l => !l.productId);
+            if (emptyIdx >= 0) {
+              const updated = [...prev];
+              updated[emptyIdx] = { ...updated[emptyIdx], ...fill };
+              return updated;
+            }
+            return [...prev, { ...newLine(), ...fill }];
+          });
+          toast(`📷 ${prod.name} 추가`, 'ok');
+        }
+      } else if (e.key.length === 1) {
+        if (now - buf.lastTime > 100) {
+          buf.chars = '';
+          buf.startTime = now;
+        }
+        buf.chars += e.key;
+        buf.lastTime = now;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allProducts]);
 
   const fetchRecent = useCallback(async () => {
     const { data } = await supabase.from('sales')
