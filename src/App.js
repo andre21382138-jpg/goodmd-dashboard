@@ -589,6 +589,54 @@ export default function App() {
       .then(({ data }) => { setProfile(data); setAL(false); });
   }, [session, joinManagerId]);
 
+  // 글로벌 바코드 스캐너 가드
+  // - 판매입력/입고확인 외 페이지에서 스캔 감지 시: 입력 차단(또는 정리) + 안내 토스트
+  // - 판매입력/입고확인 페이지에서는 자체 리스너가 처리하므로 여기서는 패스
+  useEffect(() => {
+    if (!profile?.approved) return;
+    if (page === 'sales_input' || page === 'purchase_check') return;
+    const buf = { chars: '', lastTime: 0, startTime: 0 };
+    const handler = (e) => {
+      const now = Date.now();
+      if (e.key === 'Enter') {
+        const code = buf.chars.trim();
+        const elapsed = now - buf.startTime;
+        buf.chars = ''; buf.lastTime = 0; buf.startTime = 0;
+        if (code.length >= 3 && elapsed < 800) {
+          e.preventDefault();
+          // 현재 포커스된 input/textarea에서 스캔된 꼬리 코드 제거
+          const el = document.activeElement;
+          if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+            const v = el.value || '';
+            if (v.endsWith(code)) {
+              const nativeSetter = Object.getOwnPropertyDescriptor(
+                el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
+                'value'
+              )?.set;
+              const newVal = v.slice(0, -code.length);
+              if (nativeSetter) {
+                nativeSetter.call(el, newVal);
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+              } else {
+                el.value = newVal;
+              }
+            }
+          }
+          toast('📷 스캔 감지 — 판매입력 또는 입고확인 화면에서 스캔해주세요', 'inf');
+        }
+      } else if (e.key.length === 1) {
+        if (now - buf.lastTime > 100) {
+          buf.chars = '';
+          buf.startTime = now;
+        }
+        buf.chars += e.key;
+        buf.lastTime = now;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [profile?.approved, page]);
+
   // QR 가입 페이지면 여기서 렌더
   if (joinManagerId) return <><Toasts/><JoinPage managerId={joinManagerId}/></>;
 
