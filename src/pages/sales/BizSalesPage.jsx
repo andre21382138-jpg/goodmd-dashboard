@@ -22,6 +22,15 @@ export default function BizSalesPage({ profile, setPage }) {
   });
   const [lines, setLines] = useState([newLine()]);
 
+  // 신규업체 추가 모달
+  const [showAddCompany,   setShowAddCompany]   = useState(false);
+  const [newCompName,      setNewCompName]      = useState('');
+  const [newCompContact,   setNewCompContact]   = useState('');
+  const [newCompPhone,     setNewCompPhone]     = useState('');
+  const [newCompAddr,      setNewCompAddr]      = useState('');
+  const [newCompAddrDetail,setNewCompAddrDetail]= useState('');
+  const [savingCompany,    setSavingCompany]    = useState(false);
+
   // 데이터
   const [companies, setCompanies] = useState([]);
   const [brands,    setBrands]    = useState([]);
@@ -98,25 +107,65 @@ export default function BizSalesPage({ profile, setPage }) {
     }));
   };
 
-  const handleAddCompany = async () => {
-    const raw = window.prompt('새 업체 이름을 입력하세요:');
-    if (!raw) return;
-    const name = raw.trim();
-    if (!name) return;
+  const openAddCompanyModal = () => {
+    setNewCompName(''); setNewCompContact(''); setNewCompPhone('');
+    setNewCompAddr(''); setNewCompAddrDetail('');
+    setShowAddCompany(true);
+  };
+
+  // 다음(카카오) 우편번호 — 신규업체 주소 검색
+  const openCompanyAddrSearch = () => {
+    const launch = () => {
+      // eslint-disable-next-line no-new, new-cap
+      new window.daum.Postcode({
+        oncomplete: (data) => {
+          const addr = data.roadAddress || data.jibunAddress || '';
+          const zip = data.zonecode ? `(${data.zonecode}) ` : '';
+          setNewCompAddr(`${zip}${addr}`);
+          setTimeout(() => {
+            const el = document.getElementById('new-comp-addr-detail');
+            if (el) el.focus();
+          }, 0);
+        },
+      }).open();
+    };
+    if (window.daum?.Postcode) {
+      launch();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+      script.onload  = launch;
+      script.onerror = () => toast('주소 검색 서비스 로드 실패', 'err');
+      document.body.appendChild(script);
+    }
+  };
+
+  const submitAddCompany = async () => {
+    const name = newCompName.trim();
+    if (!name) { toast('업체명을 입력해주세요', 'err'); return; }
     if (companies.some(c => c.name === name)) {
       const exist = companies.find(c => c.name === name);
       toast(`'${name}' 업체는 이미 등록되어 있습니다`, 'err');
       if (exist) setCompanyId(String(exist.id));
       return;
     }
+    setSavingCompany(true);
+    const fullAddr = (newCompAddr.trim() + (newCompAddrDetail.trim() ? ' ' + newCompAddrDetail.trim() : '')).trim();
     const { data, error } = await supabase.from('biz_companies')
-      .insert({ name })
+      .insert({
+        name,
+        contact_name: newCompContact.trim() || null,
+        phone:        newCompPhone.trim()   || null,
+        address:      fullAddr               || null,
+      })
       .select()
       .single();
+    setSavingCompany(false);
     if (error) { toast(error.message, 'err'); return; }
     toast(`'${name}' 추가 완료`, 'ok');
     setCompanies(prev => [...prev, data].sort((a,b) => a.name.localeCompare(b.name)));
     setCompanyId(String(data.id));
+    setShowAddCompany(false);
   };
 
   const handleSubmit = async () => {
@@ -201,7 +250,7 @@ export default function BizSalesPage({ profile, setPage }) {
                   <option value="">-- 업체 선택 --</option>
                   {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-                <button type="button" onClick={handleAddCompany}
+                <button type="button" onClick={openAddCompanyModal}
                   title="신규업체 추가"
                   style={{height:36, padding:'0 12px', border:'1px solid var(--accent)', background:'#fff3e0', color:'var(--accent)', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
                   + 신규
@@ -413,6 +462,61 @@ export default function BizSalesPage({ profile, setPage }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 신규업체 추가 모달 */}
+      {showAddCompany && (
+        <div style={{position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}} onClick={() => !savingCompany && setShowAddCompany(false)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:480, maxWidth:'92vw', boxShadow:'0 8px 40px rgba(0,0,0,0.22)'}}>
+            <div style={{display:'flex', alignItems:'center', marginBottom:16}}>
+              <div style={{fontSize:16, fontWeight:700, color:'var(--text)'}}>🏢 신규업체 추가</div>
+              <button type="button" onClick={() => !savingCompany && setShowAddCompany(false)}
+                style={{marginLeft:'auto', background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#999'}}>✕</button>
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={labelStyle}>업체명 <span style={{color:'var(--danger)'}}>*</span></label>
+              <input value={newCompName} onChange={e => setNewCompName(e.target.value)}
+                style={inputStyle} placeholder="예: ○○유통" autoFocus />
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10}}>
+              <div>
+                <label style={labelStyle}>담당자명</label>
+                <input value={newCompContact} onChange={e => setNewCompContact(e.target.value)}
+                  style={inputStyle} placeholder="예: 홍길동" />
+              </div>
+              <div>
+                <label style={labelStyle}>연락처</label>
+                <input value={newCompPhone} onChange={e => setNewCompPhone(e.target.value)}
+                  style={inputStyle} placeholder="010-1234-5678" />
+              </div>
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={labelStyle}>주소</label>
+              <div style={{display:'flex', gap:6}}>
+                <input value={newCompAddr} onChange={e => setNewCompAddr(e.target.value)}
+                  style={{...inputStyle, flex:1}} placeholder="🔍 주소검색 버튼 또는 직접 입력" />
+                <button type="button" onClick={openCompanyAddrSearch}
+                  title="다음(카카오) 우편번호 검색"
+                  style={{height:36, padding:'0 14px', border:'1px solid var(--accent)', background:'#fff3e0', color:'var(--accent)', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                  🔍 주소검색
+                </button>
+              </div>
+              <input id="new-comp-addr-detail" value={newCompAddrDetail} onChange={e => setNewCompAddrDetail(e.target.value)}
+                style={{...inputStyle, marginTop:6}} placeholder="상세주소 (동·호수 등, 선택)" />
+            </div>
+            <div style={{display:'flex', gap:8}}>
+              <button type="button" onClick={() => setShowAddCompany(false)} disabled={savingCompany}
+                style={{flex:1, height:42, border:'1px solid var(--border)', background:'#fff', color:'var(--text2)', borderRadius:'var(--radius)', fontSize:13, fontWeight:600, cursor:'pointer'}}>
+                취소
+              </button>
+              <button type="button" onClick={submitAddCompany} disabled={savingCompany}
+                style={{flex:2, height:42, border:'none', background:'var(--accent)', color:'#fff', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, cursor:'pointer'}}>
+                {savingCompany ? <span className="spinner"/> : '✅ 업체 등록'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
