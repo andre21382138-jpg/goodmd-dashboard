@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 
@@ -76,6 +76,55 @@ export default function PurchaseOrderMgrPage({ profile }) {
   }, [profile.department, profile.branch]);
 
   useEffect(() => { if (tab === 'receive') fetchTransfers(); }, [tab, fetchTransfers]);
+
+  // 바코드 스캐너 (입고확인 탭에서 발주서를 펼친 상태에서만 활성)
+  // - HID 키보드 방식: 빠른 연속 keystroke + Enter
+  // - 스캔 코드와 발주 라인의 products.code 매칭 → 해당 라인의 received_qty +1
+  // - 매칭 실패 → '발주 목록에 없는 코드' 토스트
+  // - 이미 입고완료(received)된 발주는 스캔 차단
+  const scanBufRef = useRef({ chars: '', lastTime: 0, startTime: 0 });
+  useEffect(() => {
+    if (tab !== 'receive' || !expanded) return;
+    const handler = (e) => {
+      const tg = (e.target?.tagName || '').toLowerCase();
+      if (tg === 'input' || tg === 'textarea' || tg === 'select') return;
+      const now = Date.now();
+      const buf = scanBufRef.current;
+      if (e.key === 'Enter') {
+        const code = buf.chars.trim();
+        const elapsed = now - buf.startTime;
+        buf.chars = ''; buf.lastTime = 0; buf.startTime = 0;
+        if (code.length >= 3 && elapsed < 800) {
+          e.preventDefault();
+          const order = orders.find(o => o.id === expanded);
+          if (!order) return;
+          if (order.status === 'received') {
+            toast('이미 입고완료된 발주입니다', 'err');
+            return;
+          }
+          const matched = (order.items || []).find(it => String(it.product?.code || '').trim() === code);
+          if (!matched) {
+            toast(`발주 목록에 없는 코드: ${code}`, 'err');
+            return;
+          }
+          setRecvMap(prev => {
+            const cur = prev[matched.id] || { qty: 0, ok: true };
+            return { ...prev, [matched.id]: { ...cur, qty: (Number(cur.qty) || 0) + 1 } };
+          });
+          toast(`📷 ${matched.product?.name || '상품'} +1`, 'ok');
+        }
+      } else if (e.key.length === 1) {
+        if (now - buf.lastTime > 100) {
+          buf.chars = '';
+          buf.startTime = now;
+        }
+        buf.chars += e.key;
+        buf.lastTime = now;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [tab, expanded, orders]);
 
   // 상품 검색 (debounce 300ms)
   useEffect(() => {
