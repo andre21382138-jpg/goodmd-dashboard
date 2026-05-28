@@ -194,7 +194,10 @@ export default function SalesInputPage({ profile }) {
   };
 
   const addLine = () => setLines(prev => [...prev, newLine()]);
-  const removeLine = (id) => setLines(prev => prev.filter(l => l.id !== id));
+  const removeLine = (id) => setLines(prev => {
+    if (prev.length <= 1) return [newLine()];
+    return prev.filter(l => l.id !== id);
+  });
 
   const openPointsModal = (line) => {
     if (!line.productId) { toast('먼저 상품을 선택해주세요', 'err'); return; }
@@ -411,24 +414,17 @@ export default function SalesInputPage({ profile }) {
             </div>
 
             {/* 헤더 라벨 */}
-            {(() => {
-              const cols = lines.length > 1
-                ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px'
-                : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px';
-              return (
-                <div style={{ display:'grid', gridTemplateColumns: cols, gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
-                  <div>상품검색</div>
-                  <div style={{textAlign:'center'}}>수량</div>
-                  <div style={{textAlign:'center'}}>정상가</div>
-                  <div style={{textAlign:'center'}}>할인금액</div>
-                  <div style={{textAlign:'center'}}>판매가</div>
-                  <div style={{textAlign:'center'}}>결제</div>
-                  <div style={{textAlign:'center'}}>택배</div>
-                  <div></div>
-                  {lines.length > 1 && <div></div>}
-                </div>
-              );
-            })()}
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
+              <div>상품검색</div>
+              <div style={{textAlign:'center'}}>수량</div>
+              <div style={{textAlign:'center'}}>정상가</div>
+              <div style={{textAlign:'center'}}>할인금액</div>
+              <div style={{textAlign:'center'}}>판매가</div>
+              <div style={{textAlign:'center'}}>결제</div>
+              <div style={{textAlign:'center'}}>택배</div>
+              <div></div>
+              <div></div>
+            </div>
 
             {lines.map((l, idx) => {
               const suggestions = l.productSearch && l.productSearch.length >= 1
@@ -456,7 +452,7 @@ export default function SalesInputPage({ profile }) {
 
               return (
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 8px', marginBottom:6 }}>
-                <div style={{ display:'grid', gridTemplateColumns: lines.length > 1 ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px' : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px', gap:6, alignItems:'center' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px', gap:6, alignItems:'center' }}>
                   {/* 상품검색 */}
                   <div style={{ position:'relative' }}>
                     <input
@@ -545,16 +541,14 @@ export default function SalesInputPage({ profile }) {
                       title="상품 추가"
                       style={{ height:38, width:'100%', border:'1px solid var(--accent)', background:'#fff3e0', color:'var(--accent)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:12, fontWeight:700, lineHeight:1, padding:0, whiteSpace:'nowrap' }}>상품추가</button>
                   ) : <div/>}
-                  {/* ✕ 삭제 — lines.length > 1일 때만 슬롯 렌더 */}
-                  {lines.length > 1 && (
-                    <button type="button" onClick={() => removeLine(l.id)}
-                      title="삭제"
-                      style={{ height:38, width:36, border:'1px solid var(--border)', background:'#fff', color:'var(--danger)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:14, lineHeight:1, padding:0 }}>✕</button>
-                  )}
+                  {/* ✕ 삭제 (마지막 라인이면 빈 라인으로 초기화) */}
+                  <button type="button" onClick={() => removeLine(l.id)}
+                    title={lines.length > 1 ? '삭제' : '초기화'}
+                    style={{ height:38, width:36, border:'1px solid var(--border)', background:'#fff', color:'var(--danger)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:14, lineHeight:1, padding:0 }}>✕</button>
                 </div>
                 {/* 1개당 단가 (수량 > 1일 때) */}
                 {l.productId && Number(l.quantity) > 1 && (
-                  <div style={{ display:'grid', gridTemplateColumns: lines.length > 1 ? 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px' : 'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
                     <div/><div/>
                     <div style={{textAlign:'right', paddingRight:4}}>
                       {Number(l.normalPrice) > 0 && <>1개당 {Math.round(Number(l.normalPrice)).toLocaleString()}원</>}
@@ -564,7 +558,7 @@ export default function SalesInputPage({ profile }) {
                       {Number(l.price) > 0 && <>1개당 {Math.round(Number(l.price)).toLocaleString()}원</>}
                     </div>
                     <div/><div/><div/>
-                    {lines.length > 1 && <div/>}
+                    <div/>
                   </div>
                 )}
                 {l.productId && (
