@@ -163,6 +163,28 @@ function SidebarClockPanel({ profile, setPage }) {
     fetchToday();
   }, [profile.id, fetchToday]);
 
+  // 매장 계정이 로그아웃 안 한 채 자정을 넘기는 경우 대응:
+  // - 매 분 자정 통과 감지 → 새 날짜로 fetchToday
+  // - 페이지가 다시 활성화될 때(다음 날 첫 클릭 등)도 체크
+  useEffect(() => {
+    let lastDate = todayStr();
+    const recheck = () => {
+      const cur = todayStr();
+      if (cur !== lastDate) {
+        lastDate = cur;
+        fetchToday();
+      }
+    };
+    const interval = setInterval(recheck, 60000);
+    window.addEventListener('focus', recheck);
+    document.addEventListener('visibilitychange', recheck);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', recheck);
+      document.removeEventListener('visibilitychange', recheck);
+    };
+  }, [fetchToday]);
+
   // 퇴근 시 요일별 고정 시각 — 월~목 20:00, 금~일 20:30
   const getClockOutIso = () => {
     const d = new Date();
