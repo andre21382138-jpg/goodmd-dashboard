@@ -182,7 +182,7 @@ export default function PurchaseOrderHQPage({ profile }) {
     setAggLoading(true);
     setConfirmStep(false);
     const { data, error } = await supabase.from('sales')
-      .select('store_name, branch_name, product_id, quantity, returned_qty, product:products(name,code)')
+      .select('store_name, branch_name, product_id, quantity, returned_qty, delivery_type, product:products(name,code)')
       .gte('sold_at', fFrom).lte('sold_at', fTo);
     if (error) { toast(error.message, 'err'); setAggLoading(false); return; }
 
@@ -205,9 +205,11 @@ export default function PurchaseOrderHQPage({ profile }) {
     }
 
     // 집계: store+branch+product_id 별로 effQty 합산
+    // 단, 본사 발송 요청건(delivery_type='hq')은 본사에서 대신 발송하므로 매장 발주에서 제외
     const map = new Map();
     for (const r of (data || [])) {
       if (!r.product_id) continue;
+      if (r.delivery_type === 'hq') continue;
       const eff = Math.max(0, (r.quantity||0) - (r.returned_qty||0));
       if (eff <= 0) continue;
       const key = `${r.store_name}|${r.branch_name}`;
