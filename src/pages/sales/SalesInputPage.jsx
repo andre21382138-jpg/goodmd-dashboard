@@ -478,9 +478,11 @@ export default function SalesInputPage({ profile }) {
               const selectedProd = allProducts.find(p => String(p.id) === String(l.productId));
               const lineSubtotal = (Number(l.quantity)||0) * (Number(String(l.price).replace(/,/g,''))||0);
               const effQtyDisplay = Math.max(Number(l.quantity) || 0, 1);
-              const totalNormal   = Number(l.normalPrice) ? Number(l.normalPrice) * effQtyDisplay : '';
-              const totalDiscount = Number(l.discount)    ? Number(l.discount)    * effQtyDisplay : '';
-              const totalPrice    = Number(l.price)       ? Number(l.price)       * effQtyDisplay : '';
+              // 0원도 표시되도록 — 빈 값('', null, undefined)만 빈 칸으로
+              const isEmpty = v => v === '' || v == null;
+              const totalNormal   = isEmpty(l.normalPrice) ? '' : Number(l.normalPrice) * effQtyDisplay;
+              const totalDiscount = isEmpty(l.discount)    ? '' : Number(l.discount)    * effQtyDisplay;
+              const totalPrice    = isEmpty(l.price)       ? '' : Number(l.price)       * effQtyDisplay;
               const isLast = idx === lines.length - 1;
 
               return (
@@ -533,8 +535,8 @@ export default function SalesInputPage({ profile }) {
                   <input type="number" min={0} value={totalNormal} onChange={e => updateLine(l.id,'normalPrice',e.target.value)} style={{...inputStyle, textAlign:'right'}} placeholder="0" />
                   {/* 할인금액 (수량 × 단가) */}
                   <input type="number" min={0} value={totalDiscount} onChange={e => updateLine(l.id,'discount',e.target.value)} style={{...inputStyle, textAlign:'right', color:'var(--danger)'}} placeholder="0" />
-                  {/* 판매가 (수량 × 단가) */}
-                  <input type="number" min={0} value={totalPrice} onChange={e => updateLine(l.id,'price',e.target.value)} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" required />
+                  {/* 판매가 (수량 × 단가) — 0 허용 (증정·시식) */}
+                  <input type="number" min={0} value={totalPrice} onChange={e => updateLine(l.id,'price',e.target.value)} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" />
                   {/* 결제 */}
                   <div style={{ display:'flex', gap:2 }}>
                     {PAYMENTS.map(p => {
