@@ -2,26 +2,45 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+
 export default function AttendanceMgmtPage() {
-  const [tab,      setTab]      = useState('attendance');
-  const [records,  setRecords]  = useState([]);
-  const [plans,    setPlans]    = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [fStore,   setFStore]   = useState('');
-  const [fManager, setFManager] = useState('');
-  const [fFrom,    setFFrom]    = useState('');
-  const [fTo,      setFTo]      = useState('');
+  const [tab,         setTab]         = useState('attendance');
+  const [records,     setRecords]     = useState([]);
+  const [storeMembers,setStoreMembers]= useState([]);
+  const [plans,       setPlans]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [fStore,      setFStore]      = useState('');
+  const [fManager,    setFManager]    = useState('');
+  const [fDate,       setFDate]       = useState(todayStr());
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const { data: att } = await supabase.from('attendance')
-      .select('*').order('work_date', { ascending: false }).limit(200);
-    const { data: lp } = await supabase.from('leave_plans')
-      .select('*').order('created_at', { ascending: false });
+    const [{ data: att }, { data: lp }, { data: sm }] = await Promise.all([
+      supabase.from('attendance').select('*')
+        .gte('work_date', fDate).lte('work_date', fDate)
+        .order('store_name', { ascending: true }),
+      supabase.from('leave_plans').select('*')
+        .order('created_at', { ascending: false }),
+      supabase.from('store_members')
+        .select('id, name, display_name, job_title, store:profiles!store_account_id(department, branch)')
+        .order('id', { ascending: true }),
+    ]);
     setRecords(att || []);
     setPlans(lp || []);
+    setStoreMembers((sm || []).map(m => ({
+      sm_id: m.id,
+      name: m.name,
+      display_name: m.display_name || m.name,
+      job_title: m.job_title,
+      store_name: m.store?.department || '',
+      branch_name: m.store?.branch || '',
+    })));
     setLoading(false);
-  }, []);
+  }, [fDate]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -36,17 +55,76 @@ export default function AttendanceMgmtPage() {
     return `${Math.floor(m/60)}h ${m%60}m`;
   };
 
-  const stores = useMemo(() => [...new Set(records.map(r => r.store_name).filter(Boolean))].sort(), [records]);
-  const managers = useMemo(() => [...new Set(records.map(r => r.manager_name).filter(Boolean))].sort(), [records]);
+  // 매장 = 등록된 모든 매장 (출퇴근 기록 없어도 표시)
+  const stores = useMemo(() =>
+    [...new Set(storeMembers.map(m => m.store_name).filter(Boolean))].sort(),
+    [storeMembers]
+  );
+  const managers = useMemo(() => {
+    const ms = storeMembers
+      .filter(m => !fStore || m.store_name === fStore)
+      .map(m => m.display_name)
+      .filter(Boolean);
+    return [...new Set(ms)].sort();
+  }, [storeMembers, fStore]);
+
+  // 매장 매니저별 × 선택 날짜 → row 만들기.
+  // attendance 기록과 매칭되면 시각 표시, 안 되면 [미체크].
+  // store_members에 없는 attendance(기타근무자)는 별도 행으로 추가.
+  const displayRows = useMemo(() => {
+    const lookup = new Map();
+    for (const r of records) {
+      lookup.set(`${r.store_name}|${r.branch_name}|${r.manager_name}`, r);
+    }
+    const usedRecordIds = new Set();
+    const rows = storeMembers
+      .filter(m => m.store_name && m.branch_name)
+      .map(m => {
+        const rec = lookup.get(`${m.store_name}|${m.branch_name}|${m.name}`);
+        if (rec) usedRecordIds.add(rec.id);
+        return {
+          key: `sm-${m.sm_id}`,
+          name: m.name,
+          display_name: m.display_name,
+          job_title: m.job_title,
+          store_name: m.store_name,
+          branch_name: m.branch_name,
+          work_date: fDate,
+          clock_in: rec?.clock_in || null,
+          clock_out: rec?.clock_out || null,
+          isExtra: false,
+        };
+      });
+    const extras = records
+      .filter(r => !usedRecordIds.has(r.id))
+      .map(r => ({
+        key: `extra-${r.id}`,
+        name: r.manager_name,
+        display_name: r.manager_name,
+        job_title: '기타근무자',
+        store_name: r.store_name || '',
+        branch_name: r.branch_name || '',
+        work_date: r.work_date,
+        clock_in: r.clock_in,
+        clock_out: r.clock_out,
+        isExtra: true,
+      }));
+    return [...rows, ...extras];
+  }, [records, storeMembers, fDate]);
 
   const filteredAtt = useMemo(() => {
-    let r = records;
+    let r = displayRows;
     if (fStore)   r = r.filter(x => x.store_name === fStore);
-    if (fManager) r = r.filter(x => x.manager_name === fManager);
-    if (fFrom)    r = r.filter(x => x.work_date >= fFrom);
-    if (fTo)      r = r.filter(x => x.work_date <= fTo);
+    if (fManager) r = r.filter(x => x.display_name === fManager);
     return r;
-  }, [records, fStore, fManager, fFrom, fTo]);
+  }, [displayRows, fStore, fManager]);
+
+  const stat = useMemo(() => {
+    const total = filteredAtt.length;
+    const checkedIn = filteredAtt.filter(r => !!r.clock_in).length;
+    const missing = total - checkedIn;
+    return { total, checkedIn, missing };
+  }, [filteredAtt]);
 
   const newPlanCount = plans.filter(p => p.status === 'pending').length;
 
@@ -73,35 +151,49 @@ export default function AttendanceMgmtPage() {
       {tab === 'attendance' && (
         <div className="card" style={{padding:'16px 20px'}}>
           <div className="fbar" style={{flexWrap:'wrap'}}>
+            <input type="date" className="fsel" value={fDate}
+              onChange={e => setFDate(e.target.value || todayStr())}/>
+            <button className="btn btn-s" onClick={() => setFDate(todayStr())}>오늘</button>
             <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFManager(''); }}>
               <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
             </select>
             <select className="fsel" value={fManager} onChange={e => setFManager(e.target.value)}>
-              <option value="">전체 매니저</option>{managers.map(m => <option key={m}>{m}</option>)}
+              <option value="">전체 근무자</option>{managers.map(m => <option key={m}>{m}</option>)}
             </select>
-            <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)}/>
-            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
-            <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)}/>
-            {(fStore||fManager||fFrom||fTo) && (
-              <button className="btn-ghost" onClick={() => { setFStore(''); setFManager(''); setFFrom(''); setFTo(''); }}>✕ 초기화</button>
+            {(fStore||fManager) && (
+              <button className="btn-ghost" onClick={() => { setFStore(''); setFManager(''); }}>✕ 초기화</button>
             )}
-            <div className="fbar-right"><span className="fresult"><b>{filteredAtt.length}</b>건</span></div>
+            <div className="fbar-right" style={{display:'flex', alignItems:'center', gap:14}}>
+              <span className="fresult">근무자 <b>{stat.total}</b>명</span>
+              <span style={{fontSize:12, color:'var(--success)', fontWeight:700}}>출근 {stat.checkedIn}</span>
+              <span style={{fontSize:12, color:'var(--danger)', fontWeight:700}}>미체크 {stat.missing}</span>
+            </div>
           </div>
 
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>날짜</th><th>매니저</th><th>점포</th><th>지점</th><th>출근</th><th>퇴근</th><th>근무시간</th></tr></thead>
+                <thead><tr><th>날짜</th><th>근무자</th><th>점포</th><th>지점</th><th>출근</th><th>퇴근</th><th>근무시간</th></tr></thead>
                 <tbody>
                   {filteredAtt.length === 0
-                    ? <tr><td colSpan={7} className="empty">데이터가 없습니다</td></tr>
+                    ? <tr><td colSpan={7} className="empty">등록된 근무자가 없습니다</td></tr>
                     : filteredAtt.map(r => (
-                      <tr key={r.id}>
+                      <tr key={r.key} style={!r.clock_in && !r.isExtra ? {background:'#fafafa'} : {}}>
                         <td className="mono">{r.work_date}</td>
-                        <td><strong>{r.manager_name}</strong></td>
-                        <td><span className="badge badge-dept">{r.store_name}</span></td>
-                        <td><span className="badge badge-store">{r.branch_name}</span></td>
-                        <td style={{fontFamily:'var(--mono)', color:'var(--success)', fontWeight:600}}>{fmt(r.clock_in)}</td>
+                        <td>
+                          <strong>{r.display_name}</strong>
+                          {r.job_title && r.job_title !== '매니저' && (
+                            <span style={{fontSize:10, color:'var(--text3)', marginLeft:6}}>{r.job_title}</span>
+                          )}
+                        </td>
+                        <td><span className="badge badge-dept">{r.store_name || '-'}</span></td>
+                        <td><span className="badge badge-store">{r.branch_name || '-'}</span></td>
+                        <td>
+                          {r.clock_in
+                            ? <span style={{fontFamily:'var(--mono)', color:'var(--success)', fontWeight:600}}>{fmt(r.clock_in)}</span>
+                            : <span style={{padding:'2px 8px', background:'#ffebee', color:'var(--danger)', border:'1px solid #f48fb1', borderRadius:3, fontSize:11, fontWeight:700}}>미체크</span>
+                          }
+                        </td>
                         <td style={{fontFamily:'var(--mono)', color:'var(--accent)', fontWeight:600}}>{fmt(r.clock_out)}</td>
                         <td className="mono" style={{color:'var(--text2)'}}>{duration(r.clock_in, r.clock_out)}</td>
                       </tr>
