@@ -6,6 +6,11 @@ const todayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
+const firstOfMonthStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+};
+const DOW = ['일','월','화','수','목','금','토'];
 
 export default function AttendanceMgmtPage() {
   const [tab,         setTab]         = useState('attendance');
@@ -17,6 +22,14 @@ export default function AttendanceMgmtPage() {
   const [fManager,    setFManager]    = useState('');
   const [fDate,       setFDate]       = useState(todayStr());
 
+  // 근무자별 이력 탭 (history)
+  const [hStore,      setHStore]      = useState('');
+  const [hMemberKey,  setHMemberKey]  = useState(''); // store_members.id
+  const [hFrom,       setHFrom]       = useState(firstOfMonthStr());
+  const [hTo,         setHTo]         = useState(todayStr());
+  const [hRecords,    setHRecords]    = useState([]);
+  const [hLoading,    setHLoading]    = useState(false);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     const [{ data: att }, { data: lp }, { data: sm }] = await Promise.all([
@@ -26,7 +39,7 @@ export default function AttendanceMgmtPage() {
       supabase.from('leave_plans').select('*')
         .order('created_at', { ascending: false }),
       supabase.from('store_members')
-        .select('id, name, display_name, job_title, store:profiles!store_account_id(department, branch)')
+        .select('id, name, display_name, job_title, store_account_id, store:profiles!store_account_id(department, branch)')
         .order('id', { ascending: true }),
     ]);
     setRecords(att || []);
@@ -36,6 +49,7 @@ export default function AttendanceMgmtPage() {
       name: m.name,
       display_name: m.display_name || m.name,
       job_title: m.job_title,
+      store_account_id: m.store_account_id,
       store_name: m.store?.department || '',
       branch_name: m.store?.branch || '',
     })));
@@ -128,6 +142,60 @@ export default function AttendanceMgmtPage() {
 
   const newPlanCount = plans.filter(p => p.status === 'pending').length;
 
+  // 근무자별 이력 — 점포·근무자·기간 변경 시 자동 조회
+  const hMember = useMemo(
+    () => storeMembers.find(m => String(m.sm_id) === String(hMemberKey)),
+    [storeMembers, hMemberKey]
+  );
+  const fetchHistory = useCallback(async () => {
+    if (!hMember || !hFrom || !hTo) { setHRecords([]); return; }
+    setHLoading(true);
+    const { data } = await supabase.from('attendance').select('*')
+      .eq('manager_id', hMember.store_account_id)
+      .eq('manager_name', hMember.name)
+      .gte('work_date', hFrom).lte('work_date', hTo)
+      .order('work_date', { ascending: false });
+    setHRecords(data || []);
+    setHLoading(false);
+  }, [hMember, hFrom, hTo]);
+  useEffect(() => {
+    if (tab !== 'history') return;
+    fetchHistory();
+  }, [tab, fetchHistory]);
+
+  // 기간 내 모든 날짜 × attendance 매핑 (미체크 표시 포함)
+  const hDisplayRows = useMemo(() => {
+    if (!hMember || !hFrom || !hTo) return [];
+    const lookup = new Map();
+    for (const r of hRecords) lookup.set(r.work_date, r);
+    const rows = [];
+    const start = new Date(hFrom);
+    const end   = new Date(hTo);
+    if (isNaN(start) || isNaN(end) || start > end) return [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const rec = lookup.get(ds);
+      rows.push({
+        date: ds, dow: DOW[d.getDay()],
+        clock_in: rec?.clock_in || null,
+        clock_out: rec?.clock_out || null,
+      });
+    }
+    return rows.reverse(); // 최신 날짜가 위로
+  }, [hMember, hFrom, hTo, hRecords]);
+
+  const hStat = useMemo(() => {
+    const total    = hDisplayRows.length;
+    const worked   = hDisplayRows.filter(r => r.clock_in).length;
+    const missing  = total - worked;
+    const totalMin = hDisplayRows.reduce((s,r) => {
+      if (!r.clock_in || !r.clock_out) return s;
+      return s + Math.round((new Date(r.clock_out) - new Date(r.clock_in)) / 60000);
+    }, 0);
+    const hours = `${Math.floor(totalMin/60)}h ${totalMin%60}m`;
+    return { total, worked, missing, hours };
+  }, [hDisplayRows]);
+
   const updatePlanStatus = async (id, status) => {
     const { error } = await supabase.from('leave_plans').update({ status }).eq('id', id);
     if (error) toast(error.message, 'err');
@@ -138,6 +206,7 @@ export default function AttendanceMgmtPage() {
     <div>
       <div className="tabs">
         <button className={`tab ${tab==='attendance'?'on':''}`} onClick={() => setTab('attendance')}>출퇴근 현황</button>
+        <button className={`tab ${tab==='history'?'on':''}`} onClick={() => setTab('history')}>근무자별 이력</button>
         <button className={`tab ${tab==='leave'?'on':''}`} onClick={() => setTab('leave')}>
           연차계획
           {newPlanCount > 0 && (
@@ -203,6 +272,80 @@ export default function AttendanceMgmtPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <div className="card" style={{padding:'16px 20px'}}>
+          <div className="fbar" style={{flexWrap:'wrap'}}>
+            <select className="fsel" value={hStore}
+              onChange={e => { setHStore(e.target.value); setHMemberKey(''); }}>
+              <option value="">점포 선택</option>
+              {stores.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select className="fsel" value={hMemberKey}
+              onChange={e => setHMemberKey(e.target.value)} disabled={!hStore}
+              style={{background:!hStore?'#f0f0f0':'#fff'}}>
+              <option value="">근무자 선택</option>
+              {storeMembers
+                .filter(m => m.store_name === hStore)
+                .map(m => (
+                  <option key={m.sm_id} value={m.sm_id}>
+                    {m.branch_name ? `[${m.branch_name}] ` : ''}{m.display_name}{m.job_title === '부매니저' ? ' (부)' : ''}
+                  </option>
+                ))
+              }
+            </select>
+            <input type="date" className="fsel" value={hFrom} onChange={e => setHFrom(e.target.value)}/>
+            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+            <input type="date" className="fsel" value={hTo} onChange={e => setHTo(e.target.value)}/>
+            <button className="btn btn-s" onClick={() => { setHFrom(firstOfMonthStr()); setHTo(todayStr()); }}>이번달</button>
+            <div className="fbar-right" style={{display:'flex', alignItems:'center', gap:14}}>
+              {hMember && (
+                <>
+                  <span className="fresult">대상기간 <b>{hStat.total}</b>일</span>
+                  <span style={{fontSize:12, color:'var(--success)', fontWeight:700}}>근무 {hStat.worked}</span>
+                  <span style={{fontSize:12, color:'var(--danger)', fontWeight:700}}>미체크 {hStat.missing}</span>
+                  <span style={{fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', fontWeight:700}}>총 {hStat.hours}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {!hMember
+            ? <div className="empty" style={{padding:'40px 0', color:'var(--text3)'}}>점포와 근무자를 선택하면 이력이 표시됩니다</div>
+            : hLoading
+              ? <div className="empty"><span className="spinner"/></div>
+              : (
+                <div className="twrap">
+                  <table>
+                    <thead><tr><th>날짜</th><th>요일</th><th>출근</th><th>퇴근</th><th>근무시간</th></tr></thead>
+                    <tbody>
+                      {hDisplayRows.length === 0
+                        ? <tr><td colSpan={5} className="empty">기간을 선택해주세요</td></tr>
+                        : hDisplayRows.map(r => (
+                          <tr key={r.date} style={!r.clock_in ? {background:'#fafafa'} : {}}>
+                            <td className="mono">{r.date}</td>
+                            <td style={{
+                              fontSize:12, fontWeight:600,
+                              color: r.dow === '일' ? 'var(--danger)' : r.dow === '토' ? 'var(--accent2)' : 'var(--text2)',
+                            }}>{r.dow}</td>
+                            <td>
+                              {r.clock_in
+                                ? <span style={{fontFamily:'var(--mono)', color:'var(--success)', fontWeight:600}}>{fmt(r.clock_in)}</span>
+                                : <span style={{padding:'2px 8px', background:'#ffebee', color:'var(--danger)', border:'1px solid #f48fb1', borderRadius:3, fontSize:11, fontWeight:700}}>미체크</span>
+                              }
+                            </td>
+                            <td style={{fontFamily:'var(--mono)', color:'var(--accent)', fontWeight:600}}>{fmt(r.clock_out)}</td>
+                            <td className="mono" style={{color:'var(--text2)'}}>{duration(r.clock_in, r.clock_out)}</td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              )
+          }
         </div>
       )}
 
