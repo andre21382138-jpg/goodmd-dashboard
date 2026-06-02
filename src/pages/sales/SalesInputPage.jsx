@@ -932,13 +932,13 @@ export default function SalesInputPage({ profile }) {
             <thead>
               <tr>
                 <th>판매일</th><th>브랜드</th><th>상품명</th>
-                <th className="r">수량</th><th className="r">판매가</th>
+                <th className="r">수량</th><th className="r">판매가</th><th className="r">합계금액</th>
                 <th>결제</th><th>출고방식</th><th>고객</th><th>메모</th><th></th>
               </tr>
             </thead>
             <tbody>
               {recentSales.length === 0
-                ? <tr><td colSpan={10} className="empty">입력된 판매 내역이 없습니다</td></tr>
+                ? <tr><td colSpan={11} className="empty">입력된 판매 내역이 없습니다</td></tr>
                 : recentSales.map(s => {
                   const fully = (s.returned_qty||0) >= (s.quantity||0);
                   const partial = (s.returned_qty||0) > 0 && !fully;
@@ -955,6 +955,7 @@ export default function SalesInputPage({ profile }) {
                     </td>
                     <td className="r" style={strike}>{effQ}</td>
                     <td className="r" style={strike}>{Number(s.price).toLocaleString()}원</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', ...strike}}>{(effQ * Number(s.price||0)).toLocaleString()}원</td>
                     <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9', ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
                     <td style={strike}>
                       {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
