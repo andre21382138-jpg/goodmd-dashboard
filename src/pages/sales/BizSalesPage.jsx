@@ -173,15 +173,19 @@ export default function BizSalesPage({ profile, setPage }) {
     }
   };
 
-  // 업체 선택 시 그 업체의 등록 정보(담당자·연락처·주소)를 자동으로 채움.
-  // 사용자가 이미 입력 중인 값은 덮어쓰지 않음.
+  // 업체 선택 시 그 업체의 등록 정보(담당자·연락처·주소)로 배송지 자동 채움.
+  // 업체를 바꾸면 항상 새 업체 정보로 덮어쓴다 (사용자가 수정한 내용도 새 업체 기준으로 갱신).
   useEffect(() => {
-    if (!companyId) return;
+    if (!companyId) {
+      setRecipName(''); setRecipPhone(''); setRecipAddr(''); setRecipAddrDetail('');
+      return;
+    }
     const c = companies.find(x => String(x.id) === String(companyId));
     if (!c) return;
-    if (!recipName.trim()  && c.contact_name) setRecipName(c.contact_name);
-    if (!recipPhone.trim() && c.phone)        setRecipPhone(c.phone);
-    if (!recipAddr.trim()  && c.address)      setRecipAddr(c.address);
+    setRecipName(c.contact_name || '');
+    setRecipPhone(c.phone        || '');
+    setRecipAddr(c.address       || '');
+    setRecipAddrDetail('');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, companies]);
 
