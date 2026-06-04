@@ -369,12 +369,30 @@ function LoginForm({ onGoSignup }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); setMsg(null);
+    const email = `${userId.trim().toLowerCase()}@kbh.kr`;
+    const isNetworkError = (err) => {
+      const m = String(err?.message || '').toLowerCase();
+      return m.includes('failed to fetch')
+          || m.includes('network')
+          || m.includes('timeout')
+          || m.includes('load failed');
+    };
     try {
-      const email = `${userId.trim().toLowerCase()}@kbh.kr`;
-      const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+      // 1차 시도
+      let { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+      // 네트워크 일시 오류면 1.5초 후 자동 재시도 (콜드 스타트·일시 끊김 대응)
+      if (error && isNetworkError(error)) {
+        await new Promise(r => setTimeout(r, 1500));
+        ({ error } = await supabase.auth.signInWithPassword({ email, password: pw }));
+      }
       if (error) throw error;
     } catch (err) {
-      setMsg(err.message.replace('Invalid login credentials', '아이디 또는 비밀번호가 틀렸습니다'));
+      let userMsg = String(err.message || err)
+        .replace('Invalid login credentials', '아이디 또는 비밀번호가 틀렸습니다');
+      if (isNetworkError(err)) {
+        userMsg = '네트워크가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요';
+      }
+      setMsg(userMsg);
     }
     setLoading(false);
   };
