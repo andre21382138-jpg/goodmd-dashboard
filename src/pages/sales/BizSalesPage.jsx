@@ -14,6 +14,12 @@ export default function BizSalesPage({ profile, setPage }) {
   const [memo,           setMemo]           = useState('');
   const [saving,         setSaving]         = useState(false);
 
+  // 배송지 정보 (거래 단위)
+  const [recipName,       setRecipName]       = useState('');
+  const [recipPhone,      setRecipPhone]      = useState('');
+  const [recipAddr,       setRecipAddr]       = useState('');
+  const [recipAddrDetail, setRecipAddrDetail] = useState('');
+
   // 상품 라인
   const newLine = () => ({
     id: Date.now()+Math.random(),
@@ -140,6 +146,45 @@ export default function BizSalesPage({ profile, setPage }) {
     }
   };
 
+  // 다음(카카오) 우편번호 — 배송지 주소 검색
+  const openShippingAddrSearch = () => {
+    const launch = () => {
+      // eslint-disable-next-line no-new, new-cap
+      new window.daum.Postcode({
+        oncomplete: (data) => {
+          const addr = data.roadAddress || data.jibunAddress || '';
+          const zip = data.zonecode ? `(${data.zonecode}) ` : '';
+          setRecipAddr(`${zip}${addr}`);
+          setTimeout(() => {
+            const el = document.getElementById('biz-recip-addr-detail');
+            if (el) el.focus();
+          }, 0);
+        },
+      }).open();
+    };
+    if (window.daum?.Postcode) {
+      launch();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+      script.onload  = launch;
+      script.onerror = () => toast('주소 검색 서비스 로드 실패', 'err');
+      document.body.appendChild(script);
+    }
+  };
+
+  // 업체 선택 시 그 업체의 등록 정보(담당자·연락처·주소)를 자동으로 채움.
+  // 사용자가 이미 입력 중인 값은 덮어쓰지 않음.
+  useEffect(() => {
+    if (!companyId) return;
+    const c = companies.find(x => String(x.id) === String(companyId));
+    if (!c) return;
+    if (!recipName.trim()  && c.contact_name) setRecipName(c.contact_name);
+    if (!recipPhone.trim() && c.phone)        setRecipPhone(c.phone);
+    if (!recipAddr.trim()  && c.address)      setRecipAddr(c.address);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, companies]);
+
   const submitAddCompany = async () => {
     const name = newCompName.trim();
     if (!name) { toast('업체명을 입력해주세요', 'err'); return; }
@@ -178,6 +223,7 @@ export default function BizSalesPage({ profile, setPage }) {
     const company = companies.find(c => String(c.id) === String(companyId));
     setSaving(true);
     try {
+      const fullAddr = (recipAddr.trim() + (recipAddrDetail.trim() ? ' ' + recipAddrDetail.trim() : '')).trim();
       for (const l of validLines) {
         const prod  = allProds.find(p => String(p.id) === String(l.productId));
         const brand = brands.find(b => String(b.id) === String(l.brandId));
@@ -190,12 +236,16 @@ export default function BizSalesPage({ profile, setPage }) {
           supply_price: Number(l.supplyPrice)||0,
           memo: memo.trim()||null,
           delivery_method: deliveryMethod,
+          recipient_name:    recipName.trim()  || null,
+          recipient_phone:   recipPhone.trim() || null,
+          recipient_address: fullAddr           || null,
           created_by: profile.id,
         });
         if (error) throw error;
       }
       toast(`특판 매출 ${validLines.length}건 등록 완료`, 'ok');
       setCompanyId(''); setDeliveryMethod(''); setMemo(''); setSoldAt(today);
+      setRecipName(''); setRecipPhone(''); setRecipAddr(''); setRecipAddrDetail('');
       setLines([newLine()]);
       if (tab === 'list') fetchSales();
     } catch (err) {
@@ -393,7 +443,42 @@ export default function BizSalesPage({ profile, setPage }) {
           )}
 
           {/* 메모 */}
-          <div style={{marginTop:14, marginBottom:12}}>
+          {/* 배송지 정보 (선택) */}
+          <div style={{ background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'14px 16px', marginTop:14, marginBottom:12 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#e65100', marginBottom:10 }}>
+              📦 배송지 정보 <span style={{fontSize:11, color:'var(--text3)', fontWeight:500}}>(업체 선택 시 자동 입력, 수정 가능)</span>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div>
+                <label style={labelStyle}>받는사람</label>
+                <input value={recipName} onChange={e => setRecipName(e.target.value)}
+                  style={inputStyle} placeholder="예: 홍길동" />
+              </div>
+              <div>
+                <label style={labelStyle}>연락처</label>
+                <input value={recipPhone} onChange={e => setRecipPhone(e.target.value)}
+                  style={inputStyle} placeholder="010-1234-5678" />
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>주소</label>
+              <div style={{display:'flex', gap:6}}>
+                <input value={recipAddr} onChange={e => setRecipAddr(e.target.value)}
+                  style={{...inputStyle, flex:1}} placeholder="🔍 주소검색 버튼 또는 직접 입력" />
+                <button type="button" onClick={openShippingAddrSearch}
+                  title="다음(카카오) 우편번호 검색"
+                  style={{height:36, padding:'0 14px', border:'1px solid var(--accent)', background:'#fff3e0', color:'var(--accent)', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                  🔍 주소검색
+                </button>
+              </div>
+              <input id="biz-recip-addr-detail" value={recipAddrDetail}
+                onChange={e => setRecipAddrDetail(e.target.value)}
+                style={{...inputStyle, marginTop:6}}
+                placeholder="상세주소 (동·호수 등, 선택)" />
+            </div>
+          </div>
+
+          <div style={{marginTop:0, marginBottom:12}}>
             <label style={labelStyle}>메모</label>
             <input value={memo} onChange={e=>setMemo(e.target.value)} placeholder="메모 (선택)" style={inputStyle}/>
           </div>
