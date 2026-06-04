@@ -314,8 +314,8 @@ function SidebarClockPanel({ profile, setPage }) {
                     return (
                       <div key={m.name} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontFamily:'var(--mono)' }}>
                         <span style={{ fontWeight:700, color:'#666', minWidth:40 }}>{m.display_name || m.name}</span>
-                        {rec?.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>↑{fmt(rec.clock_in)}</span>}
-                        {rec?.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>↓{fmt(rec.clock_out)}</span>}
+                        {rec?.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>✓ 출근</span>}
+                        {rec?.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>✓ 퇴근</span>}
                         {!rec && <span style={{ color:'#ccc' }}>미체크</span>}
                       </div>
                     );
@@ -324,8 +324,8 @@ function SidebarClockPanel({ profile, setPage }) {
                     <div key={r.id} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontFamily:'var(--mono)' }}>
                       <span style={{ fontWeight:700, color:'#888', minWidth:40 }}>{r.manager_name}</span>
                       <span style={{ fontSize:8, color:'#888' }}>(기타)</span>
-                      {r.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>↑{fmt(r.clock_in)}</span>}
-                      {r.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>↓{fmt(r.clock_out)}</span>}
+                      {r.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>✓ 출근</span>}
+                      {r.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>✓ 퇴근</span>}
                     </div>
                   ))}
                 </>
