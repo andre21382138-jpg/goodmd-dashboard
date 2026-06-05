@@ -216,7 +216,7 @@ export default function AttendanceMgmtPage() {
           r.job_title || (r.isExtra ? '기타근무자' : '-'),
           r.display_name || r.name || '-',
           r.clock_in ? fmt(r.clock_in) : '미체크',
-          r.clock_out ? fmt(r.clock_out) : '-',
+          r.clock_out ? fmt(r.clock_out) : '미체크',
         ]);
       }
       ws.columns.forEach(col => {
