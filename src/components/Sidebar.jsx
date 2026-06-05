@@ -209,7 +209,8 @@ function SidebarClockPanel({ profile, setPage }) {
       }).select().single();
       if (!error) {
         setTodayMap(prev => ({ ...prev, [member.name]: data }));
-        toast(`${member.display_name || member.name} 출근 체크 완료 ✅`, 'ok');
+        const [y, mo, d] = String(data.work_date).split('-');
+        toast(`${y}년 ${Number(mo)}월 ${Number(d)}일 출근 체크되었습니다 ✅`, 'ok');
         // 기타근무자는 등록된 매니저가 아니라 휴무계획 미제출 알림 대상 아님
         if (member.isCustom) { setSaving(false); setPopup(null); return; }
         // 휴무계획 미제출 체크 (매월 15~20일)
@@ -234,7 +235,8 @@ function SidebarClockPanel({ profile, setPage }) {
         .update({ clock_out: clockOut }).eq('id', rec.id).select().single();
       if (!error) {
         setTodayMap(prev => ({ ...prev, [member.name]: data }));
-        toast(`${member.display_name || member.name} 퇴근 체크 완료 ✅`, 'ok');
+        const [y, mo, d] = String(data.work_date).split('-');
+        toast(`${y}년 ${Number(mo)}월 ${Number(d)}일 퇴근 체크되었습니다 ✅`, 'ok');
       }
     }
     setSaving(false);
