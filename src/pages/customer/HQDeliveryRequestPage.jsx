@@ -56,7 +56,7 @@ async function exportDeliveryRequests(groups) {
         ORDER_CONSTANTS.ORDERER_PHONE,             // 20 주문자 연락처2
         '',                                        // 21 수수료
         '',                                        // 22 수수료액
-        '',                                        // 23 공란
+        `SID:${it.id}`,                            // 23 공란 — sale_id 자동 저장 (송장 매핑용, 물류팀이 건드리지 않음)
         '',                                        // 24 사방넷주문번호
         '',                                        // 25 주문일
         '',                                        // 26 주문자 ID
@@ -127,7 +127,7 @@ export default function HQDeliveryRequestPage({ profile }) {
     const { data, error } = await supabase.from('sales')
       .select(`id, sold_at, store_name, branch_name, quantity, price,
                recipient_name, recipient_phone, recipient_address, delivery_notes,
-               dispatched_at, customer_id,
+               dispatched_at, customer_id, tracking_number,
                product:products(name, code)`)
       .eq('delivery_type', 'hq')
       .eq('delivery_status', tab)
@@ -139,6 +139,55 @@ export default function HQDeliveryRequestPage({ profile }) {
   }, [tab]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // 송장번호 엑셀 업로드 — 공란(24번 컬럼)의 SID:<sale_id>로 매칭
+  const fileInputRef = React.useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const handleUploadClick = () => fileInputRef.current?.click();
+  const handleUploadFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const XLSX = await import('xlsx');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const updates = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !Array.isArray(row) || row.length === 0) continue;
+        const tracking = String(row[1] || '').trim();   // B 송장번호
+        const sidCell  = String(row[23] || '').trim();  // X 공란 (SID:N)
+        const m = sidCell.match(/SID:(\d+)/);
+        if (!tracking || !m) continue;
+        updates.push({ saleId: Number(m[1]), tracking });
+      }
+      if (updates.length === 0) {
+        toast('업로드 가능한 행이 없습니다 (송장번호 또는 SID 누락)', 'err');
+        return;
+      }
+      let ok = 0, fail = 0;
+      const nowIso = new Date().toISOString();
+      for (const u of updates) {
+        const { error } = await supabase.from('sales').update({
+          tracking_number: u.tracking,
+          delivery_status: 'dispatched',
+          dispatched_at: nowIso,
+          dispatched_by: profile.id,
+        }).eq('id', u.saleId);
+        if (error) fail++; else ok++;
+      }
+      toast(`송장번호 등록 완료 (성공 ${ok}건${fail > 0 ? `, 실패 ${fail}건` : ''})`, fail ? 'err' : 'ok');
+      setTab('dispatched');
+      fetchData();
+    } catch (err) {
+      toast('업로드 실패: ' + (err.message || err), 'err');
+    }
+    setUploading(false);
+  };
 
   const handleDispatch = async (group) => {
     const ok = window.confirm(
@@ -198,6 +247,13 @@ export default function HQDeliveryRequestPage({ profile }) {
                 📥 엑셀 다운로드
               </button>
             )}
+            <input ref={fileInputRef} type="file" accept=".xls,.xlsx"
+              onChange={handleUploadFile} style={{display:'none'}}/>
+            <button type="button" onClick={handleUploadClick} disabled={uploading}
+              title="송장번호 채워진 엑셀 업로드 → 자동으로 발송완료 + 송장번호 등록"
+              style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6}}>
+              {uploading ? <span className="spinner"/> : '📤 송장 업로드'}
+            </button>
             <button className="btn btn-s" onClick={fetchData} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔄 새로고침'}
             </button>
@@ -221,6 +277,7 @@ export default function HQDeliveryRequestPage({ profile }) {
                   <th>주소</th>
                   <th>연락처</th>
                   <th>요청사항</th>
+                  <th style={{textAlign:'center', width:140}}>송장번호</th>
                   <th style={{textAlign:'center', width:130}}>
                     {tab === 'pending' ? '작업' : '발송일'}
                   </th>
@@ -252,6 +309,16 @@ export default function HQDeliveryRequestPage({ profile }) {
                       </td>
                       <td style={{fontSize:11, color:'var(--text3)'}}>
                         {iIdx === 0 ? (g.delivery_notes || '-') : ''}
+                      </td>
+                      <td style={{textAlign:'center', fontSize:11, fontFamily:'var(--mono)'}}>
+                        {it.tracking_number
+                          ? <a href={`https://tracker.delivery/#/kr.cjlogistics/${it.tracking_number}`}
+                              target="_blank" rel="noopener noreferrer"
+                              title="CJ대한통운 배송조회"
+                              style={{color:'var(--accent)', fontWeight:700, textDecoration:'none'}}>
+                              📦 {it.tracking_number}
+                            </a>
+                          : <span style={{color:'var(--text3)'}}>-</span>}
                       </td>
                       <td style={{textAlign:'center'}}>
                         {iIdx === 0 && tab === 'pending' && (
