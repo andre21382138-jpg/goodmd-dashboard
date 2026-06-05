@@ -156,17 +156,25 @@ export default function HQDeliveryRequestPage({ profile }) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
       const updates = [];
+      let totalSaleRows = 0; // SID가 들어간 (= 다운로드된) 데이터 행 수
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || !Array.isArray(row) || row.length === 0) continue;
-        const tracking = String(row[1] || '').trim();   // B 송장번호
-        const sidCell  = String(row[23] || '').trim();  // X 공란 (SID:N)
+        const sidCell = String(row[23] || '').trim();
         const m = sidCell.match(/SID:(\d+)/);
-        if (!tracking || !m) continue;
+        if (!m) continue; // 다운로드된 데이터 행이 아님 (빈 행 등)
+        totalSaleRows++;
+        const tracking = String(row[1] || '').trim();
+        if (!tracking) continue; // 송장번호 미입력 → 처리에서 제외
         updates.push({ saleId: Number(m[1]), tracking });
       }
+      if (totalSaleRows === 0) {
+        toast('업로드 가능한 행이 없습니다 (SID 누락)', 'err');
+        return;
+      }
+      const noTrackingCount = totalSaleRows - updates.length;
       if (updates.length === 0) {
-        toast('업로드 가능한 행이 없습니다 (송장번호 또는 SID 누락)', 'err');
+        toast(`송장번호 입력된 행이 없습니다 (전체 ${totalSaleRows}건 모두 미입력)`, 'err');
         return;
       }
       let ok = 0, fail = 0;
@@ -180,7 +188,10 @@ export default function HQDeliveryRequestPage({ profile }) {
         }).eq('id', u.saleId);
         if (error) fail++; else ok++;
       }
-      toast(`송장번호 등록 완료 (성공 ${ok}건${fail > 0 ? `, 실패 ${fail}건` : ''})`, fail ? 'err' : 'ok');
+      const parts = [`처리 ${ok}건`];
+      if (fail > 0) parts.push(`실패 ${fail}건`);
+      if (noTrackingCount > 0) parts.push(`미입력 ${noTrackingCount}건은 대기 그대로`);
+      toast(`송장번호 등록 완료 — ${parts.join(' / ')}`, fail > 0 ? 'err' : 'ok');
       setTab('dispatched');
       fetchData();
     } catch (err) {
