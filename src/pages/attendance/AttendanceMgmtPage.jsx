@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast } from '../../lib/utils';
+import { toast, dlBlob } from '../../lib/utils';
 
 const todayStr = () => {
   const d = new Date();
@@ -196,6 +196,45 @@ export default function AttendanceMgmtPage() {
     return { total, worked, missing, hours };
   }, [hDisplayRows]);
 
+  const handleDownloadAttendance = async () => {
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('출퇴근현황');
+      const header = ['날짜', '점포명', '지점', '직책', '이름(근무자)', '출근시간', '퇴근시간'];
+      const hr = ws.addRow(header);
+      hr.eachCell(cell => {
+        cell.font = { bold: true };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFEEEEEE'} };
+        cell.alignment = { horizontal:'center', vertical:'middle' };
+      });
+      for (const r of filteredAtt) {
+        ws.addRow([
+          r.work_date,
+          r.store_name || '-',
+          r.branch_name || '-',
+          r.job_title || (r.isExtra ? '기타근무자' : '-'),
+          r.display_name || r.name || '-',
+          r.clock_in ? fmt(r.clock_in) : '미체크',
+          r.clock_out ? fmt(r.clock_out) : '-',
+        ]);
+      }
+      ws.columns.forEach(col => {
+        let max = 10;
+        col.eachCell({ includeEmpty:false }, cell => {
+          const v = cell.value == null ? '' : String(cell.value);
+          if (v.length > max) max = Math.min(40, v.length + 2);
+        });
+        col.width = max;
+      });
+      const buf = await wb.xlsx.writeBuffer();
+      dlBlob(buf, `출퇴근현황_${fDate}.xlsx`);
+      toast(`엑셀 다운로드 완료 (${filteredAtt.length}명)`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    }
+  };
+
   const updatePlanStatus = async (id, status) => {
     const { error } = await supabase.from('leave_plans').update({ status }).eq('id', id);
     if (error) toast(error.message, 'err');
@@ -229,6 +268,11 @@ export default function AttendanceMgmtPage() {
             <select className="fsel" value={fManager} onChange={e => setFManager(e.target.value)}>
               <option value="">전체 근무자</option>{managers.map(m => <option key={m}>{m}</option>)}
             </select>
+            <button type="button" onClick={handleDownloadAttendance}
+              title={`${fDate} 출퇴근현황을 엑셀로 다운로드`}
+              style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+              📥 엑셀
+            </button>
             {(fStore||fManager) && (
               <button className="btn-ghost" onClick={() => { setFStore(''); setFManager(''); }}>✕ 초기화</button>
             )}
