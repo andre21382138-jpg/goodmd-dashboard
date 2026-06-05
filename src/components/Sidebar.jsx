@@ -200,10 +200,12 @@ function SidebarClockPanel({ profile, setPage }) {
     const nowIn = new Date().toISOString();
     const rec = todayMap[member.name];
     if (popup === 'in') {
+      // work_date는 DB에서 서버 시간(KST) 기준 자동 설정 (매장 PC 시계 오류 대응).
+      // clock_in 시각은 클라이언트 시간이지만 work_date가 정확하면 일자별 분석은 정상.
       const { data, error } = await supabase.from('attendance').insert({
         manager_id: profile.id, manager_name: member.name,
         store_name: profile.department, branch_name: profile.branch,
-        work_date: todayStr(), clock_in: nowIn,
+        clock_in: nowIn,
       }).select().single();
       if (!error) {
         setTodayMap(prev => ({ ...prev, [member.name]: data }));
