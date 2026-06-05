@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, uniq } from '../../lib/utils';
+import { downloadPayrollExcel } from '../../lib/payrollExcel';
 
 // ── AttendanceCalendarModal ──────────────────────────────
 function AttendanceCalendarModal({ member, year, month, onClose }) {
@@ -667,6 +668,18 @@ function SalaryCalcTab() {
   const [loading,   setLoading]   = useState(false);
   const [fStore,    setFStore]    = useState('');
   const [calTarget, setCalTarget] = useState(null);
+  const [dlLoading, setDlLoading] = useState(false);
+
+  const handleDownload = async () => {
+    setDlLoading(true);
+    try {
+      const r = await downloadPayrollExcel({ year: selYear, month: selMonth });
+      toast(`엑셀 다운로드 완료 — ${r.groupCount}개 매장 / ${r.rowCount}명`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    }
+    setDlLoading(false);
+  };
 
   const calcSalary = useCallback(async () => {
     setLoading(true);
@@ -763,6 +776,11 @@ function SalaryCalcTab() {
             <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
           </select>
           {fStore && <button className="btn-ghost" onClick={() => setFStore('')}>✕</button>}
+          <button type="button" onClick={handleDownload} disabled={dlLoading}
+            title={`${selYear}년 ${selMonth}월 점별 판매사원 스케줄표 다운로드 (재무팀 전달용)`}
+            style={{height:36, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6}}>
+            {dlLoading ? <span className="spinner"/> : `📥 ${selMonth}월 급여표 엑셀`}
+          </button>
           <div style={{marginLeft:'auto', textAlign:'right'}}>
             <div style={{fontSize:11, color:'var(--text3)', marginBottom:2}}>총 인건비</div>
             <div style={{fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{totalSalary.toLocaleString()}원</div>
