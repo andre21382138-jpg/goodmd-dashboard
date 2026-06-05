@@ -28,6 +28,12 @@ export default function BizSalesPage({ profile, setPage }) {
   });
   const [lines, setLines] = useState([newLine()]);
 
+  // 매출조회 행 인라인 편집 / 삭제 (본사·어드민만)
+  const canManage = !!profile && (profile.role === 'admin' || profile.job_title === '담당자');
+  const [editingId,  setEditingId]  = useState(null);
+  const [editData,   setEditData]   = useState({});
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // 신규업체 추가 모달
   const [showAddCompany,   setShowAddCompany]   = useState(false);
   const [newCompName,      setNewCompName]      = useState('');
@@ -256,6 +262,40 @@ export default function BizSalesPage({ profile, setPage }) {
       toast('저장 실패: ' + (err.message || err), 'err');
     }
     setSaving(false);
+  };
+
+  const startEdit = (s) => {
+    setEditingId(s.id);
+    setEditData({
+      quantity:        s.quantity || 0,
+      supply_price:    s.supply_price || 0,
+      memo:            s.memo || '',
+      delivery_method: s.delivery_method || '',
+    });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditData({}); };
+  const saveEdit = async (id) => {
+    setSavingEdit(true);
+    const { error } = await supabase.from('biz_sales').update({
+      quantity:        Number(editData.quantity) || 0,
+      supply_price:    Number(editData.supply_price) || 0,
+      memo:            (editData.memo || '').trim() || null,
+      delivery_method: editData.delivery_method || null,
+    }).eq('id', id);
+    setSavingEdit(false);
+    if (error) { toast(error.message, 'err'); return; }
+    toast('수정 완료', 'ok');
+    cancelEdit();
+    fetchSales();
+  };
+  const deleteRow = async (s) => {
+    const name = s.product?.name || s.product_name || '상품';
+    if (!window.confirm(`'${name}' 특판 매출 라인을 삭제하시겠습니까?\n(되돌릴 수 없습니다)`)) return;
+    const { error } = await supabase.from('biz_sales').delete().eq('id', s.id);
+    if (error) { toast(error.message, 'err'); return; }
+    toast('삭제 완료', 'inf');
+    if (editingId === s.id) cancelEdit();
+    fetchSales();
   };
 
   // 입력 합계
@@ -519,26 +559,78 @@ export default function BizSalesPage({ profile, setPage }) {
             <div className="twrap">
               <table>
                 <thead>
-                  <tr><th>날짜</th><th>업체</th><th>브랜드</th><th>상품명</th><th className="r">수량</th><th className="r">공급가</th><th className="r">합계</th><th style={{width:80}}>배송</th><th>메모</th></tr>
+                  <tr>
+                    <th>날짜</th><th>업체</th><th>브랜드</th><th>상품명</th>
+                    <th className="r">수량</th><th className="r">공급가</th><th className="r">합계</th>
+                    <th style={{width:80}}>배송</th><th>메모</th>
+                    {canManage && <th style={{width:120, textAlign:'center'}}>관리</th>}
+                  </tr>
                 </thead>
                 <tbody>
-                  {sales.map(s=>(
-                    <tr key={s.id}>
+                  {sales.map(s => {
+                    const isEditing = editingId === s.id;
+                    const numInput = { width:70, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, textAlign:'right', outline:'none', fontFamily:'var(--mono)' };
+                    return (
+                    <tr key={s.id} style={isEditing ? {background:'#fffde7'} : {}}>
                       <td className="mono" style={{fontSize:12}}>{s.sold_at}</td>
                       <td style={{fontWeight:600}}>{s.company?.name||s.company_name}</td>
                       <td><span className="badge badge-dept">{s.brand?.name||s.brand_name||'-'}</span></td>
                       <td style={{fontSize:13}}>{s.product?.name||s.product_name}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)'}}>{s.quantity}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)'}}>{(s.supply_price||0).toLocaleString()}원</td>
-                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{((s.supply_price||0)*(s.quantity||0)).toLocaleString()}원</td>
-                      <td style={{fontSize:11}}>
-                        {s.delivery_method === '용차' ? '🚚 용차'
-                          : s.delivery_method === '택배' ? '📦 택배'
-                          : '-'}
+                      <td className="r" style={{fontFamily:'var(--mono)'}}>
+                        {isEditing
+                          ? <input type="number" min={0} value={editData.quantity}
+                              onChange={e => setEditData(p => ({...p, quantity:e.target.value}))}
+                              style={{...numInput, width:60}}/>
+                          : s.quantity}
                       </td>
-                      <td style={{fontSize:11, color:'var(--text2)'}}>{s.memo||'-'}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)'}}>
+                        {isEditing
+                          ? <input type="number" min={0} value={editData.supply_price}
+                              onChange={e => setEditData(p => ({...p, supply_price:e.target.value}))}
+                              style={numInput}/>
+                          : `${(s.supply_price||0).toLocaleString()}원`}
+                      </td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>
+                        {(((isEditing ? Number(editData.supply_price) : s.supply_price) || 0) *
+                          ((isEditing ? Number(editData.quantity) : s.quantity) || 0)).toLocaleString()}원
+                      </td>
+                      <td style={{fontSize:11}}>
+                        {isEditing
+                          ? <select value={editData.delivery_method}
+                              onChange={e => setEditData(p => ({...p, delivery_method:e.target.value}))}
+                              style={{height:28, padding:'0 4px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:11}}>
+                              <option value="">-</option>
+                              <option value="용차">🚚 용차</option>
+                              <option value="택배">📦 택배</option>
+                            </select>
+                          : (s.delivery_method === '용차' ? '🚚 용차' : s.delivery_method === '택배' ? '📦 택배' : '-')}
+                      </td>
+                      <td style={{fontSize:11, color:'var(--text2)'}}>
+                        {isEditing
+                          ? <input type="text" value={editData.memo}
+                              onChange={e => setEditData(p => ({...p, memo:e.target.value}))}
+                              style={{width:'100%', height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:11, outline:'none'}}/>
+                          : (s.memo || '-')}
+                      </td>
+                      {canManage && (
+                        <td style={{textAlign:'center'}}>
+                          {isEditing ? (
+                            <div style={{display:'flex', gap:4, justifyContent:'center'}}>
+                              <button className="btn btn-p" style={{height:26, padding:'0 10px', fontSize:11}} disabled={savingEdit} onClick={() => saveEdit(s.id)}>
+                                {savingEdit ? <span className="spinner"/> : '저장'}
+                              </button>
+                              <button className="btn btn-s" style={{height:26, padding:'0 8px', fontSize:11}} onClick={cancelEdit}>취소</button>
+                            </div>
+                          ) : (
+                            <div style={{display:'flex', gap:4, justifyContent:'center'}}>
+                              <button className="btn btn-s" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => startEdit(s)}>수정</button>
+                              <button className="btn-danger" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => deleteRow(s)}>삭제</button>
+                            </div>
+                          )}
+                        </td>
+                      )}
                     </tr>
-                  ))}
+                  );})}
                   <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
                     <td colSpan={4} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
                     <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, padding:'10px 11px'}}>{listTotalQty}</td>
@@ -546,6 +638,7 @@ export default function BizSalesPage({ profile, setPage }) {
                     <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:14, color:'var(--accent)', padding:'10px 11px'}}>{listTotalAmt.toLocaleString()}원</td>
                     <td/>
                     <td/>
+                    {canManage && <td/>}
                   </tr>
                 </tbody>
               </table>
