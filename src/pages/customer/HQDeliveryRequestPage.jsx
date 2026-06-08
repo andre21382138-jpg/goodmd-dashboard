@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, dlBlob } from '../../lib/utils';
-import { ORDER_CONSTANTS } from '../../lib/constants';
+import { ORDER_CONSTANTS, STORE_MAP, STORE_NAMES } from '../../lib/constants';
 
 // 31-컬럼 발주 양식 헤더 (sample: 매장발주_26.05.21_전송건.xls)
 const DELIVERY_HEADERS = [
@@ -121,22 +121,45 @@ export default function HQDeliveryRequestPage({ profile }) {
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(null);
 
+  // 발송완료 탭 필터
+  const todayStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+  const minusDays = (n) => {
+    const d = new Date(); d.setDate(d.getDate() - n);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+  const [fFrom,   setFFrom]   = useState(minusDays(30));
+  const [fTo,     setFTo]     = useState(todayStr());
+  const [fStore,  setFStore]  = useState('');
+  const [fBranch, setFBranch] = useState('');
+  const branchOptions = fStore ? (STORE_MAP[fStore] || []) : [];
+
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const limit = tab === 'pending' ? 200 : 50;
-    const { data, error } = await supabase.from('sales')
+    let q = supabase.from('sales')
       .select(`id, sold_at, store_name, branch_name, quantity, price,
                recipient_name, recipient_phone, recipient_address, delivery_notes,
                dispatched_at, customer_id, tracking_number,
                product:products(name, code)`)
       .eq('delivery_type', 'hq')
-      .eq('delivery_status', tab)
-      .order(tab === 'pending' ? 'sold_at' : 'dispatched_at', { ascending: false })
-      .limit(limit);
+      .eq('delivery_status', tab);
+    if (tab === 'pending') {
+      q = q.order('sold_at', { ascending: false }).limit(200);
+    } else {
+      // 발송완료: 기간·점포·지점 필터
+      if (fFrom)   q = q.gte('dispatched_at', `${fFrom}T00:00:00`);
+      if (fTo)     q = q.lte('dispatched_at', `${fTo}T23:59:59`);
+      if (fStore)  q = q.eq('store_name',  fStore);
+      if (fBranch) q = q.eq('branch_name', fBranch);
+      q = q.order('dispatched_at', { ascending: false }).limit(500);
+    }
+    const { data, error } = await q;
     if (error) toast(error.message, 'err');
     else setGroups(groupSales(data));
     setLoading(false);
-  }, [tab]);
+  }, [tab, fFrom, fTo, fStore, fBranch]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -237,11 +260,40 @@ export default function HQDeliveryRequestPage({ profile }) {
       </div>
 
       <div className="card" style={{padding:'16px 20px'}}>
+        {tab === 'dispatched' && (
+          <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12, flexWrap:'wrap'}}>
+            <input type="date" className="fsel" value={fFrom}
+              onChange={e => setFFrom(e.target.value || todayStr())}
+              style={{height:32, padding:'0 8px', fontSize:12}}/>
+            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+            <input type="date" className="fsel" value={fTo}
+              onChange={e => setFTo(e.target.value || todayStr())}
+              style={{height:32, padding:'0 8px', fontSize:12}}/>
+            <button className="btn btn-s" onClick={() => { setFFrom(minusDays(30)); setFTo(todayStr()); }}>최근 30일</button>
+            <button className="btn btn-s" onClick={() => { setFFrom(minusDays(90)); setFTo(todayStr()); }}>최근 3개월</button>
+            <select className="fsel" value={fStore}
+              onChange={e => { setFStore(e.target.value); setFBranch(''); }}
+              style={{height:32, padding:'0 8px', fontSize:12}}>
+              <option value="">전체 점포</option>
+              {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="fsel" value={fBranch}
+              onChange={e => setFBranch(e.target.value)}
+              disabled={!fStore}
+              style={{height:32, padding:'0 8px', fontSize:12, background:!fStore?'#f0f0f0':'#fff'}}>
+              <option value="">전체 지점</option>
+              {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            {(fStore||fBranch) && (
+              <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); }}>✕ 매장 초기화</button>
+            )}
+          </div>
+        )}
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, gap:8, flexWrap:'wrap'}}>
           <span className="fresult">
             {tab === 'pending'
               ? <>발송 대기 중인 본사 택배 요청 — <b>{groups.length}</b>건</>
-              : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>(최근 50건만 표시)</span></>}
+              : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>{fFrom} ~ {fTo}</span></>}
           </span>
           <div style={{display:'flex', gap:8}}>
             {tab === 'pending' && groups.length > 0 && (
