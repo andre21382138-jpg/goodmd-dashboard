@@ -326,16 +326,24 @@ export default function HQDeliveryRequestPage({ profile }) {
                       {iIdx === 0 && (
                         <td rowSpan={rs} style={{fontSize:11, color:'var(--text3)', ...mergedStyle}}>{g.delivery_notes || '-'}</td>
                       )}
-                      <td style={{textAlign:'center', fontSize:11, fontFamily:'var(--mono)', ...lineBorder}}>
-                        {it.tracking_number
-                          ? <a href={`https://tracker.delivery/#/kr.cjlogistics/${it.tracking_number}`}
-                              target="_blank" rel="noopener noreferrer"
-                              title="CJ대한통운 배송조회"
-                              style={{color:'var(--accent)', fontWeight:700, textDecoration:'none'}}>
-                              📦 {it.tracking_number}
-                            </a>
-                          : <span style={{color:'var(--text3)'}}>-</span>}
-                      </td>
+                      {iIdx === 0 && (() => {
+                        const groupTracking = g.items.find(x => x.tracking_number)?.tracking_number;
+                        return (
+                          <td rowSpan={rs} style={{textAlign:'center', fontSize:11, fontFamily:'var(--mono)', ...mergedStyle}}>
+                            {groupTracking ? (
+                              <div style={{display:'flex', alignItems:'center', gap:6, justifyContent:'center', flexWrap:'wrap'}}>
+                                <span style={{fontWeight:700, color:'var(--text)'}}>📦 {groupTracking}</span>
+                                <button type="button"
+                                  onClick={() => window.open(`https://tracker.delivery/#/kr.cjlogistics/${groupTracking}`, '_blank', 'noopener,noreferrer')}
+                                  title="CJ대한통운 배송조회 (새 창)"
+                                  style={{height:24, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4, background:'#fff3e0', color:'var(--accent)', fontSize:11, fontWeight:700, cursor:'pointer'}}>
+                                  🔍 조회
+                                </button>
+                              </div>
+                            ) : <span style={{color:'var(--text3)'}}>-</span>}
+                          </td>
+                        );
+                      })()}
                       {iIdx === 0 && (
                         <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
                           {tab === 'pending' && (
