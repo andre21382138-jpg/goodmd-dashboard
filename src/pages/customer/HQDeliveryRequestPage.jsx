@@ -299,28 +299,32 @@ export default function HQDeliveryRequestPage({ profile }) {
                   const isProc = processing === g.key;
                   // 그룹 시각적 구분: 짝수 그룹 흰색, 홀수 그룹 매우 옅은 노랑
                   const groupBg = gIdx % 2 === 0 ? '#fff' : '#fffdf5';
+                  const rs = g.items.length;
+                  const mergedStyle = { verticalAlign:'middle', background: groupBg };
                   return g.items.map((it, iIdx) => (
-                    <tr key={it.id} style={{background: groupBg}}>
-                      <td className="mono" style={{fontSize:11}}>{iIdx === 0 ? g.sold_at : ''}</td>
-                      <td style={{fontSize:11}}>
-                        {iIdx === 0 ? (
-                          <><span className="badge badge-dept">{g.store_name}</span> <span className="badge badge-store">{g.branch_name}</span></>
-                        ) : ''}
-                      </td>
+                    <tr key={it.id} style={{background: groupBg, ...(iIdx === 0 ? {borderTop:'2px solid var(--border2)'} : {})}}>
+                      {iIdx === 0 && (
+                        <td rowSpan={rs} className="mono" style={{fontSize:11, ...mergedStyle}}>{g.sold_at}</td>
+                      )}
+                      {iIdx === 0 && (
+                        <td rowSpan={rs} style={{fontSize:11, ...mergedStyle}}>
+                          <span className="badge badge-dept">{g.store_name}</span> <span className="badge badge-store">{g.branch_name}</span>
+                        </td>
+                      )}
                       <td style={{fontSize:12}}>{it.product?.name || '-'}</td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{it.quantity}</td>
-                      <td style={{fontSize:12, fontWeight: iIdx === 0 ? 700 : 400}}>
-                        {iIdx === 0 ? g.recipient_name : ''}
-                      </td>
-                      <td style={{fontSize:11, color:'var(--text2)'}}>
-                        {iIdx === 0 ? g.recipient_address : ''}
-                      </td>
-                      <td className="mono" style={{fontSize:11, color:'var(--text2)'}}>
-                        {iIdx === 0 ? g.recipient_phone : ''}
-                      </td>
-                      <td style={{fontSize:11, color:'var(--text3)'}}>
-                        {iIdx === 0 ? (g.delivery_notes || '-') : ''}
-                      </td>
+                      {iIdx === 0 && (
+                        <td rowSpan={rs} style={{fontSize:12, fontWeight:700, ...mergedStyle}}>{g.recipient_name}</td>
+                      )}
+                      {iIdx === 0 && (
+                        <td rowSpan={rs} style={{fontSize:11, color:'var(--text2)', ...mergedStyle}}>{g.recipient_address}</td>
+                      )}
+                      {iIdx === 0 && (
+                        <td rowSpan={rs} className="mono" style={{fontSize:11, color:'var(--text2)', ...mergedStyle}}>{g.recipient_phone}</td>
+                      )}
+                      {iIdx === 0 && (
+                        <td rowSpan={rs} style={{fontSize:11, color:'var(--text3)', ...mergedStyle}}>{g.delivery_notes || '-'}</td>
+                      )}
                       <td style={{textAlign:'center', fontSize:11, fontFamily:'var(--mono)'}}>
                         {it.tracking_number
                           ? <a href={`https://tracker.delivery/#/kr.cjlogistics/${it.tracking_number}`}
@@ -331,19 +335,21 @@ export default function HQDeliveryRequestPage({ profile }) {
                             </a>
                           : <span style={{color:'var(--text3)'}}>-</span>}
                       </td>
-                      <td style={{textAlign:'center'}}>
-                        {iIdx === 0 && tab === 'pending' && (
-                          <button className="btn btn-p" onClick={() => handleDispatch(g)} disabled={isProc}
-                            style={{padding:'0 14px', height:30, fontWeight:700, fontSize:12}}>
-                            {isProc ? <span className="spinner"/> : '✓ 발송처리'}
-                          </button>
-                        )}
-                        {iIdx === 0 && tab === 'dispatched' && g.dispatched_at && (
-                          <span style={{fontSize:11, color:'var(--success)', fontWeight:600}}>
-                            {new Date(g.dispatched_at).toLocaleDateString('ko-KR')}
-                          </span>
-                        )}
-                      </td>
+                      {iIdx === 0 && (
+                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
+                          {tab === 'pending' && (
+                            <button className="btn btn-p" onClick={() => handleDispatch(g)} disabled={isProc}
+                              style={{padding:'0 14px', height:30, fontWeight:700, fontSize:12}}>
+                              {isProc ? <span className="spinner"/> : '✓ 발송처리'}
+                            </button>
+                          )}
+                          {tab === 'dispatched' && g.dispatched_at && (
+                            <span style={{fontSize:11, color:'var(--success)', fontWeight:600}}>
+                              {new Date(g.dispatched_at).toLocaleDateString('ko-KR')}
+                            </span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ));
                 })}
