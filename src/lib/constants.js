@@ -79,6 +79,7 @@ export const MANAGER_MENUS = [
   { key: 'attendance',     icon: '🗓️', label: '근태 관리', sub: [
     { key: 'my_attendance', icon: '📊', label: '근무 현황' },
     { key: 'leave_plan',    icon: '📅', label: '휴무 신청' },
+    { key: 'store_closure', icon: '🏪', label: '휴점 등록' },
   ]},
 ];
 export const ADMIN_MENUS = [

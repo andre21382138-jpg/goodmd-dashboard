@@ -132,6 +132,7 @@ function SidebarClockPanel({ profile, setPage }) {
   const [saving,   setSaving]   = useState(false);
   const [todayMap, setTodayMap] = useState({}); // name → attendance record
   const [lpReminder, setLpReminder] = useState(null); // {name, display_name} 휴무계획 미제출 알림
+  const [isClosedToday, setIsClosedToday] = useState(false); // 오늘이 매장 휴점일?
 
   const todayStr = () => {
     const d = new Date();
@@ -149,12 +150,22 @@ function SidebarClockPanel({ profile, setPage }) {
   };
 
   const fetchToday = useCallback(async () => {
-    const { data } = await supabase.from('attendance')
-      .select('*').eq('manager_id', profile.id).eq('work_date', todayStr());
+    const today = todayStr();
+    const monthStr = today.slice(0, 7);
+    const [{ data: att }, { data: closure }] = await Promise.all([
+      supabase.from('attendance').select('*')
+        .eq('manager_id', profile.id).eq('work_date', today),
+      supabase.from('store_closures').select('dates')
+        .eq('store_name',  profile.department || '')
+        .eq('branch_name', profile.branch || '')
+        .eq('target_month', monthStr)
+        .maybeSingle(),
+    ]);
     const map = {};
-    (data || []).forEach(r => { map[r.manager_name] = r; });
+    (att || []).forEach(r => { map[r.manager_name] = r; });
     setTodayMap(map);
-  }, [profile.id]);
+    setIsClosedToday((closure?.dates || []).includes(today));
+  }, [profile.id, profile.department, profile.branch]);
 
   useEffect(() => {
     supabase.from('store_members').select('name, display_name, job_title')
@@ -320,7 +331,8 @@ function SidebarClockPanel({ profile, setPage }) {
                         <span style={{ fontWeight:700, color:'#666', minWidth:40 }}>{m.display_name || m.name}</span>
                         {rec?.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>✓ 출근</span>}
                         {rec?.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>✓ 퇴근</span>}
-                        {!rec && <span style={{ color:'#ccc' }}>미체크</span>}
+                        {!rec && isClosedToday && <span style={{ color:'#6a1b9a', fontWeight:700 }}>🏪 휴점</span>}
+                        {!rec && !isClosedToday && <span style={{ color:'#ccc' }}>미체크</span>}
                       </div>
                     );
                   })}

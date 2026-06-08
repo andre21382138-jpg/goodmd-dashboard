@@ -30,9 +30,11 @@ export default function AttendanceMgmtPage() {
   const [hRecords,    setHRecords]    = useState([]);
   const [hLoading,    setHLoading]    = useState(false);
 
+  const [closures, setClosures] = useState([]); // 휴점일 데이터
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const [{ data: att }, { data: lp }, { data: sm }] = await Promise.all([
+    const [{ data: att }, { data: lp }, { data: sm }, { data: cl }] = await Promise.all([
       supabase.from('attendance').select('*')
         .gte('work_date', fDate).lte('work_date', fDate)
         .order('store_name', { ascending: true }),
@@ -41,7 +43,9 @@ export default function AttendanceMgmtPage() {
       supabase.from('store_members')
         .select('id, name, display_name, job_title, store_account_id, store:profiles!store_account_id(department, branch)')
         .order('id', { ascending: true }),
+      supabase.from('store_closures').select('store_name, branch_name, dates'),
     ]);
+    setClosures(cl || []);
     setRecords(att || []);
     setPlans(lp || []);
     setStoreMembers((sm || []).map(m => ({
@@ -90,6 +94,16 @@ export default function AttendanceMgmtPage() {
     for (const r of records) {
       lookup.set(`${r.store_name}|${r.branch_name}|${r.manager_name}`, r);
     }
+    // 매장별 휴점일 lookup: 'store|branch' → Set<date>
+    const closureMap = new Map();
+    for (const c of closures) {
+      const key = `${c.store_name}|${c.branch_name}`;
+      if (!closureMap.has(key)) closureMap.set(key, new Set());
+      for (const d of (c.dates || [])) closureMap.get(key).add(d);
+    }
+    const isClosed = (store, branch, date) =>
+      closureMap.get(`${store}|${branch}`)?.has(date) || false;
+
     const usedRecordIds = new Set();
     const rows = storeMembers
       .filter(m => m.store_name && m.branch_name)
@@ -106,6 +120,7 @@ export default function AttendanceMgmtPage() {
           work_date: fDate,
           clock_in: rec?.clock_in || null,
           clock_out: rec?.clock_out || null,
+          isClosed: isClosed(m.store_name, m.branch_name, fDate),
           isExtra: false,
         };
       });
@@ -121,10 +136,11 @@ export default function AttendanceMgmtPage() {
         work_date: r.work_date,
         clock_in: r.clock_in,
         clock_out: r.clock_out,
+        isClosed: isClosed(r.store_name, r.branch_name, r.work_date),
         isExtra: true,
       }));
     return [...rows, ...extras];
-  }, [records, storeMembers, fDate]);
+  }, [records, storeMembers, closures, fDate]);
 
   const filteredAtt = useMemo(() => {
     let r = displayRows;
@@ -136,8 +152,9 @@ export default function AttendanceMgmtPage() {
   const stat = useMemo(() => {
     const total = filteredAtt.length;
     const checkedIn = filteredAtt.filter(r => !!r.clock_in).length;
-    const missing = total - checkedIn;
-    return { total, checkedIn, missing };
+    const closed = filteredAtt.filter(r => r.isClosed && !r.clock_in).length;
+    const missing = total - checkedIn - closed;
+    return { total, checkedIn, closed, missing };
   }, [filteredAtt]);
 
   const newPlanCount = plans.filter(p => p.status === 'pending').length;
@@ -168,6 +185,13 @@ export default function AttendanceMgmtPage() {
     if (!hMember || !hFrom || !hTo) return [];
     const lookup = new Map();
     for (const r of hRecords) lookup.set(r.work_date, r);
+    // 해당 매장 휴점일 set
+    const closureSet = new Set();
+    for (const c of closures) {
+      if (c.store_name === hMember.store_name && c.branch_name === hMember.branch_name) {
+        (c.dates || []).forEach(d => closureSet.add(d));
+      }
+    }
     const rows = [];
     const start = new Date(hFrom);
     const end   = new Date(hTo);
@@ -179,21 +203,23 @@ export default function AttendanceMgmtPage() {
         date: ds, dow: DOW[d.getDay()],
         clock_in: rec?.clock_in || null,
         clock_out: rec?.clock_out || null,
+        isClosed: closureSet.has(ds),
       });
     }
     return rows.reverse(); // 최신 날짜가 위로
-  }, [hMember, hFrom, hTo, hRecords]);
+  }, [hMember, hFrom, hTo, hRecords, closures]);
 
   const hStat = useMemo(() => {
     const total    = hDisplayRows.length;
     const worked   = hDisplayRows.filter(r => r.clock_in).length;
-    const missing  = total - worked;
+    const closedDays = hDisplayRows.filter(r => r.isClosed && !r.clock_in).length;
+    const missing  = total - worked - closedDays;
     const totalMin = hDisplayRows.reduce((s,r) => {
       if (!r.clock_in || !r.clock_out) return s;
       return s + Math.round((new Date(r.clock_out) - new Date(r.clock_in)) / 60000);
     }, 0);
     const hours = `${Math.floor(totalMin/60)}h ${totalMin%60}m`;
-    return { total, worked, missing, hours };
+    return { total, worked, missing, closedDays, hours };
   }, [hDisplayRows]);
 
   const handleDownloadAttendance = async () => {
@@ -215,8 +241,8 @@ export default function AttendanceMgmtPage() {
           r.branch_name || '-',
           r.job_title || (r.isExtra ? '기타근무자' : '-'),
           r.display_name || r.name || '-',
-          r.clock_in ? fmt(r.clock_in) : '미체크',
-          r.clock_out ? fmt(r.clock_out) : '미체크',
+          r.clock_in ? fmt(r.clock_in) : (r.isClosed ? '휴점' : '미체크'),
+          r.clock_out ? fmt(r.clock_out) : (r.isClosed ? '휴점' : '미체크'),
         ]);
       }
       ws.columns.forEach(col => {
@@ -279,6 +305,7 @@ export default function AttendanceMgmtPage() {
             <div className="fbar-right" style={{display:'flex', alignItems:'center', gap:14}}>
               <span className="fresult">근무자 <b>{stat.total}</b>명</span>
               <span style={{fontSize:12, color:'var(--success)', fontWeight:700}}>출근 {stat.checkedIn}</span>
+              {stat.closed > 0 && <span style={{fontSize:12, color:'#6a1b9a', fontWeight:700}}>휴점 {stat.closed}</span>}
               <span style={{fontSize:12, color:'var(--danger)', fontWeight:700}}>미체크 {stat.missing}</span>
             </div>
           </div>
@@ -291,7 +318,7 @@ export default function AttendanceMgmtPage() {
                   {filteredAtt.length === 0
                     ? <tr><td colSpan={7} className="empty">등록된 근무자가 없습니다</td></tr>
                     : filteredAtt.map(r => (
-                      <tr key={r.key} style={!r.clock_in && !r.isExtra ? {background:'#fafafa'} : {}}>
+                      <tr key={r.key} style={r.isClosed ? {background:'#f3e5f5'} : (!r.clock_in && !r.isExtra ? {background:'#fafafa'} : {})}>
                         <td className="mono">{r.work_date}</td>
                         <td>
                           <strong>{r.display_name}</strong>
@@ -304,7 +331,9 @@ export default function AttendanceMgmtPage() {
                         <td>
                           {r.clock_in
                             ? <span style={{fontFamily:'var(--mono)', color:'var(--success)', fontWeight:600}}>{fmt(r.clock_in)}</span>
-                            : <span style={{padding:'2px 8px', background:'#ffebee', color:'var(--danger)', border:'1px solid #f48fb1', borderRadius:3, fontSize:11, fontWeight:700}}>미체크</span>
+                            : r.isClosed
+                              ? <span style={{padding:'2px 8px', background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', borderRadius:3, fontSize:11, fontWeight:700}}>🏪 휴점</span>
+                              : <span style={{padding:'2px 8px', background:'#ffebee', color:'var(--danger)', border:'1px solid #f48fb1', borderRadius:3, fontSize:11, fontWeight:700}}>미체크</span>
                           }
                         </td>
                         <td style={{fontFamily:'var(--mono)', color:'var(--accent)', fontWeight:600}}>{fmt(r.clock_out)}</td>
@@ -349,6 +378,7 @@ export default function AttendanceMgmtPage() {
                 <>
                   <span className="fresult">대상기간 <b>{hStat.total}</b>일</span>
                   <span style={{fontSize:12, color:'var(--success)', fontWeight:700}}>근무 {hStat.worked}</span>
+                  {hStat.closedDays > 0 && <span style={{fontSize:12, color:'#6a1b9a', fontWeight:700}}>휴점 {hStat.closedDays}</span>}
                   <span style={{fontSize:12, color:'var(--danger)', fontWeight:700}}>미체크 {hStat.missing}</span>
                   <span style={{fontSize:12, color:'var(--text2)', fontFamily:'var(--mono)', fontWeight:700}}>총 {hStat.hours}</span>
                 </>
@@ -368,7 +398,7 @@ export default function AttendanceMgmtPage() {
                       {hDisplayRows.length === 0
                         ? <tr><td colSpan={5} className="empty">기간을 선택해주세요</td></tr>
                         : hDisplayRows.map(r => (
-                          <tr key={r.date} style={!r.clock_in ? {background:'#fafafa'} : {}}>
+                          <tr key={r.date} style={r.isClosed ? {background:'#f3e5f5'} : (!r.clock_in ? {background:'#fafafa'} : {})}>
                             <td className="mono">{r.date}</td>
                             <td style={{
                               fontSize:12, fontWeight:600,
@@ -377,7 +407,9 @@ export default function AttendanceMgmtPage() {
                             <td>
                               {r.clock_in
                                 ? <span style={{fontFamily:'var(--mono)', color:'var(--success)', fontWeight:600}}>{fmt(r.clock_in)}</span>
-                                : <span style={{padding:'2px 8px', background:'#ffebee', color:'var(--danger)', border:'1px solid #f48fb1', borderRadius:3, fontSize:11, fontWeight:700}}>미체크</span>
+                                : r.isClosed
+                                  ? <span style={{padding:'2px 8px', background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', borderRadius:3, fontSize:11, fontWeight:700}}>🏪 휴점</span>
+                                  : <span style={{padding:'2px 8px', background:'#ffebee', color:'var(--danger)', border:'1px solid #f48fb1', borderRadius:3, fontSize:11, fontWeight:700}}>미체크</span>
                               }
                             </td>
                             <td style={{fontFamily:'var(--mono)', color:'var(--accent)', fontWeight:600}}>{fmt(r.clock_out)}</td>

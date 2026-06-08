@@ -35,6 +35,7 @@ import StoreInfoPage from './pages/store/StoreInfoPage';
 import ClockInOutPage from './pages/attendance/ClockInOutPage';
 import MyAttendancePage from './pages/attendance/MyAttendancePage';
 import LeavePlanPage from './pages/attendance/LeavePlanPage';
+import StoreClosurePage from './pages/attendance/StoreClosurePage';
 import AttendanceMgmtPage from './pages/attendance/AttendanceMgmtPage';
 import IncentivePage from './pages/salary/IncentivePage';
 import JoinPage from './pages/join/JoinPage';
@@ -703,6 +704,7 @@ export default function App() {
     attendance_mgmt: '근태 관리',
     clock_inout:     '출근/퇴근 체크',
     leave_plan:      '휴무 신청',
+    store_closure:   '휴점 등록',
     admin:          '사용자 관리',
     notice:         '공지 사항',
   };
@@ -769,6 +771,7 @@ export default function App() {
             {page === 'stock_mgr_view' && (isManager || isAdmin || isHQ) && <StoreStockPage profile={profile}/>}
             {page === 'my_attendance'  && (isManager || isAdmin || isHQ) && <MyAttendancePage profile={profile}/>}
             {page === 'leave_plan'     && (isManager || isAdmin || isHQ) && <LeavePlanPage profile={profile}/>}
+            {page === 'store_closure'  && (isManager || isAdmin || isHQ) && <StoreClosurePage profile={profile}/>}
             {page === 'attendance_mgmt'&& canSeeMain && <AttendanceMgmtPage/>}
             {page === 'clock_inout'    && (isManager || isAdmin || isHQ) && <ClockInOutPage profile={profile}/>}
             {page === 'upload'         && canSeeMain && <UploadPage profile={profile} activeUploadId={activeUploadId} setActiveUploadId={setActiveUploadId} parsed={parsed} setParsed={setParsed} filename={filename} setFilename={setFilename}/>}

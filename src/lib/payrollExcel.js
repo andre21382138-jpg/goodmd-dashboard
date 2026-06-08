@@ -24,8 +24,10 @@ const DOW_KR = ['일','월','화','수','목','금','토'];
 // 그날의 일자 컬럼 인덱스 (1일 → T=20, 2일 → 21, ...)
 const dayCol = (day) => 19 + day;
 
-// 표시 정책: 휴무신청 × 출근 × 휴무일/공휴일
-function calcDayCell({ hasLeave, hasAtt, isHoliday, isFriSatSun, isManager }) {
+// 표시 정책: 휴점 × 휴무신청 × 출근 × 휴무일/공휴일
+function calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun, isManager }) {
+  // 매장 휴점일 — 출근 없으면 '휴점', 출근 있으면 '확인필요'
+  if (isClosed) return hasAtt ? '확인필요' : '휴점';
   if (hasLeave && !hasAtt) return 'X';
   if (hasLeave &&  hasAtt) return '확인필요';
   if (!hasLeave && !hasAtt) return '확인필요';
@@ -89,6 +91,7 @@ export async function downloadPayrollExcel({ year, month }) {
     { data: members },
     { data: attendance },
     { data: leavePlans },
+    { data: storeClosures },
     incentiveMap,
   ] = await Promise.all([
     supabase.from('store_members')
@@ -99,6 +102,9 @@ export async function downloadPayrollExcel({ year, month }) {
       .gte('work_date', from).lte('work_date', to),
     supabase.from('leave_plans')
       .select('manager_id, manager_name, dates')
+      .eq('target_month', monthStr),
+    supabase.from('store_closures')
+      .select('store_name, branch_name, dates')
       .eq('target_month', monthStr),
     fetchMemberIncentive(from, to),
   ]);
@@ -121,6 +127,13 @@ export async function downloadPayrollExcel({ year, month }) {
     (p.dates || []).forEach(d => {
       leaveLookup.add(`${p.manager_id}|${p.manager_name}|${d}`);
     });
+  });
+  // 매장별 휴점일: 'store|branch' → Set<date>
+  const closureMap = new Map();
+  (storeClosures || []).forEach(c => {
+    const key = `${c.store_name}|${c.branch_name}`;
+    if (!closureMap.has(key)) closureMap.set(key, new Set());
+    (c.dates || []).forEach(d => closureMap.get(key).add(d));
   });
 
   // ── 4. 매장 그룹화 ────────────────────────────────────
@@ -255,7 +268,8 @@ export async function downloadPayrollExcel({ year, month }) {
       const isManager = m.job_title === '매니저';
 
       // 일자별 셀 값 + 통계
-      let workDays = 0, extendDays = 0, holidayDays = 0;
+      const storeClosureSet = closureMap.get(`${m.store_name}|${m.branch_name}`) || new Set();
+      let workDays = 0, extendDays = 0, holidayDays = 0, closedDays = 0;
       for (let d = 1; d <= lastDay; d++) {
         const dateStr = `${monthStr}-${String(d).padStart(2,'0')}`;
         const k = `${m.store_account_id}|${m.name}|${dateStr}`;
@@ -264,10 +278,12 @@ export async function downloadPayrollExcel({ year, month }) {
         const dow = new Date(year, month-1, d).getDay();
         const isFriSatSun = dow === 0 || dow === 5 || dow === 6;
         const isHoliday = holidaySet.has(d);
-        const val = calcDayCell({ hasLeave, hasAtt, isHoliday, isFriSatSun, isManager });
+        const isClosed = storeClosureSet.has(dateStr);
+        const val = calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun, isManager });
         if (val.startsWith('O')) workDays++;
         if (val === 'O(연장)') extendDays++;
         if (val === 'O(휴근)') holidayDays++;
+        if (val === '휴점') closedDays++;
         const cell = ws.getCell(curRow, dayCol(d));
         cell.value = val;
         cell.font = font10;
@@ -277,8 +293,9 @@ export async function downloadPayrollExcel({ year, month }) {
         else if (val === '확인필요') cell.font = { ...font10, color: { argb: 'FFE65100' }, bold: true };
         else if (val === 'O(연장)') cell.font = { ...font10, color: { argb: 'FF1565C0' } };
         else if (val === 'O(휴근)') cell.font = { ...font10, color: { argb: 'FF6A1B9A' }, bold: true };
+        else if (val === '휴점') cell.font = { ...font10, color: { argb: 'FF6A1B9A' }, bold: true };
       }
-      const offDays = lastDay - workDays;
+      const offDays = lastDay - workDays - closedDays;
 
       // 급여 계산
       const isMonthly = m.salary_type === '월급';
