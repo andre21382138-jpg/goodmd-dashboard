@@ -301,6 +301,7 @@ export default function HQDeliveryRequestPage({ profile }) {
                   const groupBg = gIdx % 2 === 0 ? '#fff' : '#fffdf5';
                   const rs = g.items.length;
                   const mergedStyle = { verticalAlign:'middle', background: groupBg };
+                  const lineBorder = { borderBottom: '1px solid var(--border)' };
                   return g.items.map((it, iIdx) => (
                     <tr key={it.id} style={{background: groupBg, ...(iIdx === 0 ? {borderTop:'2px solid var(--border2)'} : {})}}>
                       {iIdx === 0 && (
@@ -311,8 +312,8 @@ export default function HQDeliveryRequestPage({ profile }) {
                           <span className="badge badge-dept">{g.store_name}</span> <span className="badge badge-store">{g.branch_name}</span>
                         </td>
                       )}
-                      <td style={{fontSize:12}}>{it.product?.name || '-'}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{it.quantity}</td>
+                      <td style={{fontSize:12, ...lineBorder}}>{it.product?.name || '-'}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, ...lineBorder}}>{it.quantity}</td>
                       {iIdx === 0 && (
                         <td rowSpan={rs} style={{fontSize:12, fontWeight:700, ...mergedStyle}}>{g.recipient_name}</td>
                       )}
@@ -325,7 +326,7 @@ export default function HQDeliveryRequestPage({ profile }) {
                       {iIdx === 0 && (
                         <td rowSpan={rs} style={{fontSize:11, color:'var(--text3)', ...mergedStyle}}>{g.delivery_notes || '-'}</td>
                       )}
-                      <td style={{textAlign:'center', fontSize:11, fontFamily:'var(--mono)'}}>
+                      <td style={{textAlign:'center', fontSize:11, fontFamily:'var(--mono)', ...lineBorder}}>
                         {it.tracking_number
                           ? <a href={`https://tracker.delivery/#/kr.cjlogistics/${it.tracking_number}`}
                               target="_blank" rel="noopener noreferrer"
