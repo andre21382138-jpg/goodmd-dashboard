@@ -358,6 +358,7 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
   const isAdmin    = profile?.role === 'admin';
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
+  const isScm      = profile?.role === 'scm';
   const canSeeMain = isAdmin || isHQ;
   const [newPlanCount,  setNewPlanCount]  = useState(0);
   const [hasNewNotice,  setHasNewNotice]  = useState(false);
@@ -439,7 +440,18 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
       {isManager && <SidebarClockPanel profile={profile} setPage={setPage}/>}
 
       <div className="sidebar-menu">
-        {/* 본사 메뉴 */}
+        {/* SCM 담당자 — 택배요청 한 메뉴만 */}
+        {isScm && (
+          <>
+            <div className="sidebar-section">본사</div>
+            <button
+              className={`sidebar-item ${page==='hq_delivery_request'?'on':''}`}
+              onClick={() => setPage('hq_delivery_request')}>
+              <span className="sidebar-item-icon">📦</span>택배요청
+            </button>
+          </>
+        )}
+        {/* 본사 메뉴 (admin·hq 전용) */}
         {canSeeMain && (
           <>
             <div className="sidebar-section">본사</div>
@@ -462,8 +474,8 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
             })}
           </>
         )}
-        {/* 매장 메뉴 */}
-        {(isManager || isAdmin || isHQ) && (
+        {/* 매장 메뉴 (SCM 제외) */}
+        {!isScm && (isManager || isAdmin || isHQ) && (
           <>
             <div className="sidebar-section" style={{marginTop: canSeeMain ? 8 : 0}}>매장</div>
             {MANAGER_MENUS.map(m => {
@@ -482,8 +494,8 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
             })}
           </>
         )}
-        {/* 관리자 메뉴 */}
-        {(isAdmin || isHQ) && (
+        {/* 관리자 메뉴 (SCM 제외) */}
+        {!isScm && (isAdmin || isHQ) && (
           <>
             <div className="sidebar-section" style={{marginTop:8}}>관리자</div>
             {isAdmin && ADMIN_MENUS.map(m => (
@@ -502,8 +514,8 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
             )}
           </>
         )}
-        {/* 공지사항 - 담당자/매니저 열람 */}
-        {(isHQ || isManager) && (
+        {/* 공지사항 - 담당자/매니저 열람 (SCM 제외) */}
+        {!isScm && (isHQ || isManager) && (
           <>
             <div className="sidebar-section" style={{marginTop:8}}>공지</div>
             <button className={`sidebar-item ${page==='notice'?'on':''}`} onClick={handleNoticeClick}>

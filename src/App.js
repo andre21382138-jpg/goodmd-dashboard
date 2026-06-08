@@ -667,7 +667,15 @@ export default function App() {
   const isAdmin    = profile?.role === 'admin';
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
+  const isScm      = profile?.role === 'scm';
   const canSeeMain = isAdmin || isHQ;
+
+  // SCM 담당자는 본사 택배요청 메뉴만 접근 가능 — 다른 페이지로 가지 못하도록 자동 리다이렉트
+  useEffect(() => {
+    if (isScm && page !== 'hq_delivery_request' && page !== 'help') {
+      setPage('hq_delivery_request');
+    }
+  }, [isScm, page]);
 
   const PAGE_TITLES = {
     help:           '사용 안내',
@@ -746,7 +754,7 @@ export default function App() {
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
             {page === 'sms_unsubscribe_sync' && canSeeMain && <SmsUnsubscribeSyncPage/>}
-            {page === 'hq_delivery_request' && canSeeMain && <HQDeliveryRequestPage profile={profile}/>}
+            {page === 'hq_delivery_request' && (canSeeMain || isScm) && <HQDeliveryRequestPage profile={profile}/>}
             {page === 'store_info'     && canSeeMain && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
