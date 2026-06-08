@@ -296,38 +296,86 @@ export default function AttendanceMgmtPage() {
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('출퇴근현황');
-      const header = ['날짜', '점포명', '지점', '직책', '이름(근무자)', '출근시간', '퇴근시간'];
+
+      // 헤더: 점포 / 지점 / 근무자 / 직책 / [일자별 컬럼...]
+      const header = ['점포', '지점', '근무자', '직책', ...dateList.map(ds => {
+        const dow = new Date(ds).getDay();
+        return `${ds.slice(5)} (${DOW[dow]})`;
+      })];
       const hr = ws.addRow(header);
       hr.eachCell(cell => {
         cell.font = { bold: true };
         cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFEEEEEE'} };
-        cell.alignment = { horizontal:'center', vertical:'middle' };
+        cell.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+        cell.border = { top:{style:'thin'}, bottom:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'} };
       });
-      // 각 근무자 × 일자 → 한 행씩
+      hr.height = 28;
+
+      // 데이터 행 (근무자 단위)
       for (const r of filteredAtt) {
-        for (const ds of dateList) {
-          const c = r.cells[ds];
-          const inTxt  = c.clock_in  ? fmt(c.clock_in)  : (c.isClosed ? '휴점' : c.isOnLeave ? '휴무' : '미체크');
-          const outTxt = c.clock_out ? fmt(c.clock_out) : (c.isClosed ? '휴점' : c.isOnLeave ? '휴무' : '미체크');
-          ws.addRow([
-            ds,
-            r.store_name || '-',
-            r.branch_name || '-',
-            r.job_title || (r.isExtra ? '기타근무자' : '-'),
-            r.display_name || r.name || '-',
-            inTxt,
-            outTxt,
-          ]);
+        const row = ws.addRow([
+          r.store_name || '-',
+          r.branch_name || '-',
+          r.display_name || r.name || '-',
+          r.job_title || (r.isExtra ? '기타근무자' : '-'),
+          ...dateList.map(ds => {
+            const c = r.cells[ds];
+            if (c.clock_in || c.clock_out) {
+              const inTxt  = c.clock_in  ? fmt(c.clock_in)  : '-';
+              const outTxt = c.clock_out ? fmt(c.clock_out) : '-';
+              return `${inTxt}\n${outTxt}`;
+            }
+            if (c.isClosed)  return '휴점';
+            if (c.isOnLeave) return '휴무';
+            return '미체크';
+          }),
+        ]);
+        row.eachCell({ includeEmpty:true }, (cell, colNum) => {
+          cell.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+          cell.border = { top:{style:'thin'}, bottom:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'} };
+          if (colNum > 4) {
+            const v = String(cell.value || '');
+            if (v === '휴점')   cell.font = { color:{argb:'FF6A1B9A'}, bold:true };
+            else if (v === '휴무') cell.font = { color:{argb:'FF1565C0'}, bold:true };
+            else if (v === '미체크') cell.font = { color:{argb:'FFC62828'}, bold:true };
+          }
+        });
+        row.height = 32; // 출근/퇴근 두 줄 표시 위함
+      }
+
+      // 컬럼 폭
+      ws.getColumn(1).width = 14;  // 점포
+      ws.getColumn(2).width = 14;  // 지점
+      ws.getColumn(3).width = 10;  // 근무자
+      ws.getColumn(4).width = 8;   // 직책
+      for (let i = 5; i <= 4 + dateList.length; i++) {
+        ws.getColumn(i).width = 12;
+      }
+
+      // 같은 점포·지점 행 병합 (화면 rowSpan과 동일 효과)
+      // filteredAtt[i] → 엑셀 row (i+2)  [헤더가 row 1]
+      let groupStart = 2;
+      for (let i = 1; i < filteredAtt.length; i++) {
+        const cur = filteredAtt[i];
+        const prev = filteredAtt[i - 1];
+        if (cur.store_name !== prev.store_name || cur.branch_name !== prev.branch_name) {
+          const groupEnd = i + 1; // 직전 그룹 마지막 엑셀 row
+          if (groupEnd > groupStart) {
+            ws.mergeCells(groupStart, 1, groupEnd, 1);
+            ws.mergeCells(groupStart, 2, groupEnd, 2);
+          }
+          groupStart = i + 2; // 새 그룹 시작 엑셀 row
         }
       }
-      ws.columns.forEach(col => {
-        let max = 10;
-        col.eachCell({ includeEmpty:false }, cell => {
-          const v = cell.value == null ? '' : String(cell.value);
-          if (v.length > max) max = Math.min(40, v.length + 2);
-        });
-        col.width = max;
-      });
+      // 마지막 그룹 마무리
+      if (filteredAtt.length > 0) {
+        const lastEnd = filteredAtt.length + 1;
+        if (lastEnd > groupStart) {
+          ws.mergeCells(groupStart, 1, lastEnd, 1);
+          ws.mergeCells(groupStart, 2, lastEnd, 2);
+        }
+      }
+
       const buf = await wb.xlsx.writeBuffer();
       dlBlob(buf, `출퇴근현황_${fFrom}_${fTo}.xlsx`);
       toast(`엑셀 다운로드 완료 (${filteredAtt.length}명 × ${dateList.length}일)`, 'ok');
