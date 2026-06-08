@@ -267,6 +267,7 @@ export default function BizSalesPage({ profile, setPage }) {
   const startEdit = (s) => {
     setEditingId(s.id);
     setEditData({
+      sold_at:         s.sold_at || '',
       quantity:        s.quantity || 0,
       supply_price:    s.supply_price || 0,
       memo:            s.memo || '',
@@ -275,8 +276,10 @@ export default function BizSalesPage({ profile, setPage }) {
   };
   const cancelEdit = () => { setEditingId(null); setEditData({}); };
   const saveEdit = async (id) => {
+    if (!editData.sold_at) { toast('매출일을 입력해주세요', 'err'); return; }
     setSavingEdit(true);
     const { error } = await supabase.from('biz_sales').update({
+      sold_at:         editData.sold_at,
       quantity:        Number(editData.quantity) || 0,
       supply_price:    Number(editData.supply_price) || 0,
       memo:            (editData.memo || '').trim() || null,
@@ -572,7 +575,13 @@ export default function BizSalesPage({ profile, setPage }) {
                     const numInput = { width:70, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, textAlign:'right', outline:'none', fontFamily:'var(--mono)' };
                     return (
                     <tr key={s.id} style={isEditing ? {background:'#fffde7'} : {}}>
-                      <td className="mono" style={{fontSize:12}}>{s.sold_at}</td>
+                      <td className="mono" style={{fontSize:12}}>
+                        {isEditing
+                          ? <input type="date" value={editData.sold_at}
+                              onChange={e => setEditData(p => ({...p, sold_at:e.target.value}))}
+                              style={{width:130, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, outline:'none'}}/>
+                          : s.sold_at}
+                      </td>
                       <td style={{fontWeight:600}}>{s.company?.name||s.company_name}</td>
                       <td><span className="badge badge-dept">{s.brand?.name||s.brand_name||'-'}</span></td>
                       <td style={{fontSize:13}}>{s.product?.name||s.product_name}</td>
