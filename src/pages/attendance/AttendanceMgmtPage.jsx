@@ -191,14 +191,34 @@ export default function AttendanceMgmtPage() {
         g.cells[r.work_date].attId = r.id;
       }
     }
-    return [...rows, ...extraGroups.values()];
+    // 점포·지점·직책 순 정렬 (같은 매장끼리 묶이도록)
+    const all = [...rows, ...extraGroups.values()];
+    const titleRank = (t) => t === '매니저' ? 0 : t === '부매니저' ? 1 : t === '기타근무자' ? 3 : 2;
+    all.sort((a, b) => {
+      if (a.store_name !== b.store_name) return (a.store_name || '').localeCompare(b.store_name || '');
+      if (a.branch_name !== b.branch_name) return (a.branch_name || '').localeCompare(b.branch_name || '');
+      return titleRank(a.job_title) - titleRank(b.job_title);
+    });
+    return all;
   }, [records, storeMembers, plans, closures, dateList]);
 
   const filteredAtt = useMemo(() => {
     let r = displayRows;
     if (fStore)   r = r.filter(x => x.store_name === fStore);
     if (fManager) r = r.filter(x => x.display_name === fManager);
-    return r;
+    // 그룹화 정보: 같은 (store, branch) 행끼리 묶어 rowSpan 처리
+    const groupSizes = new Map();
+    for (const x of r) {
+      const k = `${x.store_name}|${x.branch_name}`;
+      groupSizes.set(k, (groupSizes.get(k) || 0) + 1);
+    }
+    const seen = new Set();
+    return r.map(x => {
+      const k = `${x.store_name}|${x.branch_name}`;
+      const isFirstOfGroup = !seen.has(k);
+      seen.add(k);
+      return { ...x, isFirstOfGroup, groupSize: groupSizes.get(k) };
+    });
   }, [displayRows, fStore, fManager]);
 
   const stat = useMemo(() => {
@@ -389,9 +409,17 @@ export default function AttendanceMgmtPage() {
                   {filteredAtt.length === 0
                     ? <tr><td colSpan={3 + dateList.length} className="empty">등록된 근무자가 없습니다</td></tr>
                     : filteredAtt.map(r => (
-                      <tr key={r.key}>
-                        <td><span className="badge badge-dept">{r.store_name || '-'}</span></td>
-                        <td><span className="badge badge-store">{r.branch_name || '-'}</span></td>
+                      <tr key={r.key} style={r.isFirstOfGroup ? {borderTop:'2px solid var(--border2)'} : {}}>
+                        {r.isFirstOfGroup && (
+                          <td rowSpan={r.groupSize} style={{verticalAlign:'middle', background:'#fafafa'}}>
+                            <span className="badge badge-dept">{r.store_name || '-'}</span>
+                          </td>
+                        )}
+                        {r.isFirstOfGroup && (
+                          <td rowSpan={r.groupSize} style={{verticalAlign:'middle', background:'#fafafa'}}>
+                            <span className="badge badge-store">{r.branch_name || '-'}</span>
+                          </td>
+                        )}
                         <td>
                           <strong>{r.display_name}</strong>
                           {r.job_title && r.job_title !== '매니저' && (
