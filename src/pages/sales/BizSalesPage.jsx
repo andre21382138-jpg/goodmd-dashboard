@@ -24,7 +24,7 @@ export default function BizSalesPage({ profile, setPage }) {
   const newLine = () => ({
     id: Date.now()+Math.random(),
     productId:'', productSearch:'', showSuggestions:false,
-    brandId:'', quantity:1, supplyPrice:'',
+    brandId:'', quantity:1, supplyPrice:'', isGift:false,
   });
   const [lines, setLines] = useState([newLine()]);
 
@@ -227,7 +227,8 @@ export default function BizSalesPage({ profile, setPage }) {
     if (!companyId) { toast('업체를 선택해주세요', 'err'); return; }
     if (!deliveryMethod) { toast('배송방법을 선택해주세요', 'err'); return; }
     const validLines = lines.filter(l =>
-      l.productId && Number(l.supplyPrice) > 0 && Number(l.quantity) > 0
+      l.productId && Number(l.quantity) > 0 &&
+      (l.isGift || Number(l.supplyPrice) > 0)
     );
     if (validLines.length === 0) { toast('상품을 1개 이상 입력해주세요', 'err'); return; }
     const company = companies.find(c => String(c.id) === String(companyId));
@@ -311,7 +312,7 @@ export default function BizSalesPage({ profile, setPage }) {
 
   const inputStyle = {height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none', width:'100%'};
   const labelStyle = {display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4};
-  const GRID_COLS = 'minmax(220px, 1fr) 80px 130px 130px 80px 36px';
+  const GRID_COLS = 'minmax(220px, 1fr) 70px 180px 110px 80px 36px';
 
   return (
     <div>
@@ -451,11 +452,29 @@ export default function BizSalesPage({ profile, setPage }) {
                   <input type="number" min={1} value={l.quantity}
                     onChange={e => updateLine(l.id,'quantity',e.target.value)}
                     style={{...inputStyle, height:38, textAlign:'center'}} required />
-                  {/* 공급가 */}
-                  <input type="number" min={0} value={l.supplyPrice}
-                    onChange={e => updateLine(l.id,'supplyPrice',e.target.value)}
-                    style={{...inputStyle, height:38, textAlign:'right', fontWeight:700, color:'var(--accent)'}}
-                    placeholder="0" required />
+                  {/* 공급가 + 증정 토글 */}
+                  <div style={{ display:'flex', gap:4 }}>
+                    <input type="number" min={0} value={l.isGift ? 0 : l.supplyPrice}
+                      onChange={e => updateLine(l.id,'supplyPrice',e.target.value)}
+                      disabled={l.isGift}
+                      style={{...inputStyle, height:38, flex:1, textAlign:'right', fontWeight:700,
+                        color: l.isGift ? 'var(--text3)' : 'var(--accent)',
+                        background: l.isGift ? '#f5f5f5' : '#fff'}}
+                      placeholder="0" />
+                    <button type="button"
+                      onClick={() => {
+                        const turningOn = !l.isGift;
+                        updateLine(l.id, 'isGift', turningOn);
+                        if (turningOn) updateLine(l.id, 'supplyPrice', '0');
+                      }}
+                      title={l.isGift ? '증정 해제' : '증정으로 처리 (공급가 0원)'}
+                      style={{ height:38, padding:'0 8px', border:'1px solid', borderRadius:'var(--radius)', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
+                        borderColor: l.isGift ? '#6a1b9a' : 'var(--border)',
+                        background:  l.isGift ? '#f3e5f5' : '#fff',
+                        color:       l.isGift ? '#6a1b9a' : 'var(--text2)'}}>
+                      🎁 증정
+                    </button>
+                  </div>
                   {/* 합계 */}
                   <div style={{textAlign:'right', fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--accent)'}}>
                     {lineSubtotal > 0 ? lineSubtotal.toLocaleString()+'원' : '-'}
