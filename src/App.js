@@ -608,6 +608,13 @@ export default function App() {
       .then(({ data }) => { setProfile(data); setAL(false); });
   }, [session, joinManagerId]);
 
+  // SCM 담당자는 본사 택배요청 메뉴만 접근 가능 — 다른 페이지로 가지 못하도록 자동 리다이렉트
+  useEffect(() => {
+    if (profile?.role === 'scm' && page !== 'hq_delivery_request' && page !== 'help') {
+      setPage('hq_delivery_request');
+    }
+  }, [profile?.role, page]);
+
   // 글로벌 바코드 스캐너 가드
   // - 판매입력/입고확인 외 페이지에서 스캔 감지 시: 입력 차단(또는 정리) + 안내 토스트
   // - 판매입력/입고확인 페이지에서는 자체 리스너가 처리하므로 여기서는 패스
@@ -669,13 +676,6 @@ export default function App() {
   const isManager  = profile?.job_title === '매니저';
   const isScm      = profile?.role === 'scm';
   const canSeeMain = isAdmin || isHQ;
-
-  // SCM 담당자는 본사 택배요청 메뉴만 접근 가능 — 다른 페이지로 가지 못하도록 자동 리다이렉트
-  useEffect(() => {
-    if (isScm && page !== 'hq_delivery_request' && page !== 'help') {
-      setPage('hq_delivery_request');
-    }
-  }, [isScm, page]);
 
   const PAGE_TITLES = {
     help:           '사용 안내',
