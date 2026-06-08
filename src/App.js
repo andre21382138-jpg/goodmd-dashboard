@@ -772,7 +772,7 @@ export default function App() {
             {page === 'my_attendance'  && (isManager || isAdmin || isHQ) && <MyAttendancePage profile={profile}/>}
             {page === 'leave_plan'     && (isManager || isAdmin || isHQ) && <LeavePlanPage profile={profile}/>}
             {page === 'store_closure'  && (isManager || isAdmin || isHQ) && <StoreClosurePage profile={profile}/>}
-            {page === 'attendance_mgmt'&& canSeeMain && <AttendanceMgmtPage/>}
+            {page === 'attendance_mgmt'&& canSeeMain && <AttendanceMgmtPage profile={profile}/>}
             {page === 'clock_inout'    && (isManager || isAdmin || isHQ) && <ClockInOutPage profile={profile}/>}
             {page === 'upload'         && canSeeMain && <UploadPage profile={profile} activeUploadId={activeUploadId} setActiveUploadId={setActiveUploadId} parsed={parsed} setParsed={setParsed} filename={filename} setFilename={setFilename}/>}
             {page === 'upload_history' && canSeeMain && <UploadHistoryPage profile={profile} activeUploadId={activeUploadId} setActiveUploadId={setActiveUploadId} setPage={setPage} setParsed={setParsed} setFilename={setFilename}/>}

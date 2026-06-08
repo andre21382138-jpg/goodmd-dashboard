@@ -17,7 +17,89 @@ const minus = (n) => {
 };
 const DOW = ['일','월','화','수','목','금','토'];
 
-export default function AttendanceMgmtPage() {
+export default function AttendanceMgmtPage({ profile }) {
+  const canEdit = !!profile && (profile.role === 'admin' || profile.job_title === '담당자');
+  const [editCell, setEditCell] = useState(null); // { row, ds, attId, clock_in, clock_out }
+  const [editIn,   setEditIn]   = useState('');
+  const [editOut,  setEditOut]  = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  const openEdit = (row, ds) => {
+    if (!canEdit) return;
+    const c = row.cells[ds];
+    setEditCell({ row, ds, attId: c.attId });
+    // ISO → 'HH:MM' (KST 환경에 맞춰 local)
+    const toHm = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    };
+    setEditIn(toHm(c.clock_in));
+    setEditOut(toHm(c.clock_out));
+  };
+  const closeEdit = () => { setEditCell(null); setEditIn(''); setEditOut(''); };
+
+  const hmToIso = (date, hm) => {
+    if (!hm || !/^\d{2}:\d{2}$/.test(hm)) return null;
+    const [h, m] = hm.split(':').map(Number);
+    const d = new Date(date + 'T00:00:00');
+    d.setHours(h, m, 0, 0);
+    return d.toISOString();
+  };
+
+  const saveEdit = async () => {
+    if (!editCell) return;
+    const { row, ds, attId } = editCell;
+    const inIso  = hmToIso(ds, editIn);
+    const outIso = hmToIso(ds, editOut);
+    setEditSaving(true);
+    let error;
+    if (attId) {
+      // 기존 row 업데이트
+      ({ error } = await supabase.from('attendance').update({
+        clock_in:  inIso,
+        clock_out: outIso,
+      }).eq('id', attId));
+    } else if (inIso || outIso) {
+      // 신규 row 삽입 (해당 매장·매니저·날짜로)
+      // store_account_id 가져오기 — storeMembers에서 매칭
+      const sm = storeMembers.find(m =>
+        m.name === row.name && m.store_name === row.store_name && m.branch_name === row.branch_name);
+      const managerId = sm?.store_account_id || null;
+      if (!managerId) {
+        toast('이 행은 매장 등록 정보가 없어 신규 추가가 불가합니다 (기타근무자 등)', 'err');
+        setEditSaving(false);
+        return;
+      }
+      ({ error } = await supabase.from('attendance').insert({
+        manager_id:   managerId,
+        manager_name: row.name,
+        store_name:   row.store_name,
+        branch_name:  row.branch_name,
+        work_date:    ds,
+        clock_in:     inIso,
+        clock_out:    outIso,
+      }));
+    }
+    setEditSaving(false);
+    if (error) { toast(error.message, 'err'); return; }
+    toast('수정 완료', 'ok');
+    closeEdit();
+    fetchAll();
+  };
+
+  const deleteAtt = async () => {
+    if (!editCell?.attId) return;
+    if (!window.confirm(`${editCell.row.display_name} - ${editCell.ds} 출퇴근 기록을 삭제하시겠습니까?`)) return;
+    setEditSaving(true);
+    const { error } = await supabase.from('attendance').delete().eq('id', editCell.attId);
+    setEditSaving(false);
+    if (error) { toast(error.message, 'err'); return; }
+    toast('삭제 완료', 'inf');
+    closeEdit();
+    fetchAll();
+  };
+
   const [tab,         setTab]         = useState('attendance');
   const [records,     setRecords]     = useState([]);
   const [storeMembers,setStoreMembers]= useState([]);
@@ -392,6 +474,50 @@ export default function AttendanceMgmtPage() {
 
   return (
     <div>
+      {/* 출퇴근 시각 편집 모달 (본사 담당자·어드민만) */}
+      {editCell && (
+        <div style={{position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => !editSaving && closeEdit()}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:380, maxWidth:'92vw', boxShadow:'0 8px 40px rgba(0,0,0,0.22)'}}>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>출퇴근 시각 수정</div>
+            <div style={{fontSize:12, color:'var(--text3)', marginBottom:16}}>
+              {editCell.row.store_name} · {editCell.row.branch_name} · <strong>{editCell.row.display_name}</strong> · {editCell.ds}
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:18}}>
+              <div>
+                <label style={{display:'block', fontSize:11, color:'var(--text2)', fontWeight:600, marginBottom:4}}>출근 시각</label>
+                <input type="time" value={editIn} onChange={e => setEditIn(e.target.value)}
+                  style={{width:'100%', height:38, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, outline:'none'}}/>
+              </div>
+              <div>
+                <label style={{display:'block', fontSize:11, color:'var(--text2)', fontWeight:600, marginBottom:4}}>퇴근 시각</label>
+                <input type="time" value={editOut} onChange={e => setEditOut(e.target.value)}
+                  style={{width:'100%', height:38, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, outline:'none'}}/>
+              </div>
+            </div>
+            <div style={{fontSize:11, color:'var(--text3)', marginBottom:14, lineHeight:1.5}}>
+              💡 빈 칸으로 두면 시각이 비워집니다. 둘 다 비우려면 [삭제] 사용 권장.
+            </div>
+            <div style={{display:'flex', gap:8}}>
+              {editCell.attId && (
+                <button type="button" onClick={deleteAtt} disabled={editSaving}
+                  style={{flex:1, height:40, border:'1px solid var(--danger)', background:'#fff', color:'var(--danger)', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer'}}>
+                  🗑️ 삭제
+                </button>
+              )}
+              <button type="button" onClick={closeEdit} disabled={editSaving}
+                style={{flex:1, height:40, border:'1px solid var(--border)', background:'#fff', color:'var(--text2)', borderRadius:'var(--radius)', fontSize:13, fontWeight:600, cursor:'pointer'}}>
+                취소
+              </button>
+              <button type="button" onClick={saveEdit} disabled={editSaving}
+                style={{flex:2, height:40, border:'none', background:'var(--accent)', color:'#fff', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, cursor:'pointer'}}>
+                {editSaving ? <span className="spinner"/> : '✅ 저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="tabs">
         <button className={`tab ${tab==='attendance'?'on':''}`} onClick={() => setTab('attendance')}>출퇴근 현황</button>
         <button className={`tab ${tab==='history'?'on':''}`} onClick={() => setTab('history')}>근무자별 이력</button>
@@ -476,9 +602,14 @@ export default function AttendanceMgmtPage() {
                         </td>
                         {dateList.map(ds => {
                           const c = r.cells[ds];
+                          const cellClickable = canEdit && !r.isExtra;
+                          const onClickCell = cellClickable ? () => openEdit(r, ds) : undefined;
+                          const cellStyle = cellClickable ? { cursor:'pointer' } : {};
                           if (c.clock_in || c.clock_out) {
                             return (
-                              <td key={ds} style={{textAlign:'center', fontFamily:'var(--mono)', fontSize:11, lineHeight:1.5}}>
+                              <td key={ds} onClick={onClickCell}
+                                title={cellClickable ? '클릭해 수정' : ''}
+                                style={{textAlign:'center', fontFamily:'var(--mono)', fontSize:11, lineHeight:1.5, ...cellStyle}}>
                                 <div style={{color:'var(--success)', fontWeight:700}}>{c.clock_in ? fmt(c.clock_in) : '-'}</div>
                                 <div style={{color:'var(--accent)', fontWeight:600}}>{c.clock_out ? fmt(c.clock_out) : '-'}</div>
                               </td>
@@ -491,7 +622,9 @@ export default function AttendanceMgmtPage() {
                             ? { bg:'#e3f2fd', fg:'#1565C0', bd:'#90caf9' }
                             : { bg:'#ffebee', fg:'var(--danger)', bd:'#f48fb1' };
                           return (
-                            <td key={ds} style={{textAlign:'center', background: c.isClosed?'#faf5fc':c.isOnLeave?'#f7fbfe':'#fafafa'}}>
+                            <td key={ds} onClick={onClickCell}
+                              title={cellClickable ? '클릭해 수정' : ''}
+                              style={{textAlign:'center', background: c.isClosed?'#faf5fc':c.isOnLeave?'#f7fbfe':'#fafafa', ...cellStyle}}>
                               <span style={{padding:'2px 8px', background:colors.bg, color:colors.fg, border:`1px solid ${colors.bd}`, borderRadius:3, fontSize:11, fontWeight:700, whiteSpace:'nowrap'}}>
                                 {label}
                               </span>
