@@ -10,6 +10,11 @@ const firstOfMonthStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
 };
+const minus = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 const DOW = ['일','월','화','수','목','금','토'];
 
 export default function AttendanceMgmtPage() {
@@ -20,7 +25,8 @@ export default function AttendanceMgmtPage() {
   const [loading,     setLoading]     = useState(true);
   const [fStore,      setFStore]      = useState('');
   const [fManager,    setFManager]    = useState('');
-  const [fDate,       setFDate]       = useState(todayStr());
+  const [fFrom,       setFFrom]       = useState(minus(4));
+  const [fTo,         setFTo]         = useState(todayStr());
 
   // 근무자별 이력 탭 (history)
   const [hStore,      setHStore]      = useState('');
@@ -36,8 +42,8 @@ export default function AttendanceMgmtPage() {
     setLoading(true);
     const [{ data: att }, { data: lp }, { data: sm }, { data: cl }] = await Promise.all([
       supabase.from('attendance').select('*')
-        .gte('work_date', fDate).lte('work_date', fDate)
-        .order('store_name', { ascending: true }),
+        .gte('work_date', fFrom).lte('work_date', fTo)
+        .order('work_date', { ascending: true }),
       supabase.from('leave_plans').select('*')
         .order('created_at', { ascending: false }),
       supabase.from('store_members')
@@ -58,7 +64,7 @@ export default function AttendanceMgmtPage() {
       branch_name: m.store?.branch || '',
     })));
     setLoading(false);
-  }, [fDate]);
+  }, [fFrom, fTo]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -86,30 +92,65 @@ export default function AttendanceMgmtPage() {
     return [...new Set(ms)].sort();
   }, [storeMembers, fStore]);
 
-  // 매장 매니저별 × 선택 날짜 → row 만들기.
-  // attendance 기록과 매칭되면 시각 표시, 안 되면 [미체크].
-  // store_members에 없는 attendance(기타근무자)는 별도 행으로 추가.
-  const displayRows = useMemo(() => {
-    const lookup = new Map();
-    for (const r of records) {
-      lookup.set(`${r.store_name}|${r.branch_name}|${r.manager_name}`, r);
+  // 조회 기간의 날짜 리스트 (헤더 컬럼용)
+  const dateList = useMemo(() => {
+    const arr = [];
+    if (!fFrom || !fTo) return arr;
+    const start = new Date(fFrom);
+    const end   = new Date(fTo);
+    if (isNaN(start) || isNaN(end) || start > end) return arr;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+      arr.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
     }
-    // 매장별 휴점일 lookup: 'store|branch' → Set<date>
+    return arr;
+  }, [fFrom, fTo]);
+
+  // 매장 매니저별 × 일자별 셀 구성 (피벗).
+  // 각 셀: { clock_in, clock_out, isClosed, isOnLeave }
+  const displayRows = useMemo(() => {
+    // attendance lookup
+    const attLookup = new Map(); // 'store|branch|name|date' → rec
+    for (const r of records) {
+      attLookup.set(`${r.store_name}|${r.branch_name}|${r.manager_name}|${r.work_date}`, r);
+    }
+    // 매장별 휴점일 set
     const closureMap = new Map();
     for (const c of closures) {
       const key = `${c.store_name}|${c.branch_name}`;
       if (!closureMap.has(key)) closureMap.set(key, new Set());
       for (const d of (c.dates || [])) closureMap.get(key).add(d);
     }
-    const isClosed = (store, branch, date) =>
-      closureMap.get(`${store}|${branch}`)?.has(date) || false;
+    // 매니저별 휴무신청 set (manager_id + manager_name 기준)
+    const leaveMap = new Map();
+    for (const p of plans) {
+      const key = `${p.manager_id}|${p.manager_name}`;
+      if (!leaveMap.has(key)) leaveMap.set(key, new Set());
+      for (const d of (p.dates || [])) leaveMap.get(key).add(d);
+    }
+
+    const buildCells = (storeName, branchName, accountId, name) => {
+      const out = {};
+      for (const ds of dateList) {
+        const rec = attLookup.get(`${storeName}|${branchName}|${name}|${ds}`);
+        out[ds] = {
+          clock_in:  rec?.clock_in  || null,
+          clock_out: rec?.clock_out || null,
+          attId:     rec?.id        || null,
+          isClosed:  closureMap.get(`${storeName}|${branchName}`)?.has(ds) || false,
+          isOnLeave: leaveMap.get(`${accountId}|${name}`)?.has(ds) || false,
+        };
+      }
+      return out;
+    };
 
     const usedRecordIds = new Set();
     const rows = storeMembers
       .filter(m => m.store_name && m.branch_name)
       .map(m => {
-        const rec = lookup.get(`${m.store_name}|${m.branch_name}|${m.name}`);
-        if (rec) usedRecordIds.add(rec.id);
+        const cells = buildCells(m.store_name, m.branch_name, m.store_account_id, m.name);
+        for (const ds of dateList) {
+          if (cells[ds].attId) usedRecordIds.add(cells[ds].attId);
+        }
         return {
           key: `sm-${m.sm_id}`,
           name: m.name,
@@ -117,30 +158,41 @@ export default function AttendanceMgmtPage() {
           job_title: m.job_title,
           store_name: m.store_name,
           branch_name: m.branch_name,
-          work_date: fDate,
-          clock_in: rec?.clock_in || null,
-          clock_out: rec?.clock_out || null,
-          isClosed: isClosed(m.store_name, m.branch_name, fDate),
+          cells,
           isExtra: false,
         };
       });
-    const extras = records
-      .filter(r => !usedRecordIds.has(r.id))
-      .map(r => ({
-        key: `extra-${r.id}`,
-        name: r.manager_name,
-        display_name: r.manager_name,
-        job_title: '기타근무자',
-        store_name: r.store_name || '',
-        branch_name: r.branch_name || '',
-        work_date: r.work_date,
-        clock_in: r.clock_in,
-        clock_out: r.clock_out,
-        isClosed: isClosed(r.store_name, r.branch_name, r.work_date),
-        isExtra: true,
-      }));
-    return [...rows, ...extras];
-  }, [records, storeMembers, closures, fDate]);
+
+    // 기타근무자 (storeMembers에 없는 attendance) — name 기준 그룹화
+    const extraGroups = new Map();
+    for (const r of records) {
+      if (usedRecordIds.has(r.id)) continue;
+      const gk = `${r.store_name}|${r.branch_name}|${r.manager_name}`;
+      if (!extraGroups.has(gk)) {
+        const cells = {};
+        for (const ds of dateList) {
+          cells[ds] = { clock_in:null, clock_out:null, attId:null, isClosed:false, isOnLeave:false };
+        }
+        extraGroups.set(gk, {
+          key: `extra-${gk}`,
+          name: r.manager_name,
+          display_name: r.manager_name,
+          job_title: '기타근무자',
+          store_name: r.store_name || '',
+          branch_name: r.branch_name || '',
+          cells,
+          isExtra: true,
+        });
+      }
+      const g = extraGroups.get(gk);
+      if (g.cells[r.work_date]) {
+        g.cells[r.work_date].clock_in = r.clock_in;
+        g.cells[r.work_date].clock_out = r.clock_out;
+        g.cells[r.work_date].attId = r.id;
+      }
+    }
+    return [...rows, ...extraGroups.values()];
+  }, [records, storeMembers, plans, closures, dateList]);
 
   const filteredAtt = useMemo(() => {
     let r = displayRows;
@@ -150,12 +202,9 @@ export default function AttendanceMgmtPage() {
   }, [displayRows, fStore, fManager]);
 
   const stat = useMemo(() => {
-    const total = filteredAtt.length;
-    const checkedIn = filteredAtt.filter(r => !!r.clock_in).length;
-    const closed = filteredAtt.filter(r => r.isClosed && !r.clock_in).length;
-    const missing = total - checkedIn - closed;
-    return { total, checkedIn, closed, missing };
-  }, [filteredAtt]);
+    const memberCount = filteredAtt.length;
+    return { memberCount, days: dateList.length };
+  }, [filteredAtt, dateList]);
 
   const newPlanCount = plans.filter(p => p.status === 'pending').length;
 
@@ -234,16 +283,22 @@ export default function AttendanceMgmtPage() {
         cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFEEEEEE'} };
         cell.alignment = { horizontal:'center', vertical:'middle' };
       });
+      // 각 근무자 × 일자 → 한 행씩
       for (const r of filteredAtt) {
-        ws.addRow([
-          r.work_date,
-          r.store_name || '-',
-          r.branch_name || '-',
-          r.job_title || (r.isExtra ? '기타근무자' : '-'),
-          r.display_name || r.name || '-',
-          r.clock_in ? fmt(r.clock_in) : (r.isClosed ? '휴점' : '미체크'),
-          r.clock_out ? fmt(r.clock_out) : (r.isClosed ? '휴점' : '미체크'),
-        ]);
+        for (const ds of dateList) {
+          const c = r.cells[ds];
+          const inTxt  = c.clock_in  ? fmt(c.clock_in)  : (c.isClosed ? '휴점' : c.isOnLeave ? '휴무' : '미체크');
+          const outTxt = c.clock_out ? fmt(c.clock_out) : (c.isClosed ? '휴점' : c.isOnLeave ? '휴무' : '미체크');
+          ws.addRow([
+            ds,
+            r.store_name || '-',
+            r.branch_name || '-',
+            r.job_title || (r.isExtra ? '기타근무자' : '-'),
+            r.display_name || r.name || '-',
+            inTxt,
+            outTxt,
+          ]);
+        }
       }
       ws.columns.forEach(col => {
         let max = 10;
@@ -254,8 +309,8 @@ export default function AttendanceMgmtPage() {
         col.width = max;
       });
       const buf = await wb.xlsx.writeBuffer();
-      dlBlob(buf, `출퇴근현황_${fDate}.xlsx`);
-      toast(`엑셀 다운로드 완료 (${filteredAtt.length}명)`, 'ok');
+      dlBlob(buf, `출퇴근현황_${fFrom}_${fTo}.xlsx`);
+      toast(`엑셀 다운로드 완료 (${filteredAtt.length}명 × ${dateList.length}일)`, 'ok');
     } catch (err) {
       toast('다운로드 실패: ' + (err.message || err), 'err');
     }
@@ -285,9 +340,13 @@ export default function AttendanceMgmtPage() {
       {tab === 'attendance' && (
         <div className="card" style={{padding:'16px 20px'}}>
           <div className="fbar" style={{flexWrap:'wrap'}}>
-            <input type="date" className="fsel" value={fDate}
-              onChange={e => setFDate(e.target.value || todayStr())}/>
-            <button className="btn btn-s" onClick={() => setFDate(todayStr())}>오늘</button>
+            <input type="date" className="fsel" value={fFrom}
+              onChange={e => setFFrom(e.target.value || todayStr())}/>
+            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+            <input type="date" className="fsel" value={fTo}
+              onChange={e => setFTo(e.target.value || todayStr())}/>
+            <button className="btn btn-s" onClick={() => { setFFrom(todayStr()); setFTo(todayStr()); }}>오늘</button>
+            <button className="btn btn-s" onClick={() => { setFFrom(minus(4)); setFTo(todayStr()); }}>최근 5일</button>
             <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFManager(''); }}>
               <option value="">전체 점포</option>{stores.map(s => <option key={s}>{s}</option>)}
             </select>
@@ -295,7 +354,7 @@ export default function AttendanceMgmtPage() {
               <option value="">전체 근무자</option>{managers.map(m => <option key={m}>{m}</option>)}
             </select>
             <button type="button" onClick={handleDownloadAttendance}
-              title={`${fDate} 출퇴근현황을 엑셀로 다운로드`}
+              title={`${fFrom} ~ ${fTo} 출퇴근현황을 엑셀로 다운로드`}
               style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
               📥 엑셀
             </button>
@@ -303,41 +362,66 @@ export default function AttendanceMgmtPage() {
               <button className="btn-ghost" onClick={() => { setFStore(''); setFManager(''); }}>✕ 초기화</button>
             )}
             <div className="fbar-right" style={{display:'flex', alignItems:'center', gap:14}}>
-              <span className="fresult">근무자 <b>{stat.total}</b>명</span>
-              <span style={{fontSize:12, color:'var(--success)', fontWeight:700}}>출근 {stat.checkedIn}</span>
-              {stat.closed > 0 && <span style={{fontSize:12, color:'#6a1b9a', fontWeight:700}}>휴점 {stat.closed}</span>}
-              <span style={{fontSize:12, color:'var(--danger)', fontWeight:700}}>미체크 {stat.missing}</span>
+              <span className="fresult">근무자 <b>{stat.memberCount}</b>명 · 기간 <b>{stat.days}</b>일</span>
             </div>
           </div>
 
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>날짜</th><th>근무자</th><th>점포</th><th>지점</th><th>출근</th><th>퇴근</th><th>근무시간</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>점포</th>
+                    <th>지점</th>
+                    <th>근무자</th>
+                    {dateList.map(ds => {
+                      const dow = new Date(ds).getDay();
+                      return (
+                        <th key={ds} style={{textAlign:'center', minWidth:90}}>
+                          <div style={{fontSize:11, fontWeight:700}}>{ds.slice(5)}</div>
+                          <div style={{fontSize:10, fontWeight:600, color: dow===0?'var(--danger)':dow===6?'var(--accent2)':'var(--text3)'}}>{DOW[dow]}</div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
                 <tbody>
                   {filteredAtt.length === 0
-                    ? <tr><td colSpan={7} className="empty">등록된 근무자가 없습니다</td></tr>
+                    ? <tr><td colSpan={3 + dateList.length} className="empty">등록된 근무자가 없습니다</td></tr>
                     : filteredAtt.map(r => (
-                      <tr key={r.key} style={r.isClosed ? {background:'#f3e5f5'} : (!r.clock_in && !r.isExtra ? {background:'#fafafa'} : {})}>
-                        <td className="mono">{r.work_date}</td>
+                      <tr key={r.key}>
+                        <td><span className="badge badge-dept">{r.store_name || '-'}</span></td>
+                        <td><span className="badge badge-store">{r.branch_name || '-'}</span></td>
                         <td>
                           <strong>{r.display_name}</strong>
                           {r.job_title && r.job_title !== '매니저' && (
                             <span style={{fontSize:10, color:'var(--text3)', marginLeft:6}}>{r.job_title}</span>
                           )}
                         </td>
-                        <td><span className="badge badge-dept">{r.store_name || '-'}</span></td>
-                        <td><span className="badge badge-store">{r.branch_name || '-'}</span></td>
-                        <td>
-                          {r.clock_in
-                            ? <span style={{fontFamily:'var(--mono)', color:'var(--success)', fontWeight:600}}>{fmt(r.clock_in)}</span>
-                            : r.isClosed
-                              ? <span style={{padding:'2px 8px', background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', borderRadius:3, fontSize:11, fontWeight:700}}>🏪 휴점</span>
-                              : <span style={{padding:'2px 8px', background:'#ffebee', color:'var(--danger)', border:'1px solid #f48fb1', borderRadius:3, fontSize:11, fontWeight:700}}>미체크</span>
+                        {dateList.map(ds => {
+                          const c = r.cells[ds];
+                          if (c.clock_in || c.clock_out) {
+                            return (
+                              <td key={ds} style={{textAlign:'center', fontFamily:'var(--mono)', fontSize:11, lineHeight:1.5}}>
+                                <div style={{color:'var(--success)', fontWeight:700}}>{c.clock_in ? fmt(c.clock_in) : '-'}</div>
+                                <div style={{color:'var(--accent)', fontWeight:600}}>{c.clock_out ? fmt(c.clock_out) : '-'}</div>
+                              </td>
+                            );
                           }
-                        </td>
-                        <td style={{fontFamily:'var(--mono)', color:'var(--accent)', fontWeight:600}}>{fmt(r.clock_out)}</td>
-                        <td className="mono" style={{color:'var(--text2)'}}>{duration(r.clock_in, r.clock_out)}</td>
+                          const label = c.isClosed ? '🏪 휴점' : c.isOnLeave ? '📅 휴무' : '미체크';
+                          const colors = c.isClosed
+                            ? { bg:'#f3e5f5', fg:'#6a1b9a', bd:'#ce93d8' }
+                            : c.isOnLeave
+                            ? { bg:'#e3f2fd', fg:'#1565C0', bd:'#90caf9' }
+                            : { bg:'#ffebee', fg:'var(--danger)', bd:'#f48fb1' };
+                          return (
+                            <td key={ds} style={{textAlign:'center', background: c.isClosed?'#faf5fc':c.isOnLeave?'#f7fbfe':'#fafafa'}}>
+                              <span style={{padding:'2px 8px', background:colors.bg, color:colors.fg, border:`1px solid ${colors.bd}`, borderRadius:3, fontSize:11, fontWeight:700, whiteSpace:'nowrap'}}>
+                                {label}
+                              </span>
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))
                   }
