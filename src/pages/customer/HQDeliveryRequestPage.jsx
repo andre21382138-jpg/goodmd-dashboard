@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, dlBlob } from '../../lib/utils';
 import { ORDER_CONSTANTS, STORE_MAP, STORE_NAMES } from '../../lib/constants';
+import HQDeliveryBizView from './HQDeliveryBizView';
 
 // 31-컬럼 발주 양식 헤더 (sample: 매장발주_26.05.21_전송건.xls)
 const DELIVERY_HEADERS = [
@@ -116,6 +117,7 @@ function groupSales(rows) {
 }
 
 export default function HQDeliveryRequestPage({ profile }) {
+  const [mainTab, setMainTab] = useState('store'); // 'store' | 'biz_courier' | 'biz_truck'
   const [tab, setTab] = useState('pending');
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -137,6 +139,7 @@ export default function HQDeliveryRequestPage({ profile }) {
   const branchOptions = fStore ? (STORE_MAP[fStore] || []) : [];
 
   const fetchData = useCallback(async () => {
+    if (mainTab !== 'store') return; // 특판 탭은 별도 컴포넌트가 처리
     setLoading(true);
     let q = supabase.from('sales')
       .select(`id, sold_at, store_name, branch_name, quantity, price,
@@ -159,7 +162,7 @@ export default function HQDeliveryRequestPage({ profile }) {
     if (error) toast(error.message, 'err');
     else setGroups(groupSales(data));
     setLoading(false);
-  }, [tab, fFrom, fTo, fStore, fBranch]);
+  }, [mainTab, tab, fFrom, fTo, fStore, fBranch]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -250,6 +253,31 @@ export default function HQDeliveryRequestPage({ profile }) {
 
   return (
     <div>
+      {/* 메인 탭: 매장 본사요청 / 특판 택배 / 특판 용차 */}
+      <div style={{display:'flex', gap:8, marginBottom:14, borderBottom:'2px solid var(--border)'}}>
+        {[
+          { key:'store',       label:'📦 매장 본사요청' },
+          { key:'biz_courier', label:'🏭 특판 택배' },
+          { key:'biz_truck',   label:'🚚 특판 용차' },
+        ].map(t => (
+          <button key={t.key} type="button" onClick={() => setMainTab(t.key)}
+            style={{
+              padding:'10px 18px', border:'none', background:'transparent',
+              borderBottom: mainTab === t.key ? '3px solid var(--accent)' : '3px solid transparent',
+              marginBottom:-2, fontSize:14, fontWeight:700, cursor:'pointer',
+              color: mainTab === t.key ? 'var(--accent)' : 'var(--text2)',
+            }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 특판 탭은 별도 컴포넌트 */}
+      {mainTab === 'biz_courier' && <HQDeliveryBizView kind="courier" profile={profile}/>}
+      {mainTab === 'biz_truck'   && <HQDeliveryBizView kind="truck"   profile={profile}/>}
+
+      {/* 매장 본사요청 — 기존 sub 탭 + 표 */}
+      {mainTab === 'store' && (<>
       <div className="tabs">
         <button className={`tab ${tab==='pending'?'on':''}`} onClick={() => setTab('pending')}>
           📦 발송 대기
@@ -419,6 +447,7 @@ export default function HQDeliveryRequestPage({ profile }) {
           </div>
         )}
       </div>
+      </>)}
     </div>
   );
 }
