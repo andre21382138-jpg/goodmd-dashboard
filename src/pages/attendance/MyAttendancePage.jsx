@@ -87,10 +87,6 @@ export default function MyAttendancePage({ profile }) {
               <div style={{fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:2}}>출근일수</div>
               <div style={{fontSize:20, fontWeight:700, color:'var(--success)', fontFamily:'var(--mono)'}}>{totalDays}일</div>
             </div>
-            <div style={{textAlign:'center'}}>
-              <div style={{fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:2}}>총 근무시간</div>
-              <div style={{fontSize:20, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{Math.floor(totalMins/60)}h {totalMins%60}m</div>
-            </div>
           </div>
         </div>
       </div>
@@ -100,11 +96,11 @@ export default function MyAttendancePage({ profile }) {
           <div className="twrap">
             <table>
               <thead>
-                <tr><th>날짜</th><th>요일</th><th>출근</th><th>퇴근</th><th>근무시간</th></tr>
+                <tr><th>날짜</th><th>요일</th><th>출근</th><th>퇴근</th></tr>
               </thead>
               <tbody>
                 {records.length === 0
-                  ? <tr><td colSpan={5} className="empty">{!selMember ? '근무자를 선택해주세요' : `${selMonth} 출퇴근 기록이 없습니다`}</td></tr>
+                  ? <tr><td colSpan={4} className="empty">{!selMember ? '근무자를 선택해주세요' : `${selMonth} 출퇴근 기록이 없습니다`}</td></tr>
                   : records.map(r => {
                     const day = dayName(r.work_date);
                     const isSun = day === '일';
@@ -113,9 +109,12 @@ export default function MyAttendancePage({ profile }) {
                       <tr key={r.id}>
                         <td className="mono">{r.work_date}</td>
                         <td style={{fontWeight:700, color: isSun?'var(--danger)':isSat?'var(--accent2)':'var(--text)'}}>{day}</td>
-                        <td style={{fontFamily:'var(--mono)', fontWeight:600, color:'var(--success)'}}>{fmt(r.clock_in)}</td>
-                        <td style={{fontFamily:'var(--mono)', fontWeight:600, color: r.clock_out?'var(--accent)':'var(--text3)'}}>{fmt(r.clock_out)}</td>
-                        <td className="mono" style={{color:'var(--text2)'}}>{duration(r.clock_in, r.clock_out)}</td>
+                        <td style={{fontWeight:700, color: r.clock_in  ? 'var(--success)' : 'var(--danger)'}}>
+                          {r.clock_in  ? '✓ 체크완료' : '미체크'}
+                        </td>
+                        <td style={{fontWeight:700, color: r.clock_out ? 'var(--accent)'  : 'var(--danger)'}}>
+                          {r.clock_out ? '✓ 체크완료' : '미체크'}
+                        </td>
                       </tr>
                     );
                   })
