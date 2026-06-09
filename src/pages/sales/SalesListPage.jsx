@@ -14,8 +14,8 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
       .order('id',      { ascending: true });
     if (fStore) q = q.eq('store_name', fStore);
     if (fBrand) q = q.eq('brand_id', fBrand);
-    if (fFrom)  q = q.gte('sold_at', `${fFrom}T00:00:00+09:00`);
-    if (fTo)    q = q.lte('sold_at', `${fTo}T23:59:59+09:00`);
+    if (fFrom)  q = q.gte('sold_at', fFrom);
+    if (fTo)    q = q.lte('sold_at', fTo);
     const { data, error } = await q.range(start, start + PAGE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -80,7 +80,8 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
     const cost = (s.product && s.product.cost != null) ? Number(s.product.cost) : null;
     const finalCost = cost != null ? cost * effQty : null;
     const ratio = (cost != null && finalAmount > 0) ? (finalCost / finalAmount) : null;
-    const dateObj = s.sold_at ? new Date(s.sold_at + 'T00:00:00') : null;
+    // KST 정오를 기준으로 Date 객체 생성 → 어느 timezone에서 표시해도 같은 일자 유지
+    const dateObj = s.sold_at ? new Date(`${String(s.sold_at).slice(0,10)}T12:00:00+09:00`) : null;
     const codeStr = s.product?.code || '';
     const codeValue = /^\d+$/.test(codeStr) ? Number(codeStr) : codeStr;
 
@@ -162,8 +163,8 @@ export default function SalesListPage({ setPage }) {
       .order('sold_at', { ascending: false });
     if (fStore) q = q.eq('store_name', fStore);
     if (fBrand) q = q.eq('brand_id', fBrand);
-    if (fFrom)  q = q.gte('sold_at', `${fFrom}T00:00:00+09:00`);
-    if (fTo)    q = q.lte('sold_at', `${fTo}T23:59:59+09:00`);
+    if (fFrom)  q = q.gte('sold_at', fFrom);
+    if (fTo)    q = q.lte('sold_at', fTo);
     const { data, error } = await q.limit(500);
     if (error) toast(error.message, 'err');
     else setSales(data || []);
