@@ -198,7 +198,8 @@ export default function SalesInputPage({ profile }) {
         const np = Number(updated.normalPrice) || 0;
         const dc = Number(updated.discount)    || 0;
         const pu = Number(updated.pointsUsed)  || 0;
-        updated.price = Math.max(0, np - dc - pu);
+        // pu(적립금)는 라인 전체 금액이므로 단가에서는 effQty로 나눠 차감
+        updated.price = Math.max(0, np - dc - pu / effQty);
       }
       if (field === 'price') {
         const effQty = Math.max(Number(updated.quantity) || 0, 1);
@@ -207,7 +208,15 @@ export default function SalesInputPage({ profile }) {
         const np = Number(updated.normalPrice) || 0;
         const sp = Number(updated.price) || 0;
         const pu = Number(updated.pointsUsed) || 0;
-        updated.discount = Math.max(0, np - sp - pu);
+        updated.discount = Math.max(0, np - sp - pu / effQty);
+      }
+      if (field === 'quantity') {
+        // 수량 변경 시 적립금 단가환산(pu/qty)이 달라지므로 price 재계산
+        const effQty = Math.max(Number(value) || 0, 1);
+        const np = Number(updated.normalPrice) || 0;
+        const dc = Number(updated.discount) || 0;
+        const pu = Number(updated.pointsUsed) || 0;
+        if (pu > 0) updated.price = Math.max(0, np - dc - pu / effQty);
       }
       return updated;
     }));
@@ -220,7 +229,9 @@ export default function SalesInputPage({ profile }) {
       const np = Number(l.normalPrice) || 0;
       const dc = Number(l.discount) || 0;
       const pu = Number(usedAmt) || 0;
-      const newPrice = Math.max(0, np - dc - pu);
+      const qty = Math.max(Number(l.quantity) || 0, 1);
+      // pu는 라인 전체 적립금이므로 단가에서는 qty로 나눠 차감
+      const newPrice = Math.max(0, np - dc - pu / qty);
       return { ...l, payment: pu > 0 ? '적립금사용' : l.payment, pointCustomer: pu > 0 ? customer : null, pointsUsed: pu, price: newPrice };
     }));
   };
@@ -268,7 +279,8 @@ export default function SalesInputPage({ profile }) {
     if (amt > (pmCustomer.total_points || 0)) { toast(`사용가능 적립금(${(pmCustomer.total_points||0).toLocaleString()}원)을 초과합니다`, 'err'); return; }
     const np = Number(line.normalPrice) || 0;
     const dc = Number(line.discount) || 0;
-    const maxAllowed = Math.max(0, np - dc);
+    const qty = Math.max(Number(line.quantity) || 0, 1);
+    const maxAllowed = Math.max(0, (np - dc) * qty);
     if (amt > maxAllowed) { toast(`상품가(${maxAllowed.toLocaleString()}원)를 초과할 수 없습니다`, 'err'); return; }
     applyPointsToLine(pointsModalLine, pmCustomer, amt);
     toast(`${pmCustomer.name} 적립금 ${amt.toLocaleString()}원 사용 적용`, 'ok');
@@ -802,7 +814,8 @@ export default function SalesInputPage({ profile }) {
       {pointsModalLine && (() => {
         const line = lines.find(l => l.id === pointsModalLine);
         const np = Number(line?.normalPrice)||0, dc = Number(line?.discount)||0;
-        const maxAllowed = Math.max(0, np - dc);
+        const qty = Math.max(Number(line?.quantity)||0, 1);
+        const maxAllowed = Math.max(0, (np - dc) * qty);
         return (
           <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}>
             <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
