@@ -130,7 +130,8 @@ export default function SalesListPage({ setPage }) {
   const [fKeyword,setFKeyword]= useState('');
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'product'
+  const [viewMode, setViewMode] = useState('store'); // 'store' | 'list' | 'product'
+  const [drillStore, setDrillStore] = useState(null); // { store_name, branch_name } 상세보기 대상
   const [exporting, setExporting] = useState(false);
   const [aggSortBy, setAggSortBy] = useState('amt_desc'); // 'amt_desc' | 'qty_desc' | 'count_desc' | 'name'
   const [drillProduct, setDrillProduct] = useState(null); // {key, product_id, product_name, brand_name, count, qty, amt} | null
@@ -265,6 +266,40 @@ export default function SalesListPage({ setPage }) {
   const aggTotalCount = useMemo(() => productAgg.reduce((s,r) => s + r.count, 0), [productAgg]);
   const aggTotalQty   = useMemo(() => productAgg.reduce((s,r) => s + r.qty,   0), [productAgg]);
   const aggTotalAmt   = useMemo(() => productAgg.reduce((s,r) => s + r.amt,   0), [productAgg]);
+
+  // 매장별 집계 (점포·지점 단위)
+  const storeAgg = useMemo(() => {
+    const map = new Map();
+    for (const s of filtered) {
+      const key = `${s.store_name || '-'}|${s.branch_name || '-'}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          store_name: s.store_name || '-',
+          branch_name: s.branch_name || '-',
+          count: 0,
+          qty: 0,
+          amt: 0,
+        });
+      }
+      const g = map.get(key);
+      g.count += 1;
+      g.qty   += effQty(s);
+      g.amt   += effAmt(s);
+    }
+    return [...map.values()].sort((a,b) => b.amt - a.amt);
+  }, [filtered]);
+  const storeTotalCount = useMemo(() => storeAgg.reduce((s,r) => s + r.count, 0), [storeAgg]);
+  const storeTotalQty   = useMemo(() => storeAgg.reduce((s,r) => s + r.qty,   0), [storeAgg]);
+  const storeTotalAmt   = useMemo(() => storeAgg.reduce((s,r) => s + r.amt,   0), [storeAgg]);
+  // 상세보기 모달 — 선택한 매장의 거래만 필터
+  const drillRows = useMemo(() => {
+    if (!drillStore) return [];
+    return filtered.filter(s =>
+      (s.store_name || '-') === drillStore.store_name &&
+      (s.branch_name || '-') === drillStore.branch_name
+    );
+  }, [filtered, drillStore]);
   const truncated     = sales.length === 500;
 
   const drillRows = useMemo(() => {
@@ -354,7 +389,17 @@ export default function SalesListPage({ setPage }) {
         </div>
       )}
       <div className="card">
-        <div style={{display:'flex', gap:8, marginBottom:12}}>
+        <div style={{display:'flex', gap:8, marginBottom:12, flexWrap:'wrap'}}>
+          <button
+            style={{
+              height:36, padding:'0 16px', border:'2px solid',
+              borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+              borderColor: viewMode==='store' ? 'var(--accent)' : 'var(--border)',
+              background:  viewMode==='store' ? '#fff3e0' : '#fff',
+              color:       viewMode==='store' ? 'var(--accent)' : 'var(--text2)',
+            }}
+            onClick={() => setViewMode('store')}
+          >🏬 매장별 집계</button>
           <button
             style={{
               height:36, padding:'0 16px', border:'2px solid',
@@ -376,7 +421,9 @@ export default function SalesListPage({ setPage }) {
             onClick={() => { setViewMode('product'); setAggSortBy('amt_desc'); }}
           >📊 상품별 집계</button>
         </div>
-        <div className="card-label">{viewMode === 'list' ? '판매내역 조회' : '상품별 집계'}</div>
+        <div className="card-label">
+          {viewMode === 'list' ? '판매내역 조회' : viewMode === 'product' ? '상품별 집계' : '매장별 집계'}
+        </div>
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
           <select className="fsel" value={fStore} onChange={e => setFStore(e.target.value)}>
             <option value="">전체 점포</option>
@@ -437,15 +484,55 @@ export default function SalesListPage({ setPage }) {
                   {exporting ? <span className="spinner"/> : '📥'} 엑셀 다운로드
                 </button>
               </>
-            ) : (
+            ) : viewMode === 'product' ? (
               <span className="fresult">
                 <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
+                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 500건 한도 도달 - 기간/필터를 좁혀주세요</span>}
+              </span>
+            ) : (
+              <span className="fresult">
+                <b>{storeAgg.length.toLocaleString()}</b>개 매장 · <b>{storeTotalCount.toLocaleString()}</b>건 · <b>{storeTotalQty.toLocaleString()}</b>개 · <b>{storeTotalAmt.toLocaleString()}</b>원
                 {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 500건 한도 도달 - 기간/필터를 좁혀주세요</span>}
               </span>
             )}
           </div>
         </div>
-        {loading ? <div className="empty"><span className="spinner"/></div> : viewMode === 'list' ? (
+        {loading ? <div className="empty"><span className="spinner"/></div> : viewMode === 'store' ? (
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>점포</th>
+                  <th>지점</th>
+                  <th className="r">판매건수</th>
+                  <th className="r">총 수량</th>
+                  <th className="r">총 매출액</th>
+                  <th style={{width:120, textAlign:'center'}}>상세</th>
+                </tr>
+              </thead>
+              <tbody>
+                {storeAgg.length === 0
+                  ? <tr><td colSpan={6} className="empty">조회된 매장이 없습니다</td></tr>
+                  : storeAgg.map(g => (
+                    <tr key={g.key}>
+                      <td><span className="badge badge-dept">{g.store_name}</span></td>
+                      <td><span className="badge badge-store">{g.branch_name}</span></td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{g.count.toLocaleString()}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)'}}>{g.qty.toLocaleString()}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{g.amt.toLocaleString()}원</td>
+                      <td style={{textAlign:'center'}}>
+                        <button className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}}
+                          onClick={() => setDrillStore({ store_name: g.store_name, branch_name: g.branch_name })}>
+                          상세보기
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        ) : viewMode === 'list' ? (
           <div className="twrap">
             <table>
               <thead>
@@ -453,7 +540,7 @@ export default function SalesListPage({ setPage }) {
                   <th>판매일</th><th>점포</th><th>지점</th><th>매니저</th>
                   <th>브랜드</th><th>상품명</th>
                   <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
-                  <th>결제</th><th>출고방식</th><th>메모</th>
+                  <th>결제</th><th style={{whiteSpace:'nowrap', minWidth:88}}>출고방식</th><th>메모</th>
                 </tr>
               </thead>
               <tbody>
@@ -479,11 +566,11 @@ export default function SalesListPage({ setPage }) {
                       <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
                       <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
                       <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
-                      <td style={strikeStyle}>
-                        {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
-                        {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
-                        {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
-                        {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                      <td style={{whiteSpace:'nowrap', padding:'4px 8px', ...strikeStyle}}>
+                        {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}
+                        {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(매장)</span>}
+                        {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
+                        {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
                       </td>
                       <td style={{fontSize:11,color:'var(--text2)', ...strikeStyle}}>{s.memo || '-'}</td>
                     </tr>
@@ -632,6 +719,65 @@ export default function SalesListPage({ setPage }) {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 매장별 상세보기 모달 */}
+      {drillStore && (
+        <div style={{position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setDrillStore(null)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'20px 24px', width:'90vw', maxWidth:1200, maxHeight:'85vh', overflow:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
+              <span className="badge badge-dept">{drillStore.store_name}</span>
+              <span className="badge badge-store">{drillStore.branch_name}</span>
+              <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>판매 상세 — {drillRows.length}건</span>
+              <button type="button" onClick={() => setDrillStore(null)}
+                style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+            </div>
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>판매일</th><th>매니저</th><th>브랜드</th><th>상품명</th>
+                    <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
+                    <th>결제</th><th style={{whiteSpace:'nowrap', minWidth:88}}>출고방식</th><th>메모</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drillRows.length === 0
+                    ? <tr><td colSpan={10} className="empty">판매 내역이 없습니다</td></tr>
+                    : drillRows.map(s => {
+                      const fully = isFullyReturned(s);
+                      const partial = isPartialReturn(s);
+                      const strikeStyle = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                      return (
+                      <tr key={s.id} style={fully ? { background:'#fafafa' } : {}}>
+                        <td className="mono" style={strikeStyle}>{s.sold_at}</td>
+                        <td style={{fontSize:12, ...strikeStyle}}>{s.seller?.name || '-'}</td>
+                        <td style={strikeStyle}>{s.brand?.name || '-'}</td>
+                        <td style={strikeStyle}>
+                          {s.product?.name || '-'}
+                          {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
+                          {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}개</span>}
+                        </td>
+                        <td className="r" style={strikeStyle}>{effQty(s)}</td>
+                        <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
+                        <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
+                        <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
+                        <td style={{whiteSpace:'nowrap', padding:'4px 8px', ...strikeStyle}}>
+                          {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}
+                          {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(매장)</span>}
+                          {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
+                          {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
+                        </td>
+                        <td style={{fontSize:11,color:'var(--text2)', ...strikeStyle}}>{s.memo || '-'}</td>
+                      </tr>
+                    )})
+                  }
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
