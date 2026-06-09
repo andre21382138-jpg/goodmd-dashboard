@@ -292,8 +292,8 @@ export default function SalesListPage({ setPage }) {
   const storeTotalCount = useMemo(() => storeAgg.reduce((s,r) => s + r.count, 0), [storeAgg]);
   const storeTotalQty   = useMemo(() => storeAgg.reduce((s,r) => s + r.qty,   0), [storeAgg]);
   const storeTotalAmt   = useMemo(() => storeAgg.reduce((s,r) => s + r.amt,   0), [storeAgg]);
-  // 상세보기 모달 — 선택한 매장의 거래만 필터
-  const drillRows = useMemo(() => {
+  // 매장별 상세보기 모달 — 선택한 매장의 거래만 필터
+  const drillStoreRows = useMemo(() => {
     if (!drillStore) return [];
     return filtered.filter(s =>
       (s.store_name || '-') === drillStore.store_name &&
@@ -732,7 +732,7 @@ export default function SalesListPage({ setPage }) {
             <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
               <span className="badge badge-dept">{drillStore.store_name}</span>
               <span className="badge badge-store">{drillStore.branch_name}</span>
-              <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>판매 상세 — {drillRows.length}건</span>
+              <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>판매 상세 — {drillStoreRows.length}건</span>
               <button type="button" onClick={() => setDrillStore(null)}
                 style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
             </div>
@@ -746,9 +746,9 @@ export default function SalesListPage({ setPage }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {drillRows.length === 0
+                  {drillStoreRows.length === 0
                     ? <tr><td colSpan={10} className="empty">판매 내역이 없습니다</td></tr>
-                    : drillRows.map(s => {
+                    : drillStoreRows.map(s => {
                       const fully = isFullyReturned(s);
                       const partial = isPartialReturn(s);
                       const strikeStyle = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
