@@ -615,6 +615,34 @@ export default function App() {
     }
   }, [profile?.role, page]);
 
+  // 새 배포 자동 감지 — 5분마다 /build.json 확인해 다르면 안내 후 자동 리로드
+  useEffect(() => {
+    let currentBuild = null;
+    let reloading = false;
+    const check = async () => {
+      try {
+        const res = await fetch('/build.json?t=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (currentBuild == null) {
+          currentBuild = data.build;
+        } else if (data.build && data.build !== currentBuild && !reloading) {
+          reloading = true;
+          toast('새 버전이 배포되어 화면을 새로고침합니다…', 'inf');
+          setTimeout(() => window.location.reload(), 2500);
+        }
+      } catch { /* 네트워크 오류는 무시 */ }
+    };
+    check();
+    const interval = setInterval(check, 5 * 60 * 1000);
+    const onFocus = () => check(); // 탭 활성화 시 즉시 확인
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
   // 글로벌 바코드 스캐너 가드
   // - 판매입력/입고확인 외 페이지에서 스캔 감지 시: 입력 차단(또는 정리) + 안내 토스트
   // - 판매입력/입고확인 페이지에서는 자체 리스너가 처리하므로 여기서는 패스
