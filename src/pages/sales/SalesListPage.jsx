@@ -14,8 +14,8 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
       .order('id',      { ascending: true });
     if (fStore) q = q.eq('store_name', fStore);
     if (fBrand) q = q.eq('brand_id', fBrand);
-    if (fFrom)  q = q.gte('sold_at', fFrom);
-    if (fTo)    q = q.lte('sold_at', fTo);
+    if (fFrom)  q = q.gte('sold_at', `${fFrom}T00:00:00+09:00`);
+    if (fTo)    q = q.lte('sold_at', `${fTo}T23:59:59+09:00`);
     const { data, error } = await q.range(start, start + PAGE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -162,8 +162,8 @@ export default function SalesListPage({ setPage }) {
       .order('sold_at', { ascending: false });
     if (fStore) q = q.eq('store_name', fStore);
     if (fBrand) q = q.eq('brand_id', fBrand);
-    if (fFrom)  q = q.gte('sold_at', fFrom);
-    if (fTo)    q = q.lte('sold_at', fTo);
+    if (fFrom)  q = q.gte('sold_at', `${fFrom}T00:00:00+09:00`);
+    if (fTo)    q = q.lte('sold_at', `${fTo}T23:59:59+09:00`);
     const { data, error } = await q.limit(500);
     if (error) toast(error.message, 'err');
     else setSales(data || []);
