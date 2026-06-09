@@ -582,6 +582,7 @@ export default function App() {
   const [activeUploadId, setActiveId] = useState(
     () => { const v = localStorage.getItem('gmd_active_id'); return v ? Number(v) : null; }
   );
+  const [hasUpdate, setHasUpdate] = useState(false);
 
   const setActiveUploadId = (id) => {
     setActiveId(id);
@@ -615,10 +616,9 @@ export default function App() {
     }
   }, [profile?.role, page]);
 
-  // 새 배포 자동 감지 — 5분마다 /build.json 확인해 다르면 안내 후 자동 리로드
+  // 새 배포 자동 감지 — 5분마다 /build.json 확인. 다르면 상단 배너 안내(자동 reload 안 함, 사용자 안전 보호)
   useEffect(() => {
     let currentBuild = null;
-    let reloading = false;
     const check = async () => {
       try {
         const res = await fetch('/build.json?t=' + Date.now(), { cache: 'no-store' });
@@ -626,16 +626,14 @@ export default function App() {
         const data = await res.json();
         if (currentBuild == null) {
           currentBuild = data.build;
-        } else if (data.build && data.build !== currentBuild && !reloading) {
-          reloading = true;
-          toast('새 버전이 배포되어 화면을 새로고침합니다…', 'inf');
-          setTimeout(() => window.location.reload(), 2500);
+        } else if (data.build && data.build !== currentBuild) {
+          setHasUpdate(true);
         }
       } catch { /* 네트워크 오류는 무시 */ }
     };
     check();
     const interval = setInterval(check, 5 * 60 * 1000);
-    const onFocus = () => check(); // 탭 활성화 시 즉시 확인
+    const onFocus = () => check();
     window.addEventListener('focus', onFocus);
     return () => {
       clearInterval(interval);
@@ -755,7 +753,34 @@ export default function App() {
     <>
       <Toasts/>
       <NotificationCenter profile={profile} setPage={setPage}/>
-      <div className="app-layout">
+      {hasUpdate && (
+        <div style={{
+          position:'fixed', top:0, left:0, right:0, zIndex:9999,
+          background:'#fff3e0', borderBottom:'2px solid var(--accent)',
+          padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'center', gap:14,
+          boxShadow:'0 2px 8px rgba(0,0,0,0.08)'
+        }}>
+          <span style={{fontSize:13, fontWeight:700, color:'#bf360c'}}>
+            🔔 새 버전이 배포되었습니다. 작업이 끝나면 새로고침해 주세요.
+          </span>
+          <button type="button" onClick={() => window.location.reload()}
+            style={{
+              height:32, padding:'0 14px', border:'none', borderRadius:'var(--radius)',
+              background:'var(--accent)', color:'#fff', fontSize:12, fontWeight:700,
+              cursor:'pointer', whiteSpace:'nowrap'
+            }}>
+            지금 새로고침
+          </button>
+          <button type="button" onClick={() => setHasUpdate(false)}
+            style={{
+              height:32, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)',
+              background:'#fff', color:'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer'
+            }}>
+            나중에
+          </button>
+        </div>
+      )}
+      <div className="app-layout" style={hasUpdate ? {paddingTop:54} : undefined}>
         <Sidebar page={page} setPage={setPage} profile={profile} onLogout={handleLogout}/>
         <div className="content">
           <div className="content-header">
