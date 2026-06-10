@@ -42,17 +42,19 @@ export default function ProductMgmtPage({ subPage }) {
     if (!selBrand || !newProd.trim()) { toast('브랜드와 상품명을 입력해주세요', 'err'); return; }
     if (!newCode.trim()) { toast('상품코드를 입력해주세요', 'err'); return; }
     if (!newErpCode.trim()) { toast('ERP코드를 입력해주세요', 'err'); return; }
+    if (String(newCost).trim()  === '') { toast('원가를 입력해주세요', 'err'); return; }
+    if (String(newPrice).trim() === '') { toast('판매가를 입력해주세요', 'err'); return; }
     const codeTrim    = newCode.trim();
     const erpCodeTrim = newErpCode.trim();
     // 중복 검증 — 상품코드 / ERP코드 둘 다
     const dupCode    = products.find(p => (p.code     || '').trim() === codeTrim);
     const dupErpCode = products.find(p => (p.erp_code || '').trim() === erpCodeTrim);
     if (dupCode) {
-      toast(`이미 같은 상품코드(${codeTrim})로 등록된 상품이 있습니다: ${dupCode.name}`, 'err');
+      toast(`이미 [${dupCode.name}] 동일한 상품이 등록되어있습니다 (상품코드: ${codeTrim})`, 'err');
       return;
     }
     if (dupErpCode) {
-      toast(`이미 같은 ERP코드(${erpCodeTrim})로 등록된 상품이 있습니다: ${dupErpCode.name}`, 'err');
+      toast(`이미 [${dupErpCode.name}] 동일한 상품이 등록되어있습니다 (ERP코드: ${erpCodeTrim})`, 'err');
       return;
     }
     const { error } = await supabase.from('products').insert({
@@ -108,22 +110,62 @@ export default function ProductMgmtPage({ subPage }) {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
         toast(`${rows.length}행 감지됨 — 순차 저장 중...`, 'inf');
-        let cnt = 0;
+        // DB에 이미 등록된 상품 코드 / ERP코드 캐시
+        const existingByCode    = new Map(products.map(p => [String(p.code||'').trim(),     p]));
+        const existingByErpCode = new Map(products.map(p => [String(p.erp_code||'').trim(), p]));
+        // 같은 배치 내 중복도 차단
+        const batchCodes    = new Set();
+        const batchErpCodes = new Set();
+        const dupSamples = []; // 중복 안내용 (앞 3건만)
+        let cnt = 0, skipDup = 0, skipMissing = 0;
         for (const row of rows) {
           const brandName = String(row['브랜드명'] || row['브랜드'] || '').trim();
           const prodName  = String(row['상품명'] || '').trim();
-          const code      = String(row['상품코드'] || row['code'] || '').trim() || null;
-          const cost      = Number(row['원가'] || row['cost'] || 0);
-          const price     = Number(row['판매가'] || row['price'] || 0);
-          if (!brandName || !prodName) continue;
+          const code      = String(row['상품코드'] || row['code'] || '').trim();
+          const erpCode   = String(row['ERP코드'] || row['erp_code'] || '').trim();
+          const costStr   = String(row['원가']   || row['cost']  || '').trim();
+          const priceStr  = String(row['판매가'] || row['price'] || '').trim();
+          // 필수 누락 — 브랜드명/상품명/상품코드/ERP코드/원가/판매가 모두 필요
+          if (!brandName || !prodName || !code || !erpCode || costStr === '' || priceStr === '') {
+            skipMissing++;
+            continue;
+          }
+          // 중복 — DB 기존 또는 같은 배치 안
+          const dup = existingByCode.get(code) || existingByErpCode.get(erpCode);
+          if (dup) {
+            if (dupSamples.length < 3) dupSamples.push(`[${dup.name}] — ${prodName}`);
+            skipDup++;
+            continue;
+          }
+          if (batchCodes.has(code) || batchErpCodes.has(erpCode)) {
+            skipDup++;
+            continue;
+          }
           let { data: br } = await supabase.from('brands').select('id').eq('name', brandName).single();
           if (!br) {
             const { data: newBr } = await supabase.from('brands').insert({ name: brandName }).select().single();
             br = newBr;
           }
-          if (br) { await supabase.from('products').insert({ brand_id: br.id, name: prodName, code, cost, price }); cnt++; }
+          if (br) {
+            const { error } = await supabase.from('products').insert({
+              brand_id: br.id, name: prodName, code, erp_code: erpCode,
+              cost: Number(costStr) || 0, price: Number(priceStr) || 0,
+            });
+            if (!error) {
+              cnt++;
+              batchCodes.add(code);
+              batchErpCodes.add(erpCode);
+            }
+          }
         }
-        toast(`${cnt}개 상품 업로드 완료`, 'ok'); fetchAll();
+        const parts = [`${cnt}개 등록`];
+        if (skipDup > 0) parts.push(`중복 ${skipDup}개 건너뜀`);
+        if (skipMissing > 0) parts.push(`필수누락 ${skipMissing}개 건너뜀`);
+        toast(parts.join(' / '), 'ok');
+        if (dupSamples.length > 0) {
+          toast(`이미 동일한 상품이 등록되어있습니다 — ${dupSamples.join(', ')}${skipDup > dupSamples.length ? ' 외' : ''}`, 'err');
+        }
+        fetchAll();
       } catch(err) { toast('파싱 실패: ' + err.message, 'err'); }
     };
     reader.readAsBinaryString(file);
@@ -207,11 +249,11 @@ export default function ProductMgmtPage({ subPage }) {
                   <input value={newProd} onChange={e => setNewProd(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="상품명 입력"/>
                 </div>
                 <div>
-                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>원가</label>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>원가 <span style={{color:'var(--danger)'}}>*</span></label>
                   <input type="number" value={newCost} onChange={e => setNewCost(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="0"/>
                 </div>
                 <div>
-                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>판매가</label>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>판매가 <span style={{color:'var(--danger)'}}>*</span></label>
                   <input type="number" value={newPrice} onChange={e => setNewPrice(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="0"/>
                 </div>
                 <button className="btn btn-p" onClick={addProduct} style={{height:34}}>추가</button>
@@ -227,12 +269,12 @@ export default function ProductMgmtPage({ subPage }) {
                 <input ref={fileRef} type="file" accept=".xls,.xlsx" onClick={e=>e.stopPropagation()} onChange={e=>{handleFile(e.target.files[0]);e.target.value='';}}/>
                 <div className="drop-icon">📂</div>
                 <div className="drop-main"><strong>클릭</strong> 또는 <strong>드래그&드롭</strong></div>
-                <div className="drop-sub">컬럼: 브랜드명 / 상품명 / 판매가</div>
+                <div className="drop-sub">컬럼: 브랜드명 / 상품명 / 상품코드 / ERP코드 / 원가 / 판매가 (모두 필수)</div>
               </div>
               <div style={{marginTop:12, background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:12}}>
                 <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:6}}>📋 필수 컬럼 안내</div>
                 <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
-                  {['브랜드명','상품명','판매가'].map(h => (
+                  {['브랜드명','상품명','상품코드','ERP코드','원가','판매가'].map(h => (
                     <span key={h} style={{background:'#fff', border:'1px solid var(--border)', borderRadius:4, padding:'3px 10px', fontSize:12, fontWeight:600, color:'var(--text)'}}>{h}</span>
                   ))}
                 </div>
