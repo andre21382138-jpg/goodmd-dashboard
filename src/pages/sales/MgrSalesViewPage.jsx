@@ -14,6 +14,7 @@ export default function MgrSalesViewPage({ profile }) {
   const [sales, setSales] = useState([]);
   const [loading,    setLoading]    = useState(false);
   const [expandedDate, setExpandedDate] = useState(null);
+  const [expandedTxn, setExpandedTxn]   = useState(null);  // 트랜잭션 그룹 식별자(첫 라인의 id)
 
   const setRange = (type) => {
     if (type === 'today') {
@@ -48,22 +49,45 @@ export default function MgrSalesViewPage({ profile }) {
 
   useEffect(() => { fetchSales(); }, []); // 최초 1회 (당월)
 
-  // 일자별 그룹핑
+  // 1) 트랜잭션 단위 그룹화 — 같은 sold_at + customer + created_at 60초 윈도 = 1 결제묶음
+  // 2) 일자별 집계는 트랜잭션 수 기준으로 (사용자 요청: 6개 상품 1번 결제 = 판매건수 1건)
   const { dailyRows, dailyDetails, totals } = useMemo(() => {
+    // 1단계: 트랜잭션 그룹
+    const txnGroups = [];
+    const groupMap = new Map();
+    for (const r of sales) {
+      if (r._eff <= 0) continue;
+      const custKey = r.customer_id || `__noc_${r.id}`;
+      const baseKey = `${r.sold_at}|${custKey}`;
+      const ts = new Date(r.created_at || 0).getTime();
+      let g = groupMap.get(baseKey);
+      if (g && Math.abs(ts - g.lastTs) <= 60000) {
+        g.rows.push(r); g.lastTs = ts;
+      } else {
+        g = { date: r.sold_at, rows: [r], firstTs: ts, lastTs: ts };
+        groupMap.set(baseKey, g);
+        txnGroups.push(g);
+      }
+    }
+    // 2단계: 일자 집계 (트랜잭션 단위로 카운트)
     const dMap = new Map();
     const dDetails = {};
     let totC = 0, totQ = 0, totA = 0;
     let delC = 0, delA = 0;
-    for (const r of sales) {
-      if (r._eff <= 0) continue;
-      const d = r.sold_at;
+    for (const g of txnGroups) {
+      const d = g.date;
+      const gQty = g.rows.reduce((s, r) => s + r._eff, 0);
+      const gAmt = g.rows.reduce((s, r) => s + r.price * r._eff, 0);
       if (!dMap.has(d)) dMap.set(d, { date: d, count: 0, qty: 0, amt: 0 });
       const e = dMap.get(d);
-      e.count++; e.qty += r._eff; e.amt += r.price * r._eff;
+      e.count++; e.qty += gQty; e.amt += gAmt;
       if (!dDetails[d]) dDetails[d] = [];
-      dDetails[d].push(r);
-      totC++; totQ += r._eff; totA += r.price * r._eff;
-      if (r.delivery_requested) { delC++; delA += r.price * r._eff; }
+      dDetails[d].push(g);
+      totC++; totQ += gQty; totA += gAmt;
+      // 택배는 라인 단위(트랜잭션 일부만 택배일 수도 있음)
+      for (const r of g.rows) {
+        if (r.delivery_requested) { delC++; delA += r.price * r._eff; }
+      }
     }
     const list = [...dMap.values()].sort((a,b) => b.date.localeCompare(a.date));
     return { dailyRows: list, dailyDetails: dDetails, totals: { count: totC, qty: totQ, amt: totA, deliveryCount: delC, deliveryAmt: delA } };
@@ -177,7 +201,7 @@ export default function MgrSalesViewPage({ profile }) {
                       <tr>
                         <td colSpan={5} style={{background:'#fafafa', padding:'10px 14px', borderTop:'2px solid var(--accent)'}}>
                           <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8}}>
-                            📋 {r.date} 판매 내역 ({items.length}건)
+                            📋 {r.date} 판매 내역 — {items.length}건 (결제 묶음)
                           </div>
                           <div className="twrap" style={{background:'#fff', borderRadius:'var(--radius)', border:'1px solid var(--border)'}}>
                             <table>
@@ -185,47 +209,116 @@ export default function MgrSalesViewPage({ profile }) {
                                 <tr>
                                   <th>브랜드</th>
                                   <th>상품명</th>
-                                  <th className="r">수량</th>
-                                  <th className="r">단가</th>
-                                  <th className="r">합계</th>
+                                  <th className="r">총 수량</th>
+                                  <th className="r">총 합계</th>
                                   <th className="r">적립금사용</th>
                                   <th>결제</th>
                                   <th>출고방식</th>
                                   <th>고객</th>
-                                  <th>메모</th>
+                                  <th style={{textAlign:'center'}}>상세</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {items.map(it => {
-                                  const fully = (it.returned_qty||0) >= (it.quantity||0);
-                                  const partial = (it.returned_qty||0) > 0 && !fully;
-                                  const eff = it._eff;
-                                  const strike = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                                {items.map(g => {
+                                  const txnId = g.rows[0].id;
+                                  const isTxnOpen = expandedTxn === txnId;
+                                  const head = g.rows[0];
+                                  const allFully = g.rows.every(x => (x.returned_qty||0) >= (x.quantity||0));
+                                  const gQty = g.rows.reduce((s, x) => s + x._eff, 0);
+                                  const gAmt = g.rows.reduce((s, x) => s + x.price * x._eff, 0);
+                                  const gPts = g.rows.reduce((s, x) => s + (Number(x.points_used)||0), 0);
+                                  const paymentSet = Array.from(new Set(g.rows.map(x => x.payment).filter(p => p && p !== '적립금사용')));
+                                  const extraCount = g.rows.length - 1;
+                                  const strike = allFully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
                                   return (
-                                  <tr key={it.id} style={fully?{background:'#fafafa'}:{}}>
-                                    <td style={strike}>{it.brand?.name || '-'}</td>
+                                  <React.Fragment key={txnId}>
+                                  <tr style={{...(allFully?{background:'#fafafa'}:{}), ...(isTxnOpen?{background:'#fff8e1'}:{})}}>
+                                    <td style={strike}>{head.brand?.name || '-'}</td>
                                     <td style={{fontSize:12, ...strike}}>
-                                      <strong>{it.product?.name || '-'}</strong>
-                                      {it.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {it.product.code}</div>}
-                                      {fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
-                                      {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {it.returned_qty}</span>}
+                                      <strong>{head.product?.name || '-'}</strong>
+                                      {extraCount > 0 && (
+                                        <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#1565C0', background:'#e3f2fd', border:'1px solid #90caf9', padding:'1px 6px', borderRadius:3}}>
+                                          외 {extraCount}개
+                                        </span>
+                                      )}
                                     </td>
-                                    <td className="r" style={strike}>{eff}</td>
-                                    <td className="r" style={{fontFamily:'var(--mono)', ...strike}}>{Number(it.price).toLocaleString()}원</td>
-                                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)', ...strike}}>{(it.price*eff).toLocaleString()}원</td>
-                                    <td className="r" style={{color:(it.points_used||0)>0?'#6a1b9a':'var(--text3)', fontFamily:'var(--mono)', ...(fully?{opacity:0.5}:{})}}>
-                                      {(it.points_used||0) > 0 ? `-${Number(it.points_used).toLocaleString()}` : '-'}
+                                    <td className="r" style={strike}>{gQty}</td>
+                                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)', ...strike}}>{gAmt.toLocaleString()}원</td>
+                                    <td className="r" style={{color: gPts>0?'#6a1b9a':'var(--text3)', fontFamily:'var(--mono)', ...(allFully?{opacity:0.5}:{})}}>
+                                      {gPts > 0 ? `-${gPts.toLocaleString()}` : '-'}
                                     </td>
-                                    <td>{it.payment && it.payment !== '적립금사용' && <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{it.payment}</span>}</td>
+                                    <td>
+                                      {paymentSet.map(p => (
+                                        <span key={p} className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, marginRight:2, ...(allFully?{opacity:0.5}:{})}}>{p}</span>
+                                      ))}
+                                    </td>
                                     <td style={strike}>
-                                      {(!it.delivery_type || it.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
-                                      {it.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
-                                      {it.delivery_type === 'hq' && it.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
-                                      {it.delivery_type === 'hq' && it.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                                      {(!head.delivery_type || head.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
+                                      {head.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
+                                      {head.delivery_type === 'hq' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                                     </td>
-                                    <td style={{fontSize:12}}>{it.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {it.customer.name}</span> : '-'}</td>
-                                    <td style={{fontSize:11,color:'var(--text2)'}}>{it.memo||'-'}</td>
+                                    <td style={{fontSize:12}}>{head.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {head.customer.name}</span> : '-'}</td>
+                                    <td style={{textAlign:'center'}}>
+                                      <button className="btn btn-s" style={{padding:'3px 10px', fontSize:11}}
+                                        onClick={() => setExpandedTxn(isTxnOpen ? null : txnId)}>
+                                        {isTxnOpen ? '▲ 닫기' : '▼ 상세'}
+                                      </button>
+                                    </td>
                                   </tr>
+                                  {isTxnOpen && (
+                                    <tr>
+                                      <td colSpan={9} style={{background:'#fafafa', padding:'8px 12px', borderTop:'1px dashed var(--border)'}}>
+                                        <div className="twrap" style={{background:'#fff', borderRadius:'var(--radius)', border:'1px solid var(--border)'}}>
+                                          <table>
+                                            <thead>
+                                              <tr>
+                                                <th>상품명</th>
+                                                <th className="r">수량</th>
+                                                <th className="r">단가</th>
+                                                <th className="r">합계</th>
+                                                <th className="r">적립금</th>
+                                                <th>결제</th>
+                                                <th>출고방식</th>
+                                                <th>메모</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {g.rows.map(it => {
+                                                const fully = (it.returned_qty||0) >= (it.quantity||0);
+                                                const partial = (it.returned_qty||0) > 0 && !fully;
+                                                const eff = it._eff;
+                                                const lineStrike = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                                                return (
+                                                <tr key={it.id} style={fully?{background:'#fafafa'}:{}}>
+                                                  <td style={{fontSize:12, ...lineStrike}}>
+                                                    {it.product?.name || '-'}
+                                                    {it.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {it.product.code}</div>}
+                                                    {fully && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
+                                                    {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {it.returned_qty}</span>}
+                                                  </td>
+                                                  <td className="r" style={lineStrike}>{eff}</td>
+                                                  <td className="r" style={{fontFamily:'var(--mono)', ...lineStrike}}>{Number(it.price).toLocaleString()}원</td>
+                                                  <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)', ...lineStrike}}>{(it.price*eff).toLocaleString()}원</td>
+                                                  <td className="r" style={{color:(it.points_used||0)>0?'#6a1b9a':'var(--text3)', fontFamily:'var(--mono)', ...(fully?{opacity:0.5}:{})}}>
+                                                    {(it.points_used||0) > 0 ? `-${Number(it.points_used).toLocaleString()}` : '-'}
+                                                  </td>
+                                                  <td>{it.payment && it.payment !== '적립금사용' && <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{it.payment}</span>}</td>
+                                                  <td style={lineStrike}>
+                                                    {(!it.delivery_type || it.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
+                                                    {it.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
+                                                    {it.delivery_type === 'hq' && it.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                                                    {it.delivery_type === 'hq' && it.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                                                  </td>
+                                                  <td style={{fontSize:11,color:'var(--text2)'}}>{it.memo||'-'}</td>
+                                                </tr>
+                                              )})}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                  </React.Fragment>
                                 )})}
                               </tbody>
                             </table>
