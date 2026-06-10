@@ -218,6 +218,18 @@ export default function SalesInputPage({ profile }) {
         const pu = Number(updated.pointsUsed) || 0;
         if (pu > 0) updated.price = Math.max(0, np - dc - pu / effQty);
       }
+      if (field === 'payment' && value !== '적립금사용') {
+        // 적립금 사용 중인 라인에서 다른 결제 버튼을 누르면 적립금 자동 해제
+        // (payment만 덮어쓰여 points_used와 모순 저장되던 버그 차단)
+        if (Number(updated.pointsUsed) > 0) {
+          const np = Number(updated.normalPrice) || 0;
+          const dc = Number(updated.discount) || 0;
+          updated.pointsUsed = 0;
+          updated.pointCustomer = null;
+          updated.price = Math.max(0, np - dc);
+          setTimeout(() => toast(`적립금 사용이 해제되고 ${value}(으)로 변경되었습니다`, 'inf'), 0);
+        }
+      }
       return updated;
     }));
   };

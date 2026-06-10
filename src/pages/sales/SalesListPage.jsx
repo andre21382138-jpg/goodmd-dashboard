@@ -9,7 +9,7 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
   let all = [], start = 0;
   while (true) {
     let q = supabase.from('sales')
-      .select('id, sold_at, store_name, branch_name, payment, quantity, returned_qty, price, brand:brands(name), product:products(code, name, cost)')
+      .select('id, sold_at, store_name, branch_name, payment, quantity, returned_qty, price, points_used, brand:brands(name), product:products(code, name, cost)')
       .order('sold_at', { ascending: true })
       .order('id',      { ascending: true });
     if (fStore) q = q.eq('store_name', fStore);
@@ -566,7 +566,12 @@ export default function SalesListPage({ setPage }) {
                       <td className="r" style={strikeStyle}>{effQty(s)}</td>
                       <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
                       <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
-                      <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
+                      <td>
+                        {Number(s.points_used) > 0
+                          ? <span className="badge" style={{background:'#f3e5f5',color:'#6a1b9a',border:'1px solid #ce93d8',fontSize:11, ...(fully?{opacity:0.5}:{})}}>적립금사용</span>
+                          : <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                        }
+                      </td>
                       <td style={{whiteSpace:'nowrap', padding:'4px 8px', ...strikeStyle}}>
                         {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}
                         {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(매장)</span>}
@@ -766,7 +771,12 @@ export default function SalesListPage({ setPage }) {
                         <td className="r" style={strikeStyle}>{effQty(s)}</td>
                         <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
                         <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
-                        <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
+                        <td>
+                          {Number(s.points_used) > 0
+                            ? <span className="badge" style={{background:'#f3e5f5',color:'#6a1b9a',border:'1px solid #ce93d8',fontSize:11, ...(fully?{opacity:0.5}:{})}}>적립금사용</span>
+                            : <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                          }
+                        </td>
                         <td style={{whiteSpace:'nowrap', padding:'4px 8px', ...strikeStyle}}>
                           {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}
                           {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(매장)</span>}
