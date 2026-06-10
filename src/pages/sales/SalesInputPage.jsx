@@ -44,7 +44,7 @@ export default function SalesInputPage({ profile }) {
   const [saving,    setSaving]   = useState(false);
   const [recentSales, setRecent] = useState([]);
 
-  const PAYMENTS = ['카드','현금','증정','시식','적립금사용'];
+  const PAYMENTS = ['카드','현금','증정','시식'];
 
   // 상품 라인 (여러 개)
   const newLine = () => ({
@@ -459,13 +459,14 @@ export default function SalesInputPage({ profile }) {
             </div>
 
             {/* 헤더 라벨 */}
-            <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 220px 110px 80px 72px 34px', gap:6, padding:'0 4px 6px', fontSize:11, fontWeight:700, color:'var(--text3)' }}>
               <div>상품검색</div>
               <div style={{textAlign:'center'}}>수량</div>
               <div style={{textAlign:'center'}}>정상가</div>
               <div style={{textAlign:'center'}}>할인금액</div>
               <div style={{textAlign:'center'}}>판매가</div>
               <div style={{textAlign:'center'}}>결제</div>
+              <div style={{textAlign:'center', color:'#6a1b9a'}}>적립금</div>
               <div style={{textAlign:'center'}}>택배</div>
               <div></div>
               <div></div>
@@ -500,7 +501,7 @@ export default function SalesInputPage({ profile }) {
 
               return (
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 8px', marginBottom:6 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px', gap:6, alignItems:'center' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 220px 110px 80px 72px 34px', gap:6, alignItems:'center' }}>
                   {/* 상품검색 */}
                   <div style={{ position:'relative' }}>
                     <input
@@ -553,18 +554,30 @@ export default function SalesInputPage({ profile }) {
                   {/* 결제 */}
                   <div style={{ display:'flex', gap:2 }}>
                     {PAYMENTS.map(p => {
-                      const isPoint = p === '적립금사용';
-                      const active = l.payment === p || (isPoint && l.pointsUsed > 0);
+                      const active = l.payment === p;
                       return (
                       <button key={p} type="button"
-                        onClick={() => isPoint ? openPointsModal(l) : updateLine(l.id,'payment',p)}
-                        style={{ flex:isPoint ? 1.6 : 1, height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', padding:0,
-                          borderColor: active ? (isPoint ? '#7b1fa2' : 'var(--accent)') : 'var(--border)',
-                          background: active ? (isPoint ? '#f3e5f5' : '#fff3e0') : '#fff',
-                          color: active ? (isPoint ? '#6a1b9a' : 'var(--accent)') : 'var(--text2)',
-                          fontWeight: active ? 700 : 500, fontSize: isPoint ? 11 : 12, whiteSpace:'nowrap' }}>{p}</button>
+                        onClick={() => updateLine(l.id,'payment',p)}
+                        style={{ flex:1, height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', padding:0,
+                          borderColor: active ? 'var(--accent)' : 'var(--border)',
+                          background: active ? '#fff3e0' : '#fff',
+                          color: active ? 'var(--accent)' : 'var(--text2)',
+                          fontWeight: active ? 700 : 500, fontSize:12, whiteSpace:'nowrap' }}>{p}</button>
                     )})}
                   </div>
+                  {/* 적립금사용 (결제와 분리된 공제 항목) */}
+                  <button type="button"
+                    onClick={() => openPointsModal(l)}
+                    style={{ height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', padding:'0 6px',
+                      borderColor: l.pointsUsed > 0 ? '#7b1fa2' : 'var(--border)',
+                      background: l.pointsUsed > 0 ? '#f3e5f5' : '#fff',
+                      color: l.pointsUsed > 0 ? '#6a1b9a' : 'var(--text2)',
+                      fontWeight: l.pointsUsed > 0 ? 700 : 500, fontSize:11, whiteSpace:'nowrap', lineHeight:1.2 }}
+                    title="적립금 사용">
+                    {l.pointsUsed > 0
+                      ? <>💳<br/>-{Number(l.pointsUsed).toLocaleString()}원</>
+                      : <>💳 적립금<br/>사용</>}
+                  </button>
                   {/* 택배 종류 드롭다운 */}
                   <select value={l.delivery || 'none'}
                     onChange={e => updateLine(l.id, 'delivery', e.target.value)}
@@ -596,7 +609,7 @@ export default function SalesInputPage({ profile }) {
                 </div>
                 {/* 1개당 단가 (수량 > 1일 때) */}
                 {l.productId && Number(l.quantity) > 1 && (
-                  <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 320px 80px 72px 34px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 220px 110px 80px 72px 34px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
                     <div/><div/>
                     <div style={{textAlign:'right', paddingRight:4}}>
                       {Number(l.normalPrice) > 0 && <>1개당 {Math.round(Number(l.normalPrice)).toLocaleString()}원</>}
@@ -605,7 +618,7 @@ export default function SalesInputPage({ profile }) {
                     <div style={{textAlign:'right', paddingRight:4, color:'var(--accent)'}}>
                       {Number(l.price) > 0 && <>1개당 {Math.round(Number(l.price)).toLocaleString()}원</>}
                     </div>
-                    <div/><div/><div/>
+                    <div/><div/><div/><div/>
                     <div/>
                   </div>
                 )}
