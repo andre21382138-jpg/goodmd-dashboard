@@ -279,6 +279,15 @@ export default function SalesInputPage({ profile }) {
     if (amt <= 0) { toast('사용 금액을 입력해주세요', 'err'); return; }
     if (!pmCustomer) { toast('회원을 선택해주세요', 'err'); return; }
     if (amt > (pmCustomer.total_points || 0)) { toast(`사용가능 적립금(${(pmCustomer.total_points||0).toLocaleString()}원)을 초과합니다`, 'err'); return; }
+    // 회원적립 영역 자동 동기화: 적립금 사용 회원을 그대로 적립 대상 회원으로 설정
+    // (선택돼 있던 다른 회원/비회원 모드는 그대로 두어 매니저 의도를 보존)
+    if (memberMode === 'none' && !selectedMember) {
+      setMemberMode('search');
+      setSelMember(pmCustomer);
+      setMemberSearch(pmCustomer.phone || '');
+      setMemberResults([]);
+      toast(`${pmCustomer.name}님을 적립 회원으로 자동 선택했습니다`, 'inf');
+    }
     const np = Number(line.normalPrice) || 0;
     const dc = Number(line.discount) || 0;
     const qty = Math.max(Number(line.quantity) || 0, 1);
