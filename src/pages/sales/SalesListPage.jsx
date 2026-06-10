@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { toast, uniq, dlBlob } from '../../lib/utils';
 import SalesTabNav from './SalesTabNav';
 
-async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
+async function exportSalesRaw({ fStore, fBranch, fBrand, fFrom, fTo, fKeyword }) {
   // 1) 페이징 fetch (Supabase 1000건 limit 회피)
   const PAGE = 1000;
   let all = [], start = 0;
@@ -12,10 +12,11 @@ async function exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword }) {
       .select('id, sold_at, store_name, branch_name, payment, quantity, returned_qty, price, points_used, brand:brands(name), product:products(code, name, cost)')
       .order('sold_at', { ascending: true })
       .order('id',      { ascending: true });
-    if (fStore) q = q.eq('store_name', fStore);
-    if (fBrand) q = q.eq('brand_id', fBrand);
-    if (fFrom)  q = q.gte('sold_at', fFrom);
-    if (fTo)    q = q.lte('sold_at', fTo);
+    if (fStore)  q = q.eq('store_name',  fStore);
+    if (fBranch) q = q.eq('branch_name', fBranch);
+    if (fBrand)  q = q.eq('brand_id', fBrand);
+    if (fFrom)   q = q.gte('sold_at', fFrom);
+    if (fTo)     q = q.lte('sold_at', fTo);
     const { data, error } = await q.range(start, start + PAGE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -125,6 +126,7 @@ export default function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [fStore,  setFStore]  = useState('');
+  const [fBranch, setFBranch] = useState('');
   const [fBrand,  setFBrand]  = useState('');
   const [fFrom,   setFFrom]   = useState('');
   const [fTo,     setFTo]     = useState('');
@@ -161,15 +163,16 @@ export default function SalesListPage({ setPage }) {
     let q = supabase.from('sales')
       .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch), customer:customers(name)')
       .order('sold_at', { ascending: false });
-    if (fStore) q = q.eq('store_name', fStore);
-    if (fBrand) q = q.eq('brand_id', fBrand);
-    if (fFrom)  q = q.gte('sold_at', fFrom);
-    if (fTo)    q = q.lte('sold_at', fTo);
+    if (fStore)  q = q.eq('store_name',  fStore);
+    if (fBranch) q = q.eq('branch_name', fBranch);
+    if (fBrand)  q = q.eq('brand_id', fBrand);
+    if (fFrom)   q = q.gte('sold_at', fFrom);
+    if (fTo)     q = q.lte('sold_at', fTo);
     const { data, error } = await q.limit(500);
     if (error) toast(error.message, 'err');
     else setSales(data || []);
     setLoading(false);
-  }, [fStore, fBrand, fFrom, fTo]);
+  }, [fStore, fBranch, fBrand, fFrom, fTo]);
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
@@ -177,6 +180,11 @@ export default function SalesListPage({ setPage }) {
   useEffect(() => { supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || [])); }, []);
 
   const stores = useMemo(() => uniq(sales.map(s => s.store_name)), [sales]);
+  // 점포 선택 시 그 점포에 속한 지점만, 미선택이면 전체 지점
+  const branches = useMemo(() => {
+    const base = fStore ? sales.filter(s => s.store_name === fStore) : sales;
+    return uniq(base.map(s => s.branch_name));
+  }, [sales, fStore]);
 
   // 실효 수량/금액 (반품 차감)
   const effQty = (s) => Math.max(0, (s.quantity||0) - (s.returned_qty||0));
@@ -251,7 +259,7 @@ export default function SalesListPage({ setPage }) {
     if (exporting) return;
     setExporting(true);
     try {
-      const n = await exportSalesRaw({ fStore, fBrand, fFrom, fTo, fKeyword });
+      const n = await exportSalesRaw({ fStore, fBranch, fBrand, fFrom, fTo, fKeyword });
       toast(`엑셀 다운로드 완료 (${n.toLocaleString()}건)`, 'ok');
     } catch (err) {
       toast('다운로드 실패: ' + (err.message || err), 'err');
@@ -458,9 +466,13 @@ export default function SalesListPage({ setPage }) {
           {viewMode === 'list' ? '판매내역 조회' : viewMode === 'product' ? '상품별 집계' : '매장별 집계'}
         </div>
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
-          <select className="fsel" value={fStore} onChange={e => setFStore(e.target.value)}>
+          <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
             <option value="">전체 점포</option>
             {stores.map(s => <option key={s}>{s}</option>)}
+          </select>
+          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)}>
+            <option value="">전체 지점</option>
+            {branches.map(b => <option key={b}>{b}</option>)}
           </select>
           <select className="fsel" value={fBrand} onChange={e => setFBrand(e.target.value)}>
             <option value="">전체 브랜드</option>
@@ -493,8 +505,8 @@ export default function SalesListPage({ setPage }) {
               style={{width:15, height:15, cursor:'pointer'}}/>
             완전반품 포함 {returnedCount > 0 && <span style={{color:'var(--danger)', fontWeight:700}}>({returnedCount})</span>}
           </label>
-          {(fStore||fBrand||fFrom||fTo||fKeyword) &&
-            <button className="btn-ghost" onClick={() => { setFStore(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
+          {(fStore||fBranch||fBrand||fFrom||fTo||fKeyword) &&
+            <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
               <>
