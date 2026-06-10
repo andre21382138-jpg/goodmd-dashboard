@@ -41,10 +41,24 @@ export default function ProductMgmtPage({ subPage }) {
   const addProduct = async () => {
     if (!selBrand || !newProd.trim()) { toast('브랜드와 상품명을 입력해주세요', 'err'); return; }
     if (!newCode.trim()) { toast('상품코드를 입력해주세요', 'err'); return; }
+    if (!newErpCode.trim()) { toast('ERP코드를 입력해주세요', 'err'); return; }
+    const codeTrim    = newCode.trim();
+    const erpCodeTrim = newErpCode.trim();
+    // 중복 검증 — 상품코드 / ERP코드 둘 다
+    const dupCode    = products.find(p => (p.code     || '').trim() === codeTrim);
+    const dupErpCode = products.find(p => (p.erp_code || '').trim() === erpCodeTrim);
+    if (dupCode) {
+      toast(`이미 같은 상품코드(${codeTrim})로 등록된 상품이 있습니다: ${dupCode.name}`, 'err');
+      return;
+    }
+    if (dupErpCode) {
+      toast(`이미 같은 ERP코드(${erpCodeTrim})로 등록된 상품이 있습니다: ${dupErpCode.name}`, 'err');
+      return;
+    }
     const { error } = await supabase.from('products').insert({
       brand_id: selBrand.id, name: newProd.trim(),
-      code: newCode.trim(),
-      erp_code: newErpCode.trim() || null,
+      code: codeTrim,
+      erp_code: erpCodeTrim,
       cost: Number(newCost) || 0,
       price: Number(newPrice) || 0,
     });
@@ -55,7 +69,14 @@ export default function ProductMgmtPage({ subPage }) {
   const deleteProduct = async (id) => {
     if (!window.confirm('상품을 삭제하시겠습니까?')) return;
     const { error } = await supabase.from('products').delete().eq('id', id);
-    if (error) toast(error.message, 'err');
+    if (error) {
+      // 매출(sales)이 이 상품을 참조 중이면 FK 위반 — 사용자에게 알기 쉬운 안내
+      if (String(error.message || '').includes('sales_product_id_fkey')) {
+        toast('판매 이력이 있는 상품은 삭제할 수 없습니다. 대신 [판매중지]를 사용하거나, 본사에 중복 상품 병합을 요청해주세요.', 'err');
+      } else {
+        toast(error.message, 'err');
+      }
+    }
     else { toast('삭제 완료', 'inf'); fetchAll(); }
   };
 
@@ -176,7 +197,7 @@ export default function ProductMgmtPage({ subPage }) {
                   <input value={newCode} onChange={e => setNewCode(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="상품코드 입력"/>
                 </div>
                 <div>
-                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>ERP코드</label>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>ERP코드 <span style={{color:'var(--danger)'}}>*</span></label>
                   <input value={newErpCode} onChange={e => setNewErpCode(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="ERP코드 입력"/>
                 </div>
               </div>
