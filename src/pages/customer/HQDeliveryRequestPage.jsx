@@ -203,7 +203,7 @@ export default function HQDeliveryRequestPage({ profile }) {
         toast(`송장번호 입력된 행이 없습니다 (전체 ${totalSaleRows}건 모두 미입력)`, 'err');
         return;
       }
-      let ok = 0, fail = 0;
+      let ok = 0, fail = 0, lastError = null;
       const nowIso = new Date().toISOString();
       for (const u of updates) {
         const { error } = await supabase.from('sales').update({
@@ -212,12 +212,16 @@ export default function HQDeliveryRequestPage({ profile }) {
           dispatched_at: nowIso,
           dispatched_by: profile.id,
         }).eq('id', u.saleId);
+        if (error) lastError = error;
         if (error) fail++; else ok++;
       }
       const parts = [`처리 ${ok}건`];
       if (fail > 0) parts.push(`실패 ${fail}건`);
       if (noTrackingCount > 0) parts.push(`미입력 ${noTrackingCount}건은 대기 그대로`);
       toast(`송장번호 등록 완료 — ${parts.join(' / ')}`, fail > 0 ? 'err' : 'ok');
+      if (fail > 0 && lastError) {
+        toast(`실패 사유: ${lastError.message || lastError}`, 'err');
+      }
       setTab('dispatched');
       fetchData();
     } catch (err) {
