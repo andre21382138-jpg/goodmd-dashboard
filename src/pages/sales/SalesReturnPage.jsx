@@ -135,15 +135,37 @@ export default function SalesReturnPage({ profile }) {
 
     setSaving(true);
     try {
+      // 반품일 기준 KST 날짜 (음수 매출 row의 sold_at)
+      const nowKst = new Date(Date.now() + 9*60*60*1000).toISOString().slice(0, 10);
+      const nowIso = new Date().toISOString();
       for (const it of toReturn) {
         const qty = Number(returnMap[it.id]);
         const newReturnedQty = (it.returned_qty||0) + qty;
         const fullyReturned = newReturnedQty >= it.quantity;
 
+        // 1) 원본 row — returned_qty 누적 (이중 반품 방지용. 매출 차감용으로는 더 이상 안 씀)
         await supabase.from('sales').update({
           returned_qty: newReturnedQty,
-          returned_at: fullyReturned ? new Date().toISOString() : it.returned_at,
+          returned_at: fullyReturned ? nowIso : it.returned_at,
         }).eq('id', it.id);
+
+        // 2) 반품일 기준 음수 매출 row INSERT — 매출조회는 이 row를 음수로 합산
+        await supabase.from('sales').insert({
+          sold_at:    nowKst,
+          store_name: it.store_name,
+          branch_name: it.branch_name,
+          brand_id:   it.brand_id,
+          product_id: it.product_id,
+          quantity:   qty,
+          price:      -Math.abs(Number(it.price) || 0),
+          payment:    '반품',
+          memo:       `반품 (원본 매출일 ${it.sold_at}, 매출 ID:${it.id})`,
+          created_by: profile.id,
+          customer_id: it.customer_id,
+          points_earned: 0,
+          points_used: 0,
+          delivery_type: 'none',
+        });
 
         if (it.product?.code) {
           const { data: stockRow } = await supabase.from('store_stock')
@@ -202,6 +224,7 @@ export default function SalesReturnPage({ profile }) {
     setMSaving(true);
     try {
       const nowIso = new Date().toISOString();
+      // 수기 반품도 음수 매출 row로 저장 (returned_qty 미사용 — 자기 자신 반품 마킹은 의미 없음)
       const { error } = await supabase.from('sales').insert({
         sold_at: mDate,
         store_name: profile.department,
@@ -209,11 +232,11 @@ export default function SalesReturnPage({ profile }) {
         brand_id: mProduct.brand_id,
         product_id: mProduct.id,
         quantity: qty,
-        price,
+        price: -Math.abs(price),
         payment: '반품',
         memo: '수기 반품 접수' + (mMemo.trim() ? ` · ${mMemo.trim()}` : ''),
         created_by: profile.id,
-        returned_qty: qty,
+        returned_qty: 0,
         returned_at: nowIso,
         points_earned: 0,
         points_used: 0,

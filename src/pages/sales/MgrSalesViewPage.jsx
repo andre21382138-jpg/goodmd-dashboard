@@ -43,7 +43,8 @@ export default function MgrSalesViewPage({ profile }) {
       .order('sold_at', { ascending: false })
       .order('created_at', { ascending: false });
     if (error) toast(error.message, 'err');
-    else setSales((data || []).map(r => ({...r, _eff: Math.max(0,(r.quantity||0)-(r.returned_qty||0))})));
+    // 새 정책: 반품은 음수 매출 row로 처리되므로 returned_qty는 무시 (이중 반품 방지용으로만 보존)
+    else setSales((data || []).map(r => ({...r, _eff: (r.quantity || 0)})));
     setLoading(false);
   }, [fFrom, fTo, profile.department, profile.branch]);
 
@@ -223,7 +224,8 @@ export default function MgrSalesViewPage({ profile }) {
                                   const txnId = g.rows[0].id;
                                   const isTxnOpen = expandedTxn === txnId;
                                   const head = g.rows[0];
-                                  const allFully = g.rows.every(x => (x.returned_qty||0) >= (x.quantity||0));
+                                  const allFully = false; // 새 정책: 반품은 별도 음수 row, 원본은 그대로
+                                  const isAllReturnEntries = g.rows.every(x => (Number(x.price)||0) < 0 || x.payment === '반품');
                                   const gQty = g.rows.reduce((s, x) => s + x._eff, 0);
                                   const gAmt = g.rows.reduce((s, x) => s + x.price * x._eff, 0);
                                   const gPts = g.rows.reduce((s, x) => s + (Number(x.points_used)||0), 0);
@@ -284,8 +286,9 @@ export default function MgrSalesViewPage({ profile }) {
                                             </thead>
                                             <tbody>
                                               {g.rows.map(it => {
-                                                const fully = (it.returned_qty||0) >= (it.quantity||0);
-                                                const partial = (it.returned_qty||0) > 0 && !fully;
+                                                // 새 정책: 반품 표시는 음수 매출 row 기준
+                                                const fully = false;
+                                                const partial = false;
                                                 const eff = it._eff;
                                                 const lineStrike = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
                                                 return (

@@ -186,11 +186,14 @@ export default function SalesListPage({ setPage }) {
     return uniq(base.map(s => s.branch_name));
   }, [sales, fStore]);
 
-  // 실효 수량/금액 (반품 차감)
-  const effQty = (s) => Math.max(0, (s.quantity||0) - (s.returned_qty||0));
-  const effAmt = (s) => effQty(s) * (s.price||0);
-  const isFullyReturned = (s) => (s.returned_qty||0) >= (s.quantity||0);
-  const isPartialReturn = (s) => (s.returned_qty||0) > 0 && !isFullyReturned(s);
+  // 실효 수량/금액 — 반품은 별도 음수 매출 row로 처리되므로 returned_qty는 무시
+  const effQty = (s) => (s.quantity || 0);
+  const effAmt = (s) => (s.quantity || 0) * (s.price || 0);
+  // 반품 row 식별 (price < 0 또는 payment='반품')
+  const isReturnEntry = (s) => (Number(s.price) || 0) < 0 || s.payment === '반품';
+  // 이전 호환 — 이제 사용 안 함 (음수 매출 정책)
+  const isFullyReturned = () => false;
+  const isPartialReturn = () => false;
 
   // 키워드 필터 + 반품 필터 + 정렬 (클라이언트 사이드)
   const filtered = useMemo(() => {
@@ -600,8 +603,9 @@ export default function SalesListPage({ setPage }) {
                     const ptsUsed = groupPointsUsed(g);
                     const payments = groupPayments(g);
                     const extraCount = g.rows.length - 1;
-                    const allFully = g.rows.every(r => isFullyReturned(r));
-                    const strikeStyle = allFully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                    const isReturn = g.rows.every(r => isReturnEntry(r));
+                    const allFully = false; // 새 정책: 더 이상 차감 X
+                    const strikeStyle = {};
                     return (
                     <tr key={g.key} style={allFully ? { background:'#fafafa' } : {}}>
                       <td className="mono" style={strikeStyle}>{head.sold_at}</td>
