@@ -5,7 +5,7 @@ import { ORDER_CONSTANTS, STORE_MAP, STORE_NAMES } from '../../lib/constants';
 import HQDeliveryBizView from './HQDeliveryBizView';
 
 // 31-컬럼 발주 양식 헤더 (sample: 매장발주_26.05.21_전송건.xls)
-const DELIVERY_HEADERS = [
+export const DELIVERY_HEADERS = [
   '발송일','송장번호','주문번호','채널','매장명','수취인명','결제금액','주문수량',
   '상품명','옵션','품명','수취인명','','주소','수취인 천화번호1','수취인 전화번호2',
   '배송메세지','상품번호','주문자명','주문자 연락처1','주문자 연락처2','수수료','수수료액','공란',
@@ -52,7 +52,7 @@ async function exportDeliveryRequests(groups) {
         '',                                        // 15 수취인 전화번호2
         g.delivery_notes || '',                    // 16 배송메세지
         '',                                        // 17 상품번호
-        g.recipient_name || '',                    // 18 주문자명 (사용자 스펙: 받는사람)
+        storeFull,                                 // 18 주문자명 → 매장명+지점 자동 입력
         ORDER_CONSTANTS.ORDERER_PHONE,             // 19 주문자 연락처1
         ORDER_CONSTANTS.ORDERER_PHONE,             // 20 주문자 연락처2
         '',                                        // 21 수수료

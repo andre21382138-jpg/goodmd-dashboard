@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
+import { ORDER_CONSTANTS } from '../../lib/constants';
+import { DELIVERY_HEADERS } from './HQDeliveryRequestPage';
 
 // 특판 택배·용차 뷰 (biz_sales 기반)
 // kind: 'courier' (택배) | 'truck' (용차)
@@ -77,8 +79,7 @@ export default function HQDeliveryBizView({ kind, profile }) {
     }
   };
 
-  // 송장 일괄 업로드 (택배 탭 전용) — 간단한 양식 (id, tracking_number)
-  // 첫 컬럼이 biz_sale_id, 둘째가 송장번호 형식
+  // 송장 일괄 업로드 — 31컬럼 양식: row[23]에서 SIDB:<id>, row[1]에서 송장번호
   const handleUploadFile = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -95,16 +96,16 @@ export default function HQDeliveryBizView({ kind, profile }) {
       for (let i = 1; i < data.length; i++) {
         const r = data[i];
         if (!r || !Array.isArray(r) || r.length === 0) continue;
-        const idCell = String(r[0] || '').trim();
-        const trkCell = String(r[1] || '').trim();
-        const m = idCell.match(/^(\d+)$/);
-        if (!m) continue;
+        const sidCell = String(r[23] || '').trim();
+        const m = sidCell.match(/SIDB:(\d+)/);
+        if (!m) continue; // 다운로드된 특판 데이터 행이 아님
         totalRows++;
+        const trkCell = String(r[1] || '').trim();
         if (!trkCell) continue;
         updates.push({ id: Number(m[1]), tracking: trkCell });
       }
       if (totalRows === 0) {
-        toast('업로드 가능한 행이 없습니다 (첫 컬럼 ID 누락)', 'err');
+        toast('업로드 가능한 행이 없습니다 (SIDB 누락)', 'err');
         setUploading(false);
         return;
       }
@@ -137,45 +138,73 @@ export default function HQDeliveryBizView({ kind, profile }) {
     setUploading(false);
   };
 
-  // 발송대기 엑셀 다운로드 (택배 탭만 — 송장 받기 위함)
+  // 발송대기 엑셀 다운로드 — 매장 본사요청과 동일한 31컬럼 양식
   const handleDownload = async () => {
     try {
       const ExcelJS = (await import('exceljs')).default;
       const { dlBlob } = await import('../../lib/utils');
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('특판 택배요청');
-      const header = ['ID', '송장번호', '발송일', '거래처', '상품명', '수량', '받는사람', '연락처', '주소', '메모'];
-      const hr = ws.addRow(header);
-      hr.eachCell(cell => {
-        cell.font = { bold: true };
-        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFEEEEEE'} };
-        cell.alignment = { horizontal:'center', vertical:'middle' };
-      });
+      ws.addRow(DELIVERY_HEADERS);
+
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      const ymd    = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}`;
+      const yymmdd = `${String(now.getFullYear()).slice(-2)}.${pad(now.getMonth()+1)}.${pad(now.getDate())}`;
+
+      let seq = 0;
       for (const r of rows) {
+        seq += 1;
+        const orderNo  = `${ymd}-${String(seq).padStart(4,'0')}`;
+        const soldDate = r.sold_at ? new Date(r.sold_at) : null;
+        const companyFull = r.company_name || '';
         ws.addRow([
-          r.id,
-          '', // 송장번호 — 물류팀이 채워서 반환
-          r.sold_at,
-          r.company_name || '-',
-          r.product_name || r.product?.name || '-',
-          r.quantity || 0,
-          r.recipient_name || '',
-          r.recipient_phone || '',
-          r.recipient_address || '',
-          r.memo || '',
+          soldDate,                                  // 0  발송일
+          '',                                        // 1  송장번호
+          orderNo,                                   // 2  주문번호
+          ORDER_CONSTANTS.CHANNEL,                   // 3  채널
+          companyFull,                               // 4  매장명 → 거래처명
+          r.recipient_name || '',                    // 5  수취인명
+          0,                                         // 6  결제금액
+          1,                                         // 7  주문수량
+          '',                                        // 8  상품명
+          '',                                        // 9  옵션
+          r.product_name || r.product?.name || '',   // 10 품명
+          r.recipient_name || '',                    // 11 수취인명
+          '',                                        // 12 (우편번호)
+          r.recipient_address || '',                 // 13 주소
+          r.recipient_phone || '',                   // 14 수취인 전화1
+          '',                                        // 15 수취인 전화2
+          r.memo || '',                              // 16 배송메세지
+          '',                                        // 17 상품번호
+          companyFull,                               // 18 주문자명 → 거래처명 자동 입력
+          ORDER_CONSTANTS.ORDERER_PHONE,             // 19 주문자 연락처1
+          ORDER_CONSTANTS.ORDERER_PHONE,             // 20 주문자 연락처2
+          '',                                        // 21 수수료
+          '',                                        // 22 수수료액
+          `SIDB:${r.id}`,                            // 23 공란 — biz_sale_id (특판 prefix)
+          '',                                        // 24 사방넷
+          '',                                        // 25 주문일
+          '',                                        // 26 주문자 ID
+          '',                                        // 27 물류바코드
+          '',                                        // 28 송장전송일
+          r.product?.code || '',                     // 29 ERP코드
+          r.quantity || 0,                           // 30 수량
         ]);
       }
+
+      ws.getColumn(1).numFmt = 'yyyy-mm-dd';
       ws.columns.forEach(col => {
         let max = 8;
         col.eachCell({ includeEmpty:false }, cell => {
           const v = cell.value == null ? '' : String(cell.value);
           if (v.length > max) max = Math.min(40, v.length + 2);
         });
-        col.width = max;
+        col.width = Math.max(max, 8);
       });
       const buf = await wb.xlsx.writeBuffer();
-      dlBlob(buf, `특판택배요청_${todayStr()}.xlsx`);
-      toast(`엑셀 다운로드 완료 (${rows.length}건)`, 'ok');
+      dlBlob(buf, `특판택배요청_${yymmdd}_전송건.xlsx`);
+      toast(`엑셀 다운로드 완료 (${seq}건)`, 'ok');
     } catch (err) {
       toast('다운로드 실패: ' + (err.message || err), 'err');
     }
