@@ -567,10 +567,12 @@ export default function SalesListPage({ setPage }) {
                       <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
                       <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
                       <td>
-                        {Number(s.points_used) > 0
-                          ? <span className="badge" style={{background:'#f3e5f5',color:'#6a1b9a',border:'1px solid #ce93d8',fontSize:11, ...(fully?{opacity:0.5}:{})}}>적립금사용</span>
-                          : <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
-                        }
+                        <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                        {Number(s.points_used) > 0 && (
+                          <div style={{fontSize:10, color:'#6a1b9a', fontWeight:700, marginTop:2, whiteSpace:'nowrap'}}>
+                            💳 적립금 -{Number(s.points_used).toLocaleString()}원
+                          </div>
+                        )}
                       </td>
                       <td style={{whiteSpace:'nowrap', padding:'4px 8px', ...strikeStyle}}>
                         {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}
@@ -772,10 +774,12 @@ export default function SalesListPage({ setPage }) {
                         <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
                         <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
                         <td>
-                          {Number(s.points_used) > 0
-                            ? <span className="badge" style={{background:'#f3e5f5',color:'#6a1b9a',border:'1px solid #ce93d8',fontSize:11, ...(fully?{opacity:0.5}:{})}}>적립금사용</span>
-                            : <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
-                          }
+                          <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                          {Number(s.points_used) > 0 && (
+                            <div style={{fontSize:10, color:'#6a1b9a', fontWeight:700, marginTop:2, whiteSpace:'nowrap'}}>
+                              💳 적립금 -{Number(s.points_used).toLocaleString()}원
+                            </div>
+                          )}
                         </td>
                         <td style={{whiteSpace:'nowrap', padding:'4px 8px', ...strikeStyle}}>
                           {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}

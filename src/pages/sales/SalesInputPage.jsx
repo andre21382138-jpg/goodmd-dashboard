@@ -218,18 +218,6 @@ export default function SalesInputPage({ profile }) {
         const pu = Number(updated.pointsUsed) || 0;
         if (pu > 0) updated.price = Math.max(0, np - dc - pu / effQty);
       }
-      if (field === 'payment' && value !== '적립금사용') {
-        // 적립금 사용 중인 라인에서 다른 결제 버튼을 누르면 적립금 자동 해제
-        // (payment만 덮어쓰여 points_used와 모순 저장되던 버그 차단)
-        if (Number(updated.pointsUsed) > 0) {
-          const np = Number(updated.normalPrice) || 0;
-          const dc = Number(updated.discount) || 0;
-          updated.pointsUsed = 0;
-          updated.pointCustomer = null;
-          updated.price = Math.max(0, np - dc);
-          setTimeout(() => toast(`적립금 사용이 해제되고 ${value}(으)로 변경되었습니다`, 'inf'), 0);
-        }
-      }
       return updated;
     }));
   };
@@ -244,7 +232,8 @@ export default function SalesInputPage({ profile }) {
       const qty = Math.max(Number(l.quantity) || 0, 1);
       // pu는 라인 전체 적립금이므로 단가에서는 qty로 나눠 차감
       const newPrice = Math.max(0, np - dc - pu / qty);
-      return { ...l, payment: pu > 0 ? '적립금사용' : l.payment, pointCustomer: pu > 0 ? customer : null, pointsUsed: pu, price: newPrice };
+      // 적립금사용은 결제수단이 아니라 '공제' — 기존 payment(카드/현금 등)는 유지
+      return { ...l, pointCustomer: pu > 0 ? customer : null, pointsUsed: pu, price: newPrice };
     }));
   };
 
