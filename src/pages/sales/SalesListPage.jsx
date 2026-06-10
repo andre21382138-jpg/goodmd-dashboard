@@ -159,7 +159,7 @@ export default function SalesListPage({ setPage }) {
   const fetchSales = useCallback(async () => {
     setLoading(true);
     let q = supabase.from('sales')
-      .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch)')
+      .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch), customer:customers(name)')
       .order('sold_at', { ascending: false });
     if (fStore) q = q.eq('store_name', fStore);
     if (fBrand) q = q.eq('brand_id', fBrand);
@@ -204,6 +204,38 @@ export default function SalesListPage({ setPage }) {
   const totalQty = useMemo(() => filtered.reduce((s, r) => s + effQty(r), 0), [filtered]);
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
   const returnedCount = useMemo(() => sales.filter(isFullyReturned).length, [sales]);
+
+  // 트랜잭션 그룹화 — 같은 sold_at + 매장 + 지점 + 고객 + created_at 60초 윈도 = 같은 결제 묶음
+  const groupedList = useMemo(() => {
+    const groups = [];
+    // sold_at desc 정렬 유지, 그룹 내부는 created_at 오름차순
+    const groupMap = new Map();
+    for (const s of filtered) {
+      const custKey = s.customer_id || `__no_${s.id}__guest__${(s.created_at||'').slice(0,16)}`;
+      const baseKey = `${s.sold_at}|${s.store_name}|${s.branch_name}|${custKey}`;
+      const ts = new Date(s.created_at || 0).getTime();
+      let g = groupMap.get(baseKey);
+      if (g && Math.abs(ts - g.lastTs) <= 60000) {
+        g.rows.push(s); g.lastTs = ts;
+      } else {
+        g = { key: `${baseKey}|${s.id}`, rows: [s], firstTs: ts, lastTs: ts, sold_at: s.sold_at };
+        groupMap.set(baseKey, g);
+        groups.push(g);
+      }
+    }
+    return groups;
+  }, [filtered]);
+
+  // 그룹 합계 헬퍼
+  const groupQty = (g) => g.rows.reduce((s, r) => s + effQty(r), 0);
+  const groupAmt = (g) => g.rows.reduce((s, r) => s + effAmt(r), 0);
+  const groupPointsUsed = (g) => g.rows.reduce((s, r) => s + (Number(r.points_used)||0), 0);
+  const groupPayments = (g) => {
+    const set = new Set(g.rows.map(r => r.payment).filter(p => p && p !== '적립금사용'));
+    return Array.from(set);
+  };
+
+  const [drillGroup, setDrillGroup] = useState(null); // 트랜잭션 상세보기 모달
 
   // 택배 발송 통계 (반품 차감 후)
   const deliveryCount = useMemo(
@@ -539,50 +571,63 @@ export default function SalesListPage({ setPage }) {
               <thead>
                 <tr>
                   <th>판매일</th><th>점포</th><th>지점</th><th>매니저</th>
-                  <th>브랜드</th><th>상품명</th>
-                  <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
-                  <th>결제</th><th style={{whiteSpace:'nowrap', minWidth:88}}>출고방식</th><th>메모</th>
+                  <th>고객</th>
+                  <th>상품명</th>
+                  <th className="r">총 수량</th><th className="r">총 합계</th>
+                  <th>결제</th><th style={{whiteSpace:'nowrap', minWidth:88}}>출고방식</th>
+                  <th>상세</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0
-                  ? <tr><td colSpan={12} className="empty">조회된 판매 내역이 없습니다</td></tr>
-                  : filtered.map(s => {
-                    const fully = isFullyReturned(s);
-                    const partial = isPartialReturn(s);
-                    const strikeStyle = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                {groupedList.length === 0
+                  ? <tr><td colSpan={11} className="empty">조회된 판매 내역이 없습니다</td></tr>
+                  : groupedList.map(g => {
+                    const head = g.rows[0];
+                    const totalQty = groupQty(g);
+                    const totalAmt = groupAmt(g);
+                    const ptsUsed = groupPointsUsed(g);
+                    const payments = groupPayments(g);
+                    const extraCount = g.rows.length - 1;
+                    const allFully = g.rows.every(r => isFullyReturned(r));
+                    const strikeStyle = allFully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
                     return (
-                    <tr key={s.id} style={fully ? { background:'#fafafa' } : {}}>
-                      <td className="mono" style={strikeStyle}>{s.sold_at}</td>
-                      <td><span className="badge badge-dept" style={fully?{opacity:0.5}:{}}>{s.store_name}</span></td>
-                      <td><span className="badge badge-store" style={fully?{opacity:0.5}:{}}>{s.branch_name}</span></td>
-                      <td style={{fontSize:12, ...strikeStyle}}>{s.seller?.name || '-'}</td>
-                      <td style={strikeStyle}>{s.brand?.name || '-'}</td>
+                    <tr key={g.key} style={allFully ? { background:'#fafafa' } : {}}>
+                      <td className="mono" style={strikeStyle}>{head.sold_at}</td>
+                      <td><span className="badge badge-dept" style={allFully?{opacity:0.5}:{}}>{head.store_name}</span></td>
+                      <td><span className="badge badge-store" style={allFully?{opacity:0.5}:{}}>{head.branch_name}</span></td>
+                      <td style={{fontSize:12, ...strikeStyle}}>{head.seller?.name || '-'}</td>
+                      <td style={{fontSize:12, ...strikeStyle}}>{head.customer?.name || '-'}</td>
                       <td style={strikeStyle}>
-                        {s.product?.name || '-'}
-                        {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
-                        {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}개</span>}
-                      </td>
-                      <td className="r" style={strikeStyle}>{effQty(s)}</td>
-                      <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
-                      <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
-                      <td>
-                        {s.payment && s.payment !== '적립금사용' && (
-                          <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                        {head.product?.name || '-'}
+                        {extraCount > 0 && (
+                          <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#1565C0', background:'#e3f2fd', border:'1px solid #90caf9', padding:'1px 6px', borderRadius:3}}>
+                            외 {extraCount}개
+                          </span>
                         )}
-                        {Number(s.points_used) > 0 && (
+                      </td>
+                      <td className="r" style={strikeStyle}>{totalQty}</td>
+                      <td className="r" style={{fontWeight:600, ...strikeStyle}}>{totalAmt.toLocaleString()}</td>
+                      <td>
+                        {payments.length > 0 && payments.map(p => (
+                          <span key={p} className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, marginRight:2, ...(allFully?{opacity:0.5}:{})}}>{p}</span>
+                        ))}
+                        {ptsUsed > 0 && (
                           <div style={{fontSize:10, color:'#6a1b9a', fontWeight:700, marginTop:2, whiteSpace:'nowrap'}}>
-                            💳 적립금 -{Number(s.points_used).toLocaleString()}원
+                            💳 적립금 -{ptsUsed.toLocaleString()}원
                           </div>
                         )}
                       </td>
                       <td style={{whiteSpace:'nowrap', padding:'4px 8px', ...strikeStyle}}>
-                        {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}
-                        {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(매장)</span>}
-                        {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
-                        {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
+                        {(!head.delivery_type || head.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}
+                        {head.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(매장)</span>}
+                        {head.delivery_type === 'hq' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
                       </td>
-                      <td style={{fontSize:11,color:'var(--text2)', ...strikeStyle}}>{s.memo || '-'}</td>
+                      <td>
+                        <button className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}}
+                          onClick={() => setDrillGroup(g)}>
+                          상세보기
+                        </button>
+                      </td>
                     </tr>
                   )})
                 }
@@ -776,7 +821,9 @@ export default function SalesListPage({ setPage }) {
                         <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
                         <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
                         <td>
-                          <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                          {s.payment && s.payment !== '적립금사용' && (
+                            <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                          )}
                           {Number(s.points_used) > 0 && (
                             <div style={{fontSize:10, color:'#6a1b9a', fontWeight:700, marginTop:2, whiteSpace:'nowrap'}}>
                               💳 적립금 -{Number(s.points_used).toLocaleString()}원
@@ -799,6 +846,87 @@ export default function SalesListPage({ setPage }) {
           </div>
         </div>
       )}
+
+      {/* 트랜잭션(결제묶음) 상세보기 모달 */}
+      {drillGroup && (() => {
+        const head = drillGroup.rows[0];
+        const totalQty = groupQty(drillGroup);
+        const totalAmt = groupAmt(drillGroup);
+        const ptsUsed  = groupPointsUsed(drillGroup);
+        return (
+        <div style={{position:'fixed', inset:0, zIndex:310, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setDrillGroup(null)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'20px 24px', width:'90vw', maxWidth:1100, maxHeight:'85vh', overflow:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap'}}>
+              <span style={{fontSize:14, fontWeight:700, color:'var(--text)'}}>📋 결제 상세</span>
+              <span className="badge badge-dept">{head.store_name}</span>
+              <span className="badge badge-store">{head.branch_name}</span>
+              <span className="mono" style={{fontSize:12, color:'var(--text2)'}}>{head.sold_at}</span>
+              <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>· 고객 {head.customer?.name || '(비회원)'}</span>
+              <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>· {drillGroup.rows.length}개 상품</span>
+              <button type="button" onClick={() => setDrillGroup(null)}
+                style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+            </div>
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>브랜드</th><th>상품명</th>
+                    <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
+                    <th>결제</th><th style={{whiteSpace:'nowrap', minWidth:88}}>출고방식</th><th>메모</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drillGroup.rows.map(s => {
+                    const fully = isFullyReturned(s);
+                    const partial = isPartialReturn(s);
+                    const strikeStyle = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                    return (
+                    <tr key={s.id} style={fully ? { background:'#fafafa' } : {}}>
+                      <td style={strikeStyle}>{s.brand?.name || '-'}</td>
+                      <td style={strikeStyle}>
+                        {s.product?.name || '-'}
+                        {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
+                        {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}개</span>}
+                      </td>
+                      <td className="r" style={strikeStyle}>{effQty(s)}</td>
+                      <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
+                      <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
+                      <td>
+                        {s.payment && s.payment !== '적립금사용' && (
+                          <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                        )}
+                        {Number(s.points_used) > 0 && (
+                          <div style={{fontSize:10, color:'#6a1b9a', fontWeight:700, marginTop:2, whiteSpace:'nowrap'}}>
+                            💳 적립금 -{Number(s.points_used).toLocaleString()}원
+                          </div>
+                        )}
+                      </td>
+                      <td style={{whiteSpace:'nowrap', padding:'4px 8px', ...strikeStyle}}>
+                        {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>매장판매</span>}
+                        {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(매장)</span>}
+                        {s.delivery_type === 'hq' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
+                      </td>
+                      <td style={{fontSize:11,color:'var(--text2)', ...strikeStyle}}>{s.memo || '-'}</td>
+                    </tr>
+                  )})}
+                </tbody>
+                <tfoot>
+                  <tr style={{background:'#fafafa', fontWeight:700}}>
+                    <td colSpan={2} style={{textAlign:'right'}}>합계</td>
+                    <td className="r">{totalQty}</td>
+                    <td></td>
+                    <td className="r" style={{color:'var(--accent)'}}>{totalAmt.toLocaleString()}원</td>
+                    <td colSpan={3} style={{fontSize:11, color:'#6a1b9a'}}>
+                      {ptsUsed > 0 && <>💳 적립금 -{ptsUsed.toLocaleString()}원</>}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )})()}
     </div>
   );
 }
