@@ -18,6 +18,8 @@ export default function StockRequestsAdminView() {
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(null);
   const [expandedKey, setExpandedKey] = useState(null); // 그룹 펼침 키
+  const [editingQty, setEditingQty]   = useState({}); // { [id]: '입력중인 값' }
+  const [savingQty,  setSavingQty]    = useState({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -58,6 +60,30 @@ export default function StockRequestsAdminView() {
     list.sort((a, b) => (b.latestAt || '').localeCompare(a.latestAt || ''));
     return list;
   }, [rows]);
+
+  const saveQty = async (r) => {
+    const raw = editingQty[r.id];
+    const next = Number(raw);
+    if (raw === '' || !Number.isFinite(next) || next < 1) {
+      toast('수량은 1 이상의 숫자로 입력해주세요', 'err'); return;
+    }
+    if (next === Number(r.quantity)) {
+      // 변경 없음 — 편집 상태만 정리
+      setEditingQty(p => { const n = {...p}; delete n[r.id]; return n; });
+      return;
+    }
+    setSavingQty(p => ({ ...p, [r.id]: true }));
+    const { error } = await supabase.from('order_requests').update({
+      quantity: next, updated_at: new Date().toISOString(),
+    }).eq('id', r.id);
+    if (error) toast(error.message, 'err');
+    else {
+      toast(`수량 ${r.quantity} → ${next} 변경 완료`, 'ok');
+      setEditingQty(p => { const n = {...p}; delete n[r.id]; return n; });
+      fetchData();
+    }
+    setSavingQty(p => { const n = {...p}; delete n[r.id]; return n; });
+  };
 
   const markFulfilled = async (id) => {
     if (!window.confirm('이 요청을 처리완료로 표시하시겠습니까?')) return;
@@ -165,7 +191,12 @@ export default function StockRequestsAdminView() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {g.items.map(r => (
+                                {g.items.map(r => {
+                                  const isPending = r.status === 'pending';
+                                  const draft = editingQty[r.id];
+                                  const editing = draft !== undefined;
+                                  const changed = editing && Number(draft) !== Number(r.quantity);
+                                  return (
                                   <tr key={r.id}>
                                     <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
                                       {r.created_at ? new Date(r.created_at).toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-'}
@@ -175,17 +206,37 @@ export default function StockRequestsAdminView() {
                                       {r.product?.name || '-'}
                                       {r.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {r.product.code}</div>}
                                     </td>
-                                    <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
+                                    <td className="r">
+                                      {isPending ? (
+                                        <div style={{display:'flex', alignItems:'center', gap:4, justifyContent:'flex-end'}}>
+                                          <input type="number" min={1}
+                                            value={editing ? draft : r.quantity}
+                                            onChange={e => setEditingQty(p => ({ ...p, [r.id]: e.target.value }))}
+                                            onKeyDown={e => { if (e.key === 'Enter' && changed) saveQty(r); }}
+                                            disabled={savingQty[r.id]}
+                                            style={{width:60, height:28, padding:'0 6px', border:`1px solid ${changed?'var(--accent)':'var(--border)'}`, borderRadius:4, fontFamily:'var(--mono)', fontWeight:700, textAlign:'right', fontSize:12, background: changed ? '#fff3e0' : '#fff'}}/>
+                                          {changed && (
+                                            <button type="button" onClick={() => saveQty(r)} disabled={savingQty[r.id]}
+                                              title="수량 저장"
+                                              style={{height:24, padding:'0 8px', border:'1px solid var(--accent)', borderRadius:4, background:'var(--accent)', color:'#fff', fontSize:10, fontWeight:700, cursor:'pointer'}}>
+                                              {savingQty[r.id] ? '…' : '저장'}
+                                            </button>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <span style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</span>
+                                      )}
+                                    </td>
                                     <td style={{fontSize:11, color:'var(--text2)'}}>{r.memo || '-'}</td>
                                     <td style={{textAlign:'center'}}>
-                                      {r.status === 'pending'
+                                      {isPending
                                         ? <span className="badge" style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', fontSize:11}}>대기</span>
                                         : r.status === 'fulfilled'
                                         ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>처리완료</span>
                                         : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
                                     </td>
                                     <td style={{textAlign:'center'}}>
-                                      {r.status === 'pending' && (
+                                      {isPending && (
                                         <button className="btn btn-s" onClick={() => markFulfilled(r.id)} disabled={processing === r.id}
                                           style={{padding:'2px 10px', fontSize:11}}>
                                           {processing === r.id ? <span className="spinner"/> : '✓ 완료'}
@@ -193,7 +244,7 @@ export default function StockRequestsAdminView() {
                                       )}
                                     </td>
                                   </tr>
-                                ))}
+                                )})}
                               </tbody>
                             </table>
                           </div>
