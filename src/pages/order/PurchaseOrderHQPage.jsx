@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, dlBlob } from '../../lib/utils';
 import { ORDER_CONSTANTS } from '../../lib/constants';
+import StockRequestsAdminView from './StockRequestsAdminView';
 
 const STATUS_LABEL = {
   sent:        { label:'발송',        color:'#1565C0', bg:'#e3f2fd', border:'#90caf9' },
@@ -146,7 +147,15 @@ const lastWeekRange = () => {
 };
 
 export default function PurchaseOrderHQPage({ profile }) {
-  const [tab, setTab] = useState('create'); // 'create' | 'status'
+  // 초기 탭 — NotificationCenter가 localStorage에 'open_purchase_hq_tab'='stock_request' 같은
+  // hint를 남기면 그 탭으로 진입. 사용 후 즉시 삭제하여 다음 방문 때는 기본 탭으로 돌아감.
+  const [tab, setTab] = useState(() => {
+    try {
+      const hint = localStorage.getItem('open_purchase_hq_tab');
+      if (hint) { localStorage.removeItem('open_purchase_hq_tab'); return hint; }
+    } catch {}
+    return 'create';
+  }); // 'create' | 'status' | 'stock_request'
   const initRange = lastWeekRange();
   const [fFrom, setFFrom] = useState(initRange.start);
   const [fTo,   setFTo]   = useState(initRange.end);
@@ -490,7 +499,10 @@ export default function PurchaseOrderHQPage({ profile }) {
       <div className="tabs">
         <button className={`tab ${tab==='create'?'on':''}`} onClick={() => setTab('create')}>발주 진행</button>
         <button className={`tab ${tab==='status'?'on':''}`} onClick={() => setTab('status')}>발주 현황</button>
+        <button className={`tab ${tab==='stock_request'?'on':''}`} onClick={() => setTab('stock_request')}>매장 재고요청</button>
       </div>
+
+      {tab === 'stock_request' && <StockRequestsAdminView/>}
 
       {/* ── 발주 진행 ── */}
       {tab === 'create' && (

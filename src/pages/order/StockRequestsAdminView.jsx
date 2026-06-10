@@ -1,0 +1,142 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { supabase } from '../../lib/supabase';
+import { toast, uniq } from '../../lib/utils';
+
+// 본사 — 매장에서 들어온 재고요청 조회 (order_requests 테이블)
+export default function StockRequestsAdminView() {
+  const today = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const todayStr = fmt(today);
+  const monthStart = `${today.getFullYear()}-${pad(today.getMonth()+1)}-01`;
+
+  const [fFrom, setFFrom] = useState(monthStart);
+  const [fTo,   setFTo]   = useState(todayStr);
+  const [fStore,setFStore]= useState('');
+  const [fStatus, setFStatus] = useState('pending'); // 'pending' | 'fulfilled' | 'all'
+  const [rows,  setRows]  = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    let q = supabase.from('order_requests')
+      .select('id, store_name, branch_name, quantity, memo, status, request_date, created_at, brand:brands(name), product:products(name, code)')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (fFrom)   q = q.gte('created_at', `${fFrom}T00:00:00`);
+    if (fTo)     q = q.lte('created_at', `${fTo}T23:59:59`);
+    if (fStore)  q = q.eq('store_name', fStore);
+    if (fStatus !== 'all') q = q.eq('status', fStatus);
+    const { data, error } = await q;
+    if (error) toast(error.message, 'err');
+    else setRows(data || []);
+    setLoading(false);
+  }, [fFrom, fTo, fStore, fStatus]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const stores = useMemo(() => uniq(rows.map(r => r.store_name)), [rows]);
+
+  const markFulfilled = async (id) => {
+    if (!window.confirm('이 요청을 처리완료로 표시하시겠습니까?')) return;
+    setProcessing(id);
+    const { error } = await supabase.from('order_requests').update({
+      status: 'fulfilled', updated_at: new Date().toISOString(),
+    }).eq('id', id);
+    if (error) toast(error.message, 'err');
+    else { toast('처리완료로 변경', 'ok'); fetchData(); }
+    setProcessing(null);
+  };
+
+  const totalQty = rows.reduce((s, r) => s + (Number(r.quantity)||0), 0);
+  const pendingCount = rows.filter(r => r.status === 'pending').length;
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-label">📋 매장 재고요청 조회</div>
+        <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
+          <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
+          <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+          <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} />
+          <select className="fsel" value={fStore} onChange={e => setFStore(e.target.value)}>
+            <option value="">전체 매장</option>
+            {stores.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
+            <option value="pending">대기</option>
+            <option value="fulfilled">처리완료</option>
+            <option value="all">전체</option>
+          </select>
+          <div className="fbar-right">
+            <span className="fresult">
+              <b>{rows.length}</b>건 · 총 수량 <b>{totalQty}</b>개
+              {fStatus === 'all' && <> · 대기 <b style={{color:'var(--accent)'}}>{pendingCount}</b>건</>}
+            </span>
+            <button className="btn btn-s" onClick={fetchData} disabled={loading}>
+              {loading ? <span className="spinner"/> : '🔄 새로고침'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{padding:'16px 20px'}}>
+        {loading ? <div className="empty"><span className="spinner"/></div>
+        : rows.length === 0 ? <div className="empty">조회된 재고요청이 없습니다</div>
+        : (
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>요청일시</th>
+                  <th>매장</th>
+                  <th>지점</th>
+                  <th>브랜드</th>
+                  <th>상품명</th>
+                  <th className="r" style={{width:80}}>수량</th>
+                  <th>메모</th>
+                  <th style={{width:110, textAlign:'center'}}>상태</th>
+                  <th style={{width:110, textAlign:'center'}}>작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id}>
+                    <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
+                      {r.created_at ? new Date(r.created_at).toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-'}
+                    </td>
+                    <td><span className="badge badge-dept">{r.store_name}</span></td>
+                    <td><span className="badge badge-store">{r.branch_name}</span></td>
+                    <td style={{fontSize:12}}>{r.brand?.name || '-'}</td>
+                    <td style={{fontSize:12, fontWeight:600}}>
+                      {r.product?.name || '-'}
+                      {r.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {r.product.code}</div>}
+                    </td>
+                    <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
+                    <td style={{fontSize:11, color:'var(--text2)'}}>{r.memo || '-'}</td>
+                    <td style={{textAlign:'center'}}>
+                      {r.status === 'pending'
+                        ? <span className="badge" style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', fontSize:11}}>대기</span>
+                        : r.status === 'fulfilled'
+                        ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>처리완료</span>
+                        : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
+                    </td>
+                    <td style={{textAlign:'center'}}>
+                      {r.status === 'pending' && (
+                        <button className="btn btn-s" onClick={() => markFulfilled(r.id)} disabled={processing === r.id}
+                          style={{padding:'2px 10px', fontSize:11}}>
+                          {processing === r.id ? <span className="spinner"/> : '✓ 완료'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

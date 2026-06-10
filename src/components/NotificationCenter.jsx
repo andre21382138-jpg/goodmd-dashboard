@@ -107,7 +107,8 @@ export default function NotificationCenter({ profile, setPage }) {
           key: `stock_request_pending`, color:'blue', icon:'📋',
           title:`새 재고요청 ${stockReq.length}건`,
           msg: stockReq.length <= 3 ? sampleNames : `${sampleNames} 외 ${stockReq.length - 3}건`,
-          page:'stock_store',
+          page:'purchase_hq',
+          tab: 'stock_request',
         });
       }
       // 매장 발주요청
@@ -196,6 +197,10 @@ export default function NotificationCenter({ profile, setPage }) {
   };
 
   const handleConfirm = (n) => {
+    // 페이지 안에서 특정 탭을 열어야 하는 경우 localStorage hint로 전달
+    if (n.tab) {
+      try { localStorage.setItem('open_purchase_hq_tab', n.tab); } catch {}
+    }
     if (setPage) setPage(n.page);
     handleClose(n);
     setBellOpen(false);
