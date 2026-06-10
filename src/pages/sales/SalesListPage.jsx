@@ -567,7 +567,9 @@ export default function SalesListPage({ setPage }) {
                       <td className="r" style={strikeStyle}>{Number(s.price).toLocaleString()}</td>
                       <td className="r" style={{fontWeight:600, ...strikeStyle}}>{effAmt(s).toLocaleString()}</td>
                       <td>
-                        <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                        {s.payment && s.payment !== '적립금사용' && (
+                          <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{s.payment}</span>
+                        )}
                         {Number(s.points_used) > 0 && (
                           <div style={{fontSize:10, color:'#6a1b9a', fontWeight:700, marginTop:2, whiteSpace:'nowrap'}}>
                             💳 적립금 -{Number(s.points_used).toLocaleString()}원
