@@ -17,6 +17,7 @@ export default function StockRequestsAdminView() {
   const [rows,  setRows]  = useState([]);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(null);
+  const [expandedKey, setExpandedKey] = useState(null); // 그룹 펼침 키
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -37,6 +38,26 @@ export default function StockRequestsAdminView() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const stores = useMemo(() => uniq(rows.map(r => r.store_name)), [rows]);
+
+  // 매장+지점 단위로 그룹화 — 같은 매장 내에서는 요청일시 desc
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const r of rows) {
+      const key = `${r.store_name || ''}|${r.branch_name || ''}`;
+      if (!map.has(key)) map.set(key, { key, store_name: r.store_name, branch_name: r.branch_name, items: [] });
+      map.get(key).items.push(r);
+    }
+    // 그룹 정렬: 가장 최근 요청이 있는 그룹부터
+    const list = Array.from(map.values());
+    for (const g of list) {
+      g.items.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+      g.totalQty = g.items.reduce((s, x) => s + (Number(x.quantity)||0), 0);
+      g.pendingCount = g.items.filter(x => x.status === 'pending').length;
+      g.latestAt = g.items[0]?.created_at || '';
+    }
+    list.sort((a, b) => (b.latestAt || '').localeCompare(a.latestAt || ''));
+    return list;
+  }, [rows]);
 
   const markFulfilled = async (id) => {
     if (!window.confirm('이 요청을 처리완료로 표시하시겠습니까?')) return;
@@ -85,56 +106,106 @@ export default function StockRequestsAdminView() {
         {loading ? <div className="empty"><span className="spinner"/></div>
         : rows.length === 0 ? <div className="empty">조회된 재고요청이 없습니다</div>
         : (
+          <>
+          <div style={{fontSize:11, color:'var(--text3)', marginBottom:8}}>매장 행 클릭 시 상품 내역 펼침</div>
           <div className="twrap">
             <table>
               <thead>
                 <tr>
-                  <th>요청일시</th>
                   <th>매장</th>
                   <th>지점</th>
-                  <th>브랜드</th>
-                  <th>상품명</th>
-                  <th className="r" style={{width:80}}>수량</th>
-                  <th>메모</th>
-                  <th style={{width:110, textAlign:'center'}}>상태</th>
-                  <th style={{width:110, textAlign:'center'}}>작업</th>
+                  <th className="r" style={{width:90}}>요청 건수</th>
+                  <th className="r" style={{width:90}}>총 수량</th>
+                  <th className="r" style={{width:90}}>대기 건수</th>
+                  <th>최근 요청</th>
+                  <th style={{width:90, textAlign:'center'}}></th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map(r => (
-                  <tr key={r.id}>
-                    <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
-                      {r.created_at ? new Date(r.created_at).toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-'}
-                    </td>
-                    <td><span className="badge badge-dept">{r.store_name}</span></td>
-                    <td><span className="badge badge-store">{r.branch_name}</span></td>
-                    <td style={{fontSize:12}}>{r.brand?.name || '-'}</td>
-                    <td style={{fontSize:12, fontWeight:600}}>
-                      {r.product?.name || '-'}
-                      {r.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {r.product.code}</div>}
-                    </td>
-                    <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
-                    <td style={{fontSize:11, color:'var(--text2)'}}>{r.memo || '-'}</td>
-                    <td style={{textAlign:'center'}}>
-                      {r.status === 'pending'
-                        ? <span className="badge" style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', fontSize:11}}>대기</span>
-                        : r.status === 'fulfilled'
-                        ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>처리완료</span>
-                        : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
-                    </td>
-                    <td style={{textAlign:'center'}}>
-                      {r.status === 'pending' && (
-                        <button className="btn btn-s" onClick={() => markFulfilled(r.id)} disabled={processing === r.id}
-                          style={{padding:'2px 10px', fontSize:11}}>
-                          {processing === r.id ? <span className="spinner"/> : '✓ 완료'}
+                {groups.map(g => {
+                  const open = expandedKey === g.key;
+                  return (
+                  <React.Fragment key={g.key}>
+                    <tr style={{cursor:'pointer', background: open ? '#fff8e1' : 'transparent'}}
+                      onClick={() => setExpandedKey(open ? null : g.key)}>
+                      <td><span className="badge badge-dept">{g.store_name}</span></td>
+                      <td><span className="badge badge-store">{g.branch_name}</span></td>
+                      <td className="r" style={{fontWeight:700}}>{g.items.length}건</td>
+                      <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{g.totalQty}개</td>
+                      <td className="r" style={{fontWeight:700, color: g.pendingCount > 0 ? '#e65100' : 'var(--text3)', fontFamily:'var(--mono)'}}>
+                        {g.pendingCount > 0 ? `${g.pendingCount}건` : '0'}
+                      </td>
+                      <td className="mono" style={{fontSize:11, color:'var(--text2)'}}>
+                        {g.latestAt ? new Date(g.latestAt).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-'}
+                      </td>
+                      <td style={{textAlign:'center'}}>
+                        <button className="btn btn-s" style={{padding:'3px 10px', fontSize:11}}
+                          onClick={(e) => { e.stopPropagation(); setExpandedKey(open ? null : g.key); }}>
+                          {open ? '▲ 닫기' : '▼ 펼침'}
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                    {open && (
+                      <tr>
+                        <td colSpan={7} style={{background:'#fafafa', padding:'10px 14px', borderTop:'2px solid var(--accent)'}}>
+                          <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8}}>
+                            📋 {g.store_name} {g.branch_name} 재고요청 — {g.items.length}건
+                          </div>
+                          <div className="twrap" style={{background:'#fff', borderRadius:'var(--radius)', border:'1px solid var(--border)'}}>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th style={{width:140}}>요청일시</th>
+                                  <th>브랜드</th>
+                                  <th>상품명</th>
+                                  <th className="r" style={{width:70}}>수량</th>
+                                  <th>메모</th>
+                                  <th style={{width:90, textAlign:'center'}}>상태</th>
+                                  <th style={{width:90, textAlign:'center'}}>작업</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {g.items.map(r => (
+                                  <tr key={r.id}>
+                                    <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
+                                      {r.created_at ? new Date(r.created_at).toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-'}
+                                    </td>
+                                    <td style={{fontSize:12}}>{r.brand?.name || '-'}</td>
+                                    <td style={{fontSize:12, fontWeight:600}}>
+                                      {r.product?.name || '-'}
+                                      {r.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {r.product.code}</div>}
+                                    </td>
+                                    <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
+                                    <td style={{fontSize:11, color:'var(--text2)'}}>{r.memo || '-'}</td>
+                                    <td style={{textAlign:'center'}}>
+                                      {r.status === 'pending'
+                                        ? <span className="badge" style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', fontSize:11}}>대기</span>
+                                        : r.status === 'fulfilled'
+                                        ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>처리완료</span>
+                                        : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
+                                    </td>
+                                    <td style={{textAlign:'center'}}>
+                                      {r.status === 'pending' && (
+                                        <button className="btn btn-s" onClick={() => markFulfilled(r.id)} disabled={processing === r.id}
+                                          style={{padding:'2px 10px', fontSize:11}}>
+                                          {processing === r.id ? <span className="spinner"/> : '✓ 완료'}
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )})}
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </>
