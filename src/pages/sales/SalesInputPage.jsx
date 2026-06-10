@@ -51,7 +51,8 @@ export default function SalesInputPage({ profile }) {
     id: Date.now()+Math.random(),
     brandId:'', productId:'', productSearch:'', showSuggestions:false,
     quantity:1, normalPrice:'', discount:'0', price:'',
-    payment:'카드',
+    payment:'',  // 결제수단 미선택 — 매니저가 카드/현금/증정/시식 중 명시적으로 선택해야 저장 가능
+
     delivery:'none',  // 'none' | 'store' | 'hq'
     pointCustomer:null,  // {id,name,phone,total_points,used_points,grade}
     pointsUsed:0,
@@ -306,6 +307,13 @@ export default function SalesInputPage({ profile }) {
     e.preventDefault();
     const validLines = lines.filter(l => l.brandId && l.productId);
     if (validLines.length === 0) { toast('상품을 하나 이상 선택해주세요', 'err'); return; }
+    // 적립금 사용 여부와 무관하게 결제수단(카드/현금/증정/시식) 선택 필수
+    const noPaymentLine = validLines.find(l => !l.payment || l.payment === '적립금사용');
+    if (noPaymentLine) {
+      const prod = allProducts.find(p => String(p.id) === String(noPaymentLine.productId));
+      toast(`결제수단을 선택해주세요${prod ? ` (${prod.name})` : ''}`, 'err');
+      return;
+    }
     if (memberMode === 'search' && !selectedMember) { toast('회원을 선택해주세요', 'err'); return; }
     if (memberMode === 'new') {
       if (!custName.trim()) { toast('고객 이름을 입력해주세요', 'err'); return; }
