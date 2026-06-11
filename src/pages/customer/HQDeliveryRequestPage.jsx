@@ -63,7 +63,7 @@ async function exportDeliveryRequests(groups) {
         '',                                        // 26 주문자 ID
         '',                                        // 27 물류바코드(88코드)
         '',                                        // 28 송장전송일
-        it.product?.code || '',                    // 29 ERP코드 (현재 product.code 사용 — 별도 erp_code 컬럼 있으면 그쪽으로 교체)
+        it.product?.erp_code || '',                // 29 ERP코드
         it.quantity || 0,                          // 30 수량
       ]);
     }
@@ -145,7 +145,7 @@ export default function HQDeliveryRequestPage({ profile }) {
       .select(`id, sold_at, store_name, branch_name, quantity, price,
                recipient_name, recipient_phone, recipient_address, delivery_notes,
                dispatched_at, customer_id, tracking_number,
-               product:products(name, code)`)
+               product:products(name, code, erp_code)`)
       .eq('delivery_type', 'hq')
       .eq('delivery_status', tab);
     if (tab === 'pending') {

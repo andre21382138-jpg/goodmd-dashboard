@@ -37,7 +37,7 @@ export default function HQDeliveryBizView({ kind, profile }) {
                supply_price, memo, delivery_method,
                recipient_name, recipient_phone, recipient_address,
                delivery_status, dispatched_at, tracking_number,
-               product:products(name, code)`)
+               product:products(name, code, erp_code)`)
       .eq('delivery_method', deliveryMethod)
       .eq('delivery_status', tab);
     if (tab === 'pending') {
@@ -188,7 +188,7 @@ export default function HQDeliveryBizView({ kind, profile }) {
           '',                                        // 26 주문자 ID
           '',                                        // 27 물류바코드
           '',                                        // 28 송장전송일
-          r.product?.code || '',                     // 29 ERP코드
+          r.product?.erp_code || '',                 // 29 ERP코드
           r.quantity || 0,                           // 30 수량
         ]);
       }
