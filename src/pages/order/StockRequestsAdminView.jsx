@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, uniq } from '../../lib/utils';
+import { toast, uniq, dlBlob } from '../../lib/utils';
+import { ORDER_CONSTANTS } from '../../lib/constants';
+import { DELIVERY_HEADERS } from '../customer/HQDeliveryRequestPage';
 
 // 본사 — 매장에서 들어온 재고요청 조회 (order_requests 테이블)
 export default function StockRequestsAdminView() {
@@ -20,6 +22,8 @@ export default function StockRequestsAdminView() {
   const [expandedKey, setExpandedKey] = useState(null); // 그룹 펼침 키
   const [editingQty, setEditingQty]   = useState({}); // { [id]: '입력중인 값' }
   const [savingQty,  setSavingQty]    = useState({});
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [exporting,  setExporting]    = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -97,6 +101,109 @@ export default function StockRequestsAdminView() {
     setProcessing(null);
   };
 
+  // 선택 토글
+  const toggleOne = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleGroup = (g) => {
+    const ids = g.items.map(it => it.id);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      const allOn = ids.every(id => next.has(id));
+      if (allOn) ids.forEach(id => next.delete(id));
+      else       ids.forEach(id => next.add(id));
+      return next;
+    });
+  };
+  const selectAll = () => setSelectedIds(new Set(rows.map(r => r.id)));
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // 31컬럼 매장발주 양식으로 엑셀 다운로드
+  const exportSelected = async () => {
+    if (selectedIds.size === 0) { toast('다운로드할 요청을 선택해주세요', 'err'); return; }
+    setExporting(true);
+    try {
+      const items = rows.filter(r => selectedIds.has(r.id));
+      // 매장 주소 일괄 조회
+      const storeNames  = uniq(items.map(it => it.store_name));
+      const { data: addrs } = await supabase.from('store_addresses').select('*')
+        .in('store_name', storeNames);
+      const addrMap = new Map();
+      for (const a of (addrs || [])) addrMap.set(`${a.store_name}|${a.branch_name}`, a);
+
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('매장재고요청');
+      ws.addRow(DELIVERY_HEADERS);
+
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      const ymd    = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}`;
+      const yymmdd = `${String(now.getFullYear()).slice(-2)}.${pad(now.getMonth()+1)}.${pad(now.getDate())}`;
+
+      let seq = 0;
+      for (const r of items) {
+        seq += 1;
+        const orderNo = `${ymd}-${String(seq).padStart(4,'0')}`;
+        const storeFull = `${r.store_name || ''}${r.branch_name || ''}`;
+        const addr = addrMap.get(`${r.store_name}|${r.branch_name}`) || {};
+        ws.addRow([
+          now,                                       // 0  발송일
+          '',                                        // 1  송장번호
+          orderNo,                                   // 2  주문번호
+          ORDER_CONSTANTS.CHANNEL,                   // 3  채널
+          storeFull,                                 // 4  매장명
+          storeFull,                                 // 5  수취인명 (매장이 수취인)
+          0,                                         // 6  결제금액
+          1,                                         // 7  주문수량
+          '',                                        // 8  상품명
+          '',                                        // 9  옵션
+          r.product?.name || '',                     // 10 품명
+          storeFull,                                 // 11 수취인명
+          addr.postal_code || '',                    // 12 우편번호
+          addr.address || '',                        // 13 주소
+          addr.recipient_phone || '',                // 14 수취인 전화1
+          '',                                        // 15 수취인 전화2
+          r.memo || '',                              // 16 배송메세지
+          '',                                        // 17 상품번호
+          storeFull,                                 // 18 주문자명 (본사가 매장명으로)
+          ORDER_CONSTANTS.ORDERER_PHONE,             // 19 주문자 연락처1
+          ORDER_CONSTANTS.ORDERER_PHONE,             // 20 주문자 연락처2
+          '',                                        // 21 수수료
+          '',                                        // 22 수수료액
+          `SIDR:${r.id}`,                            // 23 공란 — order_requests.id (재고요청 prefix)
+          '',                                        // 24 사방넷
+          '',                                        // 25 주문일
+          '',                                        // 26 주문자 ID
+          '',                                        // 27 물류바코드
+          '',                                        // 28 송장전송일
+          r.product?.code || '',                     // 29 ERP코드
+          r.quantity || 0,                           // 30 수량
+        ]);
+      }
+
+      ws.getColumn(1).numFmt = 'yyyy-mm-dd';
+      ws.columns.forEach(col => {
+        let max = 8;
+        col.eachCell({ includeEmpty:false }, cell => {
+          const v = cell.value == null ? '' : String(cell.value);
+          if (v.length > max) max = Math.min(40, v.length + 2);
+        });
+        col.width = Math.max(max, 8);
+      });
+      const buf = await wb.xlsx.writeBuffer();
+      dlBlob(buf, `매장재고요청_${yymmdd}_전송건.xlsx`);
+      toast(`엑셀 다운로드 완료 (${seq}건)`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    }
+    setExporting(false);
+  };
+
   const markFulfilled = async (id) => {
     if (!window.confirm('이 요청을 처리완료로 표시하시겠습니까?')) return;
     setProcessing(id);
@@ -132,7 +239,18 @@ export default function StockRequestsAdminView() {
             <span className="fresult">
               <b>{rows.length}</b>건 · 총 수량 <b>{totalQty}</b>개
               {fStatus === 'all' && <> · 대기 <b style={{color:'var(--accent)'}}>{pendingCount}</b>건</>}
+              {selectedIds.size > 0 && <> · <b style={{color:'#6a1b9a'}}>선택 {selectedIds.size}건</b></>}
             </span>
+            {rows.length > 0 && (
+              selectedIds.size === rows.length
+                ? <button className="btn btn-s" onClick={clearSelection}>✕ 선택 해제</button>
+                : <button className="btn btn-s" onClick={selectAll}>☑ 전체 선택</button>
+            )}
+            <button type="button" onClick={exportSelected} disabled={exporting || selectedIds.size === 0}
+              title="선택된 재고요청을 매장발주 31컬럼 양식(.xlsx)으로 다운로드"
+              style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background: selectedIds.size > 0 ? '#fff3e0' : '#f5f5f5', color: selectedIds.size > 0 ? 'var(--accent)' : 'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed'}}>
+              {exporting ? <span className="spinner"/> : `📥 엑셀 다운로드${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
+            </button>
             <button className="btn btn-s" onClick={fetchData} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔄 새로고침'}
             </button>
@@ -145,11 +263,12 @@ export default function StockRequestsAdminView() {
         : rows.length === 0 ? <div className="empty">조회된 재고요청이 없습니다</div>
         : (
           <>
-          <div style={{fontSize:11, color:'var(--text3)', marginBottom:8}}>매장 행 클릭 시 상품 내역 펼침</div>
+          <div style={{fontSize:11, color:'var(--text3)', marginBottom:8}}>매장 행 클릭 시 상품 내역 펼침 · 체크박스로 선택 후 엑셀 다운로드</div>
           <div className="twrap">
             <table>
               <thead>
                 <tr>
+                  <th style={{width:36}}></th>
                   <th>매장</th>
                   <th>지점</th>
                   <th className="r" style={{width:90}}>요청 건수</th>
@@ -162,10 +281,19 @@ export default function StockRequestsAdminView() {
               <tbody>
                 {groups.map(g => {
                   const open = expandedKey === g.key;
+                  const groupIds = g.items.map(it => it.id);
+                  const groupSelected = groupIds.every(id => selectedIds.has(id));
+                  const groupPartial  = !groupSelected && groupIds.some(id => selectedIds.has(id));
                   return (
                   <React.Fragment key={g.key}>
                     <tr style={{cursor:'pointer', background: open ? '#fff8e1' : 'transparent'}}
                       onClick={() => setExpandedKey(open ? null : g.key)}>
+                      <td style={{textAlign:'center'}} onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={groupSelected}
+                          ref={el => { if (el) el.indeterminate = groupPartial; }}
+                          onChange={() => toggleGroup(g)}
+                          style={{cursor:'pointer', width:16, height:16}}/>
+                      </td>
                       <td><span className="badge badge-dept">{g.store_name}</span></td>
                       <td><span className="badge badge-store">{g.branch_name}</span></td>
                       <td className="r" style={{fontWeight:700}}>{g.items.length}건</td>
@@ -185,7 +313,7 @@ export default function StockRequestsAdminView() {
                     </tr>
                     {open && (
                       <tr>
-                        <td colSpan={7} style={{background:'#fafafa', padding:'10px 14px', borderTop:'2px solid var(--accent)'}}>
+                        <td colSpan={8} style={{background:'#fafafa', padding:'10px 14px', borderTop:'2px solid var(--accent)'}}>
                           <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8}}>
                             📋 {g.store_name} {g.branch_name} 재고요청 — {g.items.length}건
                           </div>
@@ -193,6 +321,7 @@ export default function StockRequestsAdminView() {
                             <table>
                               <thead>
                                 <tr>
+                                  <th style={{width:36}}></th>
                                   <th style={{width:140}}>요청일시</th>
                                   <th>브랜드</th>
                                   <th>상품명</th>
@@ -209,7 +338,12 @@ export default function StockRequestsAdminView() {
                                   const editing = draft !== undefined;
                                   const changed = editing && Number(draft) !== Number(r.quantity);
                                   return (
-                                  <tr key={r.id}>
+                                  <tr key={r.id} style={selectedIds.has(r.id) ? {background:'#f3e5f5'} : {}}>
+                                    <td style={{textAlign:'center'}}>
+                                      <input type="checkbox" checked={selectedIds.has(r.id)}
+                                        onChange={() => toggleOne(r.id)}
+                                        style={{cursor:'pointer', width:16, height:16}}/>
+                                    </td>
                                     <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
                                       {r.created_at ? new Date(r.created_at).toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-'}
                                     </td>
