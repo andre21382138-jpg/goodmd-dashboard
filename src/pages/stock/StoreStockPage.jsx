@@ -21,6 +21,7 @@ export default function StoreStockPage({ profile }) {
   const [allBranches, setAllBranches] = useState([]); // [{store_name, branch_name}]
   const [uploading, setUploading] = useState(false);
   const uploadRef = useRef(null);
+  const [unmatchedRows, setUnmatchedRows] = useState([]); // 매칭 실패 row 목록
 
   useEffect(() => {
     supabase.from('store_stock').select('store_name').then(({data}) => {
@@ -80,13 +81,14 @@ export default function StoreStockPage({ profile }) {
         const a = String(r[0]||'').trim();
         const b = String(r[1]||'').trim();
         const c = String(r[2]||'').trim();
+        const d = String(r[3]||'').trim();
         const e5 = r[4];
         if (!a || !b || !c) continue;
         // 헤더 row 제외
         if (c === '상품코드') continue;
         const stock = Number(e5);
         if (!Number.isFinite(stock)) continue;
-        validRows.push({ store: a, branch: b, code: c, stock });
+        validRows.push({ store: a, branch: b, code: c, name: d, stock });
       }
 
       if (validRows.length === 0) {
@@ -106,10 +108,10 @@ export default function StoreStockPage({ profile }) {
 
       const updates = [];
       const inserts = [];
-      let notFound = 0;
+      const unmatched = [];
       for (const row of validRows) {
         const product = codeMap.get(row.code);
-        if (!product) { notFound++; continue; }
+        if (!product) { unmatched.push(row); continue; }
         const normalizedCode = product.code || row.code;
         const key = `${row.store}|${row.branch}|${normalizedCode}`;
         const existingId = existingMap.get(key);
@@ -153,14 +155,55 @@ export default function StoreStockPage({ profile }) {
       }
 
       const parts = [`${ok}건 반영`];
-      if (fail     > 0) parts.push(`실패 ${fail}건`);
-      if (notFound > 0) parts.push(`상품 매칭 실패 ${notFound}건`);
-      toast(parts.join(' / '), (fail > 0 || notFound > 0) ? 'err' : 'ok');
+      if (fail            > 0) parts.push(`실패 ${fail}건`);
+      if (unmatched.length > 0) parts.push(`상품 매칭 실패 ${unmatched.length}건`);
+      toast(parts.join(' / '), (fail > 0 || unmatched.length > 0) ? 'err' : 'ok');
+      setUnmatchedRows(unmatched);
       fetchStocks();
     } catch (err) {
       toast('업로드 실패: ' + (err.message || err), 'err');
     }
     setUploading(false);
+  };
+
+  // 매칭 실패 row를 엑셀로 다운로드 — 코드/상품명/매장/지점/재고
+  const downloadUnmatched = async () => {
+    if (unmatchedRows.length === 0) return;
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const { dlBlob } = await import('../../lib/utils');
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('매칭실패');
+      ws.addRow(['상품코드', '상품명(엑셀)', '매장', '지점', '재고']);
+      // 같은 코드 중복 제거하여 상품등록 보강용으로 활용
+      const seen = new Set();
+      const unique = [];
+      for (const r of unmatchedRows) {
+        if (seen.has(r.code)) continue;
+        seen.add(r.code);
+        unique.push(r);
+      }
+      // 보강용: 코드별 그룹 1줄 + 상세 row들
+      for (const r of unmatchedRows) {
+        ws.addRow([r.code, r.name || '', r.store, r.branch, r.stock]);
+      }
+      ws.columns.forEach(col => {
+        let max = 8;
+        col.eachCell({ includeEmpty:false }, cell => {
+          const v = cell.value == null ? '' : String(cell.value);
+          if (v.length > max) max = Math.min(40, v.length + 2);
+        });
+        col.width = max;
+      });
+      const buf = await wb.xlsx.writeBuffer();
+      const now = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      const ymd = `${String(now.getFullYear()).slice(-2)}.${pad(now.getMonth()+1)}.${pad(now.getDate())}`;
+      dlBlob(buf, `매장재고_매칭실패_${ymd}.xlsx`);
+      toast(`매칭 실패 ${unmatchedRows.length}건 (고유 코드 ${unique.length}개) 다운로드`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    }
   };
 
   // 점간이동 대상 매장 목록 fetch
@@ -297,6 +340,13 @@ export default function StoreStockPage({ profile }) {
             </span>
             {!isManager && (
               <>
+                {unmatchedRows.length > 0 && (
+                  <button type="button" onClick={downloadUnmatched}
+                    title="가장 최근 업로드의 상품 매칭 실패 row를 엑셀로 다운로드 — 어떤 상품을 등록해야 하는지 확인용"
+                    style={{height:32, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background:'#ffebee', color:'var(--danger)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                    ⚠ 매칭 실패 {unmatchedRows.length}건
+                  </button>
+                )}
                 <input ref={uploadRef} type="file" accept=".xls,.xlsx"
                   onChange={handleUploadFile} style={{display:'none'}}/>
                 <button type="button" onClick={handleUploadClick} disabled={uploading}
