@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 
@@ -19,6 +19,8 @@ export default function StoreStockPage({ profile }) {
   const [transferMemo, setTransferMemo] = useState('');
   const [transferProcessing, setTransferProcessing] = useState(false);
   const [allBranches, setAllBranches] = useState([]); // [{store_name, branch_name}]
+  const [uploading, setUploading] = useState(false);
+  const uploadRef = useRef(null);
 
   useEffect(() => {
     supabase.from('store_stock').select('store_name').then(({data}) => {
@@ -46,6 +48,120 @@ export default function StoreStockPage({ profile }) {
   }, [fStore, fBranch]);
 
   useEffect(() => { fetchStocks(); }, [fetchStocks]);
+
+  // 매장재고 일괄 업로드 (본사 전용)
+  // 엑셀 컬럼: [그룹(매장), 매장(지점), 상품코드, 상품명, 재고]
+  // 매칭은 product.code 또는 erp_code 둘 다 fallback
+  const handleUploadClick = () => uploadRef.current?.click();
+  const handleUploadFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!window.confirm('업로드 시 매장재고가 엑셀의 재고 값으로 일괄 갱신됩니다.\n계속하시겠습니까?')) return;
+    setUploading(true);
+    try {
+      const XLSX = await import('xlsx');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type:'array', codepage: 949 });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // 상품 매핑 (code/erp_code 둘 다 키로)
+      const { data: products } = await supabase.from('products').select('id, name, code, erp_code');
+      const codeMap = new Map();
+      for (const p of (products || [])) {
+        if (p.code)     codeMap.set(String(p.code).trim(),     p);
+        if (p.erp_code) codeMap.set(String(p.erp_code).trim(), p);
+      }
+
+      // 유효 데이터 row 추출 (헤더/소계/총합 제외)
+      const validRows = [];
+      for (const r of data) {
+        const a = String(r[0]||'').trim();
+        const b = String(r[1]||'').trim();
+        const c = String(r[2]||'').trim();
+        const e5 = r[4];
+        if (!a || !b || !c) continue;
+        // 헤더 row 제외
+        if (c === '상품코드') continue;
+        const stock = Number(e5);
+        if (!Number.isFinite(stock)) continue;
+        validRows.push({ store: a, branch: b, code: c, stock });
+      }
+
+      if (validRows.length === 0) {
+        toast('업로드 가능한 데이터 행이 없습니다 (컬럼 순서: 매장/지점/코드/상품명/재고)', 'err');
+        setUploading(false);
+        return;
+      }
+      toast(`${validRows.length}건 인식 — 저장 중...`, 'inf');
+
+      // 기존 store_stock 일괄 조회 → 키 매핑 (UPDATE vs INSERT 분류)
+      const { data: existing } = await supabase.from('store_stock')
+        .select('id, store_name, branch_name, product_code');
+      const existingMap = new Map();
+      for (const ex of (existing || [])) {
+        existingMap.set(`${ex.store_name}|${ex.branch_name}|${ex.product_code}`, ex.id);
+      }
+
+      const updates = [];
+      const inserts = [];
+      let notFound = 0;
+      for (const row of validRows) {
+        const product = codeMap.get(row.code);
+        if (!product) { notFound++; continue; }
+        const normalizedCode = product.code || row.code;
+        const key = `${row.store}|${row.branch}|${normalizedCode}`;
+        const existingId = existingMap.get(key);
+        if (existingId) {
+          updates.push({ id: existingId, stock_qty: row.stock, product_name: product.name });
+        } else {
+          inserts.push({
+            store_name: row.store,
+            branch_name: row.branch,
+            product_code: normalizedCode,
+            product_name: product.name,
+            stock_qty: row.stock,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      // UPDATE — 100건씩 병렬 처리
+      let ok = 0, fail = 0;
+      const BATCH = 100;
+      for (let i = 0; i < updates.length; i += BATCH) {
+        const slice = updates.slice(i, i+BATCH);
+        const results = await Promise.all(slice.map(u =>
+          supabase.from('store_stock').update({
+            stock_qty: u.stock_qty,
+            product_name: u.product_name,
+            updated_at: new Date().toISOString(),
+          }).eq('id', u.id)
+        ));
+        for (const { error } of results) {
+          if (error) fail++; else ok++;
+        }
+      }
+      // INSERT — 500건씩 배치
+      const INS_BATCH = 500;
+      for (let i = 0; i < inserts.length; i += INS_BATCH) {
+        const slice = inserts.slice(i, i+INS_BATCH);
+        const { error } = await supabase.from('store_stock').insert(slice);
+        if (error) fail += slice.length;
+        else ok += slice.length;
+      }
+
+      const parts = [`${ok}건 반영`];
+      if (fail     > 0) parts.push(`실패 ${fail}건`);
+      if (notFound > 0) parts.push(`상품 매칭 실패 ${notFound}건`);
+      toast(parts.join(' / '), (fail > 0 || notFound > 0) ? 'err' : 'ok');
+      fetchStocks();
+    } catch (err) {
+      toast('업로드 실패: ' + (err.message || err), 'err');
+    }
+    setUploading(false);
+  };
 
   // 점간이동 대상 매장 목록 fetch
   useEffect(() => {
@@ -175,10 +291,21 @@ export default function StoreStockPage({ profile }) {
             placeholder="🔍 상품명·상품코드 검색" style={{height:34, minWidth:200}}/>
           {(fStore||fBranch||fSearch) && !isManager &&
             <button className="btn-ghost" onClick={()=>{setFStore('');setFBranch('');setFSearch('');}}>✕ 초기화</button>}
-          <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:16}}>
+          <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:10}}>
             <span className="fresult">
               <b>{filtered.length.toLocaleString()}</b>개 상품 · 총 재고 <b>{totalQty.toLocaleString()}</b>개
             </span>
+            {!isManager && (
+              <>
+                <input ref={uploadRef} type="file" accept=".xls,.xlsx"
+                  onChange={handleUploadFile} style={{display:'none'}}/>
+                <button type="button" onClick={handleUploadClick} disabled={uploading}
+                  title="점별 매장재고현황 엑셀 일괄 업로드 (코드 매칭)"
+                  style={{height:32, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                  {uploading ? <span className="spinner"/> : '📤 재고 일괄 업로드'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
