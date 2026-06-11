@@ -500,9 +500,11 @@ export default function PurchaseOrderHQPage({ profile }) {
         <button className={`tab ${tab==='create'?'on':''}`} onClick={() => setTab('create')}>발주 진행</button>
         <button className={`tab ${tab==='status'?'on':''}`} onClick={() => setTab('status')}>발주 현황</button>
         <button className={`tab ${tab==='stock_request'?'on':''}`} onClick={() => setTab('stock_request')}>매장 재고요청</button>
+        <button className={`tab ${tab==='stock_completed'?'on':''}`} onClick={() => setTab('stock_completed')}>매장 발주완료</button>
       </div>
 
-      {tab === 'stock_request' && <StockRequestsAdminView/>}
+      {tab === 'stock_request'   && <StockRequestsAdminView mode="pending"   profile={profile}/>}
+      {tab === 'stock_completed' && <StockRequestsAdminView mode="completed" profile={profile}/>}
 
       {/* ── 발주 진행 ── */}
       {tab === 'create' && (

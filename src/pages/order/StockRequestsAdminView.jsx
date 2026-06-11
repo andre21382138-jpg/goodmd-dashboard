@@ -5,7 +5,9 @@ import { ORDER_CONSTANTS } from '../../lib/constants';
 import { DELIVERY_HEADERS } from '../customer/HQDeliveryRequestPage';
 
 // 본사 — 매장에서 들어온 재고요청 조회 (order_requests 테이블)
-export default function StockRequestsAdminView() {
+// mode: 'pending' (매장재고요청 탭) | 'completed' (매장발주완료 탭)
+export default function StockRequestsAdminView({ mode = 'pending', profile }) {
+  const isPendingMode = mode === 'pending';
   const today = new Date();
   const pad = n => String(n).padStart(2,'0');
   const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -15,7 +17,8 @@ export default function StockRequestsAdminView() {
   const [fFrom, setFFrom] = useState(monthStart);
   const [fTo,   setFTo]   = useState(todayStr);
   const [fStore,setFStore]= useState('');
-  const [fStatus, setFStatus] = useState('pending'); // 'pending' | 'fulfilled' | 'all'
+  // pending 모드: pending만 기본, completed 모드: ordered/received 표시
+  const [fStatus, setFStatus] = useState(isPendingMode ? 'pending' : 'all_completed');
   const [rows,  setRows]  = useState([]);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(null);
@@ -34,7 +37,15 @@ export default function StockRequestsAdminView() {
     if (fFrom)   q = q.gte('created_at', `${fFrom}T00:00:00`);
     if (fTo)     q = q.lte('created_at', `${fTo}T23:59:59`);
     if (fStore)  q = q.eq('store_name', fStore);
-    if (fStatus !== 'all') q = q.eq('status', fStatus);
+    // status 분기
+    if (isPendingMode) {
+      // 매장재고요청 탭은 pending(또는 fulfilled - 별도 처리)만 보여줌
+      if (fStatus !== 'all') q = q.eq('status', fStatus);
+    } else {
+      // 매장발주완료 탭은 ordered/received만 보여줌
+      if (fStatus === 'ordered' || fStatus === 'received') q = q.eq('status', fStatus);
+      else q = q.in('status', ['ordered', 'received']);
+    }
     const { data, error } = await q;
     if (error) toast(error.message, 'err');
     else setRows(data || []);
@@ -90,6 +101,31 @@ export default function StockRequestsAdminView() {
       fetchData();
     }
     setSavingQty(p => { const n = {...p}; delete n[r.id]; return n; });
+  };
+
+  // 선택된 pending 항목을 ordered로 일괄 전환 = 본사 발주진행
+  const processOrder = async () => {
+    if (selectedIds.size === 0) { toast('발주진행할 요청을 선택해주세요', 'err'); return; }
+    const items = rows.filter(r => selectedIds.has(r.id) && r.status === 'pending');
+    if (items.length === 0) { toast('선택된 항목 중 pending 상태가 없습니다', 'err'); return; }
+    if (!window.confirm(`${items.length}건을 발주진행 처리하시겠습니까?\n\n매장에서는 '발주진행중'으로 표시됩니다.`)) return;
+    setExporting(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase.from('order_requests').update({
+        status: 'ordered',
+        ordered_at: nowIso,
+        ordered_by: profile?.id || null,
+        updated_at: nowIso,
+      }).in('id', items.map(it => it.id));
+      if (error) throw error;
+      toast(`${items.length}건 발주진행 처리 완료`, 'ok');
+      setSelectedIds(new Set());
+      fetchData();
+    } catch (err) {
+      toast('처리 실패: ' + (err.message || err), 'err');
+    }
+    setExporting(false);
   };
 
   const deleteRequest = async (r) => {
@@ -230,11 +266,19 @@ export default function StockRequestsAdminView() {
             <option value="">전체 매장</option>
             {stores.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
-            <option value="pending">대기</option>
-            <option value="fulfilled">처리완료</option>
-            <option value="all">전체</option>
-          </select>
+          {isPendingMode ? (
+            <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
+              <option value="pending">대기</option>
+              <option value="fulfilled">자체 처리완료</option>
+              <option value="all">전체</option>
+            </select>
+          ) : (
+            <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
+              <option value="all_completed">전체 (발주중+입고완료)</option>
+              <option value="ordered">발주진행중</option>
+              <option value="received">입고완료</option>
+            </select>
+          )}
           <div className="fbar-right">
             <span className="fresult">
               <b>{rows.length}</b>건 · 총 수량 <b>{totalQty}</b>개
@@ -245,6 +289,13 @@ export default function StockRequestsAdminView() {
               selectedIds.size === rows.length
                 ? <button className="btn btn-s" onClick={clearSelection}>✕ 선택 해제</button>
                 : <button className="btn btn-s" onClick={selectAll}>☑ 전체 선택</button>
+            )}
+            {isPendingMode && (
+              <button type="button" onClick={processOrder} disabled={exporting || selectedIds.size === 0}
+                title="선택된 요청을 발주진행 처리 — 매장에는 '발주진행중'으로 표시되고 매장발주완료 탭으로 이동"
+                style={{height:30, padding:'0 12px', border:'1px solid #6a1b9a', borderRadius:'var(--radius)', background: selectedIds.size > 0 ? '#f3e5f5' : '#f5f5f5', color: selectedIds.size > 0 ? '#6a1b9a' : 'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed'}}>
+                📦 발주진행{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+              </button>
             )}
             <button type="button" onClick={exportSelected} disabled={exporting || selectedIds.size === 0}
               title="선택된 재고요청을 매장발주 31컬럼 양식(.xlsx)으로 다운로드"
@@ -378,22 +429,29 @@ export default function StockRequestsAdminView() {
                                       {isPending
                                         ? <span className="badge" style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', fontSize:11}}>대기</span>
                                         : r.status === 'fulfilled'
-                                        ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>처리완료</span>
+                                        ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>자체처리완료</span>
+                                        : r.status === 'ordered'
+                                        ? <span className="badge" style={{background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', fontSize:11}}>발주진행중</span>
+                                        : r.status === 'received'
+                                        ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>입고완료</span>
                                         : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
                                     </td>
                                     <td style={{textAlign:'center'}}>
                                       <div style={{display:'flex', gap:4, justifyContent:'center'}}>
-                                        {isPending && (
+                                        {isPending && isPendingMode && (
                                           <button className="btn btn-s" onClick={() => markFulfilled(r.id)} disabled={processing === r.id}
-                                            style={{padding:'2px 8px', fontSize:11}}>
-                                            {processing === r.id ? <span className="spinner"/> : '✓ 완료'}
+                                            style={{padding:'2px 8px', fontSize:11}}
+                                            title="발주 진행 없이 자체 처리(예: 점간이동으로 해결)">
+                                            {processing === r.id ? <span className="spinner"/> : '✓ 자체완료'}
                                           </button>
                                         )}
-                                        <button type="button" onClick={() => deleteRequest(r)} disabled={processing === r.id}
-                                          title="요청 삭제"
-                                          style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:4, background:'#fff', color:'var(--danger)', cursor:'pointer'}}>
-                                          ✕
-                                        </button>
+                                        {isPendingMode && (
+                                          <button type="button" onClick={() => deleteRequest(r)} disabled={processing === r.id}
+                                            title="요청 삭제"
+                                            style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:4, background:'#fff', color:'var(--danger)', cursor:'pointer'}}>
+                                            ✕
+                                          </button>
+                                        )}
                                       </div>
                                     </td>
                                   </tr>
