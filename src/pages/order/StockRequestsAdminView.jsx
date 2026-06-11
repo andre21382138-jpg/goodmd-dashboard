@@ -64,13 +64,16 @@ export default function StockRequestsAdminView() {
   const saveQty = async (r) => {
     const raw = editingQty[r.id];
     const next = Number(raw);
-    if (raw === '' || !Number.isFinite(next) || next < 1) {
-      toast('수량은 1 이상의 숫자로 입력해주세요', 'err'); return;
+    if (raw === '' || !Number.isFinite(next) || next < 0) {
+      toast('수량은 0 이상의 숫자로 입력해주세요', 'err'); return;
     }
     if (next === Number(r.quantity)) {
-      // 변경 없음 — 편집 상태만 정리
       setEditingQty(p => { const n = {...p}; delete n[r.id]; return n; });
       return;
+    }
+    // 0으로 저장 시: 재고 없음으로 처리 의도 명확화 (매장에는 '0개로 처리됨' 이력 남음)
+    if (next === 0) {
+      if (!window.confirm(`수량 0으로 저장하시겠습니까?\n매장에는 '본사 재고 없음 / 발주 불가'로 표시됩니다.`)) return;
     }
     setSavingQty(p => ({ ...p, [r.id]: true }));
     const { error } = await supabase.from('order_requests').update({
@@ -83,6 +86,15 @@ export default function StockRequestsAdminView() {
       fetchData();
     }
     setSavingQty(p => { const n = {...p}; delete n[r.id]; return n; });
+  };
+
+  const deleteRequest = async (r) => {
+    if (!window.confirm(`이 재고요청을 삭제하시겠습니까?\n\n매장: ${r.store_name} ${r.branch_name}\n상품: ${r.product?.name || '-'}\n수량: ${r.quantity}\n\n매장에는 이 요청 이력이 사라집니다.`)) return;
+    setProcessing(r.id);
+    const { error } = await supabase.from('order_requests').delete().eq('id', r.id);
+    if (error) toast(error.message, 'err');
+    else { toast('재고요청 삭제 완료', 'inf'); fetchData(); }
+    setProcessing(null);
   };
 
   const markFulfilled = async (id) => {
@@ -209,7 +221,7 @@ export default function StockRequestsAdminView() {
                                     <td className="r">
                                       {isPending ? (
                                         <div style={{display:'flex', alignItems:'center', gap:4, justifyContent:'flex-end'}}>
-                                          <input type="number" min={1}
+                                          <input type="number" min={0}
                                             value={editing ? draft : r.quantity}
                                             onChange={e => setEditingQty(p => ({ ...p, [r.id]: e.target.value }))}
                                             onKeyDown={e => { if (e.key === 'Enter' && changed) saveQty(r); }}
@@ -224,7 +236,7 @@ export default function StockRequestsAdminView() {
                                           )}
                                         </div>
                                       ) : (
-                                        <span style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</span>
+                                        <span style={{fontWeight:700, color: Number(r.quantity)===0?'var(--danger)':'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</span>
                                       )}
                                     </td>
                                     <td style={{fontSize:11, color:'var(--text2)'}}>{r.memo || '-'}</td>
@@ -236,12 +248,19 @@ export default function StockRequestsAdminView() {
                                         : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
                                     </td>
                                     <td style={{textAlign:'center'}}>
-                                      {isPending && (
-                                        <button className="btn btn-s" onClick={() => markFulfilled(r.id)} disabled={processing === r.id}
-                                          style={{padding:'2px 10px', fontSize:11}}>
-                                          {processing === r.id ? <span className="spinner"/> : '✓ 완료'}
+                                      <div style={{display:'flex', gap:4, justifyContent:'center'}}>
+                                        {isPending && (
+                                          <button className="btn btn-s" onClick={() => markFulfilled(r.id)} disabled={processing === r.id}
+                                            style={{padding:'2px 8px', fontSize:11}}>
+                                            {processing === r.id ? <span className="spinner"/> : '✓ 완료'}
+                                          </button>
+                                        )}
+                                        <button type="button" onClick={() => deleteRequest(r)} disabled={processing === r.id}
+                                          title="요청 삭제"
+                                          style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:4, background:'#fff', color:'var(--danger)', cursor:'pointer'}}>
+                                          ✕
                                         </button>
-                                      )}
+                                      </div>
                                     </td>
                                   </tr>
                                 )})}
