@@ -16,6 +16,7 @@ import HQDeliveryRequestPage from './pages/customer/HQDeliveryRequestPage';
 import SalesInputPage from './pages/sales/SalesInputPage';
 import SalesReturnPage from './pages/sales/SalesReturnPage';
 import MgrSalesViewPage from './pages/sales/MgrSalesViewPage';
+import StoreDeliveryStatusPage from './pages/customer/StoreDeliveryStatusPage';
 import PurchaseOrderHQPage from './pages/order/PurchaseOrderHQPage';
 import PurchaseOrderMgrPage from './pages/order/PurchaseOrderMgrPage';
 import SalesListPage from './pages/sales/SalesListPage';
@@ -726,6 +727,7 @@ export default function App() {
     sales_input:    '판매 입력',
     sales_return:   '반품 접수',
     mgr_sales_view: '매출 조회',
+    store_delivery_status: '본사 발송내역',
     purchase_hq:    '발주진행',
     purchase_check: '발주 확인',
     customer_input: '회원 등록',
@@ -816,6 +818,7 @@ export default function App() {
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
             {page === 'sales_return'   && (isManager || isAdmin || isHQ) && <SalesReturnPage profile={profile}/>}
             {page === 'mgr_sales_view' && (isManager || isAdmin || isHQ) && <MgrSalesViewPage profile={profile}/>}
+            {page === 'store_delivery_status' && (isManager || isAdmin || isHQ) && <StoreDeliveryStatusPage profile={profile}/>}
             {page === 'purchase_hq'    && (isAdmin || isHQ) && <PurchaseOrderHQPage profile={profile}/>}
             {page === 'purchase_status' && canSeeMain && (
               <div className="card">
