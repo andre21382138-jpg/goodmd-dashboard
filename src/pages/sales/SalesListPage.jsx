@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, uniq, dlBlob } from '../../lib/utils';
+import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 import SalesTabNav from './SalesTabNav';
 
 async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }) {
@@ -125,7 +126,10 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
 export default function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [fStores, setFStores] = useState([]); // 점포 다중 선택 (빈 배열 = 전체)
+  const [fStores,        setFStores]        = useState([]); // 사용자가 드롭다운에서 선택 중
+  const [appliedStores,  setAppliedStores]  = useState([]); // [조회] 클릭 시 실제 쿼리에 반영되는 점포 목록
+  const [storeMenuOpen,  setStoreMenuOpen]  = useState(false);
+  const storeMenuRef = useRef(null);
   const [fBranch, setFBranch] = useState('');
   const [fBrand,  setFBrand]  = useState('');
   const [fFrom,   setFFrom]   = useState('');
@@ -170,7 +174,7 @@ export default function SalesListPage({ setPage }) {
         .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch), customer:customers(name)')
         .order('sold_at', { ascending: false })
         .order('id',      { ascending: false });
-      if (fStores && fStores.length > 0) q = q.in('store_name', fStores);
+      if (appliedStores && appliedStores.length > 0) q = q.in('store_name', appliedStores);
       if (fBranch) q = q.eq('branch_name', fBranch);
       if (fBrand)  q = q.eq('brand_id', fBrand);
       if (fFrom)   q = q.gte('sold_at', fFrom);
@@ -185,21 +189,51 @@ export default function SalesListPage({ setPage }) {
     if (lastError) toast(lastError.message, 'err');
     else setSales(all);
     setLoading(false);
-  }, [fStores, fBranch, fBrand, fFrom, fTo]);
+  }, [appliedStores, fBranch, fBrand, fFrom, fTo]);
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
   const [brands, setBrands] = useState([]);
   useEffect(() => { supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || [])); }, []);
 
-  const stores = useMemo(() => uniq(sales.map(s => s.store_name)), [sales]);
-  // 점포 선택 시 그 점포에 속한 지점만, 미선택이면 전체 지점
+  // 점포 전체 목록 — sales에서 추출하지 않고 상수 사용 (필터되어도 점포 목록은 그대로 보임)
+  const stores = STORE_NAMES;
+  // 점포 선택 시 그 점포(들)에 속한 지점만, 미선택이면 전체 지점
   const branches = useMemo(() => {
-    const base = (fStores && fStores.length > 0)
-      ? sales.filter(s => fStores.includes(s.store_name))
-      : sales;
-    return uniq(base.map(s => s.branch_name));
-  }, [sales, fStores]);
+    if (appliedStores && appliedStores.length > 0) {
+      const list = [];
+      for (const st of appliedStores) {
+        for (const b of (STORE_MAP[st] || [])) list.push(b);
+      }
+      return uniq(list);
+    }
+    return uniq(STORE_NAMES.flatMap(s => STORE_MAP[s] || []));
+  }, [appliedStores]);
+
+  // 외부 클릭 시 점포 드롭다운 닫힘
+  useEffect(() => {
+    if (!storeMenuOpen) return;
+    const onClick = (e) => {
+      if (storeMenuRef.current && !storeMenuRef.current.contains(e.target)) {
+        setStoreMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [storeMenuOpen]);
+
+  // 점포 변경 여부 (조회 버튼 강조용)
+  const storesDirty = useMemo(() => {
+    if (fStores.length !== appliedStores.length) return true;
+    const s1 = [...fStores].sort();
+    const s2 = [...appliedStores].sort();
+    return s1.some((v, i) => v !== s2[i]);
+  }, [fStores, appliedStores]);
+
+  const handleSearch = () => {
+    setAppliedStores([...fStores]);
+    setFBranch('');
+  };
 
   // 실효 수량/금액 — 반품은 별도 음수 매출 row로 처리되므로 returned_qty는 무시
   const effQty = (s) => (s.quantity || 0);
@@ -484,37 +518,58 @@ export default function SalesListPage({ setPage }) {
           {viewMode === 'list' ? '판매내역 조회' : viewMode === 'product' ? '상품별 집계' : '매장별 집계'}
         </div>
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
-          {/* 점포 다중 선택 — 칩 토글 */}
-          <div style={{display:'flex', flexWrap:'wrap', gap:4, alignItems:'center'}}>
-            <button type="button"
-              onClick={() => { setFStores([]); setFBranch(''); }}
+          {/* 점포 다중 선택 — 드롭다운 + 체크박스 */}
+          <div ref={storeMenuRef} style={{position:'relative'}}>
+            <button type="button" onClick={() => setStoreMenuOpen(o => !o)}
               style={{
-                height:30, padding:'0 10px', border:'1px solid', borderRadius:'var(--radius)',
-                fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
-                borderColor: fStores.length===0 ? 'var(--accent)' : 'var(--border)',
-                background:  fStores.length===0 ? '#fff3e0' : '#fff',
-                color:       fStores.length===0 ? 'var(--accent)' : 'var(--text2)',
-              }}>전체 점포</button>
-            {stores.map(s => {
-              const on = fStores.includes(s);
-              return (
-                <button key={s} type="button"
-                  onClick={() => {
-                    setFStores(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
-                    setFBranch('');
-                  }}
-                  style={{
-                    height:30, padding:'0 10px', border:'1px solid', borderRadius:'var(--radius)',
-                    fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
-                    borderColor: on ? 'var(--accent)' : 'var(--border)',
-                    background:  on ? '#fff3e0' : '#fff',
-                    color:       on ? 'var(--accent)' : 'var(--text2)',
-                  }}>
-                  {on ? '✓ ' : ''}{s}
-                </button>
-              );
-            })}
+                height:34, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)',
+                fontSize:13, fontWeight:600, cursor:'pointer', background:'#fff', minWidth:160,
+                display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
+              }}>
+              <span>
+                {fStores.length === 0
+                  ? '전체 점포'
+                  : fStores.length === 1
+                  ? fStores[0]
+                  : `${fStores[0]} 외 ${fStores.length - 1}`}
+              </span>
+              <span style={{fontSize:10, color:'var(--text3)'}}>▼</span>
+            </button>
+            {storeMenuOpen && (
+              <div style={{
+                position:'absolute', top:'100%', left:0, marginTop:4, zIndex:120,
+                background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)',
+                boxShadow:'0 4px 16px rgba(0,0,0,0.12)', minWidth:220, padding:6,
+              }}>
+                <label style={{display:'flex', alignItems:'center', gap:8, padding:'8px 10px', cursor:'pointer', borderBottom:'1px solid var(--border)', fontSize:12, fontWeight:700}}>
+                  <input type="checkbox" checked={fStores.length === 0}
+                    onChange={() => setFStores([])}/>
+                  전체 점포
+                </label>
+                {stores.map(s => {
+                  const on = fStores.includes(s);
+                  return (
+                    <label key={s} style={{display:'flex', alignItems:'center', gap:8, padding:'8px 10px', cursor:'pointer', fontSize:12}}>
+                      <input type="checkbox" checked={on}
+                        onChange={() => setFStores(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}/>
+                      {s}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
+          {/* 조회 버튼 — 점포 선택을 실제 쿼리에 반영 */}
+          <button type="button" onClick={handleSearch} disabled={loading}
+            title="선택한 점포로 조회"
+            style={{
+              height:34, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:'var(--radius)',
+              background: storesDirty ? 'var(--accent)' : '#fff3e0',
+              color:      storesDirty ? '#fff' : 'var(--accent)',
+              fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
+            }}>
+            {loading ? <span className="spinner"/> : '🔍 조회'}
+          </button>
           <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)}>
             <option value="">전체 지점</option>
             {branches.map(b => <option key={b}>{b}</option>)}
@@ -550,8 +605,8 @@ export default function SalesListPage({ setPage }) {
               style={{width:15, height:15, cursor:'pointer'}}/>
             완전반품 포함 {returnedCount > 0 && <span style={{color:'var(--danger)', fontWeight:700}}>({returnedCount})</span>}
           </label>
-          {(fStores.length > 0||fBranch||fBrand||fFrom||fTo||fKeyword) &&
-            <button className="btn-ghost" onClick={() => { setFStores([]); setFBranch(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
+          {(fStores.length > 0||appliedStores.length > 0||fBranch||fBrand||fFrom||fTo||fKeyword) &&
+            <button className="btn-ghost" onClick={() => { setFStores([]); setAppliedStores([]); setFBranch(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
               <>
