@@ -126,14 +126,18 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
 export default function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [fStores,        setFStores]        = useState([]); // 사용자가 드롭다운에서 선택 중
-  const [appliedStores,  setAppliedStores]  = useState([]); // [조회] 클릭 시 실제 쿼리에 반영되는 점포 목록
+  // 점포/지점/기간 — 사용자가 선택 중인 임시 값 vs [조회] 클릭 시 실제 쿼리에 반영되는 확정 값
+  const [fStores,        setFStores]        = useState([]);
+  const [appliedStores,  setAppliedStores]  = useState([]);
   const [storeMenuOpen,  setStoreMenuOpen]  = useState(false);
   const storeMenuRef = useRef(null);
-  const [fBranch, setFBranch] = useState('');
+  const [fBranch,        setFBranch]        = useState('');
+  const [appliedBranch,  setAppliedBranch]  = useState('');
   const [fBrand,  setFBrand]  = useState('');
   const [fFrom,   setFFrom]   = useState('');
   const [fTo,     setFTo]     = useState('');
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo,   setAppliedTo]   = useState('');
   const [fKeyword,setFKeyword]= useState('');
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
@@ -175,10 +179,10 @@ export default function SalesListPage({ setPage }) {
         .order('sold_at', { ascending: false })
         .order('id',      { ascending: false });
       if (appliedStores && appliedStores.length > 0) q = q.in('store_name', appliedStores);
-      if (fBranch) q = q.eq('branch_name', fBranch);
-      if (fBrand)  q = q.eq('brand_id', fBrand);
-      if (fFrom)   q = q.gte('sold_at', fFrom);
-      if (fTo)     q = q.lte('sold_at', fTo);
+      if (appliedBranch) q = q.eq('branch_name', appliedBranch);
+      if (fBrand)        q = q.eq('brand_id', fBrand);
+      if (appliedFrom)   q = q.gte('sold_at', appliedFrom);
+      if (appliedTo)     q = q.lte('sold_at', appliedTo);
       const { data, error } = await q.range(start, start + PAGE - 1);
       if (error) { lastError = error; break; }
       if (!data || data.length === 0) break;
@@ -189,7 +193,7 @@ export default function SalesListPage({ setPage }) {
     if (lastError) toast(lastError.message, 'err');
     else setSales(all);
     setLoading(false);
-  }, [appliedStores, fBranch, fBrand, fFrom, fTo]);
+  }, [appliedStores, appliedBranch, fBrand, appliedFrom, appliedTo]);
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
@@ -199,16 +203,22 @@ export default function SalesListPage({ setPage }) {
   // 점포 전체 목록 — sales에서 추출하지 않고 상수 사용 (필터되어도 점포 목록은 그대로 보임)
   const stores = STORE_NAMES;
   // 점포 선택 시 그 점포(들)에 속한 지점만, 미선택이면 전체 지점
+  // 사용자가 드롭다운에서 점포를 선택하면 [조회] 누르기 전에도 즉시 지점 옵션이 갱신되도록 fStores 기반
   const branches = useMemo(() => {
-    if (appliedStores && appliedStores.length > 0) {
+    if (fStores && fStores.length > 0) {
       const list = [];
-      for (const st of appliedStores) {
+      for (const st of fStores) {
         for (const b of (STORE_MAP[st] || [])) list.push(b);
       }
       return uniq(list);
     }
     return uniq(STORE_NAMES.flatMap(s => STORE_MAP[s] || []));
-  }, [appliedStores]);
+  }, [fStores]);
+
+  // 점포 선택이 바뀌면 임시 지점도 그 범위 내가 아니면 비움
+  useEffect(() => {
+    if (fBranch && !branches.includes(fBranch)) setFBranch('');
+  }, [branches, fBranch]);
 
   // 외부 클릭 시 점포 드롭다운 닫힘
   useEffect(() => {
@@ -222,17 +232,23 @@ export default function SalesListPage({ setPage }) {
     return () => document.removeEventListener('mousedown', onClick);
   }, [storeMenuOpen]);
 
-  // 점포 변경 여부 (조회 버튼 강조용)
-  const storesDirty = useMemo(() => {
+  // 변경 여부 (조회 버튼 강조용) — 점포·지점·기간 중 하나라도 다르면 dirty
+  const filtersDirty = useMemo(() => {
     if (fStores.length !== appliedStores.length) return true;
     const s1 = [...fStores].sort();
     const s2 = [...appliedStores].sort();
-    return s1.some((v, i) => v !== s2[i]);
-  }, [fStores, appliedStores]);
+    if (s1.some((v, i) => v !== s2[i])) return true;
+    if (fBranch !== appliedBranch) return true;
+    if (fFrom   !== appliedFrom)   return true;
+    if (fTo     !== appliedTo)     return true;
+    return false;
+  }, [fStores, appliedStores, fBranch, appliedBranch, fFrom, appliedFrom, fTo, appliedTo]);
 
   const handleSearch = () => {
     setAppliedStores([...fStores]);
-    setFBranch('');
+    setAppliedBranch(fBranch);
+    setAppliedFrom(fFrom);
+    setAppliedTo(fTo);
   };
 
   // 실효 수량/금액 — 반품은 별도 음수 매출 row로 처리되므로 returned_qty는 무시
@@ -559,17 +575,6 @@ export default function SalesListPage({ setPage }) {
               </div>
             )}
           </div>
-          {/* 조회 버튼 — 점포 선택을 실제 쿼리에 반영 */}
-          <button type="button" onClick={handleSearch} disabled={loading}
-            title="선택한 점포로 조회"
-            style={{
-              height:34, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:'var(--radius)',
-              background: storesDirty ? 'var(--accent)' : '#fff3e0',
-              color:      storesDirty ? '#fff' : 'var(--accent)',
-              fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
-            }}>
-            {loading ? <span className="spinner"/> : '🔍 조회'}
-          </button>
           <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)}>
             <option value="">전체 지점</option>
             {branches.map(b => <option key={b}>{b}</option>)}
@@ -584,6 +589,17 @@ export default function SalesListPage({ setPage }) {
           <button style={quickBtnStyle(isYesterday)}  onClick={() => setDateRange('yesterday')}>어제</button>
           <button style={quickBtnStyle(isThisMonth)}  onClick={() => setDateRange('thismonth')}>당월</button>
           <button style={quickBtnStyle(isLastMonth)}  onClick={() => setDateRange('lastmonth')}>전월</button>
+          {/* 조회 — 점포·지점·기간 선택을 쿼리에 반영 */}
+          <button type="button" onClick={handleSearch} disabled={loading}
+            title="점포·지점·기간 선택을 조회에 반영"
+            style={{
+              height:34, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:'var(--radius)',
+              background: filtersDirty ? 'var(--accent)' : '#fff3e0',
+              color:      filtersDirty ? '#fff' : 'var(--accent)',
+              fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
+            }}>
+            {loading ? <span className="spinner"/> : '🔍 조회'}
+          </button>
           <input className="finput" value={fKeyword} onChange={e => setFKeyword(e.target.value)}
             placeholder="🔍 상품명·브랜드·메모 검색" style={{height:34, minWidth:180}} />
           {viewMode === 'list' ? (
@@ -605,8 +621,13 @@ export default function SalesListPage({ setPage }) {
               style={{width:15, height:15, cursor:'pointer'}}/>
             완전반품 포함 {returnedCount > 0 && <span style={{color:'var(--danger)', fontWeight:700}}>({returnedCount})</span>}
           </label>
-          {(fStores.length > 0||appliedStores.length > 0||fBranch||fBrand||fFrom||fTo||fKeyword) &&
-            <button className="btn-ghost" onClick={() => { setFStores([]); setAppliedStores([]); setFBranch(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
+          {(fStores.length > 0||appliedStores.length > 0||fBranch||appliedBranch||fBrand||fFrom||fTo||appliedFrom||appliedTo||fKeyword) &&
+            <button className="btn-ghost" onClick={() => {
+              setFStores([]); setAppliedStores([]);
+              setFBranch(''); setAppliedBranch('');
+              setFFrom(''); setFTo(''); setAppliedFrom(''); setAppliedTo('');
+              setFBrand(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc');
+            }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
               <>
