@@ -1,8 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge, getGrade, formatPhone } from '../../lib/utils';
+import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function SalesInputPage({ profile }) {
+  // 본사 계정(매니저가 아닌 admin/hq)이면 점포·지점을 직접 선택. 매장 매니저는 자기 매장 자동.
+  const isStoreMgr = profile?.job_title === '매니저';
+  const [hqStore,  setHqStore]  = useState('');
+  const [hqBranch, setHqBranch] = useState('');
+  const storeName  = isStoreMgr ? profile.department : hqStore;
+  const branchName = isStoreMgr ? profile.branch     : hqBranch;
+  const hqBranchOptions = useMemo(() => hqStore ? (STORE_MAP[hqStore] || []) : [], [hqStore]);
+
   const today = new Date().toISOString().slice(0, 10);
   const [soldAt,    setSoldAt]   = useState(today);
   const [memo,      setMemo]     = useState('');
@@ -314,6 +323,11 @@ export default function SalesInputPage({ profile }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // 본사 계정은 점포/지점 선택 필수
+    if (!isStoreMgr) {
+      if (!storeName)  { toast('점포를 선택해주세요', 'err'); return; }
+      if (!branchName) { toast('지점을 선택해주세요', 'err'); return; }
+    }
     const validLines = lines.filter(l => l.brandId && l.productId);
     if (validLines.length === 0) { toast('상품을 하나 이상 선택해주세요', 'err'); return; }
     // 적립금 사용 여부와 무관하게 결제수단(카드/현금/증정/시식) 선택 필수
@@ -338,8 +352,8 @@ export default function SalesInputPage({ profile }) {
       } else if (memberMode === 'new') {
         const { data: custData, error: custErr } = await supabase.from('customers').insert({
           joined_at: soldAt, name: custName.trim(), phone: custPhone,
-          birthday: custBirthday || null, store_name: profile.department,
-          branch_name: profile.branch, manager_name: managerName.trim() || null,
+          birthday: custBirthday || null, store_name: storeName,
+          branch_name: branchName, manager_name: managerName.trim() || null,
           sms_consent: false, sms_consent_at: null, created_by: profile.id,
           grade: '패밀리', total_purchase: 0, total_points: 0,
         }).select().single();
@@ -381,7 +395,7 @@ export default function SalesInputPage({ profile }) {
           ? { delivery_type: 'store', delivery_requested: true }
           : { delivery_type: 'none', delivery_requested: false };
         const { error } = await supabase.from('sales').insert({
-          sold_at: soldAt, store_name: profile.department, branch_name: profile.branch,
+          sold_at: soldAt, store_name: storeName, branch_name: branchName,
           brand_id: Number(l.brandId), product_id: Number(l.productId),
           quantity: Number(l.quantity), price: Number(String(l.price).replace(/,/g,'')),
           payment: l.payment || '카드', memo: memo.trim() || null, created_by: profile.id,
@@ -406,8 +420,8 @@ export default function SalesInputPage({ profile }) {
         if (prod?.code) {
           const { data: stockRow } = await supabase.from('store_stock')
             .select('id, stock_qty')
-            .eq('store_name',  profile.department)
-            .eq('branch_name', profile.branch)
+            .eq('store_name',  storeName)
+            .eq('branch_name', branchName)
             .eq('product_code', prod.code)
             .maybeSingle();
           if (stockRow) {
@@ -459,9 +473,28 @@ export default function SalesInputPage({ profile }) {
     <div>
       <div className="card">
         <div className="card-label">판매 입력</div>
-        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16, fontFamily:'var(--mono)' }}>
-          📍 {profile.department} · {profile.branch}
-        </div>
+        {isStoreMgr ? (
+          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:16, fontFamily:'var(--mono)' }}>
+            📍 {profile.department} · {profile.branch}
+          </div>
+        ) : (
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16}}>
+            <div>
+              <label style={labelStyle}>점포 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={hqStore} onChange={e => { setHqStore(e.target.value); setHqBranch(''); }} style={inputStyle} required>
+                <option value="">점포 선택</option>
+                {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>지점 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={hqBranch} onChange={e => setHqBranch(e.target.value)} style={{...inputStyle, background:!hqStore?'#f0f0f0':'#fff'}} disabled={!hqStore} required>
+                <option value="">{hqStore ? '지점 선택' : '먼저 점포 선택'}</option>
+                {hqBranchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           {/* 판매날짜 */}
           <div style={{ marginBottom:14, maxWidth:260 }}>
