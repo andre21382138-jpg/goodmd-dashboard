@@ -610,12 +610,18 @@ export default function App() {
       .then(({ data }) => { setProfile(data); setAL(false); });
   }, [session, joinManagerId]);
 
-  // SCM 담당자는 본사 택배요청 메뉴만 접근 가능 — 다른 페이지로 가지 못하도록 자동 리다이렉트
+  // SCM 담당자는 본사 택배요청 + 재고관리 메뉴만 접근 가능 — 그 외 페이지로 가지 못하도록 자동 리다이렉트
+  const SCM_ALLOWED_PAGES = useMemo(() => new Set([
+    'hq_delivery_request',
+    'help',
+    // 본사 재고관리 sub 메뉴
+    'stock_mgmt', 'stock_center', 'stock_store', 'purchase_hq', 'purchase_status', 'store_info',
+  ]), []);
   useEffect(() => {
-    if (profile?.role === 'scm' && page !== 'hq_delivery_request' && page !== 'help') {
+    if (profile?.role === 'scm' && !SCM_ALLOWED_PAGES.has(page)) {
       setPage('hq_delivery_request');
     }
-  }, [profile?.role, page]);
+  }, [profile?.role, page, SCM_ALLOWED_PAGES]);
 
   // 새 배포 자동 감지 — 5분마다 /build.json 확인. 다르면 상단 배너 안내(자동 reload 안 함, 사용자 안전 보호)
   useEffect(() => {
@@ -801,16 +807,16 @@ export default function App() {
             {page === 'help'           && <HelpPage profile={profile}/>}
             {page === 'product_mgmt'   && canSeeMain && <ProductMgmtPage subPage={null}/>}
             {page === 'product_add'    && canSeeMain && <ProductMgmtPage subPage="product_add"/>}
-            {page === 'stock_mgmt'     && canSeeMain && <StockMgmtPage/>}
-            {page === 'stock_center'   && canSeeMain && <CenterStockPage/>}
-            {page === 'stock_store'    && canSeeMain && <StoreStockPage profile={profile}/>}
+            {page === 'stock_mgmt'     && (canSeeMain || isScm) && <StockMgmtPage/>}
+            {page === 'stock_center'   && (canSeeMain || isScm) && <CenterStockPage/>}
+            {page === 'stock_store'    && (canSeeMain || isScm) && <StoreStockPage profile={profile}/>}
             {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
             {page === 'sms_unsubscribe_sync' && canSeeMain && <SmsUnsubscribeSyncPage/>}
             {page === 'hq_delivery_request' && (canSeeMain || isScm) && <HQDeliveryRequestPage profile={profile}/>}
-            {page === 'store_info'     && canSeeMain && <StoreInfoPage/>}
+            {page === 'store_info'     && (canSeeMain || isScm) && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
             {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage}/>}
@@ -819,8 +825,8 @@ export default function App() {
             {page === 'sales_return'   && (isManager || isAdmin || isHQ) && <SalesReturnPage profile={profile}/>}
             {page === 'mgr_sales_view' && (isManager || isAdmin || isHQ) && <MgrSalesViewPage profile={profile}/>}
             {page === 'store_delivery_status' && (isManager || isAdmin || isHQ) && <StoreDeliveryStatusPage profile={profile}/>}
-            {page === 'purchase_hq'    && (isAdmin || isHQ) && <PurchaseOrderHQPage profile={profile}/>}
-            {page === 'purchase_status' && canSeeMain && (
+            {page === 'purchase_hq'    && (isAdmin || isHQ || isScm) && <PurchaseOrderHQPage profile={profile}/>}
+            {page === 'purchase_status' && (canSeeMain || isScm) && (
               <div className="card">
                 <div className="card-label">발주현황</div>
                 <div className="empty">📊 발주현황 — 구현 예정<br/><span style={{fontSize:11, color:'var(--text3)'}}>발주 이력·상태 조회 페이지가 곧 들어옵니다.</span></div>

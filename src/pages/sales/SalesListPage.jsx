@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { toast, uniq, dlBlob } from '../../lib/utils';
 import SalesTabNav from './SalesTabNav';
 
-async function exportSalesRaw({ fStore, fBranch, fBrand, fFrom, fTo, fKeyword }) {
+async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }) {
   // 1) 페이징 fetch (Supabase 1000건 limit 회피)
   const PAGE = 1000;
   let all = [], start = 0;
@@ -12,7 +12,7 @@ async function exportSalesRaw({ fStore, fBranch, fBrand, fFrom, fTo, fKeyword })
       .select('id, sold_at, store_name, branch_name, payment, quantity, returned_qty, price, points_used, brand:brands(name), product:products(code, name, cost)')
       .order('sold_at', { ascending: true })
       .order('id',      { ascending: true });
-    if (fStore)  q = q.eq('store_name',  fStore);
+    if (fStores && fStores.length > 0) q = q.in('store_name', fStores);
     if (fBranch) q = q.eq('branch_name', fBranch);
     if (fBrand)  q = q.eq('brand_id', fBrand);
     if (fFrom)   q = q.gte('sold_at', fFrom);
@@ -125,7 +125,7 @@ async function exportSalesRaw({ fStore, fBranch, fBrand, fFrom, fTo, fKeyword })
 export default function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [fStore,  setFStore]  = useState('');
+  const [fStores, setFStores] = useState([]); // 점포 다중 선택 (빈 배열 = 전체)
   const [fBranch, setFBranch] = useState('');
   const [fBrand,  setFBrand]  = useState('');
   const [fFrom,   setFFrom]   = useState('');
@@ -170,7 +170,7 @@ export default function SalesListPage({ setPage }) {
         .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch), customer:customers(name)')
         .order('sold_at', { ascending: false })
         .order('id',      { ascending: false });
-      if (fStore)  q = q.eq('store_name',  fStore);
+      if (fStores && fStores.length > 0) q = q.in('store_name', fStores);
       if (fBranch) q = q.eq('branch_name', fBranch);
       if (fBrand)  q = q.eq('brand_id', fBrand);
       if (fFrom)   q = q.gte('sold_at', fFrom);
@@ -185,7 +185,7 @@ export default function SalesListPage({ setPage }) {
     if (lastError) toast(lastError.message, 'err');
     else setSales(all);
     setLoading(false);
-  }, [fStore, fBranch, fBrand, fFrom, fTo]);
+  }, [fStores, fBranch, fBrand, fFrom, fTo]);
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
@@ -195,9 +195,11 @@ export default function SalesListPage({ setPage }) {
   const stores = useMemo(() => uniq(sales.map(s => s.store_name)), [sales]);
   // 점포 선택 시 그 점포에 속한 지점만, 미선택이면 전체 지점
   const branches = useMemo(() => {
-    const base = fStore ? sales.filter(s => s.store_name === fStore) : sales;
+    const base = (fStores && fStores.length > 0)
+      ? sales.filter(s => fStores.includes(s.store_name))
+      : sales;
     return uniq(base.map(s => s.branch_name));
-  }, [sales, fStore]);
+  }, [sales, fStores]);
 
   // 실효 수량/금액 — 반품은 별도 음수 매출 row로 처리되므로 returned_qty는 무시
   const effQty = (s) => (s.quantity || 0);
@@ -275,7 +277,7 @@ export default function SalesListPage({ setPage }) {
     if (exporting) return;
     setExporting(true);
     try {
-      const n = await exportSalesRaw({ fStore, fBranch, fBrand, fFrom, fTo, fKeyword });
+      const n = await exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword });
       toast(`엑셀 다운로드 완료 (${n.toLocaleString()}건)`, 'ok');
     } catch (err) {
       toast('다운로드 실패: ' + (err.message || err), 'err');
@@ -482,10 +484,37 @@ export default function SalesListPage({ setPage }) {
           {viewMode === 'list' ? '판매내역 조회' : viewMode === 'product' ? '상품별 집계' : '매장별 집계'}
         </div>
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
-          <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
-            <option value="">전체 점포</option>
-            {stores.map(s => <option key={s}>{s}</option>)}
-          </select>
+          {/* 점포 다중 선택 — 칩 토글 */}
+          <div style={{display:'flex', flexWrap:'wrap', gap:4, alignItems:'center'}}>
+            <button type="button"
+              onClick={() => { setFStores([]); setFBranch(''); }}
+              style={{
+                height:30, padding:'0 10px', border:'1px solid', borderRadius:'var(--radius)',
+                fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
+                borderColor: fStores.length===0 ? 'var(--accent)' : 'var(--border)',
+                background:  fStores.length===0 ? '#fff3e0' : '#fff',
+                color:       fStores.length===0 ? 'var(--accent)' : 'var(--text2)',
+              }}>전체 점포</button>
+            {stores.map(s => {
+              const on = fStores.includes(s);
+              return (
+                <button key={s} type="button"
+                  onClick={() => {
+                    setFStores(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+                    setFBranch('');
+                  }}
+                  style={{
+                    height:30, padding:'0 10px', border:'1px solid', borderRadius:'var(--radius)',
+                    fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
+                    borderColor: on ? 'var(--accent)' : 'var(--border)',
+                    background:  on ? '#fff3e0' : '#fff',
+                    color:       on ? 'var(--accent)' : 'var(--text2)',
+                  }}>
+                  {on ? '✓ ' : ''}{s}
+                </button>
+              );
+            })}
+          </div>
           <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)}>
             <option value="">전체 지점</option>
             {branches.map(b => <option key={b}>{b}</option>)}
@@ -521,8 +550,8 @@ export default function SalesListPage({ setPage }) {
               style={{width:15, height:15, cursor:'pointer'}}/>
             완전반품 포함 {returnedCount > 0 && <span style={{color:'var(--danger)', fontWeight:700}}>({returnedCount})</span>}
           </label>
-          {(fStore||fBranch||fBrand||fFrom||fTo||fKeyword) &&
-            <button className="btn-ghost" onClick={() => { setFStore(''); setFBranch(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
+          {(fStores.length > 0||fBranch||fBrand||fFrom||fTo||fKeyword) &&
+            <button className="btn-ghost" onClick={() => { setFStores([]); setFBranch(''); setFBrand(''); setFFrom(''); setFTo(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc'); }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
               <>

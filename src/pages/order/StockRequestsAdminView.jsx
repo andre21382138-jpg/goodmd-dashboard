@@ -27,6 +27,8 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
   const [savingQty,  setSavingQty]    = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [exporting,  setExporting]    = useState(false);
+  const [uploading,  setUploading]    = useState(false);
+  const uploadInputRef = React.useRef(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -103,7 +105,71 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
     setSavingQty(p => { const n = {...p}; delete n[r.id]; return n; });
   };
 
-  // 선택된 pending 항목을 ordered로 일괄 전환 = 본사 발주진행
+  // 송장 업로드 — 31컬럼 양식의 row[23] SIDR:<order_requests.id> + row[1] 송장번호
+  // 송장이 등록된 라인은 자동으로 status='ordered' (발주진행 처리) + tracking_number 저장
+  const handleUploadClick = () => uploadInputRef.current?.click();
+  const handleUploadFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const XLSX = await import('xlsx');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      let totalRows = 0;
+      const updates = [];
+      for (let i = 1; i < data.length; i++) {
+        const r = data[i];
+        if (!r || !Array.isArray(r) || r.length === 0) continue;
+        const sidCell = String(r[23] || '').trim();
+        const m = sidCell.match(/SIDR:(\d+)/);
+        if (!m) continue;
+        totalRows++;
+        const trk = String(r[1] || '').trim();
+        if (!trk) continue;
+        updates.push({ id: Number(m[1]), tracking: trk });
+      }
+      if (totalRows === 0) {
+        toast('업로드 가능한 행이 없습니다 (SIDR 누락)', 'err');
+        setUploading(false);
+        return;
+      }
+      if (updates.length === 0) {
+        toast(`송장번호 입력된 행이 없습니다 (전체 ${totalRows}건 모두 미입력)`, 'err');
+        setUploading(false);
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      let ok = 0, fail = 0, lastError = null;
+      for (const u of updates) {
+        const { error } = await supabase.from('order_requests').update({
+          tracking_number: u.tracking,
+          status: 'ordered',
+          ordered_at: nowIso,
+          ordered_by: profile?.id || null,
+          updated_at: nowIso,
+        }).eq('id', u.id);
+        if (error) { lastError = error; fail++; }
+        else ok++;
+      }
+      const parts = [`${ok}건 발주진행 완료`];
+      if (fail > 0) parts.push(`실패 ${fail}건`);
+      const noTracking = totalRows - updates.length;
+      if (noTracking > 0) parts.push(`미입력 ${noTracking}건은 대기 그대로`);
+      toast(parts.join(' / '), fail > 0 ? 'err' : 'ok');
+      if (fail > 0 && lastError) toast(`실패 사유: ${lastError.message || lastError}`, 'err');
+      setSelectedIds(new Set());
+      fetchData();
+    } catch (err) {
+      toast('업로드 실패: ' + (err.message || err), 'err');
+    }
+    setUploading(false);
+  };
+
+  // 선택된 pending 항목을 ordered로 일괄 전환 = 본사 발주진행 (현재 비활성, 송장 업로드로 대체)
   const processOrder = async () => {
     if (selectedIds.size === 0) { toast('발주진행할 요청을 선택해주세요', 'err'); return; }
     const items = rows.filter(r => selectedIds.has(r.id) && r.status === 'pending');
@@ -291,11 +357,15 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                 : <button className="btn btn-s" onClick={selectAll}>☑ 전체 선택</button>
             )}
             {isPendingMode && (
-              <button type="button" onClick={processOrder} disabled={exporting || selectedIds.size === 0}
-                title="선택된 요청을 발주진행 처리 — 매장에는 '발주진행중'으로 표시되고 매장발주완료 탭으로 이동"
-                style={{height:30, padding:'0 12px', border:'1px solid #6a1b9a', borderRadius:'var(--radius)', background: selectedIds.size > 0 ? '#f3e5f5' : '#f5f5f5', color: selectedIds.size > 0 ? '#6a1b9a' : 'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed'}}>
-                📦 발주진행{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
-              </button>
+              <>
+                <input ref={uploadInputRef} type="file" accept=".xls,.xlsx"
+                  onChange={handleUploadFile} style={{display:'none'}}/>
+                <button type="button" onClick={handleUploadClick} disabled={uploading}
+                  title="송장번호 입력된 엑셀 업로드 → 자동으로 발주진행 처리 + 송장번호 등록"
+                  style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                  {uploading ? <span className="spinner"/> : '📤 송장 업로드'}
+                </button>
+              </>
             )}
             <button type="button" onClick={exportSelected} disabled={exporting || selectedIds.size === 0}
               title="선택된 재고요청을 매장발주 31컬럼 양식(.xlsx)으로 다운로드"
@@ -437,22 +507,13 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                                         : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
                                     </td>
                                     <td style={{textAlign:'center'}}>
-                                      <div style={{display:'flex', gap:4, justifyContent:'center'}}>
-                                        {isPending && isPendingMode && (
-                                          <button className="btn btn-s" onClick={() => markFulfilled(r.id)} disabled={processing === r.id}
-                                            style={{padding:'2px 8px', fontSize:11}}
-                                            title="발주 진행 없이 자체 처리(예: 점간이동으로 해결)">
-                                            {processing === r.id ? <span className="spinner"/> : '✓ 자체완료'}
-                                          </button>
-                                        )}
-                                        {isPendingMode && (
-                                          <button type="button" onClick={() => deleteRequest(r)} disabled={processing === r.id}
-                                            title="요청 삭제"
-                                            style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:4, background:'#fff', color:'var(--danger)', cursor:'pointer'}}>
-                                            ✕
-                                          </button>
-                                        )}
-                                      </div>
+                                      {isPendingMode && (
+                                        <button type="button" onClick={() => deleteRequest(r)} disabled={processing === r.id}
+                                          title="요청 삭제"
+                                          style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:4, background:'#fff', color:'var(--danger)', cursor:'pointer'}}>
+                                          ✕
+                                        </button>
+                                      )}
                                     </td>
                                   </tr>
                                 )})}

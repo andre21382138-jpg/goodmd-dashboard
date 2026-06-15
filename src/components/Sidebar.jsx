@@ -440,15 +440,24 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
       {isManager && <SidebarClockPanel profile={profile} setPage={setPage}/>}
 
       <div className="sidebar-menu">
-        {/* SCM 담당자 — 택배요청 한 메뉴만 */}
+        {/* SCM 담당자 — 택배요청 + 재고관리 메뉴 */}
         {isScm && (
           <>
             <div className="sidebar-section">본사</div>
-            <button
-              className={`sidebar-item ${page==='hq_delivery_request'?'on':''}`}
-              onClick={() => setPage('hq_delivery_request')}>
-              <span className="sidebar-item-icon">📦</span>택배요청
-            </button>
+            {HQ_MENUS.filter(m => m.key === 'hq_delivery_request' || m.key === 'stock_mgmt').map(m => {
+              const hasSub = m.sub && m.sub.length > 0;
+              const isActive = isOn(m.key) || (hasSub && m.sub.some(s => isOn(s.key)));
+              const isOpen = flyoutKey === m.key;
+              return (
+                <button key={m.key}
+                  className={`sidebar-item ${isActive?'on':''}`}
+                  onClick={e => handleParentClick(e, m)}>
+                  <span className="sidebar-item-icon">{m.icon}</span>
+                  {m.label}
+                  {hasSub && <span className="sidebar-chevron" style={{color: isOpen ? '#1a1a1a' : undefined}}>▶</span>}
+                </button>
+              );
+            })}
           </>
         )}
         {/* 본사 메뉴 (admin·hq 전용) */}
