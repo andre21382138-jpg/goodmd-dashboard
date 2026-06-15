@@ -1,8 +1,18 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
+import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function MgrSalesViewPage({ profile }) {
+  // 본사 계정(admin/hq — 매니저 아님)은 점포/지점 선택해서 조회 + 라인 수정 가능
+  const isStoreMgr = profile?.job_title === '매니저';
+  const isHQ = !isStoreMgr;
+  const [hqStore,  setHqStore]  = useState('');
+  const [hqBranch, setHqBranch] = useState('');
+  const storeName  = isStoreMgr ? profile.department : hqStore;
+  const branchName = isStoreMgr ? profile.branch     : hqBranch;
+  const hqBranchOptions = useMemo(() => hqStore ? (STORE_MAP[hqStore] || []) : [], [hqStore]);
+
   const today = new Date();
   const pad = n => String(n).padStart(2, '0');
   const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -15,6 +25,58 @@ export default function MgrSalesViewPage({ profile }) {
   const [loading,    setLoading]    = useState(false);
   const [expandedDate, setExpandedDate] = useState(null);
   const [expandedTxn, setExpandedTxn]   = useState(null);  // 트랜잭션 그룹 식별자(첫 라인의 id)
+
+  // 본사 계정용 라인 인라인 수정
+  const [editingLine, setEditingLine] = useState(null);  // sale id
+  const [editDraft,   setEditDraft]   = useState({});    // { quantity, price, payment, memo }
+  const [savingLine,  setSavingLine]  = useState(false);
+
+  const startEditLine = (it) => {
+    setEditingLine(it.id);
+    setEditDraft({
+      quantity: it.quantity,
+      price:    it.price,
+      payment:  it.payment || '카드',
+      memo:     it.memo || '',
+    });
+  };
+  const cancelEditLine = () => { setEditingLine(null); setEditDraft({}); };
+  const saveEditLine = async (it) => {
+    const qty   = Number(editDraft.quantity);
+    const price = Number(editDraft.price);
+    if (!Number.isFinite(qty) || qty === 0) { toast('수량은 0이 아닌 숫자여야 합니다', 'err'); return; }
+    if (!Number.isFinite(price))            { toast('단가가 유효하지 않습니다', 'err'); return; }
+    setSavingLine(true);
+    try {
+      const { error } = await supabase.from('sales').update({
+        quantity: qty,
+        price:    price,
+        payment:  editDraft.payment || '카드',
+        memo:     editDraft.memo?.trim() || null,
+      }).eq('id', it.id);
+      if (error) throw error;
+      toast('수정 완료', 'ok');
+      cancelEditLine();
+      fetchSales();
+    } catch (err) {
+      toast('수정 실패: ' + (err.message || err), 'err');
+    }
+    setSavingLine(false);
+  };
+  const deleteLine = async (it) => {
+    if (!window.confirm(`이 라인을 삭제하시겠습니까?\n\n상품: ${it.product?.name || '-'}\n수량: ${it.quantity}\n단가: ${Number(it.price).toLocaleString()}원\n\n해당 sales row가 영구 삭제됩니다.`)) return;
+    setSavingLine(true);
+    try {
+      const { error } = await supabase.from('sales').delete().eq('id', it.id);
+      if (error) throw error;
+      toast('라인 삭제 완료', 'inf');
+      cancelEditLine();
+      fetchSales();
+    } catch (err) {
+      toast('삭제 실패: ' + (err.message || err), 'err');
+    }
+    setSavingLine(false);
+  };
 
   const setRange = (type) => {
     if (type === 'today') {
@@ -33,12 +95,15 @@ export default function MgrSalesViewPage({ profile }) {
 
   const fetchSales = useCallback(async () => {
     if (!fFrom || !fTo) { toast('기간을 선택해주세요', 'err'); return; }
+    if (!storeName || !branchName) {
+      setSales([]); setLoading(false); return;
+    }
     setLoading(true);
     setExpandedDate(null);
     const { data, error } = await supabase.from('sales')
       .select('*, brand:brands(name), product:products(name,code), customer:customers(name,phone)')
-      .eq('store_name', profile.department)
-      .eq('branch_name', profile.branch)
+      .eq('store_name', storeName)
+      .eq('branch_name', branchName)
       .gte('sold_at', fFrom).lte('sold_at', fTo)
       .order('sold_at', { ascending: false })
       .order('created_at', { ascending: false });
@@ -46,7 +111,7 @@ export default function MgrSalesViewPage({ profile }) {
     // 새 정책: 반품은 음수 매출 row로 처리되므로 returned_qty는 무시 (이중 반품 방지용으로만 보존)
     else setSales((data || []).map(r => ({...r, _eff: (r.quantity || 0)})));
     setLoading(false);
-  }, [fFrom, fTo, profile.department, profile.branch]);
+  }, [fFrom, fTo, storeName, branchName]);
 
   useEffect(() => { fetchSales(); }, []); // 최초 1회 (당월)
 
@@ -116,9 +181,29 @@ export default function MgrSalesViewPage({ profile }) {
       {/* 필터 */}
       <div className="card">
         <div className="card-label">매출 조회</div>
-        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12, fontFamily:'var(--mono)' }}>
-          📍 {profile.department} · {profile.branch}
-        </div>
+        {isStoreMgr ? (
+          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12, fontFamily:'var(--mono)' }}>
+            📍 {profile.department} · {profile.branch}
+          </div>
+        ) : (
+          <div style={{display:'flex', gap:10, marginBottom:12, flexWrap:'wrap'}}>
+            <select className="fsel" value={hqStore} onChange={e => { setHqStore(e.target.value); setHqBranch(''); }}>
+              <option value="">점포 선택</option>
+              {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="fsel" value={hqBranch} onChange={e => setHqBranch(e.target.value)}
+              disabled={!hqStore} style={{background:!hqStore?'#f0f0f0':'#fff'}}>
+              <option value="">{hqStore ? '지점 선택' : '먼저 점포 선택'}</option>
+              {hqBranchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            {(!storeName || !branchName) && (
+              <span style={{fontSize:11, color:'var(--danger)', alignSelf:'center'}}>※ 점포·지점을 선택하면 매출 조회가 시작됩니다</span>
+            )}
+            {(storeName && branchName) && (
+              <span style={{fontSize:11, color:'#2e7d32', alignSelf:'center', fontWeight:700}}>📍 {storeName} · {branchName} (본사 — 라인 수정 가능)</span>
+            )}
+          </div>
+        )}
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="시작일"/>
           <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
@@ -282,6 +367,7 @@ export default function MgrSalesViewPage({ profile }) {
                                                 <th>결제</th>
                                                 <th>출고방식</th>
                                                 <th>메모</th>
+                                                {isHQ && <th style={{textAlign:'center', width:80}}>작업</th>}
                                               </tr>
                                             </thead>
                                             <tbody>
@@ -313,6 +399,15 @@ export default function MgrSalesViewPage({ profile }) {
                                                     {it.delivery_type === 'hq' && it.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                                                   </td>
                                                   <td style={{fontSize:11,color:'var(--text2)'}}>{it.memo||'-'}</td>
+                                                  {isHQ && (
+                                                    <td style={{textAlign:'center'}}>
+                                                      <button type="button" onClick={() => startEditLine(it)}
+                                                        title="라인 수정"
+                                                        style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--accent)', borderRadius:4, background:'#fff3e0', color:'var(--accent)', fontWeight:700, cursor:'pointer'}}>
+                                                        ✏️ 수정
+                                                      </button>
+                                                    </td>
+                                                  )}
                                                 </tr>
                                               )})}
                                             </tbody>
@@ -343,6 +438,81 @@ export default function MgrSalesViewPage({ profile }) {
           </div>
         </div>
       )}
+
+      {/* 본사 라인 수정 모달 */}
+      {editingLine && (() => {
+        const it = sales.find(s => s.id === editingLine);
+        if (!it) return null;
+        const PAYMENTS = ['카드','현금','증정','시식','반품'];
+        return (
+          <div style={{position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={cancelEditLine}/>
+            <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:'90vw', maxWidth:520, boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+              <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:14}}>
+                <strong style={{fontSize:15}}>✏️ 매출 라인 수정</strong>
+                <span style={{fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)'}}>ID:{it.id} · {it.sold_at}</span>
+                <button type="button" onClick={cancelEditLine}
+                  style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+              </div>
+              <div style={{fontSize:13, fontWeight:600, marginBottom:14}}>{it.product?.name || '-'}</div>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12}}>
+                <div>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>수량</label>
+                  <input type="number" value={editDraft.quantity ?? ''}
+                    onChange={e => setEditDraft(p => ({...p, quantity: e.target.value}))}
+                    style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)'}}/>
+                </div>
+                <div>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>단가 (원) · 음수=반품</label>
+                  <input type="number" value={editDraft.price ?? ''}
+                    onChange={e => setEditDraft(p => ({...p, price: e.target.value}))}
+                    style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)'}}/>
+                </div>
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>결제수단</label>
+                <div style={{display:'flex', gap:4}}>
+                  {PAYMENTS.map(p => {
+                    const active = editDraft.payment === p;
+                    return (
+                      <button key={p} type="button" onClick={() => setEditDraft(d => ({...d, payment: p}))}
+                        style={{
+                          flex:1, height:34, border:`1px solid ${active?'var(--accent)':'var(--border)'}`, borderRadius:6,
+                          background: active ? '#fff3e0' : '#fff',
+                          color:      active ? 'var(--accent)' : 'var(--text2)',
+                          fontWeight: active ? 700 : 500, fontSize:12, cursor:'pointer',
+                        }}>{p}</button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>메모</label>
+                <input type="text" value={editDraft.memo ?? ''}
+                  onChange={e => setEditDraft(p => ({...p, memo: e.target.value}))}
+                  style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13}}/>
+              </div>
+              <div style={{padding:'10px 12px', background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:6, fontSize:11, color:'#6d4c41', marginBottom:14}}>
+                ⚠️ 합계 = 수량 × 단가. 반품 음수 매출은 단가에 음수 입력. 회원 적립금/누적구매는 자동 보정되지 않으므로 필요 시 별도 조정.
+              </div>
+              <div style={{display:'flex', gap:8}}>
+                <button type="button" onClick={() => deleteLine(it)} disabled={savingLine}
+                  style={{height:38, padding:'0 14px', border:'1px solid var(--danger)', borderRadius:6, background:'#fff', color:'var(--danger)', fontWeight:700, fontSize:12, cursor:'pointer'}}>
+                  🗑️ 삭제
+                </button>
+                <button type="button" onClick={cancelEditLine} disabled={savingLine}
+                  style={{flex:1, height:38, padding:'0 14px', border:'1px solid var(--border)', borderRadius:6, background:'#fafafa', color:'var(--text2)', fontWeight:700, fontSize:13, cursor:'pointer'}}>
+                  취소
+                </button>
+                <button type="button" onClick={() => saveEditLine(it)} disabled={savingLine}
+                  style={{flex:1, height:38, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:6, background:'var(--accent)', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer'}}>
+                  {savingLine ? <span className="spinner"/> : '💾 저장'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
