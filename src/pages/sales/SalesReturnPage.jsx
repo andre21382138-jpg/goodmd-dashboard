@@ -1,8 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge, getGrade } from '../../lib/utils';
+import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function SalesReturnPage({ profile }) {
+  // 본사 계정(매니저가 아닌 admin/hq)이면 점포·지점을 직접 선택해 매장 반품 접수
+  const isStoreMgr = profile?.job_title === '매니저';
+  const [hqStore,  setHqStore]  = useState('');
+  const [hqBranch, setHqBranch] = useState('');
+  const storeName  = isStoreMgr ? profile.department : hqStore;
+  const branchName = isStoreMgr ? profile.branch     : hqBranch;
+  const hqBranchOptions = useMemo(() => hqStore ? (STORE_MAP[hqStore] || []) : [], [hqStore]);
+
   const today = new Date().toISOString().slice(0, 10);
   const [tab,      setTab]      = useState('search'); // 'search' | 'manual'
   const [fFrom,    setFFrom]    = useState(today);
@@ -33,12 +42,16 @@ export default function SalesReturnPage({ profile }) {
   }, [tab, allProducts.length]);
 
   const fetchOrders = useCallback(async () => {
+    // 본사 계정인데 점포/지점 미선택이면 조회 자체를 시도하지 않음
+    if (!storeName || !branchName) {
+      setOrders([]); setLoading(false); return;
+    }
     setLoading(true);
     const hasSearch = !!fSearch.trim();
     let q = supabase.from('sales')
       .select('*, product:products(name,code), brand:brands(name), customer:customers(id,name,phone,total_points,used_points,total_purchase,grade)')
-      .eq('store_name', profile.department)
-      .eq('branch_name', profile.branch)
+      .eq('store_name', storeName)
+      .eq('branch_name', branchName)
       .order('sold_at', { ascending: false })
       .order('created_at', { ascending: false });
     if (!hasSearch) {
@@ -68,7 +81,7 @@ export default function SalesReturnPage({ profile }) {
     setExpanded(null);
     setReturnMap({});
     setLoading(false);
-  }, [profile.department, profile.branch, fFrom, fTo, fSearch]);
+  }, [storeName, branchName, fFrom, fTo, fSearch]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -170,8 +183,8 @@ export default function SalesReturnPage({ profile }) {
         if (it.product?.code) {
           const { data: stockRow } = await supabase.from('store_stock')
             .select('id, stock_qty')
-            .eq('store_name',  profile.department)
-            .eq('branch_name', profile.branch)
+            .eq('store_name',  it.store_name || storeName)
+            .eq('branch_name', it.branch_name || branchName)
             .eq('product_code', it.product.code)
             .maybeSingle();
           if (stockRow) {
@@ -213,6 +226,9 @@ export default function SalesReturnPage({ profile }) {
 
   // 직접입력 반품 처리
   const handleManualReturn = async () => {
+    if (!isStoreMgr && (!storeName || !branchName)) {
+      toast('점포와 지점을 먼저 선택해주세요', 'err'); return;
+    }
     if (!mProduct) { toast('상품을 선택해주세요', 'err'); return; }
     if (!mDate)    { toast('날짜를 선택해주세요', 'err'); return; }
     const qty = Number(mQty) || 0;
@@ -227,8 +243,8 @@ export default function SalesReturnPage({ profile }) {
       // 수기 반품도 음수 매출 row로 저장 (returned_qty 미사용 — 자기 자신 반품 마킹은 의미 없음)
       const { error } = await supabase.from('sales').insert({
         sold_at: mDate,
-        store_name: profile.department,
-        branch_name: profile.branch,
+        store_name: storeName,
+        branch_name: branchName,
         brand_id: mProduct.brand_id,
         product_id: mProduct.id,
         quantity: qty,
@@ -247,8 +263,8 @@ export default function SalesReturnPage({ profile }) {
       if (mProduct.code) {
         const { data: stockRow } = await supabase.from('store_stock')
           .select('id, stock_qty')
-          .eq('store_name',  profile.department)
-          .eq('branch_name', profile.branch)
+          .eq('store_name',  storeName)
+          .eq('branch_name', branchName)
           .eq('product_code', mProduct.code)
           .maybeSingle();
         if (stockRow) {
@@ -289,9 +305,26 @@ export default function SalesReturnPage({ profile }) {
       {/* 필터 */}
       <div className="card">
         <div className="card-label">반품 접수</div>
-        <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12, fontFamily:'var(--mono)' }}>
-          📍 {profile.department} · {profile.branch}
-        </div>
+        {isStoreMgr ? (
+          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12, fontFamily:'var(--mono)' }}>
+            📍 {profile.department} · {profile.branch}
+          </div>
+        ) : (
+          <div style={{display:'flex', gap:10, marginBottom:12, flexWrap:'wrap'}}>
+            <select className="fsel" value={hqStore} onChange={e => { setHqStore(e.target.value); setHqBranch(''); }}>
+              <option value="">점포 선택</option>
+              {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="fsel" value={hqBranch} onChange={e => setHqBranch(e.target.value)}
+              disabled={!hqStore} style={{background:!hqStore?'#f0f0f0':'#fff'}}>
+              <option value="">{hqStore ? '지점 선택' : '먼저 점포 선택'}</option>
+              {hqBranchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            {(!storeName || !branchName) && (
+              <span style={{fontSize:11, color:'var(--danger)', alignSelf:'center'}}>※ 점포·지점을 선택하면 매출 조회가 시작됩니다</span>
+            )}
+          </div>
+        )}
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)}
             disabled={!!fSearch.trim()} title="판매일 시작"
@@ -474,9 +507,26 @@ export default function SalesReturnPage({ profile }) {
       {tab === 'manual' && (
         <div className="card">
           <div className="card-label">직접 입력 반품</div>
-          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:14, fontFamily:'var(--mono)' }}>
-            📍 {profile.department} · {profile.branch}
-          </div>
+          {isStoreMgr ? (
+            <div style={{ fontSize:12, color:'var(--text2)', marginBottom:14, fontFamily:'var(--mono)' }}>
+              📍 {profile.department} · {profile.branch}
+            </div>
+          ) : (
+            <div style={{display:'flex', gap:10, marginBottom:14, flexWrap:'wrap'}}>
+              <select className="fsel" value={hqStore} onChange={e => { setHqStore(e.target.value); setHqBranch(''); }}>
+                <option value="">점포 선택</option>
+                {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select className="fsel" value={hqBranch} onChange={e => setHqBranch(e.target.value)}
+                disabled={!hqStore} style={{background:!hqStore?'#f0f0f0':'#fff'}}>
+                <option value="">{hqStore ? '지점 선택' : '먼저 점포 선택'}</option>
+                {hqBranchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+              {(!storeName || !branchName) && (
+                <span style={{fontSize:11, color:'var(--danger)', alignSelf:'center'}}>※ 점포·지점을 선택하면 매장재고가 복구될 매장이 결정됩니다</span>
+              )}
+            </div>
+          )}
           <div style={{background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:14, fontSize:12, color:'#6d4c41'}}>
             💡 주문건을 찾을 수 없는 경우, 날짜·상품·수량·가격을 직접 입력하여 반품을 접수합니다.
             처리 시 매장재고는 자동 복구되며, 회원 적립금은 변동되지 않습니다.
