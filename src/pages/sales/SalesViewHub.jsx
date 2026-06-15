@@ -9,7 +9,7 @@ export default function SalesViewHub({ setPage }) {
     { key:'lecture_sales_view', icon:'🎓', label:'강좌 매출',  desc:'강좌 진행 매출 조회' },
   ];
 
-  // 기간 선택 (draft / applied)
+  // 기간 선택
   const today = new Date();
   const pad = n => String(n).padStart(2,'0');
   const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -25,6 +25,9 @@ export default function SalesViewHub({ setPage }) {
   const [lectureRows, setLectureRows] = useState([]);
   const [loading,     setLoading]     = useState(false);
 
+  // 상세보기 모달
+  const [drill, setDrill] = useState(null); // { kind:'store'|'biz'|'lecture', title:string, daily:[{date, count, amt}] }
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -34,7 +37,7 @@ export default function SalesViewHub({ setPage }) {
       let start = 0;
       while (true) {
         const { data, error } = await supabase.from('sales')
-          .select('sold_at, price, quantity')
+          .select('sold_at, store_name, branch_name, price, quantity')
           .gte('sold_at', appliedFrom).lte('sold_at', appliedTo)
           .range(start, start + PAGE - 1);
         if (error) throw error;
@@ -47,14 +50,14 @@ export default function SalesViewHub({ setPage }) {
 
       // 특판매출
       const { data: bizData, error: bizErr } = await supabase.from('biz_sales')
-        .select('sold_at, supply_price, quantity')
+        .select('sold_at, company_name, supply_price, quantity')
         .gte('sold_at', appliedFrom).lte('sold_at', appliedTo);
       if (bizErr) throw bizErr;
       setBizRows(bizData || []);
 
       // 강좌매출
       const { data: lecData, error: lecErr } = await supabase.from('lecture_sales')
-        .select('sold_at, price')
+        .select('sold_at, store_name, branch_name, price')
         .gte('sold_at', appliedFrom).lte('sold_at', appliedTo);
       if (lecErr) throw lecErr;
       setLectureRows(lecData || []);
@@ -66,27 +69,60 @@ export default function SalesViewHub({ setPage }) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // 일자별 집계 helper
-  const groupByDate = (rows, amountFn) => {
+  // 그룹화 helper — keyFn, labelFn으로 주체별 묶고, 각 그룹마다 일자별 분포까지 같이 계산
+  const groupBy = (rows, keyFn, labelFn, amountFn) => {
     const map = new Map();
     for (const r of rows) {
-      const d = r.sold_at;
-      if (!d) continue;
+      const k = keyFn(r);
+      if (!k) continue;
       const amt = amountFn(r);
-      map.set(d, (map.get(d) || 0) + amt);
+      let g = map.get(k);
+      if (!g) {
+        g = { key: k, label: labelFn(r), count: 0, total: 0, daily: new Map() };
+        map.set(k, g);
+      }
+      g.count += 1;
+      g.total += amt;
+      const d = r.sold_at;
+      if (d) {
+        const dEntry = g.daily.get(d) || { date: d, count: 0, amt: 0 };
+        dEntry.count += 1;
+        dEntry.amt   += amt;
+        g.daily.set(d, dEntry);
+      }
     }
-    return Array.from(map.entries())
-      .map(([date, amt]) => ({ date, amt }))
-      .sort((a,b) => a.date.localeCompare(b.date));
+    const list = Array.from(map.values()).map(g => ({
+      ...g,
+      daily: Array.from(g.daily.values()).sort((a,b) => a.date.localeCompare(b.date)),
+    }));
+    list.sort((a,b) => b.total - a.total); // 매출액 큰 순
+    return list;
   };
 
-  const storeDaily   = useMemo(() => groupByDate(storeRows,   r => (Number(r.price)||0)        * (Number(r.quantity)||0)), [storeRows]);
-  const bizDaily     = useMemo(() => groupByDate(bizRows,     r => (Number(r.supply_price)||0) * (Number(r.quantity)||0)), [bizRows]);
-  const lectureDaily = useMemo(() => groupByDate(lectureRows, r => (Number(r.price)||0)), [lectureRows]);
+  const storeGroups   = useMemo(() => groupBy(
+    storeRows,
+    r => `${r.store_name||''}|${r.branch_name||''}`,
+    r => `${r.store_name||''} ${r.branch_name||''}`.trim(),
+    r => (Number(r.price)||0) * (Number(r.quantity)||0)
+  ), [storeRows]);
 
-  const storeTotal   = useMemo(() => storeDaily.reduce((s,r) => s + r.amt, 0), [storeDaily]);
-  const bizTotal     = useMemo(() => bizDaily.reduce((s,r) => s + r.amt, 0), [bizDaily]);
-  const lectureTotal = useMemo(() => lectureDaily.reduce((s,r) => s + r.amt, 0), [lectureDaily]);
+  const bizGroups     = useMemo(() => groupBy(
+    bizRows,
+    r => r.company_name || '(미지정)',
+    r => r.company_name || '(미지정)',
+    r => (Number(r.supply_price)||0) * (Number(r.quantity)||0)
+  ), [bizRows]);
+
+  const lectureGroups = useMemo(() => groupBy(
+    lectureRows,
+    r => `${r.store_name||''}|${r.branch_name||''}`,
+    r => `${r.store_name||''} ${r.branch_name||''}`.trim() || '(미지정)',
+    r => (Number(r.price)||0)
+  ), [lectureRows]);
+
+  const storeTotal   = useMemo(() => storeGroups.reduce((s,g) => s + g.total, 0), [storeGroups]);
+  const bizTotal     = useMemo(() => bizGroups.reduce((s,g) => s + g.total, 0), [bizGroups]);
+  const lectureTotal = useMemo(() => lectureGroups.reduce((s,g) => s + g.total, 0), [lectureGroups]);
   const grandTotal   = storeTotal + bizTotal + lectureTotal;
 
   const filtersDirty = (fFrom !== appliedFrom) || (fTo !== appliedTo);
@@ -112,44 +148,49 @@ export default function SalesViewHub({ setPage }) {
     }
   };
 
-  // 카드 컴포넌트
-  const SectionCard = ({ title, icon, daily, total, color, onClick }) => (
+  // 그룹 카드 (특판: 거래처 / 매장·강좌: 매장+지점)
+  const SectionCard = ({ title, icon, groups, total, color, kind, headerOnClick, subjectLabel }) => (
     <div className="card" style={{padding:0, overflow:'hidden'}}>
-      <div style={{display:'flex', alignItems:'center', gap:10, padding:'12px 16px', borderBottom:'1px solid var(--border)', background:'#fafafa', cursor: onClick ? 'pointer' : 'default'}} onClick={onClick}>
+      <div style={{display:'flex', alignItems:'center', gap:10, padding:'12px 16px', borderBottom:'1px solid var(--border)', background:'#fafafa', cursor: headerOnClick ? 'pointer' : 'default'}} onClick={headerOnClick}>
         <span style={{fontSize:18}}>{icon}</span>
         <strong style={{fontSize:14}}>{title}</strong>
-        <span style={{fontSize:11, color:'var(--text3)'}}>{daily.length}일</span>
-        <span style={{marginLeft:'auto', fontFamily:'var(--mono)', fontWeight:700, color:color, fontSize:16}}>
+        <span style={{fontSize:11, color:'var(--text3)'}}>{groups.length}곳</span>
+        <span style={{marginLeft:'auto', fontFamily:'var(--mono)', fontWeight:700, color, fontSize:16}}>
           {total.toLocaleString()}원
         </span>
       </div>
-      {daily.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="empty" style={{padding:'18px 0', fontSize:12}}>해당 기간 매출 없음</div>
       ) : (
         <div className="twrap">
           <table>
             <thead>
               <tr>
-                <th>날짜</th>
-                <th>요일</th>
+                <th>{subjectLabel}</th>
+                <th className="r">판매건수</th>
                 <th className="r">매출액</th>
+                <th style={{width:100, textAlign:'center'}}>상세</th>
               </tr>
             </thead>
             <tbody>
-              {daily.map(r => {
-                const dow = ['일','월','화','수','목','금','토'][new Date(r.date).getDay()];
-                const isSun = dow === '일'; const isSat = dow === '토';
-                return (
-                  <tr key={r.date}>
-                    <td className="mono">{r.date}</td>
-                    <td style={{fontWeight:700, color: isSun?'var(--danger)':isSat?'var(--accent2)':'var(--text)'}}>{dow}</td>
-                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{r.amt.toLocaleString()}원</td>
-                  </tr>
-                );
-              })}
+              {groups.map(g => (
+                <tr key={g.key}>
+                  <td style={{fontWeight:600}}>{g.label}</td>
+                  <td className="r" style={{fontFamily:'var(--mono)'}}>{g.count.toLocaleString()}건</td>
+                  <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color}}>{g.total.toLocaleString()}원</td>
+                  <td style={{textAlign:'center'}}>
+                    <button className="btn btn-s" style={{padding:'2px 10px', fontSize:11}}
+                      onClick={() => setDrill({ kind, title: `${icon} ${g.label}`, daily: g.daily, total: g.total, count: g.count, color })}>
+                      상세보기
+                    </button>
+                  </td>
+                </tr>
+              ))}
               <tr style={{background:'#fafafa', fontWeight:700}}>
-                <td colSpan={2} style={{textAlign:'right'}}>합계</td>
+                <td style={{textAlign:'right'}}>합계</td>
+                <td className="r" style={{fontFamily:'var(--mono)'}}>{groups.reduce((s,g)=>s+g.count,0).toLocaleString()}건</td>
                 <td className="r" style={{fontFamily:'var(--mono)', color}}>{total.toLocaleString()}원</td>
+                <td/>
               </tr>
             </tbody>
           </table>
@@ -232,12 +273,62 @@ export default function SalesViewHub({ setPage }) {
         ))}
       </div>
 
-      {/* 매출 내역 3개 섹션 */}
+      {/* 매출 내역 3개 섹션 — 주체별 그룹 */}
       <div style={{display:'grid', gap:14}}>
-        <SectionCard title="매장 매출 내역"  icon="🏬" daily={storeDaily}   total={storeTotal}   color="var(--accent)" onClick={() => setPage('sales_list')}/>
-        <SectionCard title="특판 매출 내역"  icon="🤝" daily={bizDaily}     total={bizTotal}     color="#1565C0"       onClick={() => setPage('biz_sales_view')}/>
-        <SectionCard title="강좌 매출 내역"  icon="🎓" daily={lectureDaily} total={lectureTotal} color="#6a1b9a"       onClick={() => setPage('lecture_sales_view')}/>
+        <SectionCard title="매장 매출 내역" icon="🏬" groups={storeGroups}   total={storeTotal}   color="var(--accent)" kind="store"   subjectLabel="매장 / 지점" headerOnClick={() => setPage('sales_list')}/>
+        <SectionCard title="특판 매출 내역" icon="🤝" groups={bizGroups}     total={bizTotal}     color="#1565C0"       kind="biz"     subjectLabel="거래처"     headerOnClick={() => setPage('biz_sales_view')}/>
+        <SectionCard title="강좌 매출 내역" icon="🎓" groups={lectureGroups} total={lectureTotal} color="#6a1b9a"       kind="lecture" subjectLabel="강좌 매장"   headerOnClick={() => setPage('lecture_sales_view')}/>
       </div>
+
+      {/* 상세보기 모달 — 그룹의 일자별 분포 */}
+      {drill && (
+        <div style={{position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setDrill(null)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'20px 24px', width:'90vw', maxWidth:720, maxHeight:'85vh', overflow:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap'}}>
+              <strong style={{fontSize:15}}>{drill.title}</strong>
+              <span style={{fontSize:12, color:'var(--text3)'}}>{drill.daily.length}일</span>
+              <span style={{fontSize:12, color:'var(--text3)'}}>· 판매 {drill.count}건</span>
+              <span style={{marginLeft:'auto', fontSize:18, fontWeight:700, color:drill.color, fontFamily:'var(--mono)'}}>
+                {drill.total.toLocaleString()}원
+              </span>
+              <button type="button" onClick={() => setDrill(null)}
+                style={{background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+            </div>
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>날짜</th>
+                    <th>요일</th>
+                    <th className="r">판매건수</th>
+                    <th className="r">매출액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drill.daily.map(r => {
+                    const dow = ['일','월','화','수','목','금','토'][new Date(r.date).getDay()];
+                    const isSun = dow === '일'; const isSat = dow === '토';
+                    return (
+                      <tr key={r.date}>
+                        <td className="mono">{r.date}</td>
+                        <td style={{fontWeight:700, color: isSun?'var(--danger)':isSat?'var(--accent2)':'var(--text)'}}>{dow}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)'}}>{r.count.toLocaleString()}건</td>
+                        <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{r.amt.toLocaleString()}원</td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{background:'#fafafa', fontWeight:700}}>
+                    <td colSpan={2} style={{textAlign:'right'}}>합계</td>
+                    <td className="r" style={{fontFamily:'var(--mono)'}}>{drill.count.toLocaleString()}건</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', color:drill.color}}>{drill.total.toLocaleString()}원</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
