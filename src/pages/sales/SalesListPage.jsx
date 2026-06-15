@@ -160,17 +160,30 @@ export default function SalesListPage({ setPage }) {
 
   const fetchSales = useCallback(async () => {
     setLoading(true);
-    let q = supabase.from('sales')
-      .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch), customer:customers(name)')
-      .order('sold_at', { ascending: false });
-    if (fStore)  q = q.eq('store_name',  fStore);
-    if (fBranch) q = q.eq('branch_name', fBranch);
-    if (fBrand)  q = q.eq('brand_id', fBrand);
-    if (fFrom)   q = q.gte('sold_at', fFrom);
-    if (fTo)     q = q.lte('sold_at', fTo);
-    const { data, error } = await q.limit(500);
-    if (error) toast(error.message, 'err');
-    else setSales(data || []);
+    // 1000건 페이징으로 5000건까지 안전하게 가져옴 (truncated 표시는 cap 도달 시에만)
+    const PAGE = 1000;
+    const CAP  = 5000;
+    let all = [], start = 0;
+    let lastError = null;
+    while (start < CAP) {
+      let q = supabase.from('sales')
+        .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch), customer:customers(name)')
+        .order('sold_at', { ascending: false })
+        .order('id',      { ascending: false });
+      if (fStore)  q = q.eq('store_name',  fStore);
+      if (fBranch) q = q.eq('branch_name', fBranch);
+      if (fBrand)  q = q.eq('brand_id', fBrand);
+      if (fFrom)   q = q.gte('sold_at', fFrom);
+      if (fTo)     q = q.lte('sold_at', fTo);
+      const { data, error } = await q.range(start, start + PAGE - 1);
+      if (error) { lastError = error; break; }
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    if (lastError) toast(lastError.message, 'err');
+    else setSales(all);
     setLoading(false);
   }, [fStore, fBranch, fBrand, fFrom, fTo]);
 
@@ -344,7 +357,7 @@ export default function SalesListPage({ setPage }) {
       (s.branch_name || '-') === drillStore.branch_name
     );
   }, [filtered, drillStore]);
-  const truncated     = sales.length === 500;
+  const truncated     = sales.length >= 5000; // 페이징 cap 도달 시에만 경고
 
   const drillRows = useMemo(() => {
     if (!drillProduct) return [];
@@ -535,12 +548,12 @@ export default function SalesListPage({ setPage }) {
             ) : viewMode === 'product' ? (
               <span className="fresult">
                 <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
-                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 500건 한도 도달 - 기간/필터를 좁혀주세요</span>}
+                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 5,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
               </span>
             ) : (
               <span className="fresult">
                 <b>{storeAgg.length.toLocaleString()}</b>개 매장 · <b>{storeTotalCount.toLocaleString()}</b>건 · <b>{storeTotalQty.toLocaleString()}</b>개 · <b>{storeTotalAmt.toLocaleString()}</b>원
-                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 500건 한도 도달 - 기간/필터를 좁혀주세요</span>}
+                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 5,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
               </span>
             )}
           </div>
