@@ -538,8 +538,8 @@ export default function PurchaseOrderHQPage({ profile }) {
                 <div style={{display:'flex', gap:6}}>
                   <button className="btn btn-s" onClick={() => toggleAll(true)}>전체선택</button>
                   <button className="btn btn-s" onClick={() => toggleAll(false)}>전체해제</button>
-                  <button className="btn btn-p" disabled={totalChecked === 0} onClick={() => setConfirmStep(true)}>
-                    📋 발주진행 ({totalChecked})
+                  <button className="btn btn-p" disabled={totalChecked === 0 || submitting} onClick={handleSubmitOrders}>
+                    {submitting ? <span className="spinner"/> : `📋 발주진행 (${totalChecked})`}
                   </button>
                 </div>
               </div>
@@ -571,6 +571,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                         <th>코드</th>
                         <th className="r" style={{width:80}}>센터재고</th>
                         <th className="r">판매수량</th>
+                        <th className="r" style={{width:120}}>발주수량</th>
                         <th style={{width:40}}></th>
                       </tr>
                     </thead>
@@ -597,6 +598,16 @@ export default function PurchaseOrderHQPage({ profile }) {
                           </td>
                           <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: it.manual ? 'var(--text3)' : 'var(--text)'}}>
                             {it.manual ? '-' : it.sold_qty}
+                          </td>
+                          <td className="r">
+                            {it.alreadyOrdered ? (
+                              <span style={{fontFamily:'var(--mono)', color:'var(--text3)'}}>{it.hq_qty}</span>
+                            ) : (
+                              <input type="number" min={0} value={it.hq_qty}
+                                onChange={e => updateQty(sk, it.product_id, e.target.value)}
+                                disabled={!it.checked}
+                                style={{width:80, height:28, padding:'0 8px', border:`1px solid ${it.checked?'var(--accent)':'var(--border)'}`, borderRadius:4, fontFamily:'var(--mono)', fontWeight:700, textAlign:'right', fontSize:12, background: it.checked ? '#fff3e0' : '#f5f5f5'}}/>
+                            )}
                           </td>
                           <td style={{textAlign:'center'}}>
                             {it.manual && !it.alreadyOrdered && (
