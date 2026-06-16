@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
-import { toast } from '../../lib/utils';
+import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
 
 export default function ProductMgmtPage({ subPage }) {
   const [products, setProducts] = useState([]);
@@ -250,11 +250,11 @@ export default function ProductMgmtPage({ subPage }) {
                 </div>
                 <div>
                   <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>원가 <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input type="number" value={newCost} onChange={e => setNewCost(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="0"/>
+                  <input type="text" inputMode="numeric" value={formatNumInput(newCost)} onChange={e => setNewCost(parseNumInput(e.target.value))} style={{...inputStyle, width:'100%'}} placeholder="0"/>
                 </div>
                 <div>
                   <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>판매가 <span style={{color:'var(--danger)'}}>*</span></label>
-                  <input type="number" value={newPrice} onChange={e => setNewPrice(e.target.value)} style={{...inputStyle, width:'100%'}} placeholder="0"/>
+                  <input type="text" inputMode="numeric" value={formatNumInput(newPrice)} onChange={e => setNewPrice(parseNumInput(e.target.value))} style={{...inputStyle, width:'100%'}} placeholder="0"/>
                 </div>
                 <button className="btn btn-p" onClick={addProduct} style={{height:34}}>추가</button>
               </div>
@@ -331,14 +331,14 @@ export default function ProductMgmtPage({ subPage }) {
                           <td style={{fontWeight:600, color: p.is_sales_stopped ? 'var(--text3)' : undefined, textDecoration: p.is_sales_stopped ? 'line-through' : undefined}}>{p.name}</td>
                           <td className="r">
                             {isEditing
-                              ? <input type="number" value={ed.cost} onChange={e => setEditing(prev=>({...prev,[p.id]:{...prev[p.id],cost:e.target.value}}))}
+                              ? <input type="text" inputMode="numeric" value={formatNumInput(ed.cost)} onChange={e => setEditing(prev=>({...prev,[p.id]:{...prev[p.id],cost:parseNumInput(e.target.value)}}))}
                                   style={{width:90, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, textAlign:'right', outline:'none'}}/>
                               : <span style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{p.cost ? Number(p.cost).toLocaleString()+'원' : '-'}</span>
                             }
                           </td>
                           <td className="r">
                             {isEditing
-                              ? <input type="number" value={ed.price} onChange={e => setEditing(prev=>({...prev,[p.id]:{...prev[p.id],price:e.target.value}}))}
+                              ? <input type="text" inputMode="numeric" value={formatNumInput(ed.price)} onChange={e => setEditing(prev=>({...prev,[p.id]:{...prev[p.id],price:parseNumInput(e.target.value)}}))}
                                   style={{width:90, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, textAlign:'right', outline:'none'}}/>
                               : <span style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{Number(p.price).toLocaleString()}원</span>
                             }

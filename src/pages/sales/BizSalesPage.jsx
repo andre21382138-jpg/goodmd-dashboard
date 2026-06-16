@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast } from '../../lib/utils';
+import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
 import SalesTabNav from './SalesTabNav';
 
 export default function BizSalesPage({ profile, setPage }) {
@@ -454,8 +454,8 @@ export default function BizSalesPage({ profile, setPage }) {
                     style={{...inputStyle, height:38, textAlign:'center'}} required />
                   {/* 공급가 + 증정 토글 */}
                   <div style={{ display:'flex', gap:4 }}>
-                    <input type="number" min={0} value={l.isGift ? 0 : l.supplyPrice}
-                      onChange={e => updateLine(l.id,'supplyPrice',e.target.value)}
+                    <input type="text" inputMode="numeric" value={l.isGift ? '0' : formatNumInput(l.supplyPrice)}
+                      onChange={e => updateLine(l.id,'supplyPrice',parseNumInput(e.target.value))}
                       disabled={l.isGift}
                       style={{...inputStyle, height:38, flex:1, textAlign:'right', fontWeight:700,
                         color: l.isGift ? 'var(--text3)' : 'var(--accent)',
@@ -613,8 +613,8 @@ export default function BizSalesPage({ profile, setPage }) {
                       </td>
                       <td className="r" style={{fontFamily:'var(--mono)'}}>
                         {isEditing
-                          ? <input type="number" min={0} value={editData.supply_price}
-                              onChange={e => setEditData(p => ({...p, supply_price:e.target.value}))}
+                          ? <input type="text" inputMode="numeric" value={formatNumInput(editData.supply_price)}
+                              onChange={e => setEditData(p => ({...p, supply_price:parseNumInput(e.target.value)}))}
                               style={numInput}/>
                           : `${(s.supply_price||0).toLocaleString()}원`}
                       </td>

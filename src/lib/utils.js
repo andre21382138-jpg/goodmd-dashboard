@@ -66,6 +66,29 @@ export function uniq(arr) {
 }
 
 // ════════════════════════════════════════════════════════
+// 금액 콤마 포맷 (text input용)
+// ════════════════════════════════════════════════════════
+// 입력 문자열을 천단위 콤마 표시 문자열로. 음수/빈값 허용.
+export function formatNumInput(val) {
+  if (val === '' || val == null) return '';
+  const s = String(val);
+  const neg = s.trim().startsWith('-');
+  const digits = s.replace(/[^\d]/g, '');
+  if (digits === '') return neg ? '-' : '';
+  const out = Number(digits).toLocaleString('en-US');
+  return neg ? `-${out}` : out;
+}
+// 콤마 포함 문자열에서 숫자만 추출 (저장/계산용)
+export function parseNumInput(val) {
+  if (val === '' || val == null) return '';
+  const s = String(val).trim();
+  const neg = s.startsWith('-');
+  const digits = s.replace(/[^\d]/g, '');
+  if (digits === '') return neg ? '-' : '';
+  return (neg ? '-' : '') + digits;
+}
+
+// ════════════════════════════════════════════════════════
 // 전화번호 포맷
 // ════════════════════════════════════════════════════════
 export function formatPhone(val) {

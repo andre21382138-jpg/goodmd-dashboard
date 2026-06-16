@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast } from '../../lib/utils';
+import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function MgrSalesViewPage({ profile }) {
@@ -43,7 +43,7 @@ export default function MgrSalesViewPage({ profile }) {
   const cancelEditLine = () => { setEditingLine(null); setEditDraft({}); };
   const saveEditLine = async (it) => {
     const qty   = Number(editDraft.quantity);
-    const price = Number(editDraft.price);
+    const price = Number(parseNumInput(editDraft.price));
     if (!Number.isFinite(qty) || qty === 0) { toast('수량은 0이 아닌 숫자여야 합니다', 'err'); return; }
     if (!Number.isFinite(price))            { toast('단가가 유효하지 않습니다', 'err'); return; }
     setSavingLine(true);
@@ -464,8 +464,8 @@ export default function MgrSalesViewPage({ profile }) {
                 </div>
                 <div>
                   <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>단가 (원) · 음수=반품</label>
-                  <input type="number" value={editDraft.price ?? ''}
-                    onChange={e => setEditDraft(p => ({...p, price: e.target.value}))}
+                  <input type="text" inputMode="numeric" value={formatNumInput(editDraft.price)}
+                    onChange={e => setEditDraft(p => ({...p, price: parseNumInput(e.target.value)}))}
                     style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)'}}/>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, GradeBadge, getGrade, formatPhone } from '../../lib/utils';
+import { toast, GradeBadge, getGrade, formatPhone, formatNumInput, parseNumInput } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function SalesInputPage({ profile }) {
@@ -202,7 +202,7 @@ export default function SalesInputPage({ profile }) {
       }
       if (field === 'normalPrice' || field === 'discount') {
         const effQty = Math.max(Number(updated.quantity) || 0, 1);
-        const inputUnit = (Number(value) || 0) / effQty;
+        const inputUnit = (Number(parseNumInput(value)) || 0) / effQty;
         if (field === 'normalPrice') updated.normalPrice = inputUnit;
         else                          updated.discount    = inputUnit;
         const np = Number(updated.normalPrice) || 0;
@@ -213,7 +213,7 @@ export default function SalesInputPage({ profile }) {
       }
       if (field === 'price') {
         const effQty = Math.max(Number(updated.quantity) || 0, 1);
-        const inputUnit = (Number(value) || 0) / effQty;
+        const inputUnit = (Number(parseNumInput(value)) || 0) / effQty;
         updated.price = inputUnit;
         const np = Number(updated.normalPrice) || 0;
         const sp = Number(updated.price) || 0;
@@ -596,11 +596,11 @@ export default function SalesInputPage({ profile }) {
                   {/* 수량 */}
                   <input type="number" min={1} value={l.quantity} onChange={e => updateLine(l.id,'quantity',e.target.value)} style={{...inputStyle, textAlign:'center'}} required />
                   {/* 정상가 (수량 × 단가) */}
-                  <input type="number" min={0} value={totalNormal} onChange={e => updateLine(l.id,'normalPrice',e.target.value)} style={{...inputStyle, textAlign:'right'}} placeholder="0" />
+                  <input type="text" inputMode="numeric" value={formatNumInput(totalNormal === '' ? '' : String(Math.round(totalNormal)))} onChange={e => updateLine(l.id,'normalPrice',parseNumInput(e.target.value))} style={{...inputStyle, textAlign:'right'}} placeholder="0" />
                   {/* 할인금액 (수량 × 단가) */}
-                  <input type="number" min={0} value={totalDiscount} onChange={e => updateLine(l.id,'discount',e.target.value)} style={{...inputStyle, textAlign:'right', color:'var(--danger)'}} placeholder="0" />
+                  <input type="text" inputMode="numeric" value={formatNumInput(totalDiscount === '' ? '' : String(Math.round(totalDiscount)))} onChange={e => updateLine(l.id,'discount',parseNumInput(e.target.value))} style={{...inputStyle, textAlign:'right', color:'var(--danger)'}} placeholder="0" />
                   {/* 판매가 (수량 × 단가) — 0 허용 (증정·시식) */}
-                  <input type="number" min={0} value={totalPrice} onChange={e => updateLine(l.id,'price',e.target.value)} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" />
+                  <input type="text" inputMode="numeric" value={formatNumInput(totalPrice === '' ? '' : String(Math.round(totalPrice)))} onChange={e => updateLine(l.id,'price',parseNumInput(e.target.value))} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" />
                   {/* 결제 */}
                   <div style={{ display:'flex', gap:2 }}>
                     {PAYMENTS.map(p => {

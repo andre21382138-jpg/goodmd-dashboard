@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, GradeBadge, getGrade } from '../../lib/utils';
+import { toast, GradeBadge, getGrade, formatNumInput, parseNumInput } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function SalesReturnPage({ profile }) {
@@ -649,15 +649,22 @@ export default function SalesReturnPage({ profile }) {
             </div>
             <div>
               <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>가격 (단가)</label>
-              <input type="number" min={0} value={mPrice} onChange={e => setMPrice(e.target.value)}
+              <input type="text" inputMode="numeric" value={formatNumInput(mPrice)}
+                onChange={e => setMPrice(parseNumInput(e.target.value))}
                 style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', boxSizing:'border-box', textAlign:'right'}}
                 placeholder="0"/>
             </div>
             <div>
-              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>환불 합계</label>
-              <div style={{height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, fontFamily:'var(--mono)', display:'flex', alignItems:'center', justifyContent:'flex-end', background:'#fafafa'}}>
-                {((Number(mQty)||0) * (Number(mPrice)||0)).toLocaleString()}원
-              </div>
+              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>환불 합계 <span style={{color:'var(--text3)', fontWeight:400}}>(수정 시 단가 자동계산)</span></label>
+              <input type="text" inputMode="numeric"
+                value={formatNumInput(String((Number(mQty)||0) * (Number(parseNumInput(mPrice))||0)))}
+                onChange={e => {
+                  const total = Number(parseNumInput(e.target.value)) || 0;
+                  const q = Number(mQty) || 1;
+                  setMPrice(String(q > 0 ? Math.round(total / q) : total));
+                }}
+                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, fontFamily:'var(--mono)', outline:'none', boxSizing:'border-box', textAlign:'right', background:'#fff3e0', color:'var(--accent)'}}
+                placeholder="0"/>
             </div>
           </div>
 

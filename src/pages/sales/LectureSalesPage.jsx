@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast } from '../../lib/utils';
+import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
 import SalesTabNav from './SalesTabNav';
 
 export default function LectureSalesPage({ profile, setPage }) {
@@ -138,7 +138,7 @@ export default function LectureSalesPage({ profile, setPage }) {
             </div>
             <div>
               <label style={labelStyle}>매출액 (원) <span style={{color:'var(--danger)'}}>*</span></label>
-              <input type="number" min={0} value={price} onChange={e=>setPrice(e.target.value)}
+              <input type="text" inputMode="numeric" value={formatNumInput(price)} onChange={e=>setPrice(parseNumInput(e.target.value))}
                 placeholder="0" style={{...inputStyle,fontWeight:700,color:'var(--accent)'}}/>
             </div>
           </div>
