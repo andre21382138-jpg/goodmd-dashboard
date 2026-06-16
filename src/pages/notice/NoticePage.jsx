@@ -135,6 +135,24 @@ export default function NoticePage({ profile }) {
                   </div>
                 )}
               </div>
+              {/* 본문 미리보기 — 등록 시 매장에서 보이는 모습 그대로 */}
+              {(title.trim() || content.trim() || pendingImages.length > 0) && (
+                <div style={{marginBottom:12}}>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>👀 미리보기 (실제 표시 모습)</label>
+                  <div style={{border:'1px dashed var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', background:'#fff'}}>
+                    {title.trim() && <div style={{fontSize:16, fontWeight:700, marginBottom:8}}>{title}</div>}
+                    {content.trim() && <div style={{fontSize:13, lineHeight:1.8, color:'var(--text)', whiteSpace:'pre-wrap'}}>{content}</div>}
+                    {pendingImages.length > 0 && (
+                      <div style={{display:'flex', flexDirection:'column', gap:12, marginTop:content.trim() ? 16 : 0}}>
+                        {pendingImages.map((p, i) => (
+                          <img key={i} src={p.previewUrl} alt={`첨부 ${i+1}`}
+                            style={{maxWidth:'100%', borderRadius:8, border:'1px solid var(--border)'}}/>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               <div style={{display:'flex', gap:8}}>
                 <button className="btn btn-p" onClick={handleSave} disabled={saving}>{saving ? <span className="spinner"/> : '등록'}</button>
                 <button className="btn btn-s" onClick={resetForm} disabled={saving}>취소</button>
