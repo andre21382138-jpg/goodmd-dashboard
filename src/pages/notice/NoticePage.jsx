@@ -35,6 +35,7 @@ export default function NoticePage({ profile }) {
   const [uploading, setUploading] = useState(false);
   const editorRef = useRef(null);
   const fileRef   = useRef(null);
+  const videoRef  = useRef(null);
   const [lightbox, setLightbox] = useState(null);
   const [colorOpen, setColorOpen] = useState(false);
 
@@ -94,11 +95,39 @@ export default function NoticePage({ profile }) {
     setUploading(false);
   };
 
+  // 영상 삽입 — 커서 위치에 <video controls>
+  const handleInsertVideos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    const vids = files.filter(f => f.type.startsWith('video/'));
+    if (vids.length !== files.length) toast('영상 파일만 첨부할 수 있습니다', 'inf');
+    const tooBig = vids.find(f => f.size > 50 * 1024 * 1024);
+    if (tooBig) { toast(`영상은 50MB 이하만 가능 (${tooBig.name})`, 'err'); return; }
+    if (vids.length === 0) return;
+    setUploading(true);
+    try {
+      editorRef.current?.focus();
+      for (const file of vids) {
+        const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
+        const path = `${profile.id}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from(NOTICE_BUCKET)
+          .upload(path, file, { upsert: false, contentType: file.type });
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from(NOTICE_BUCKET).getPublicUrl(path);
+        const html = `<video src="${pub.publicUrl}" controls playsinline style="max-width:100%;border-radius:8px;display:block;margin:8px 0;"></video><p><br/></p>`;
+        document.execCommand('insertHTML', false, html);
+      }
+    } catch (err) {
+      toast('영상 업로드 실패: ' + (err.message || err), 'err');
+    }
+    setUploading(false);
+  };
+
   const handleSave = async () => {
     if (!title.trim()) { toast('제목을 입력해주세요', 'err'); return; }
     const html = sanitizeHtml(editorRef.current?.innerHTML || '');
     const textOnly = (editorRef.current?.innerText || '').trim();
-    if (!textOnly && !/<img/i.test(html)) { toast('내용을 입력해주세요', 'err'); return; }
+    if (!textOnly && !/<img/i.test(html) && !/<video/i.test(html)) { toast('내용을 입력해주세요', 'err'); return; }
     setSaving(true);
     try {
       const { error } = await supabase.from('notices').insert({
@@ -209,6 +238,10 @@ export default function NoticePage({ profile }) {
                 <button type="button" style={toolBtn} onMouseDown={e=>e.preventDefault()} onClick={() => fileRef.current?.click()} disabled={uploading} title="이미지 삽입">
                   {uploading ? '업로드중…' : '🖼️ 이미지'}
                 </button>
+                <input ref={videoRef} type="file" accept="video/*" multiple onChange={handleInsertVideos} style={{display:'none'}}/>
+                <button type="button" style={toolBtn} onMouseDown={e=>e.preventDefault()} onClick={() => videoRef.current?.click()} disabled={uploading} title="영상 삽입 (mp4·webm, 50MB 이하)">
+                  {uploading ? '업로드중…' : '🎬 영상'}
+                </button>
               </div>
               {/* 편집 영역 */}
               <div
@@ -218,7 +251,7 @@ export default function NoticePage({ profile }) {
                 style={{minHeight:200, maxHeight:480, overflowY:'auto', padding:'12px 14px', border:'1px solid var(--border)', borderBottomLeftRadius:'var(--radius)', borderBottomRightRadius:'var(--radius)', background:'#fff', fontSize:14, lineHeight:1.8, outline:'none'}}
               />
               <div style={{fontSize:11, color:'var(--text3)', marginTop:6}}>
-                💡 텍스트를 드래그해 선택한 뒤 굵게·크기·색상을 적용하세요. 이미지는 커서 위치에 삽입됩니다.
+                💡 텍스트를 드래그해 선택한 뒤 굵게·크기·색상을 적용하세요. 이미지·영상은 커서 위치에 삽입됩니다 (영상: mp4·webm, 50MB 이하).
               </div>
 
               <div style={{display:'flex', gap:8, marginTop:12}}>
