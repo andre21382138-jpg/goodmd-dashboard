@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
+
+const NOTICE_BUCKET = 'notice-images';
 
 export default function NoticePage({ profile }) {
   const isAdmin = profile?.role === 'admin';
@@ -13,6 +15,11 @@ export default function NoticePage({ profile }) {
   const [title,    setTitle]    = useState('');
   const [content,  setContent]  = useState('');
   const [saving,   setSaving]   = useState(false);
+  // 첨부 이미지 — 등록 전 임시 목록 [{ file, previewUrl }]
+  const [pendingImages, setPendingImages] = useState([]);
+  const fileRef = useRef(null);
+  // 상세보기 이미지 라이트박스
+  const [lightbox, setLightbox] = useState(null); // url
 
   const fetchNotices = useCallback(async () => {
     setLoading(true);
@@ -25,14 +32,57 @@ export default function NoticePage({ profile }) {
 
   useEffect(() => { fetchNotices(); }, [fetchNotices]);
 
+  // 이미지 선택 (여러 개) — 임시 목록에 미리보기로 추가
+  const handlePickImages = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    const imgs = files.filter(f => f.type.startsWith('image/'));
+    if (imgs.length !== files.length) toast('이미지 파일만 첨부할 수 있습니다', 'inf');
+    const tooBig = imgs.find(f => f.size > 10 * 1024 * 1024);
+    if (tooBig) { toast(`이미지는 10MB 이하만 가능 (${tooBig.name})`, 'err'); return; }
+    setPendingImages(prev => [...prev, ...imgs.map(f => ({ file: f, previewUrl: URL.createObjectURL(f) }))]);
+  };
+  const removePending = (idx) => {
+    setPendingImages(prev => {
+      const next = [...prev];
+      URL.revokeObjectURL(next[idx]?.previewUrl);
+      next.splice(idx, 1);
+      return next;
+    });
+  };
+
+  const resetForm = () => {
+    pendingImages.forEach(p => URL.revokeObjectURL(p.previewUrl));
+    setTitle(''); setContent(''); setPendingImages([]); setWriting(false);
+  };
+
   const handleSave = async () => {
     if (!title.trim() || !content.trim()) { toast('제목과 내용을 입력해주세요', 'err'); return; }
     setSaving(true);
-    const { error } = await supabase.from('notices').insert({
-      title: title.trim(), content: content.trim(), created_by: profile.id
-    });
-    if (error) toast(error.message, 'err');
-    else { toast('공지사항 등록 완료', 'ok'); setTitle(''); setContent(''); setWriting(false); fetchNotices(); }
+    try {
+      // 1) 이미지 업로드 → 공개 URL 수집
+      const imageUrls = [];
+      for (const { file } of pendingImages) {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `${profile.id}/${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from(NOTICE_BUCKET)
+          .upload(path, file, { upsert: false, contentType: file.type });
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from(NOTICE_BUCKET).getPublicUrl(path);
+        imageUrls.push(pub.publicUrl);
+      }
+      // 2) 공지 insert
+      const { error } = await supabase.from('notices').insert({
+        title: title.trim(), content: content.trim(), created_by: profile.id,
+        images: imageUrls.length > 0 ? imageUrls : null,
+      });
+      if (error) throw error;
+      toast('공지사항 등록 완료', 'ok');
+      resetForm();
+      fetchNotices();
+    } catch (err) {
+      toast('등록 실패: ' + (err.message || err), 'err');
+    }
     setSaving(false);
   };
 
@@ -65,9 +115,29 @@ export default function NoticePage({ profile }) {
                   style={{...inputStyle, height:120, resize:'vertical', lineHeight:1.6}}
                   placeholder="공지사항 내용을 입력하세요"/>
               </div>
+              {/* 이미지 첨부 */}
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>
+                  이미지 첨부 <span style={{color:'var(--text3)', fontWeight:400}}>(여러 개 가능 · 10MB 이하)</span>
+                </label>
+                <input ref={fileRef} type="file" accept="image/*" multiple onChange={handlePickImages} style={{display:'none'}}/>
+                <button type="button" className="btn btn-s" onClick={() => fileRef.current?.click()}>🖼️ 이미지 추가</button>
+                {pendingImages.length > 0 && (
+                  <div style={{display:'flex', flexWrap:'wrap', gap:8, marginTop:10}}>
+                    {pendingImages.map((p, i) => (
+                      <div key={i} style={{position:'relative', width:88, height:88, borderRadius:8, overflow:'hidden', border:'1px solid var(--border)'}}>
+                        <img src={p.previewUrl} alt={`첨부 ${i+1}`} style={{width:'100%', height:'100%', objectFit:'cover'}}/>
+                        <button type="button" onClick={() => removePending(i)}
+                          title="삭제"
+                          style={{position:'absolute', top:2, right:2, width:20, height:20, border:'none', borderRadius:'50%', background:'rgba(0,0,0,0.6)', color:'#fff', fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center'}}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div style={{display:'flex', gap:8}}>
                 <button className="btn btn-p" onClick={handleSave} disabled={saving}>{saving ? <span className="spinner"/> : '등록'}</button>
-                <button className="btn btn-s" onClick={() => {setWriting(false);setTitle('');setContent('');}}>취소</button>
+                <button className="btn btn-s" onClick={resetForm} disabled={saving}>취소</button>
               </div>
             </>
           )}
@@ -91,7 +161,12 @@ export default function NoticePage({ profile }) {
                   const authorColor = a?.job_title === '담당자' ? '#1565C0' : '#E65100';
                   return (
                     <div style={{display:'flex', alignItems:'center', gap:0}}>
-                      <div style={{fontWeight:600, fontSize:13, flex:1, marginRight:8}}>{n.title}</div>
+                      <div style={{fontWeight:600, fontSize:13, flex:1, marginRight:8}}>
+                        {n.title}
+                        {Array.isArray(n.images) && n.images.length > 0 && (
+                          <span style={{marginLeft:6, fontSize:11, color:'var(--text3)'}}>🖼️{n.images.length}</span>
+                        )}
+                      </div>
                       <div style={{fontSize:11, color:'var(--text3)', whiteSpace:'nowrap', marginRight:10}}>
                         {new Date(n.created_at).toLocaleDateString('ko-KR')}
                       </div>
@@ -123,9 +198,26 @@ export default function NoticePage({ profile }) {
               </div>
             </div>
             <div style={{fontSize:13, lineHeight:1.8, color:'var(--text)', whiteSpace:'pre-wrap'}}>{selected.content}</div>
+            {Array.isArray(selected.images) && selected.images.length > 0 && (
+              <div style={{display:'flex', flexDirection:'column', gap:12, marginTop:16}}>
+                {selected.images.map((url, i) => (
+                  <img key={i} src={url} alt={`첨부 이미지 ${i+1}`}
+                    onClick={() => setLightbox(url)}
+                    style={{maxWidth:'100%', borderRadius:8, border:'1px solid var(--border)', cursor:'zoom-in'}}/>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* 이미지 라이트박스 */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)}
+          style={{position:'fixed', inset:0, zIndex:500, background:'rgba(0,0,0,0.85)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, cursor:'zoom-out'}}>
+          <img src={lightbox} alt="첨부 이미지 확대" style={{maxWidth:'95%', maxHeight:'95%', objectFit:'contain'}}/>
+        </div>
+      )}
     </div>
   );
 }
