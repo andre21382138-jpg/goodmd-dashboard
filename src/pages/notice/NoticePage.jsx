@@ -155,13 +155,19 @@ export default function NoticePage({ profile }) {
     try {
       if (editId) {
         // 수정 — body_html/content/blocks(레거시 무효화) 갱신
-        const { error } = await supabase.from('notices').update({
+        const { data: updated, error } = await supabase.from('notices').update({
           title: title.trim(),
           body_html: html,
           content: textOnly,
           blocks: null, images: null, // 레거시 필드는 비워 body_html 단일 소스로
-        }).eq('id', editId);
+        }).eq('id', editId).select();
         if (error) throw error;
+        if (!updated || updated.length === 0) {
+          // RLS UPDATE 정책 누락 등으로 0건 반영된 경우
+          toast('수정 권한이 없어 반영되지 않았습니다 (notices UPDATE 정책 확인 필요)', 'err');
+          setSaving(false);
+          return;
+        }
         toast('공지사항 수정 완료', 'ok');
         // 상세 선택이 이 공지면 갱신
         if (selected?.id === editId) {
@@ -180,7 +186,7 @@ export default function NoticePage({ profile }) {
       resetForm();
       fetchNotices();
     } catch (err) {
-      toast('등록 실패: ' + (err.message || err), 'err');
+      toast((editId ? '수정' : '등록') + ' 실패: ' + (err.message || err), 'err');
     }
     setSaving(false);
   };
