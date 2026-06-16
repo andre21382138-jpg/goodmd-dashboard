@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge, getGrade } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
@@ -40,6 +40,45 @@ export default function SalesReturnPage({ profile }) {
         .then(({ data }) => setAllProducts(data || []));
     }
   }, [tab, allProducts.length]);
+
+  // 바코드 스캐너 (수기 반품 탭에서만 — 스캔 시 상품 자동 선택)
+  const scanBufRef = useRef({ chars: '', lastTime: 0, startTime: 0 });
+  useEffect(() => {
+    if (tab !== 'manual' || allProducts.length === 0) return;
+    const handler = (e) => {
+      const tg = (e.target?.tagName || '').toLowerCase();
+      // 입력 중인 input/textarea/select는 스캐너 무시 (직접 타이핑과 충돌 방지)
+      if (tg === 'input' || tg === 'textarea' || tg === 'select') return;
+      const now = Date.now();
+      const buf = scanBufRef.current;
+      if (e.key === 'Enter') {
+        const code = buf.chars.trim();
+        const elapsed = now - buf.startTime;
+        buf.chars = ''; buf.lastTime = 0; buf.startTime = 0;
+        if (code.length >= 3 && elapsed < 800) {
+          e.preventDefault();
+          const matched = allProducts.find(p => String(p.code || '').trim() === code);
+          if (!matched) {
+            toast(`상품 매칭 실패 — 코드: ${code}`, 'err');
+            return;
+          }
+          setMProduct({ id: matched.id, name: matched.name, code: matched.code, brand_id: matched.brand_id });
+          setMSearch(matched.name);
+          if (matched.price) setMPrice(String(matched.price));
+          toast(`📷 ${matched.name} 선택됨`, 'ok');
+        }
+      } else if (e.key.length === 1) {
+        if (now - buf.lastTime > 100) {
+          buf.chars = '';
+          buf.startTime = now;
+        }
+        buf.chars += e.key;
+        buf.lastTime = now;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [tab, allProducts]);
 
   const fetchOrders = useCallback(async () => {
     // 본사 계정인데 점포/지점 미선택이면 조회 자체를 시도하지 않음

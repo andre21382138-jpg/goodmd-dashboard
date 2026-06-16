@@ -649,11 +649,12 @@ export default function App() {
   }, []);
 
   // 글로벌 바코드 스캐너 가드
-  // - 판매입력/입고확인 외 페이지에서 스캔 감지 시: 입력 차단(또는 정리) + 안내 토스트
-  // - 판매입력/입고확인 페이지에서는 자체 리스너가 처리하므로 여기서는 패스
+  // - 판매입력/반품/입고확인 외 페이지에서 스캔 감지 시: 입력 차단 + 안내 토스트
+  // - 위 페이지들은 자체 리스너가 처리하므로 여기서는 패스
   useEffect(() => {
     if (!profile?.approved) return;
-    if (page === 'sales_input' || page === 'purchase_check') return;
+    const SCANNER_PAGES = ['sales_input', 'sales_return', 'purchase_check'];
+    if (SCANNER_PAGES.includes(page)) return;
     const buf = { chars: '', lastTime: 0, startTime: 0 };
     const handler = (e) => {
       const now = Date.now();
@@ -681,7 +682,7 @@ export default function App() {
               }
             }
           }
-          toast('📷 스캔 감지 — 판매입력 또는 입고확인 화면에서 스캔해주세요', 'inf');
+          toast('📷 스캔 감지 — 판매입력 / 반품 / 입고확인 화면에서 스캔해주세요', 'inf');
         }
       } else if (e.key.length === 1) {
         if (now - buf.lastTime > 100) {
