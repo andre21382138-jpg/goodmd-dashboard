@@ -41,14 +41,18 @@ export default function SalesReturnPage({ profile }) {
     }
   }, [tab, allProducts.length]);
 
-  // 바코드 스캐너 (수기 반품 탭에서만 — 스캔 시 상품 자동 선택)
+  // 바코드 스캐너
+  // - manual(직접입력) 탭: 스캔 → 상품 자동 선택 + 단가 기본값
+  // - search(반품접수) 탭: 스캔 처리는 없지만 input에 들어간 꼬리 코드를 자동 제거 (안전망)
   const scanBufRef = useRef({ chars: '', lastTime: 0, startTime: 0 });
   useEffect(() => {
-    if (tab !== 'manual' || allProducts.length === 0) return;
+    // search 탭은 allProducts 없이도 동작 (input 꼬리 제거만), manual 탭은 allProducts 필요
+    if (tab === 'manual' && allProducts.length === 0) return;
     const handler = (e) => {
       const tg = (e.target?.tagName || '').toLowerCase();
-      // 입력 중인 input/textarea/select는 스캐너 무시 (직접 타이핑과 충돌 방지)
-      if (tg === 'input' || tg === 'textarea' || tg === 'select') return;
+      const isInputFocused = tg === 'input' || tg === 'textarea' || tg === 'select';
+      // manual 탭은 input 포커스 중엔 무시(직접 타이핑과 충돌 방지)
+      if (tab === 'manual' && isInputFocused) return;
       const now = Date.now();
       const buf = scanBufRef.current;
       if (e.key === 'Enter') {
@@ -57,15 +61,39 @@ export default function SalesReturnPage({ profile }) {
         buf.chars = ''; buf.lastTime = 0; buf.startTime = 0;
         if (code.length >= 3 && elapsed < 800) {
           e.preventDefault();
-          const matched = allProducts.find(p => String(p.code || '').trim() === code);
-          if (!matched) {
-            toast(`상품 매칭 실패 — 코드: ${code}`, 'err');
-            return;
+          if (tab === 'manual') {
+            const matched = allProducts.find(p => String(p.code || '').trim() === code);
+            if (!matched) {
+              toast(`상품 매칭 실패 — 코드: ${code}`, 'err');
+              return;
+            }
+            setMProduct({ id: matched.id, name: matched.name, code: matched.code, brand_id: matched.brand_id });
+            setMSearch(matched.name);
+            if (matched.price) setMPrice(String(matched.price));
+            toast(`📷 ${matched.name} 선택됨`, 'ok');
+          } else if (tab === 'search') {
+            // 반품접수 탭 안전망 — 포커스된 input에 들어간 스캔 꼬리 코드 자동 제거
+            if (isInputFocused) {
+              const el = document.activeElement;
+              if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+                const v = el.value || '';
+                if (v.endsWith(code)) {
+                  const nativeSetter = Object.getOwnPropertyDescriptor(
+                    el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
+                    'value'
+                  )?.set;
+                  const newVal = v.slice(0, -code.length);
+                  if (nativeSetter) {
+                    nativeSetter.call(el, newVal);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                  } else {
+                    el.value = newVal;
+                  }
+                }
+              }
+            }
+            toast('📷 반품접수 탭에서는 스캔이 동작하지 않습니다 — [직접입력] 탭에서 사용해주세요', 'inf');
           }
-          setMProduct({ id: matched.id, name: matched.name, code: matched.code, brand_id: matched.brand_id });
-          setMSearch(matched.name);
-          if (matched.price) setMPrice(String(matched.price));
-          toast(`📷 ${matched.name} 선택됨`, 'ok');
         }
       } else if (e.key.length === 1) {
         if (now - buf.lastTime > 100) {
