@@ -302,8 +302,8 @@ export default function NoticePage({ profile }) {
         </div>
       )}
 
-      {/* 목록 + 상세 */}
-      <div style={{display:'grid', gridTemplateColumns: selected ? '320px 1fr' : '1fr', gap:14}}>
+      {/* 목록 (상세 미선택 시) */}
+      {!selected && (
         <div className="card" style={{padding:'14px 16px'}}>
           <div className="card-label">공지사항 목록</div>
           {loading ? <div className="empty"><span className="spinner"/></div>
@@ -313,8 +313,7 @@ export default function NoticePage({ profile }) {
               return (
               <div key={n.id} onClick={() => setSelected(n)}
                 style={{padding:'11px 12px', borderRadius:'var(--radius)', cursor:'pointer', marginBottom:4,
-                  background: selected?.id===n.id ? '#fff8e1' : 'var(--bg3)',
-                  border: `1px solid ${selected?.id===n.id ? '#ffcc80' : 'transparent'}`}}>
+                  background: 'var(--bg3)', border: '1px solid transparent'}}>
                 {(() => {
                   const a = n.author;
                   const authorLabel = a?.job_title === '담당자' ? '담당자' : a?.role === 'admin' ? '관리자' : (a?.name || '-');
@@ -338,30 +337,32 @@ export default function NoticePage({ profile }) {
             );})
           }
         </div>
+      )}
 
-        {selected && (
-          <div className="card">
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14, paddingBottom:12, borderBottom:'1px solid var(--border)'}}>
-              <div>
-                <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>{selected.title}</div>
-                <div style={{fontSize:12, color:'var(--text3)'}}>
-                  {selected.author?.job_title === '담당자' ? '담당자' : selected.author?.role === 'admin' ? '관리자' : (selected.author?.name || '-')} · {new Date(selected.created_at).toLocaleString('ko-KR')}
-                </div>
-              </div>
-              <div style={{display:'flex', gap:6}}>
-                {(isAdmin || (isHQ && selected.created_by === profile?.id)) && (
-                  <>
-                    <button className="btn btn-s" style={{fontSize:11}} onClick={() => startEdit(selected)}>✏️ 수정</button>
-                    <button className="btn-danger" onClick={() => handleDelete(selected.id)}>삭제</button>
-                  </>
-                )}
-                <button className="btn btn-s" style={{fontSize:11}} onClick={() => setSelected(null)}>닫기</button>
+      {/* 상세 (선택 시 전체 너비) */}
+      {selected && (
+        <div className="card">
+          {/* 목록으로 돌아가기 */}
+          <button className="btn btn-s" style={{fontSize:12, marginBottom:14}} onClick={() => setSelected(null)}>
+            ← 목록으로 돌아가기
+          </button>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14, paddingBottom:12, borderBottom:'1px solid var(--border)'}}>
+            <div>
+              <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>{selected.title}</div>
+              <div style={{fontSize:12, color:'var(--text3)'}}>
+                {selected.author?.job_title === '담당자' ? '담당자' : selected.author?.role === 'admin' ? '관리자' : (selected.author?.name || '-')} · {new Date(selected.created_at).toLocaleString('ko-KR')}
               </div>
             </div>
-            {renderBody(selected, { clickableImg: true })}
+            {(isAdmin || (isHQ && selected.created_by === profile?.id)) && (
+              <div style={{display:'flex', gap:6}}>
+                <button className="btn btn-s" style={{fontSize:11}} onClick={() => startEdit(selected)}>✏️ 수정</button>
+                <button className="btn-danger" onClick={() => handleDelete(selected.id)}>삭제</button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+          {renderBody(selected, { clickableImg: true })}
+        </div>
+      )}
 
       {/* 이미지 라이트박스 */}
       {lightbox && (
