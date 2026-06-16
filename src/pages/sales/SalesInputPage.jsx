@@ -86,6 +86,7 @@ export default function SalesInputPage({ profile }) {
   const [custName,    setCustName]    = useState('');
   const [custPhone,   setCustPhone]   = useState('');
   const [custBirthday,setCustBirthday]= useState('');
+  const [custConsent, setCustConsent] = useState(false); // 마케팅(SMS) 수신동의 — 동의 시 서류 별도 보관
   const [managerName, setManagerName] = useState('');
 
   const searchMembers = async () => {
@@ -317,7 +318,7 @@ export default function SalesInputPage({ profile }) {
   const resetForm = () => {
     setLines([newLine()]); setMemo('');
     setRecipName(''); setRecipPhone(''); setRecipAddr(''); setRecipAddrDetail(''); setDeliveryNotes('');
-    setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName('');
+    setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName(''); setCustConsent(false);
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
 
@@ -354,7 +355,7 @@ export default function SalesInputPage({ profile }) {
           joined_at: soldAt, name: custName.trim(), phone: custPhone,
           birthday: custBirthday || null, store_name: storeName,
           branch_name: branchName, manager_name: managerName.trim() || null,
-          sms_consent: false, sms_consent_at: null, created_by: profile.id,
+          sms_consent: custConsent, sms_consent_at: custConsent ? new Date().toISOString() : null, created_by: profile.id,
           grade: '패밀리', total_purchase: 0, total_points: 0,
         }).select().single();
         if (custErr) throw custErr;
@@ -857,8 +858,32 @@ export default function SalesInputPage({ profile }) {
                       style={inputStyle} placeholder="매니저 이름 입력" />
                   </div>
                 </div>
-                <div style={{fontSize:12, color:'var(--text3)', marginTop:6, padding:'6px 0'}}>
-                  💡 SMS 수신동의는 QR코드 가입으로만 처리됩니다
+                {/* 마케팅(SMS) 수신동의 */}
+                <div style={{display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+                  <label style={{...labelStyle, marginBottom:0}}>마케팅 수신동의</label>
+                  <div style={{display:'flex', gap:6}}>
+                    <button type="button" onClick={() => setCustConsent(false)}
+                      style={{
+                        height:34, padding:'0 16px', border:'1px solid', borderRadius:'var(--radius)',
+                        fontSize:13, fontWeight:700, cursor:'pointer',
+                        borderColor: !custConsent ? 'var(--text2)' : 'var(--border)',
+                        background:  !custConsent ? '#eceff1' : '#fff',
+                        color:       !custConsent ? 'var(--text)' : 'var(--text3)',
+                      }}>미동의</button>
+                    <button type="button" onClick={() => setCustConsent(true)}
+                      style={{
+                        height:34, padding:'0 16px', border:'1px solid', borderRadius:'var(--radius)',
+                        fontSize:13, fontWeight:700, cursor:'pointer',
+                        borderColor: custConsent ? 'var(--success)' : 'var(--border)',
+                        background:  custConsent ? '#e8f5e9' : '#fff',
+                        color:       custConsent ? 'var(--success)' : 'var(--text3)',
+                      }}>동의</button>
+                  </div>
+                  {custConsent && (
+                    <span style={{fontSize:11, color:'var(--success)', fontWeight:600}}>
+                      ✅ 동의 서류를 받아 보관해주세요
+                    </span>
+                  )}
                 </div>
               </div>
             )}
