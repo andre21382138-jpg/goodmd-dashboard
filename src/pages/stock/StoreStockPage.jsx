@@ -51,14 +51,20 @@ export default function StoreStockPage({ profile }) {
   useEffect(() => { fetchStocks(); }, [fetchStocks]);
 
   // 매장재고 일괄 업로드 (본사 전용)
-  // 엑셀 컬럼: [그룹(매장), 매장(지점), 상품코드, 상품명, 재고]
-  // 매칭은 product.code 또는 erp_code 둘 다 fallback
+  // 헤더 행을 읽어 컬럼을 이름으로 매핑 — 그룹/매장, 매장/지점, 상품코드, ERP코드, 상품명, 재고
+  // (컬럼 순서/추가 컬럼이 바뀌어도 동작). 매칭은 상품코드 또는 ERP코드 둘 다.
   const handleUploadClick = () => uploadRef.current?.click();
   const handleUploadFile = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     if (!window.confirm('업로드 시 매장재고가 엑셀의 재고 값으로 일괄 갱신됩니다.\n계속하시겠습니까?')) return;
+    // 파일에 없는 상품 재고를 0으로 처리할지 (스냅샷 적용)
+    const zeroMissing = window.confirm(
+      '파일에 없는 상품의 재고를 0으로 처리할까요?\n\n' +
+      '[확인] = 이 파일을 "전체 재고 스냅샷"으로 적용 (파일에 없는 상품은 0)\n' +
+      '[취소] = 파일에 있는 상품만 갱신 (나머지는 그대로 유지)'
+    );
     setUploading(true);
     try {
       const XLSX = await import('xlsx');
@@ -66,6 +72,36 @@ export default function StoreStockPage({ profile }) {
       const wb = XLSX.read(buf, { type:'array', codepage: 949 });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // 헤더 행 탐지 — '상품코드'가 들어있는 행
+      const norm = v => String(v ?? '').replace(/\s/g, '');
+      let headerIdx = -1;
+      for (let i = 0; i < Math.min(data.length, 15); i++) {
+        if ((data[i] || []).some(c => norm(c) === '상품코드')) { headerIdx = i; break; }
+      }
+      if (headerIdx === -1) {
+        toast('헤더(상품코드 컬럼)를 찾지 못했습니다', 'err'); setUploading(false); return;
+      }
+      const header = data[headerIdx].map(norm);
+      const findCol = (...names) => {
+        for (const n of names) {
+          const idx = header.findIndex(h => h === norm(n));
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      };
+      const cStore  = findCol('그룹', '매장', '점포');
+      const cBranch = header.findIndex((h, i) => i !== cStore && (h === '매장' || h === '지점' || h === '점포'));
+      const cCode   = findCol('상품코드');
+      const cErp    = findCol('ERP코드', 'ERP');
+      const cName   = findCol('상품명', '품명');
+      const cStock  = findCol('재고', '재고수량', '수량');
+      // 그룹/매장 컬럼이 둘 다 이름이 같은 케이스 대비: 0,1번을 store/branch로 가정
+      const storeCol  = cStore  !== -1 ? cStore  : 0;
+      const branchCol = cBranch !== -1 ? cBranch : 1;
+      if (cCode === -1 || cStock === -1) {
+        toast('상품코드 또는 재고 컬럼을 찾지 못했습니다', 'err'); setUploading(false); return;
+      }
 
       // 상품 매핑 (code/erp_code 둘 다 키로)
       const { data: products } = await supabase.from('products').select('id, name, code, erp_code');
@@ -75,86 +111,101 @@ export default function StoreStockPage({ profile }) {
         if (p.erp_code) codeMap.set(String(p.erp_code).trim(), p);
       }
 
-      // 유효 데이터 row 추출 (헤더/소계/총합 제외)
+      // 유효 데이터 row 추출
       const validRows = [];
-      for (const r of data) {
-        const a = String(r[0]||'').trim();
-        const b = String(r[1]||'').trim();
-        const c = String(r[2]||'').trim();
-        const d = String(r[3]||'').trim();
-        const e5 = r[4];
-        if (!a || !b || !c) continue;
-        // 헤더 row 제외
-        if (c === '상품코드') continue;
-        const stock = Number(e5);
+      for (let i = headerIdx + 1; i < data.length; i++) {
+        const r = data[i] || [];
+        const store  = String(r[storeCol]  ?? '').trim();
+        const branch = String(r[branchCol] ?? '').trim();
+        const code   = String(r[cCode]     ?? '').trim();
+        const erp    = cErp  !== -1 ? String(r[cErp]  ?? '').trim() : '';
+        const name   = cName !== -1 ? String(r[cName] ?? '').trim() : '';
+        const stock  = Number(r[cStock]);
+        if (!store || !branch || (!code && !erp)) continue;
         if (!Number.isFinite(stock)) continue;
-        validRows.push({ store: a, branch: b, code: c, name: d, stock });
+        validRows.push({ store, branch, code, erp, name, stock });
       }
 
       if (validRows.length === 0) {
-        toast('업로드 가능한 데이터 행이 없습니다 (컬럼 순서: 매장/지점/코드/상품명/재고)', 'err');
-        setUploading(false);
-        return;
+        toast('업로드 가능한 데이터 행이 없습니다', 'err'); setUploading(false); return;
       }
       toast(`${validRows.length}건 인식 — 저장 중...`, 'inf');
 
-      // 기존 store_stock 일괄 조회 → 키 매핑 (UPDATE vs INSERT 분류)
+      // 기존 store_stock 일괄 조회
       const { data: existing } = await supabase.from('store_stock')
-        .select('id, store_name, branch_name, product_code');
+        .select('id, store_name, branch_name, product_code, stock_qty');
       const existingMap = new Map();
       for (const ex of (existing || [])) {
-        existingMap.set(`${ex.store_name}|${ex.branch_name}|${ex.product_code}`, ex.id);
+        existingMap.set(`${ex.store_name}|${ex.branch_name}|${ex.product_code}`, ex);
       }
 
       const updates = [];
       const inserts = [];
       const unmatched = [];
+      const appliedKeys = new Set();   // 파일에 등장한 매칭 성공 키 (0처리 제외용)
+      const fileBranches = new Set();  // 파일에 등장한 매장|지점 (0처리 범위 제한용)
       for (const row of validRows) {
-        const product = codeMap.get(row.code);
+        fileBranches.add(`${row.store}|${row.branch}`);
+        const product = codeMap.get(row.code) || codeMap.get(row.erp);
         if (!product) { unmatched.push(row); continue; }
-        const normalizedCode = product.code || row.code;
+        const normalizedCode = product.code || row.code || row.erp;
         const key = `${row.store}|${row.branch}|${normalizedCode}`;
-        const existingId = existingMap.get(key);
-        if (existingId) {
-          updates.push({ id: existingId, stock_qty: row.stock, product_name: product.name });
+        appliedKeys.add(key);
+        const ex = existingMap.get(key);
+        if (ex) {
+          updates.push({ id: ex.id, stock_qty: row.stock, product_name: product.name });
         } else {
           inserts.push({
-            store_name: row.store,
-            branch_name: row.branch,
-            product_code: normalizedCode,
-            product_name: product.name,
-            stock_qty: row.stock,
-            updated_at: new Date().toISOString(),
+            store_name: row.store, branch_name: row.branch,
+            product_code: normalizedCode, product_name: product.name,
+            stock_qty: row.stock, updated_at: new Date().toISOString(),
           });
         }
       }
 
-      // UPDATE — 100건씩 병렬 처리
+      // 0처리 대상 — 파일 범위(매장|지점) 안인데 파일에 없고 현재 재고>0인 기존 row
+      const zeroTargets = [];
+      if (zeroMissing) {
+        for (const ex of (existing || [])) {
+          const bkey = `${ex.store_name}|${ex.branch_name}`;
+          const fkey = `${ex.store_name}|${ex.branch_name}|${ex.product_code}`;
+          if (fileBranches.has(bkey) && !appliedKeys.has(fkey) && (ex.stock_qty || 0) !== 0) {
+            zeroTargets.push(ex.id);
+          }
+        }
+      }
+
       let ok = 0, fail = 0;
       const BATCH = 100;
+      // UPDATE
       for (let i = 0; i < updates.length; i += BATCH) {
         const slice = updates.slice(i, i+BATCH);
         const results = await Promise.all(slice.map(u =>
           supabase.from('store_stock').update({
-            stock_qty: u.stock_qty,
-            product_name: u.product_name,
-            updated_at: new Date().toISOString(),
+            stock_qty: u.stock_qty, product_name: u.product_name, updated_at: new Date().toISOString(),
           }).eq('id', u.id)
         ));
-        for (const { error } of results) {
-          if (error) fail++; else ok++;
-        }
+        for (const { error } of results) { if (error) fail++; else ok++; }
       }
-      // INSERT — 500건씩 배치
+      // INSERT
       const INS_BATCH = 500;
       for (let i = 0; i < inserts.length; i += INS_BATCH) {
         const slice = inserts.slice(i, i+INS_BATCH);
         const { error } = await supabase.from('store_stock').insert(slice);
-        if (error) fail += slice.length;
-        else ok += slice.length;
+        if (error) fail += slice.length; else ok += slice.length;
+      }
+      // ZERO (파일에 없는 상품)
+      let zeroed = 0;
+      for (let i = 0; i < zeroTargets.length; i += BATCH) {
+        const slice = zeroTargets.slice(i, i+BATCH);
+        const results = await Promise.all(slice.map(id =>
+          supabase.from('store_stock').update({ stock_qty: 0, updated_at: new Date().toISOString() }).eq('id', id)
+        ));
+        for (const { error } of results) { if (!error) zeroed++; }
       }
 
       const parts = [`${ok}건 반영`];
+      if (zeroMissing)         parts.push(`미포함 ${zeroed}건 0처리`);
       if (fail            > 0) parts.push(`실패 ${fail}건`);
       if (unmatched.length > 0) parts.push(`상품 매칭 실패 ${unmatched.length}건`);
       toast(parts.join(' / '), (fail > 0 || unmatched.length > 0) ? 'err' : 'ok');
