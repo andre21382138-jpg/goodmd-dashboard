@@ -247,7 +247,8 @@ export default function SalesReturnPage({ profile }) {
           delivery_type: 'none',
         });
 
-        if (it.product?.code) {
+        // 본사 택배요청(hq)은 판매 시 매장 재고를 차감하지 않았으므로 반품 시에도 복구하지 않음
+        if (it.product?.code && it.delivery_type !== 'hq') {
           const { data: stockRow } = await supabase.from('store_stock')
             .select('id, stock_qty')
             .eq('store_name',  it.store_name || storeName)

@@ -416,9 +416,9 @@ export default function SalesInputPage({ profile }) {
           }).eq('id', l.pointCustomer.id);
         }
 
-        // 매장재고 자동 차감
+        // 매장재고 자동 차감 — 단, 본사 택배요청(hq)은 본사 창고에서 발송하므로 매장 재고 차감 제외
         const prod = allProducts.find(p => String(p.id) === String(l.productId));
-        if (prod?.code) {
+        if (prod?.code && dType !== 'hq') {
           const { data: stockRow } = await supabase.from('store_stock')
             .select('id, stock_qty')
             .eq('store_name',  storeName)
