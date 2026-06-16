@@ -38,6 +38,7 @@ export default function NoticePage({ profile }) {
   const videoRef  = useRef(null);
   const [lightbox, setLightbox] = useState(null);
   const [colorOpen, setColorOpen] = useState(false);
+  const [editId, setEditId] = useState(null); // 수정 중인 공지 id (null=신규)
 
   const fetchNotices = useCallback(async () => {
     setLoading(true);
@@ -51,12 +52,34 @@ export default function NoticePage({ profile }) {
   useEffect(() => { fetchNotices(); }, [fetchNotices]);
 
   const startWriting = () => {
+    setEditId(null);
     setWriting(true);
     setTitle('');
     setTimeout(() => { if (editorRef.current) editorRef.current.innerHTML = ''; }, 0);
   };
+  // 기존 공지 수정 — 에디터에 내용 로드 (레거시 blocks/content도 HTML로 변환)
+  const startEdit = (n) => {
+    setEditId(n.id);
+    setWriting(true);
+    setTitle(n.title || '');
+    let html = n.body_html;
+    if (!html) {
+      // 레거시 → HTML 합성
+      if (Array.isArray(n.blocks) && n.blocks.length > 0) {
+        html = n.blocks.map(b => b.type === 'text'
+          ? `<p>${(b.text||'').replace(/</g,'&lt;').replace(/\n/g,'<br/>')}</p>`
+          : `<img src="${b.url}" style="max-width:100%;border-radius:8px;display:block;margin:8px 0;" />`).join('');
+      } else {
+        const text = (n.content || '').replace(/</g,'&lt;').replace(/\n/g,'<br/>');
+        const imgs = Array.isArray(n.images) ? n.images.map(u => `<img src="${u}" style="max-width:100%;border-radius:8px;display:block;margin:8px 0;" />`).join('') : '';
+        html = (text ? `<p>${text}</p>` : '') + imgs;
+      }
+    }
+    setTimeout(() => { if (editorRef.current) editorRef.current.innerHTML = sanitizeHtml(html || ''); }, 0);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   const resetForm = () => {
-    setWriting(false); setTitle('');
+    setWriting(false); setTitle(''); setEditId(null);
     if (editorRef.current) editorRef.current.innerHTML = '';
   };
 
@@ -130,14 +153,30 @@ export default function NoticePage({ profile }) {
     if (!textOnly && !/<img/i.test(html) && !/<video/i.test(html)) { toast('내용을 입력해주세요', 'err'); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.from('notices').insert({
-        title: title.trim(),
-        body_html: html,
-        content: textOnly,   // 검색/레거시용 평문
-        created_by: profile.id,
-      });
-      if (error) throw error;
-      toast('공지사항 등록 완료', 'ok');
+      if (editId) {
+        // 수정 — body_html/content/blocks(레거시 무효화) 갱신
+        const { error } = await supabase.from('notices').update({
+          title: title.trim(),
+          body_html: html,
+          content: textOnly,
+          blocks: null, images: null, // 레거시 필드는 비워 body_html 단일 소스로
+        }).eq('id', editId);
+        if (error) throw error;
+        toast('공지사항 수정 완료', 'ok');
+        // 상세 선택이 이 공지면 갱신
+        if (selected?.id === editId) {
+          setSelected({ ...selected, title: title.trim(), body_html: html, content: textOnly, blocks: null, images: null });
+        }
+      } else {
+        const { error } = await supabase.from('notices').insert({
+          title: title.trim(),
+          body_html: html,
+          content: textOnly,   // 검색/레거시용 평문
+          created_by: profile.id,
+        });
+        if (error) throw error;
+        toast('공지사항 등록 완료', 'ok');
+      }
       resetForm();
       fetchNotices();
     } catch (err) {
@@ -204,7 +243,7 @@ export default function NoticePage({ profile }) {
             <button className="btn btn-p" onClick={startWriting}>+ 공지사항 작성</button>
           ) : (
             <>
-              <div className="card-label">공지사항 작성</div>
+              <div className="card-label">{editId ? '공지사항 수정' : '공지사항 작성'}</div>
               <div style={{marginBottom:12}}>
                 <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>제목</label>
                 <input value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} placeholder="공지사항 제목"/>
@@ -255,7 +294,7 @@ export default function NoticePage({ profile }) {
               </div>
 
               <div style={{display:'flex', gap:8, marginTop:12}}>
-                <button className="btn btn-p" onClick={handleSave} disabled={saving || uploading}>{saving ? <span className="spinner"/> : '등록'}</button>
+                <button className="btn btn-p" onClick={handleSave} disabled={saving || uploading}>{saving ? <span className="spinner"/> : (editId ? '수정 완료' : '등록')}</button>
                 <button className="btn btn-s" onClick={resetForm} disabled={saving}>취소</button>
               </div>
             </>
@@ -311,7 +350,10 @@ export default function NoticePage({ profile }) {
               </div>
               <div style={{display:'flex', gap:6}}>
                 {(isAdmin || (isHQ && selected.created_by === profile?.id)) && (
-                  <button className="btn-danger" onClick={() => handleDelete(selected.id)}>삭제</button>
+                  <>
+                    <button className="btn btn-s" style={{fontSize:11}} onClick={() => startEdit(selected)}>✏️ 수정</button>
+                    <button className="btn-danger" onClick={() => handleDelete(selected.id)}>삭제</button>
+                  </>
                 )}
                 <button className="btn btn-s" style={{fontSize:11}} onClick={() => setSelected(null)}>닫기</button>
               </div>
