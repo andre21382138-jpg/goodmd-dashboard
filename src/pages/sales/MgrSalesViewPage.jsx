@@ -19,6 +19,11 @@ export default function MgrSalesViewPage({ profile }) {
   const todayStr = fmt(today);
   const monthStart = `${today.getFullYear()}-${pad(today.getMonth()+1)}-01`;
 
+  // 수정 권한: 본사(HQ)는 전체, 매장 매니저는 '당월' 매출만 (판매수량/판매금액)
+  const curMonth = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
+  const isCurrentMonth = (sold_at) => String(sold_at || '').slice(0, 7) === curMonth;
+  const canEditLine = (it) => isHQ || isCurrentMonth(it.sold_at);
+
   const [fFrom, setFFrom] = useState(monthStart);
   const [fTo,   setFTo]   = useState(todayStr);
   const [sales, setSales] = useState([]);
@@ -42,18 +47,20 @@ export default function MgrSalesViewPage({ profile }) {
   };
   const cancelEditLine = () => { setEditingLine(null); setEditDraft({}); };
   const saveEditLine = async (it) => {
+    // 매장 매니저는 당월 매출만 수정 가능 (방어)
+    if (!isHQ && !isCurrentMonth(it.sold_at)) { toast('당월 매출만 수정할 수 있습니다', 'err'); return; }
     const qty   = Number(editDraft.quantity);
     const price = Number(parseNumInput(editDraft.price));
     if (!Number.isFinite(qty) || qty === 0) { toast('수량은 0이 아닌 숫자여야 합니다', 'err'); return; }
-    if (!Number.isFinite(price))            { toast('단가가 유효하지 않습니다', 'err'); return; }
+    if (!Number.isFinite(price))            { toast('판매금액이 유효하지 않습니다', 'err'); return; }
+    if (!isHQ && (qty < 0 || price < 0))    { toast('수량·판매금액은 0 이상이어야 합니다', 'err'); return; }
     setSavingLine(true);
     try {
-      const { error } = await supabase.from('sales').update({
-        quantity: qty,
-        price:    price,
-        payment:  editDraft.payment || '카드',
-        memo:     editDraft.memo?.trim() || null,
-      }).eq('id', it.id);
+      // 매장 매니저는 수량·금액만 갱신 (결제수단/메모는 본사만)
+      const patch = isHQ
+        ? { quantity: qty, price, payment: editDraft.payment || '카드', memo: editDraft.memo?.trim() || null }
+        : { quantity: qty, price };
+      const { error } = await supabase.from('sales').update(patch).eq('id', it.id);
       if (error) throw error;
       toast('수정 완료', 'ok');
       cancelEditLine();
@@ -367,7 +374,7 @@ export default function MgrSalesViewPage({ profile }) {
                                                 <th>결제</th>
                                                 <th>출고방식</th>
                                                 <th>메모</th>
-                                                {isHQ && <th style={{textAlign:'center', width:80}}>작업</th>}
+                                                <th style={{textAlign:'center', width:80}}>작업</th>
                                               </tr>
                                             </thead>
                                             <tbody>
@@ -399,15 +406,17 @@ export default function MgrSalesViewPage({ profile }) {
                                                     {it.delivery_type === 'hq' && it.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                                                   </td>
                                                   <td style={{fontSize:11,color:'var(--text2)'}}>{it.memo||'-'}</td>
-                                                  {isHQ && (
-                                                    <td style={{textAlign:'center'}}>
+                                                  <td style={{textAlign:'center'}}>
+                                                    {canEditLine(it) ? (
                                                       <button type="button" onClick={() => startEditLine(it)}
-                                                        title="라인 수정"
+                                                        title={isHQ ? '라인 수정' : '당월 매출 수정 (수량·금액)'}
                                                         style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--accent)', borderRadius:4, background:'#fff3e0', color:'var(--accent)', fontWeight:700, cursor:'pointer'}}>
                                                         ✏️ 수정
                                                       </button>
-                                                    </td>
-                                                  )}
+                                                    ) : (
+                                                      <span style={{fontSize:10, color:'var(--text3)'}} title="당월 매출만 수정 가능">–</span>
+                                                    )}
+                                                  </td>
                                                 </tr>
                                               )})}
                                             </tbody>
@@ -463,43 +472,52 @@ export default function MgrSalesViewPage({ profile }) {
                     style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)'}}/>
                 </div>
                 <div>
-                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>단가 (원) · 음수=반품</label>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>{isHQ ? '단가 (원) · 음수=반품' : '판매금액 (단가)'}</label>
                   <input type="text" inputMode="numeric" value={formatNumInput(editDraft.price)}
                     onChange={e => setEditDraft(p => ({...p, price: parseNumInput(e.target.value)}))}
                     style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)'}}/>
                 </div>
               </div>
-              <div style={{marginBottom:12}}>
-                <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>결제수단</label>
-                <div style={{display:'flex', gap:4}}>
-                  {PAYMENTS.map(p => {
-                    const active = editDraft.payment === p;
-                    return (
-                      <button key={p} type="button" onClick={() => setEditDraft(d => ({...d, payment: p}))}
-                        style={{
-                          flex:1, height:34, border:`1px solid ${active?'var(--accent)':'var(--border)'}`, borderRadius:6,
-                          background: active ? '#fff3e0' : '#fff',
-                          color:      active ? 'var(--accent)' : 'var(--text2)',
-                          fontWeight: active ? 700 : 500, fontSize:12, cursor:'pointer',
-                        }}>{p}</button>
-                    );
-                  })}
+              {/* 결제수단/메모/삭제는 본사(HQ)만 — 매장 매니저는 당월 수량·금액만 수정 */}
+              {isHQ && (
+                <div style={{marginBottom:12}}>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>결제수단</label>
+                  <div style={{display:'flex', gap:4}}>
+                    {PAYMENTS.map(p => {
+                      const active = editDraft.payment === p;
+                      return (
+                        <button key={p} type="button" onClick={() => setEditDraft(d => ({...d, payment: p}))}
+                          style={{
+                            flex:1, height:34, border:`1px solid ${active?'var(--accent)':'var(--border)'}`, borderRadius:6,
+                            background: active ? '#fff3e0' : '#fff',
+                            color:      active ? 'var(--accent)' : 'var(--text2)',
+                            fontWeight: active ? 700 : 500, fontSize:12, cursor:'pointer',
+                          }}>{p}</button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-              <div style={{marginBottom:14}}>
-                <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>메모</label>
-                <input type="text" value={editDraft.memo ?? ''}
-                  onChange={e => setEditDraft(p => ({...p, memo: e.target.value}))}
-                  style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13}}/>
-              </div>
+              )}
+              {isHQ && (
+                <div style={{marginBottom:14}}>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>메모</label>
+                  <input type="text" value={editDraft.memo ?? ''}
+                    onChange={e => setEditDraft(p => ({...p, memo: e.target.value}))}
+                    style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13}}/>
+                </div>
+              )}
               <div style={{padding:'10px 12px', background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:6, fontSize:11, color:'#6d4c41', marginBottom:14}}>
-                ⚠️ 합계 = 수량 × 단가. 반품 음수 매출은 단가에 음수 입력. 회원 적립금/누적구매는 자동 보정되지 않으므로 필요 시 별도 조정.
+                {isHQ
+                  ? '⚠️ 합계 = 수량 × 단가. 반품 음수 매출은 단가에 음수 입력. 회원 적립금/누적구매는 자동 보정되지 않으므로 필요 시 별도 조정.'
+                  : '⚠️ 당월 매출의 수량·판매금액만 수정됩니다. 합계 = 수량 × 판매금액.'}
               </div>
               <div style={{display:'flex', gap:8}}>
-                <button type="button" onClick={() => deleteLine(it)} disabled={savingLine}
-                  style={{height:38, padding:'0 14px', border:'1px solid var(--danger)', borderRadius:6, background:'#fff', color:'var(--danger)', fontWeight:700, fontSize:12, cursor:'pointer'}}>
-                  🗑️ 삭제
-                </button>
+                {isHQ && (
+                  <button type="button" onClick={() => deleteLine(it)} disabled={savingLine}
+                    style={{height:38, padding:'0 14px', border:'1px solid var(--danger)', borderRadius:6, background:'#fff', color:'var(--danger)', fontWeight:700, fontSize:12, cursor:'pointer'}}>
+                    🗑️ 삭제
+                  </button>
+                )}
                 <button type="button" onClick={cancelEditLine} disabled={savingLine}
                   style={{flex:1, height:38, padding:'0 14px', border:'1px solid var(--border)', borderRadius:6, background:'#fafafa', color:'var(--text2)', fontWeight:700, fontSize:13, cursor:'pointer'}}>
                   취소
