@@ -23,30 +23,43 @@ export default function StoreStockPage({ profile }) {
   const uploadRef = useRef(null);
   const [unmatchedRows, setUnmatchedRows] = useState([]); // 매칭 실패 row 목록
 
-  useEffect(() => {
-    supabase.from('store_stock').select('store_name').then(({data}) => {
-      const s = [...new Set((data||[]).map(r=>r.store_name).filter(Boolean))].sort();
-      setStores(s);
-    });
+  // store_stock은 수천 행이라 단일 select는 1000행 제한에 걸림 → 페이징으로 전체 수집
+  const fetchAllPaged = useCallback(async (build) => {
+    const PAGE = 1000;
+    let all = [], start = 0;
+    while (true) {
+      const { data, error } = await build().range(start, start + PAGE - 1);
+      if (error) break;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    return all;
   }, []);
 
   useEffect(() => {
+    fetchAllPaged(() => supabase.from('store_stock').select('store_name').order('store_name'))
+      .then(rows => setStores([...new Set(rows.map(r=>r.store_name).filter(Boolean))].sort()));
+  }, [fetchAllPaged]);
+
+  useEffect(() => {
     if (!fStore) { setBranches([]); return; }
-    supabase.from('store_stock').select('branch_name').eq('store_name', fStore).then(({data}) => {
-      const b = [...new Set((data||[]).map(r=>r.branch_name).filter(Boolean))].sort();
-      setBranches(b);
-    });
-  }, [fStore]);
+    fetchAllPaged(() => supabase.from('store_stock').select('branch_name').eq('store_name', fStore).order('branch_name'))
+      .then(rows => setBranches([...new Set(rows.map(r=>r.branch_name).filter(Boolean))].sort()));
+  }, [fStore, fetchAllPaged]);
 
   const fetchStocks = useCallback(async () => {
     setLoading(true);
-    let q = supabase.from('store_stock').select('*').order('store_name').order('branch_name').order('product_name');
-    if (fStore)  q = q.eq('store_name',  fStore);
-    if (fBranch) q = q.eq('branch_name', fBranch);
-    const { data } = await q;
-    setStocks(data || []);
+    const rows = await fetchAllPaged(() => {
+      let q = supabase.from('store_stock').select('*').order('store_name').order('branch_name').order('product_name');
+      if (fStore)  q = q.eq('store_name',  fStore);
+      if (fBranch) q = q.eq('branch_name', fBranch);
+      return q;
+    });
+    setStocks(rows);
     setLoading(false);
-  }, [fStore, fBranch]);
+  }, [fStore, fBranch, fetchAllPaged]);
 
   useEffect(() => { fetchStocks(); }, [fetchStocks]);
 
