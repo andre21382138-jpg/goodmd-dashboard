@@ -48,7 +48,6 @@ export const HQ_MENUS = [
     { key: 'stock_center',    icon: '🏭', label: '센터재고' },
     { key: 'stock_store',     icon: '🏬', label: '매장재고' },
     { key: 'purchase_hq',     icon: '📋', label: '발주진행' },
-    { key: 'purchase_status', icon: '📊', label: '발주현황' },
     { key: 'store_info',      icon: '📍', label: '매장주소정보' },
   ]},
   { key: 'incentive',      icon: '💰', label: '급여관리' },

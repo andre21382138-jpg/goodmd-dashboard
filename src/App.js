@@ -615,7 +615,7 @@ export default function App() {
     'hq_delivery_request',
     'help',
     // 본사 재고관리 sub 메뉴
-    'stock_mgmt', 'stock_center', 'stock_store', 'purchase_hq', 'purchase_status', 'store_info',
+    'stock_mgmt', 'stock_center', 'stock_store', 'purchase_hq', 'store_info',
   ]), []);
   useEffect(() => {
     if (profile?.role === 'scm' && !SCM_ALLOWED_PAGES.has(page)) {
@@ -726,7 +726,6 @@ export default function App() {
     sms_unsubscribe_sync: '수신거부 동기화',
     hq_delivery_request: '택배요청',
     store_info:     '매장주소정보',
-    purchase_status: '발주현황',
     sales_view:          '매출조회',
     sales_list:          '매장 매출',
     biz_sales_view:      '특판 매출',
@@ -827,12 +826,6 @@ export default function App() {
             {page === 'mgr_sales_view' && (isManager || isAdmin || isHQ) && <MgrSalesViewPage profile={profile}/>}
             {page === 'store_delivery_status' && (isManager || isAdmin || isHQ) && <StoreDeliveryStatusPage profile={profile}/>}
             {page === 'purchase_hq'    && (isAdmin || isHQ || isScm) && <PurchaseOrderHQPage profile={profile}/>}
-            {page === 'purchase_status' && (canSeeMain || isScm) && (
-              <div className="card">
-                <div className="card-label">발주현황</div>
-                <div className="empty">📊 발주현황 — 구현 예정<br/><span style={{fontSize:11, color:'var(--text3)'}}>발주 이력·상태 조회 페이지가 곧 들어옵니다.</span></div>
-              </div>
-            )}
             {page === 'purchase_check' && (isManager || isAdmin || isHQ) && <PurchaseOrderMgrPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'customer_qr'    && (isManager || isAdmin || isHQ) && <CustomerQRPage profile={profile}/>}
