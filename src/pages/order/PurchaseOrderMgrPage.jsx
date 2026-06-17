@@ -384,13 +384,18 @@ export default function PurchaseOrderMgrPage({ profile }) {
     if (!window.confirm(`${transfer.product?.name || '상품'} ${transfer.quantity}개 입고확인하시겠습니까?`)) return;
     setSaving(true);
     try {
-      // 1) 우리 매장 재고 가산
-      const { data: stockRow } = await supabase.from('store_stock')
-        .select('id, stock_qty')
-        .eq('store_name', profile.department)
-        .eq('branch_name', profile.branch)
-        .eq('product_id', transfer.product_id)
-        .maybeSingle();
+      // 1) 우리 매장 재고 가산 — 매장재고는 product_code 키이므로 코드로 매칭
+      const code = transfer.product?.code || null;
+      let stockRow = null;
+      if (code) {
+        const { data } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name', profile.department)
+          .eq('branch_name', profile.branch)
+          .eq('product_code', code)
+          .maybeSingle();
+        stockRow = data;
+      }
 
       if (stockRow) {
         const { error } = await supabase.from('store_stock').update({
@@ -404,7 +409,7 @@ export default function PurchaseOrderMgrPage({ profile }) {
           branch_name: profile.branch,
           product_id: transfer.product_id,
           product_name: transfer.product?.name || null,
-          product_code: transfer.product?.code || null,
+          product_code: code,
           stock_qty: transfer.quantity,
         });
         if (error) throw error;

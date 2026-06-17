@@ -338,6 +338,18 @@ export default function StoreStockPage({ profile }) {
     }
     setTransferProcessing(true);
     try {
+      // 0) product_id 확보 — 업로드된 매장재고는 product_code만 있고 product_id가 없으므로
+      //    products에서 code/erp_code로 조회해 채운다
+      let productId = transferModal.product_id;
+      if (!productId) {
+        const code = String(transferModal.product_code || '').trim();
+        if (!code) { toast('상품 코드가 없어 이동할 수 없습니다', 'err'); setTransferProcessing(false); return; }
+        const { data: prod } = await supabase.from('products')
+          .select('id').or(`code.eq.${code},erp_code.eq.${code}`).maybeSingle();
+        if (!prod?.id) { toast('상품관리에 등록되지 않은 상품입니다 (먼저 상품 등록 필요)', 'err'); setTransferProcessing(false); return; }
+        productId = prod.id;
+      }
+
       // 1) 출처 재고 차감
       const newQty = (transferModal.stock_qty||0) - qty;
       const { error: stockErr } = await supabase.from('store_stock')
@@ -351,7 +363,7 @@ export default function StoreStockPage({ profile }) {
         from_branch_name: transferModal.branch_name,
         to_store_name: toStore,
         to_branch_name: toBranch,
-        product_id: transferModal.product_id,
+        product_id: productId,
         quantity: qty,
         status: 'dispatched',
         dispatched_by: profile.id,
@@ -364,7 +376,7 @@ export default function StoreStockPage({ profile }) {
         .update({ status: 'fulfilled', updated_at: new Date().toISOString() })
         .eq('store_name', toStore)
         .eq('branch_name', toBranch)
-        .eq('product_id', transferModal.product_id)
+        .eq('product_id', productId)
         .eq('status', 'pending');
 
       toast(`${toStore} ${toBranch}으로 ${qty}개 이동 완료`, 'ok');
