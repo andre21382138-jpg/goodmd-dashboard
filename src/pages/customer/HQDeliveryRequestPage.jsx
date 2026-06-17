@@ -122,6 +122,7 @@ export default function HQDeliveryRequestPage({ profile }) {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(null);
+  const [selectedKeys, setSelectedKeys] = useState(new Set()); // 발송대기 선택 그룹 key
 
   // 발송완료 탭 필터
   const todayStr = () => {
@@ -161,6 +162,7 @@ export default function HQDeliveryRequestPage({ profile }) {
     const { data, error } = await q;
     if (error) toast(error.message, 'err');
     else setGroups(groupSales(data));
+    setSelectedKeys(new Set());
     setLoading(false);
   }, [mainTab, tab, fFrom, fTo, fStore, fBranch]);
 
@@ -203,26 +205,23 @@ export default function HQDeliveryRequestPage({ profile }) {
         toast(`송장번호 입력된 행이 없습니다 (전체 ${totalSaleRows}건 모두 미입력)`, 'err');
         return;
       }
+      // 송장번호만 매칭(등록) — 발송대기 상태 유지. 발송처리는 별도 [발송처리] 버튼으로
       let ok = 0, fail = 0, lastError = null;
-      const nowIso = new Date().toISOString();
       for (const u of updates) {
         const { error } = await supabase.from('sales').update({
           tracking_number: u.tracking,
-          delivery_status: 'dispatched',
-          dispatched_at: nowIso,
-          dispatched_by: profile.id,
         }).eq('id', u.saleId);
         if (error) lastError = error;
         if (error) fail++; else ok++;
       }
-      const parts = [`처리 ${ok}건`];
+      const parts = [`송장 매칭 ${ok}건`];
       if (fail > 0) parts.push(`실패 ${fail}건`);
-      if (noTrackingCount > 0) parts.push(`미입력 ${noTrackingCount}건은 대기 그대로`);
-      toast(`송장번호 등록 완료 — ${parts.join(' / ')}`, fail > 0 ? 'err' : 'ok');
+      if (noTrackingCount > 0) parts.push(`미입력 ${noTrackingCount}건`);
+      toast(`송장번호 매칭 완료 — ${parts.join(' / ')} · 발송대기 유지`, fail > 0 ? 'err' : 'ok');
       if (fail > 0 && lastError) {
         toast(`실패 사유: ${lastError.message || lastError}`, 'err');
       }
-      setTab('dispatched');
+      // 발송대기에 머무름 (송장번호 표시됨) → 선택 후 [발송처리]로 완료
       fetchData();
     } catch (err) {
       toast('업로드 실패: ' + (err.message || err), 'err');
@@ -230,24 +229,44 @@ export default function HQDeliveryRequestPage({ profile }) {
     setUploading(false);
   };
 
-  const handleDispatch = async (group) => {
-    const ok = window.confirm(
-      `${group.recipient_name}님 (${group.recipient_phone})\n` +
-      `${group.items.length}개 상품을 발송처리하시겠습니까?\n\n` +
-      `처리 후 매장 매출조회에서 "✅ 본사발송 완료"로 표시됩니다.`
-    );
-    if (!ok) return;
-    setProcessing(group.key);
+  // 선택 토글
+  const toggleSelect = (key) => setSelectedKeys(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+  const toggleSelectAll = () => setSelectedKeys(prev =>
+    prev.size === groups.length ? new Set() : new Set(groups.map(g => g.key))
+  );
+
+  // 선택 건 엑셀 다운로드 (선택 없으면 전체)
+  const handleExportSelected = async () => {
+    const target = selectedKeys.size > 0 ? groups.filter(g => selectedKeys.has(g.key)) : groups;
+    if (target.length === 0) { toast('다운로드할 요청이 없습니다', 'err'); return; }
     try {
-      const ids = group.items.map(it => it.id);
+      const count = await exportDeliveryRequests(target);
+      toast(`엑셀 다운로드 완료 (${count}건${selectedKeys.size>0?' · 선택분':' · 전체'})`, 'ok');
+    } catch (e) {
+      toast('다운로드 실패: ' + (e.message || e), 'err');
+    }
+  };
+
+  // 선택 건 일괄 발송처리
+  const handleDispatchSelected = async () => {
+    const target = groups.filter(g => selectedKeys.has(g.key));
+    if (target.length === 0) { toast('발송처리할 요청을 선택해주세요', 'err'); return; }
+    const ids = target.flatMap(g => g.items.map(it => it.id));
+    if (!window.confirm(`선택한 ${target.length}건(${ids.length}개 상품)을 발송처리하시겠습니까?\n\n발송완료 탭으로 이동하며, 매장 매출조회에 "✅ 본사발송 완료"로 표시됩니다.`)) return;
+    setProcessing('batch');
+    try {
       const { error } = await supabase.from('sales').update({
         delivery_status: 'dispatched',
         dispatched_at: new Date().toISOString(),
         dispatched_by: profile.id,
       }).in('id', ids);
       if (error) throw error;
-      toast(`${ids.length}건 발송처리 완료`, 'ok');
-      fetchData();
+      toast(`${target.length}건 발송처리 완료`, 'ok');
+      setTab('dispatched');
     } catch (err) {
       toast('처리 실패: ' + (err.message || err), 'err');
     } finally {
@@ -324,35 +343,38 @@ export default function HQDeliveryRequestPage({ profile }) {
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, gap:8, flexWrap:'wrap'}}>
           <span className="fresult">
             {tab === 'pending'
-              ? <>발송 대기 중인 본사 택배 요청 — <b>{groups.length}</b>건</>
+              ? <>발송 대기 중인 본사 택배 요청 — <b>{groups.length}</b>건{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>
               : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>{fFrom} ~ {fTo}</span></>}
           </span>
-          <div style={{display:'flex', gap:8}}>
-            {tab === 'pending' && groups.length > 0 && (
-              <button type="button" onClick={async () => {
-                try {
-                  const count = await exportDeliveryRequests(groups);
-                  toast(`엑셀 다운로드 완료 (${count}건)`, 'ok');
-                } catch (e) {
-                  toast('다운로드 실패: ' + (e.message || e), 'err');
-                }
-              }}
-                title="현재 발송 대기 건 전체를 매장발주 양식(.xlsx)으로 다운로드"
-                style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6}}>
-                📥 엑셀 다운로드
+          {tab === 'pending' && (
+            <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+              <button type="button" onClick={handleExportSelected} disabled={groups.length === 0}
+                title="선택 건(없으면 전체)을 매장발주 양식(.xlsx)으로 다운로드"
+                style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                📥 엑셀 다운로드{selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}
               </button>
-            )}
-            <input ref={fileInputRef} type="file" accept=".xls,.xlsx"
-              onChange={handleUploadFile} style={{display:'none'}}/>
-            <button type="button" onClick={handleUploadClick} disabled={uploading}
-              title="송장번호 채워진 엑셀 업로드 → 자동으로 발송완료 + 송장번호 등록"
-              style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6}}>
-              {uploading ? <span className="spinner"/> : '📤 송장 업로드'}
-            </button>
+              <input ref={fileInputRef} type="file" accept=".xls,.xlsx"
+                onChange={handleUploadFile} style={{display:'none'}}/>
+              <button type="button" onClick={handleUploadClick} disabled={uploading}
+                title="송장번호 채워진 엑셀 업로드 → 송장번호 매칭(발송대기 유지)"
+                style={{height:30, padding:'0 12px', border:'1px solid #1565C0', borderRadius:'var(--radius)', background:'#e3f2fd', color:'#1565C0', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                {uploading ? <span className="spinner"/> : '📤 송장 업로드'}
+              </button>
+              <button type="button" onClick={handleDispatchSelected} disabled={selectedKeys.size === 0 || processing === 'batch'}
+                title="선택 건을 발송처리 → 발송완료 탭으로"
+                style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background: selectedKeys.size>0?'#e8f5e9':'#f5f5f5', color: selectedKeys.size>0?'#2e7d32':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedKeys.size>0?'pointer':'not-allowed'}}>
+                {processing === 'batch' ? <span className="spinner"/> : `✓ 발송처리${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
+              </button>
+              <button className="btn btn-s" onClick={fetchData} disabled={loading}>
+                {loading ? <span className="spinner"/> : '🔄 새로고침'}
+              </button>
+            </div>
+          )}
+          {tab === 'dispatched' && (
             <button className="btn btn-s" onClick={fetchData} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔄 새로고침'}
             </button>
-          </div>
+          )}
         </div>
 
         {loading ? <div className="empty"><span className="spinner"/></div>
@@ -364,6 +386,15 @@ export default function HQDeliveryRequestPage({ profile }) {
             <table>
               <thead>
                 <tr>
+                  {tab === 'pending' && (
+                    <th style={{textAlign:'center', width:36}}>
+                      <input type="checkbox"
+                        checked={groups.length > 0 && selectedKeys.size === groups.length}
+                        ref={el => { if (el) el.indeterminate = selectedKeys.size > 0 && selectedKeys.size < groups.length; }}
+                        onChange={toggleSelectAll}
+                        style={{cursor:'pointer', width:15, height:15}}/>
+                    </th>
+                  )}
                   <th>날짜</th>
                   <th>매장</th>
                   <th>상품명</th>
@@ -373,14 +404,11 @@ export default function HQDeliveryRequestPage({ profile }) {
                   <th>연락처</th>
                   <th>요청사항</th>
                   <th style={{textAlign:'center', width:140}}>송장번호</th>
-                  <th style={{textAlign:'center', width:130}}>
-                    {tab === 'pending' ? '작업' : '발송일'}
-                  </th>
+                  {tab === 'dispatched' && <th style={{textAlign:'center', width:110}}>발송일</th>}
                 </tr>
               </thead>
               <tbody>
                 {groups.flatMap((g, gIdx) => {
-                  const isProc = processing === g.key;
                   // 그룹 시각적 구분: 짝수 그룹 흰색, 홀수 그룹 매우 옅은 노랑
                   const groupBg = gIdx % 2 === 0 ? '#fff' : '#fffdf5';
                   const rs = g.items.length;
@@ -388,6 +416,13 @@ export default function HQDeliveryRequestPage({ profile }) {
                   const lineBorder = { borderBottom: '1px solid var(--border)' };
                   return g.items.map((it, iIdx) => (
                     <tr key={it.id} style={{background: groupBg, ...(iIdx === 0 ? {borderTop:'2px solid var(--border2)'} : {})}}>
+                      {iIdx === 0 && tab === 'pending' && (
+                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
+                          <input type="checkbox" checked={selectedKeys.has(g.key)}
+                            onChange={() => toggleSelect(g.key)}
+                            style={{cursor:'pointer', width:15, height:15}}/>
+                        </td>
+                      )}
                       {iIdx === 0 && (
                         <td rowSpan={rs} className="mono" style={{fontSize:11, ...mergedStyle}}>{g.sold_at}</td>
                       )}
@@ -428,15 +463,9 @@ export default function HQDeliveryRequestPage({ profile }) {
                           </td>
                         );
                       })()}
-                      {iIdx === 0 && (
+                      {iIdx === 0 && tab === 'dispatched' && (
                         <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
-                          {tab === 'pending' && (
-                            <button className="btn btn-p" onClick={() => handleDispatch(g)} disabled={isProc}
-                              style={{padding:'0 14px', height:30, fontWeight:700, fontSize:12}}>
-                              {isProc ? <span className="spinner"/> : '✓ 발송처리'}
-                            </button>
-                          )}
-                          {tab === 'dispatched' && g.dispatched_at && (
+                          {g.dispatched_at && (
                             <span style={{fontSize:11, color:'var(--success)', fontWeight:600}}>
                               {new Date(g.dispatched_at).toLocaleDateString('ko-KR')}
                             </span>
