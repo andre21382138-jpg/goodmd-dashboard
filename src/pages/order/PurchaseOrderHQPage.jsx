@@ -303,6 +303,14 @@ export default function PurchaseOrderHQPage({ profile }) {
       return { ...g, items: g.items.filter(i => !(i.product_id === pid && i.manual)) };
     }));
   };
+  // 발주 목록에서 상품 제외(삭제) — 이번 발주 세션에서 빼기. 삭제 후 원래(전체) 목록으로 복귀
+  const removeItem = (storeKey, pid) => {
+    setAggRows(prev => prev.map(g => {
+      if (`${g.store}|${g.branch}` !== storeKey) return g;
+      return { ...g, items: g.items.filter(i => i.product_id !== pid) };
+    }));
+    setZeroStockOnly(false); // 삭제 후 원래 목록으로 다시 보이게
+  };
 
   const getSuggestions = (storeKey) => {
     const q = (addSearch[storeKey] || '').toLowerCase().trim();
@@ -630,6 +638,14 @@ export default function PurchaseOrderHQPage({ profile }) {
                               <button type="button" onClick={() => removeManualItem(sk, it.product_id)}
                                 title="추가 상품 삭제"
                                 style={{background:'none', border:'none', cursor:'pointer', color:'var(--danger)', fontSize:14}}>✕</button>
+                            )}
+                            {/* 센터재고 0만 보기 모드 — 발주 목록에서 제외(삭제) */}
+                            {zeroStockOnly && !it.manual && !it.alreadyOrdered && (
+                              <button type="button" onClick={() => removeItem(sk, it.product_id)}
+                                title="발주 목록에서 삭제 (원래 목록으로 복귀)"
+                                style={{height:24, padding:'0 8px', border:'1px solid var(--danger)', borderRadius:4, background:'#ffebee', color:'var(--danger)', fontSize:11, fontWeight:700, cursor:'pointer'}}>
+                                삭제
+                              </button>
                             )}
                           </td>
                         </tr>
