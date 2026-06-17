@@ -165,6 +165,7 @@ export default function PurchaseOrderHQPage({ profile }) {
   const [aggRows,    setAggRows]    = useState([]); // [{store, branch, items:[{product_id, name, code, sold_qty, hq_qty, checked}]}]
   const [confirmStep,setConfirmStep]= useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [zeroStockOnly, setZeroStockOnly] = useState(false); // 센터재고 0인 상품만 보기
 
   // 발주 현황
   const [orders,        setOrders]        = useState([]);
@@ -254,14 +255,16 @@ export default function PurchaseOrderHQPage({ profile }) {
       return { ...g, items: g.items.map(it => (it.product_id === pid && !it.alreadyOrdered) ? { ...it, checked: !it.checked } : it) };
     }));
   };
+  // 센터재고 0만 보기 필터가 켜져 있으면 화면에 보이는(=재고 0) 항목만 토글
+  const isVisibleForToggle = (it) => !zeroStockOnly || (it.center_stock || 0) === 0;
   const toggleStore = (storeKey, on) => {
     setAggRows(prev => prev.map(g => {
       if (`${g.store}|${g.branch}` !== storeKey) return g;
-      return { ...g, items: g.items.map(it => it.alreadyOrdered ? it : { ...it, checked: on }) };
+      return { ...g, items: g.items.map(it => (it.alreadyOrdered || !isVisibleForToggle(it)) ? it : { ...it, checked: on }) };
     }));
   };
   const toggleAll = (on) => {
-    setAggRows(prev => prev.map(g => ({ ...g, items: g.items.map(it => it.alreadyOrdered ? it : { ...it, checked: on }) })));
+    setAggRows(prev => prev.map(g => ({ ...g, items: g.items.map(it => (it.alreadyOrdered || !isVisibleForToggle(it)) ? it : { ...it, checked: on }) })));
   };
 
   // 상품 수동 추가
@@ -535,7 +538,13 @@ export default function PurchaseOrderHQPage({ profile }) {
             <div className="card" style={{padding:'16px 20px'}}>
               <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
                 <span className="fresult"><b>{aggRows.length}</b>개 매장 · 선택된 상품 <b>{totalChecked}</b>개</span>
-                <div style={{display:'flex', gap:6}}>
+                <div style={{display:'flex', gap:6, alignItems:'center'}}>
+                  <label style={{display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:700, cursor:'pointer', padding:'0 8px',
+                    color: zeroStockOnly ? 'var(--danger)' : 'var(--text2)'}}>
+                    <input type="checkbox" checked={zeroStockOnly} onChange={e => setZeroStockOnly(e.target.checked)}
+                      style={{width:15, height:15, cursor:'pointer'}}/>
+                    센터재고 0만 보기
+                  </label>
                   <button className="btn btn-s" onClick={() => toggleAll(true)}>전체선택</button>
                   <button className="btn btn-s" onClick={() => toggleAll(false)}>전체해제</button>
                   <button className="btn btn-p" disabled={totalChecked === 0 || submitting} onClick={handleSubmitOrders}>
@@ -544,9 +553,16 @@ export default function PurchaseOrderHQPage({ profile }) {
                 </div>
               </div>
 
+              {zeroStockOnly && !aggRows.some(g => g.items.some(i => (i.center_stock || 0) === 0)) && (
+                <div className="empty">센터재고가 0인 상품이 없습니다</div>
+              )}
+
               {aggRows.map(g => {
                 const sk = `${g.store}|${g.branch}`;
-                const selectable = g.items.filter(i => !i.alreadyOrdered);
+                // 센터재고 0만 보기 — 필터 켜지면 해당 상품만, 매칭 없는 매장 그룹은 숨김
+                const visibleItems = zeroStockOnly ? g.items.filter(i => (i.center_stock || 0) === 0) : g.items;
+                if (visibleItems.length === 0) return null;
+                const selectable = visibleItems.filter(i => !i.alreadyOrdered);
                 const allOn = selectable.length > 0 && selectable.every(i => i.checked);
                 const orderedCount = g.items.filter(i => i.alreadyOrdered).length;
                 const sug = getSuggestions(sk);
@@ -556,7 +572,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                     <input type="checkbox" checked={allOn} disabled={selectable.length === 0}
                       onChange={() => toggleStore(sk, !allOn)} style={{cursor: selectable.length === 0 ? 'not-allowed' : 'pointer'}}/>
                     <strong>{g.store} · {g.branch}</strong>
-                    <span style={{fontSize:11, color:'var(--text3)'}}>{g.items.length}개 상품</span>
+                    <span style={{fontSize:11, color:'var(--text3)'}}>{visibleItems.length}개 상품{zeroStockOnly ? ' (센터재고 0)' : ''}</span>
                     {orderedCount > 0 && (
                       <span style={{fontSize:11, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 8px', borderRadius:3}}>
                         📋 발주 완료 {orderedCount}건
@@ -576,7 +592,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {g.items.map(it => (
+                      {visibleItems.map(it => (
                         <tr key={it.product_id} style={it.alreadyOrdered ? {background:'#fafafa', opacity:0.7} : undefined}>
                           <td style={{textAlign:'center'}}>
                             {it.alreadyOrdered ? (
