@@ -270,23 +270,24 @@ export default function StoreStockPage({ profile }) {
     }
   };
 
-  // 점간이동 대상 매장 목록 fetch
+  // 점간이동 대상 매장 목록 fetch — 전체 페이징(1000행 제한 회피)
   useEffect(() => {
     if (isManager) return; // 매니저는 점간이동 안 함
-    supabase.from('store_stock').select('store_name, branch_name').then(({data}) => {
-      const seen = new Set();
-      const list = [];
-      for (const r of (data||[])) {
-        const k = `${r.store_name}|${r.branch_name}`;
-        if (!seen.has(k) && r.store_name && r.branch_name) {
-          seen.add(k);
-          list.push({ store_name: r.store_name, branch_name: r.branch_name });
+    fetchAllPaged(() => supabase.from('store_stock').select('store_name, branch_name').order('store_name').order('branch_name'))
+      .then(rows => {
+        const seen = new Set();
+        const list = [];
+        for (const r of rows) {
+          const k = `${r.store_name}|${r.branch_name}`;
+          if (!seen.has(k) && r.store_name && r.branch_name) {
+            seen.add(k);
+            list.push({ store_name: r.store_name, branch_name: r.branch_name });
+          }
         }
-      }
-      list.sort((a,b) => a.store_name.localeCompare(b.store_name) || a.branch_name.localeCompare(b.branch_name));
-      setAllBranches(list);
-    });
-  }, [isManager]);
+        list.sort((a,b) => a.store_name.localeCompare(b.store_name) || a.branch_name.localeCompare(b.branch_name));
+        setAllBranches(list);
+      });
+  }, [isManager, fetchAllPaged]);
 
   const filtered = useMemo(() => {
     if (!fSearch.trim()) return stocks;
