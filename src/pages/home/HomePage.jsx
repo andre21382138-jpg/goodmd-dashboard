@@ -548,6 +548,20 @@ export default function HomePage({ profile, setPage }) {
           )}
         </div>
       )}
+
+      {/* 소구점 문구 */}
+      <div style={{
+        marginTop:8, padding:'16px 20px', borderRadius:'var(--radius)',
+        background:'linear-gradient(135deg,#fff8e1,#fff3e0)', border:'1px solid #ffcc80',
+        display:'flex', alignItems:'flex-start', gap:12,
+      }}>
+        <span style={{fontSize:22, lineHeight:1}}>🎯</span>
+        <div style={{fontSize:13, lineHeight:1.7, color:'#6d4c41', fontWeight:500}}>
+          본 시스템은 리뷰·배송건수 등 데이터를 기반으로 판매건수 / 매출액을 <strong>예측</strong>하는 시스템이 아니라,
+          실제 상품 판매에 관련된 <strong style={{color:'#e65100'}}>Real 데이터</strong>를 기반으로 추적하기 때문에
+          <strong style={{color:'#e65100'}}> 100%에 가까운 결과</strong>를 제공합니다.
+        </div>
+      </div>
     </div>
   );
 }
