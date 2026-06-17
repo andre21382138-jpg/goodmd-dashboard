@@ -69,34 +69,105 @@ export default function CenterStockPage() {
     else { toast('삭제 완료', 'inf'); fetchStocks(); }
   };
 
+  // 센터재고 일괄 업로드 — 헤더 기반 컬럼 인식 + 상품코드/ERP코드 매칭 + upsert(product_id 기준)
+  const [unmatchedCenter, setUnmatchedCenter] = useState([]);
   const handleFile = (file) => {
     if (!file) return;
     if (!file.name.match(/\.(xls|xlsx)$/i)) { toast('xls, xlsx 파일만 지원합니다', 'err'); return; }
+    // 파일에 없는 상품 재고를 0으로 처리할지 (전체 스냅샷)
+    const zeroMissing = window.confirm(
+      '파일에 없는 상품의 센터재고를 0으로 처리할까요?\n\n' +
+      '[확인] = 이 파일을 "전체 센터재고 스냅샷"으로 적용 (파일에 없는 상품은 0)\n' +
+      '[취소] = 파일에 있는 상품만 갱신 (나머지는 그대로 유지)'
+    );
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const wb = XLSX.read(e.target.result, { type: 'binary' });
+        const wb = XLSX.read(e.target.result, { type: 'binary', codepage: 949 });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        toast(`${rows.length}행 처리 중...`, 'inf');
-        let cnt = 0;
-        for (const row of rows) {
-          const brandName = String(row['브랜드명']||row['브랜드']||'').trim();
-          const prodName  = String(row['상품명']||'').trim();
-          const code      = String(row['상품코드']||'').trim();
-          const qty       = Number(row['수량']||0);
-          const note      = String(row['비고']||'').trim();
-          if (!brandName || !prodName) continue;
-          let { data: br } = await supabase.from('brands').select('id').eq('name', brandName).maybeSingle();
-          if (!br) { const { data } = await supabase.from('brands').insert({ name: brandName }).select().single(); br = data; }
-          if (!br) continue;
-          let { data: pr } = await supabase.from('products').select('id').eq('brand_id', br.id).eq('name', prodName).maybeSingle();
-          if (!pr) continue;
-          await supabase.from('center_stock').insert({ brand_id: br.id, product_id: pr.id, product_code: code||null, quantity: qty, note: note||null, updated_at: new Date().toISOString() });
-          cnt++;
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        // 헤더 탐지
+        const norm = v => String(v ?? '').replace(/\s/g, '');
+        let headerIdx = -1;
+        for (let i = 0; i < Math.min(data.length, 10); i++) {
+          if ((data[i] || []).some(c => norm(c) === '상품코드')) { headerIdx = i; break; }
         }
-        toast(`${cnt}개 등록 완료`, 'ok'); fetchStocks(); setTab('list');
-      } catch(err) { toast('파싱 실패: ' + err.message, 'err'); }
+        if (headerIdx === -1) { toast('헤더(상품코드 컬럼)를 찾지 못했습니다', 'err'); return; }
+        const header = data[headerIdx].map(norm);
+        const col = (...names) => { for (const n of names) { const i = header.findIndex(h => h === norm(n)); if (i !== -1) return i; } return -1; };
+        const cCode = col('상품코드'), cErp = col('ERP코드','ERP'), cQty = col('수량','재고','재고수량');
+        if (cCode === -1 || cQty === -1) { toast('상품코드 또는 수량 컬럼을 찾지 못했습니다', 'err'); return; }
+
+        // 상품 매핑(code/erp_code → product)
+        const { data: products } = await supabase.from('products').select('id, brand_id, name, code, erp_code');
+        const codeMap = new Map();
+        for (const p of (products || [])) {
+          if (p.code)     codeMap.set(String(p.code).trim(), p);
+          if (p.erp_code) codeMap.set(String(p.erp_code).trim(), p);
+        }
+
+        // 파일 → product_id별 수량 합산(같은 코드 중복행 합산)
+        const byProduct = new Map(); // product_id → { product, qty }
+        const unmatched = [];
+        for (let i = headerIdx + 1; i < data.length; i++) {
+          const r = data[i] || [];
+          const code = String(r[cCode] ?? '').trim();
+          const erp  = cErp !== -1 ? String(r[cErp] ?? '').trim() : '';
+          const qty  = Number(r[cQty]);
+          if (!code && !erp) continue;
+          if (!Number.isFinite(qty)) continue;
+          const product = codeMap.get(code) || codeMap.get(erp);
+          if (!product) { unmatched.push({ code: code || erp }); continue; }
+          const cur = byProduct.get(product.id) || { product, qty: 0 };
+          cur.qty += qty;
+          byProduct.set(product.id, cur);
+        }
+        if (byProduct.size === 0) { toast('매칭된 데이터가 없습니다', 'err'); return; }
+        toast(`${byProduct.size}개 상품 인식 — 저장 중...`, 'inf');
+
+        // 기존 center_stock (product_id별)
+        const { data: existing } = await supabase.from('center_stock').select('id, product_id, quantity');
+        const exMap = new Map();
+        for (const ex of (existing || [])) if (ex.product_id != null) exMap.set(ex.product_id, ex);
+
+        let ok = 0, fail = 0;
+        const nowIso = new Date().toISOString();
+        for (const [pid, { product, qty }] of byProduct) {
+          const ex = exMap.get(pid);
+          let error;
+          if (ex) {
+            ({ error } = await supabase.from('center_stock').update({
+              quantity: qty, product_code: product.code || null, updated_at: nowIso,
+            }).eq('id', ex.id));
+          } else {
+            ({ error } = await supabase.from('center_stock').insert({
+              brand_id: product.brand_id, product_id: pid, product_code: product.code || null,
+              quantity: qty, updated_at: nowIso,
+            }));
+          }
+          if (error) fail++; else ok++;
+        }
+
+        // 미포함 0처리
+        let zeroed = 0;
+        if (zeroMissing) {
+          for (const ex of (existing || [])) {
+            if (ex.product_id != null && !byProduct.has(ex.product_id) && (ex.quantity || 0) !== 0) {
+              const { error } = await supabase.from('center_stock').update({ quantity: 0, updated_at: nowIso }).eq('id', ex.id);
+              if (!error) zeroed++;
+            }
+          }
+        }
+
+        const parts = [`${ok}건 반영`];
+        if (zeroMissing)        parts.push(`미포함 ${zeroed}건 0처리`);
+        if (fail > 0)           parts.push(`실패 ${fail}건`);
+        if (unmatched.length>0) parts.push(`상품 매칭 실패 ${unmatched.length}건`);
+        toast(parts.join(' / '), (fail>0||unmatched.length>0) ? 'err' : 'ok');
+        setUnmatchedCenter(unmatched);
+        fetchStocks(); setTab('list');
+      } catch(err) { toast('파싱 실패: ' + (err.message||err), 'err'); }
     };
     reader.readAsBinaryString(file);
   };
@@ -122,6 +193,15 @@ export default function CenterStockPage() {
 
       {tab === 'list' && (
         <div className="card" style={{padding:'16px 20px'}}>
+          {unmatchedCenter.length > 0 && (
+            <div style={{marginBottom:12, padding:'10px 14px', background:'#ffebee', border:'1px solid #ef9a9a', borderRadius:'var(--radius)', fontSize:12, color:'var(--danger)'}}>
+              ⚠ 직전 업로드 상품 매칭 실패 <b>{unmatchedCenter.length}</b>건 (미등록 상품)
+              <span style={{color:'var(--text3)', marginLeft:8, fontFamily:'var(--mono)'}}>
+                {unmatchedCenter.slice(0,5).map(u=>u.code).join(', ')}{unmatchedCenter.length>5?' 외':''}
+              </span>
+              <button className="btn-ghost" style={{marginLeft:8, fontSize:11}} onClick={() => setUnmatchedCenter([])}>✕</button>
+            </div>
+          )}
           <div className="fbar">
             <input className="finput" placeholder="상품명 / 상품코드 검색" value={fSearch} onChange={e => setFSearch(e.target.value)}/>
             {fSearch && <button className="btn-ghost" onClick={() => setFSearch('')}>✕</button>}
