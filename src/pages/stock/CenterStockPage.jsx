@@ -96,7 +96,7 @@ export default function CenterStockPage() {
         if (headerIdx === -1) { toast('헤더(상품코드 컬럼)를 찾지 못했습니다', 'err'); return; }
         const header = data[headerIdx].map(norm);
         const col = (...names) => { for (const n of names) { const i = header.findIndex(h => h === norm(n)); if (i !== -1) return i; } return -1; };
-        const cCode = col('상품코드'), cErp = col('ERP코드','ERP'), cQty = col('수량','재고','재고수량');
+        const cCode = col('상품코드'), cErp = col('ERP코드','ERP'), cQty = col('수량','재고','재고수량'), cName = col('상품명','품명');
         if (cCode === -1 || cQty === -1) { toast('상품코드 또는 수량 컬럼을 찾지 못했습니다', 'err'); return; }
 
         // 상품 매핑(code/erp_code → product)
@@ -114,11 +114,12 @@ export default function CenterStockPage() {
           const r = data[i] || [];
           const code = String(r[cCode] ?? '').trim();
           const erp  = cErp !== -1 ? String(r[cErp] ?? '').trim() : '';
+          const name = cName !== -1 ? String(r[cName] ?? '').trim() : '';
           const qty  = Number(r[cQty]);
           if (!code && !erp) continue;
           if (!Number.isFinite(qty)) continue;
           const product = codeMap.get(code) || codeMap.get(erp);
-          if (!product) { unmatched.push({ code: code || erp }); continue; }
+          if (!product) { unmatched.push({ code: code || erp, erp, name }); continue; }
           const cur = byProduct.get(product.id) || { product, qty: 0 };
           cur.qty += qty;
           byProduct.set(product.id, cur);
@@ -195,11 +196,26 @@ export default function CenterStockPage() {
         <div className="card" style={{padding:'16px 20px'}}>
           {unmatchedCenter.length > 0 && (
             <div style={{marginBottom:12, padding:'10px 14px', background:'#ffebee', border:'1px solid #ef9a9a', borderRadius:'var(--radius)', fontSize:12, color:'var(--danger)'}}>
-              ⚠ 직전 업로드 상품 매칭 실패 <b>{unmatchedCenter.length}</b>건 (미등록 상품)
-              <span style={{color:'var(--text3)', marginLeft:8, fontFamily:'var(--mono)'}}>
-                {unmatchedCenter.slice(0,5).map(u=>u.code).join(', ')}{unmatchedCenter.length>5?' 외':''}
-              </span>
-              <button className="btn-ghost" style={{marginLeft:8, fontSize:11}} onClick={() => setUnmatchedCenter([])}>✕</button>
+              <div style={{display:'flex', alignItems:'center', marginBottom:6}}>
+                <b>⚠ 직전 업로드 상품 매칭 실패 {unmatchedCenter.length}건 (상품관리 미등록)</b>
+                <button className="btn-ghost" style={{marginLeft:'auto', fontSize:11}} onClick={() => setUnmatchedCenter([])}>✕ 닫기</button>
+              </div>
+              <div style={{maxHeight:200, overflowY:'auto', background:'#fff', borderRadius:6, border:'1px solid #ffcdd2'}}>
+                <table style={{width:'100%', fontSize:11}}>
+                  <thead><tr style={{background:'#fff5f5'}}><th style={{textAlign:'left', padding:'4px 8px'}}>코드</th><th style={{textAlign:'left', padding:'4px 8px'}}>상품명(파일)</th></tr></thead>
+                  <tbody>
+                    {unmatchedCenter.map((u,i) => (
+                      <tr key={i} style={{borderTop:'1px solid #ffe0e0'}}>
+                        <td className="mono" style={{padding:'4px 8px', color:'var(--text)', whiteSpace:'nowrap'}}>{u.code}</td>
+                        <td style={{padding:'4px 8px', color:'var(--text2)'}}>{u.name || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{marginTop:6, fontSize:11, color:'var(--text3)'}}>
+                → 위 상품들을 상품관리에 등록(또는 코드 정정) 후 재업로드하면 반영됩니다.
+              </div>
             </div>
           )}
           <div className="fbar">
