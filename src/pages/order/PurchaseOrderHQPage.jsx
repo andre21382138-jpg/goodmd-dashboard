@@ -311,6 +311,18 @@ export default function PurchaseOrderHQPage({ profile }) {
     }));
     setZeroStockOnly(false); // 삭제 후 원래 목록으로 다시 보이게
   };
+  // 센터재고 0 + 선택된 상품 일괄 삭제
+  const removeCheckedZeroStock = () => {
+    const targets = aggRows.reduce((s, g) => s + g.items.filter(i => i.checked && !i.alreadyOrdered && (i.center_stock||0) === 0).length, 0);
+    if (targets === 0) { toast('삭제할 상품을 선택해주세요 (센터재고 0)', 'err'); return; }
+    if (!window.confirm(`선택한 센터재고 0 상품 ${targets}건을 발주 목록에서 삭제하시겠습니까?`)) return;
+    setAggRows(prev => prev.map(g => ({
+      ...g,
+      items: g.items.filter(i => !(i.checked && !i.alreadyOrdered && (i.center_stock||0) === 0)),
+    })));
+    setZeroStockOnly(false); // 삭제 후 원래 목록으로 복귀
+    toast(`${targets}건 발주 목록에서 삭제`, 'inf');
+  };
 
   const getSuggestions = (storeKey) => {
     const q = (addSearch[storeKey] || '').toLowerCase().trim();
@@ -555,6 +567,13 @@ export default function PurchaseOrderHQPage({ profile }) {
                   </label>
                   <button className="btn btn-s" onClick={() => toggleAll(true)}>전체선택</button>
                   <button className="btn btn-s" onClick={() => toggleAll(false)}>전체해제</button>
+                  {zeroStockOnly && (
+                    <button type="button" onClick={removeCheckedZeroStock} disabled={totalChecked === 0}
+                      title="선택한 센터재고 0 상품을 발주 목록에서 일괄 삭제"
+                      style={{height:32, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background: totalChecked>0?'#ffebee':'#f5f5f5', color: totalChecked>0?'var(--danger)':'var(--text3)', fontSize:12, fontWeight:700, cursor: totalChecked>0?'pointer':'not-allowed'}}>
+                      🗑 선택 삭제 ({totalChecked})
+                    </button>
+                  )}
                   <button className="btn btn-p" disabled={totalChecked === 0 || submitting} onClick={handleSubmitOrders}>
                     {submitting ? <span className="spinner"/> : `📋 발주진행 (${totalChecked})`}
                   </button>
@@ -596,7 +615,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                         <th className="r" style={{width:80}}>센터재고</th>
                         <th className="r">판매수량</th>
                         <th className="r" style={{width:120}}>발주수량</th>
-                        <th style={{width:40}}></th>
+                        <th style={{width:64, textAlign:'center'}}>{zeroStockOnly ? '삭제' : ''}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -633,7 +652,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                                 style={{width:80, height:28, padding:'0 8px', border:`1px solid ${it.checked?'var(--accent)':'var(--border)'}`, borderRadius:4, fontFamily:'var(--mono)', fontWeight:700, textAlign:'right', fontSize:12, background: it.checked ? '#fff3e0' : '#f5f5f5'}}/>
                             )}
                           </td>
-                          <td style={{textAlign:'center'}}>
+                          <td style={{textAlign:'center', whiteSpace:'nowrap', padding:'4px 6px'}}>
                             {it.manual && !it.alreadyOrdered && (
                               <button type="button" onClick={() => removeManualItem(sk, it.product_id)}
                                 title="추가 상품 삭제"
@@ -643,7 +662,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                             {zeroStockOnly && !it.manual && !it.alreadyOrdered && (
                               <button type="button" onClick={() => removeItem(sk, it.product_id)}
                                 title="발주 목록에서 삭제 (원래 목록으로 복귀)"
-                                style={{height:24, padding:'0 8px', border:'1px solid var(--danger)', borderRadius:4, background:'#ffebee', color:'var(--danger)', fontSize:11, fontWeight:700, cursor:'pointer'}}>
+                                style={{height:24, padding:'0 10px', border:'1px solid var(--danger)', borderRadius:4, background:'#ffebee', color:'var(--danger)', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
                                 삭제
                               </button>
                             )}
