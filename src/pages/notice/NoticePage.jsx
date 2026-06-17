@@ -39,6 +39,11 @@ export default function NoticePage({ profile }) {
   const [lightbox, setLightbox] = useState(null);
   const [colorOpen, setColorOpen] = useState(false);
   const [editId, setEditId] = useState(null); // 수정 중인 공지 id (null=신규)
+  // 검색 — 제목/내용 선택 + 검색어 (검색 버튼으로 적용)
+  const [searchField, setSearchField] = useState('title'); // 'title' | 'content'
+  const [searchInput, setSearchInput] = useState('');       // 입력 중인 값
+  const [searchQuery, setSearchQuery] = useState('');        // 적용된 값
+  const [searchScope, setSearchScope] = useState('title');   // 적용된 검색 대상
 
   const fetchNotices = useCallback(async () => {
     setLoading(true);
@@ -309,12 +314,44 @@ export default function NoticePage({ profile }) {
       )}
 
       {/* 목록 (상세 미선택 시) */}
-      {!selected && (
+      {!selected && (() => {
+        // 검색 적용 (제목/내용)
+        const q = searchQuery.trim().toLowerCase();
+        const filtered = !q ? notices : notices.filter(n => {
+          if (searchScope === 'content') {
+            // 평문 content + body_html(태그 제거) 둘 다 검색
+            const plain = (n.content || '') + ' ' + String(n.body_html || '').replace(/<[^>]*>/g, ' ');
+            return plain.toLowerCase().includes(q);
+          }
+          return (n.title || '').toLowerCase().includes(q);
+        });
+        const runSearch = () => { setSearchScope(searchField); setSearchQuery(searchInput); };
+        const clearSearch = () => { setSearchInput(''); setSearchQuery(''); };
+        return (
         <div className="card" style={{padding:'14px 16px'}}>
           <div className="card-label">공지사항 목록</div>
+          {/* 검색 바 */}
+          <div style={{display:'flex', gap:6, marginBottom:12, flexWrap:'wrap', alignItems:'center'}}>
+            <select value={searchField} onChange={e => setSearchField(e.target.value)}
+              style={{height:34, padding:'0 8px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, background:'#fff', outline:'none'}}>
+              <option value="title">제목</option>
+              <option value="content">내용</option>
+            </select>
+            <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') runSearch(); }}
+              placeholder="검색어 입력" style={{flex:1, minWidth:160, height:34, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none'}}/>
+            <button type="button" className="btn btn-p" style={{height:34}} onClick={runSearch}>🔍 검색</button>
+            {searchQuery && <button type="button" className="btn btn-s" style={{height:34}} onClick={clearSearch}>✕ 초기화</button>}
+          </div>
+          {searchQuery && (
+            <div style={{fontSize:12, color:'var(--text2)', marginBottom:8}}>
+              '{searchScope==='content'?'내용':'제목'}'에 <b>{searchQuery}</b> 포함 — <b>{filtered.length}</b>건
+            </div>
+          )}
           {loading ? <div className="empty"><span className="spinner"/></div>
             : notices.length === 0 ? <div className="empty">등록된 공지사항이 없습니다</div>
-            : notices.map(n => {
+            : filtered.length === 0 ? <div className="empty">검색 결과가 없습니다</div>
+            : filtered.map(n => {
               const imgCount = imgCountOf(n);
               return (
               <div key={n.id} onClick={() => setSelected(n)}
@@ -343,7 +380,8 @@ export default function NoticePage({ profile }) {
             );})
           }
         </div>
-      )}
+        );
+      })()}
 
       {/* 상세 (선택 시 전체 너비) */}
       {selected && (
