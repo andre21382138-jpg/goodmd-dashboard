@@ -251,10 +251,21 @@ export default function HQDeliveryRequestPage({ profile }) {
     }
   };
 
+  // 그룹에 송장번호가 있는지
+  const groupHasTracking = (g) => g.items.some(x => x.tracking_number);
+  // 선택 건이 모두 송장번호를 가졌는지 (발송처리 활성 조건)
+  const selectedAllTracked = selectedKeys.size > 0 &&
+    groups.filter(g => selectedKeys.has(g.key)).every(groupHasTracking);
+
   // 선택 건 일괄 발송처리
   const handleDispatchSelected = async () => {
     const target = groups.filter(g => selectedKeys.has(g.key));
     if (target.length === 0) { toast('발송처리할 요청을 선택해주세요', 'err'); return; }
+    const noTrack = target.filter(g => !groupHasTracking(g));
+    if (noTrack.length > 0) {
+      toast(`송장번호가 없는 요청 ${noTrack.length}건이 있습니다. 송장 업로드 후 발송처리해주세요`, 'err');
+      return;
+    }
     const ids = target.flatMap(g => g.items.map(it => it.id));
     if (!window.confirm(`선택한 ${target.length}건(${ids.length}개 상품)을 발송처리하시겠습니까?\n\n발송완료 탭으로 이동하며, 매장 매출조회에 "✅ 본사발송 완료"로 표시됩니다.`)) return;
     setProcessing('batch');
@@ -360,9 +371,9 @@ export default function HQDeliveryRequestPage({ profile }) {
                 style={{height:30, padding:'0 12px', border:'1px solid #1565C0', borderRadius:'var(--radius)', background:'#e3f2fd', color:'#1565C0', fontSize:12, fontWeight:700, cursor:'pointer'}}>
                 {uploading ? <span className="spinner"/> : '📤 송장 업로드'}
               </button>
-              <button type="button" onClick={handleDispatchSelected} disabled={selectedKeys.size === 0 || processing === 'batch'}
-                title="선택 건을 발송처리 → 발송완료 탭으로"
-                style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background: selectedKeys.size>0?'#e8f5e9':'#f5f5f5', color: selectedKeys.size>0?'#2e7d32':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedKeys.size>0?'pointer':'not-allowed'}}>
+              <button type="button" onClick={handleDispatchSelected} disabled={!selectedAllTracked || processing === 'batch'}
+                title={selectedKeys.size === 0 ? '발송처리할 요청을 선택하세요' : !selectedAllTracked ? '송장 업로드 후 발송처리할 수 있습니다' : '선택 건을 발송처리 → 발송완료 탭으로'}
+                style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background: selectedAllTracked?'#e8f5e9':'#f5f5f5', color: selectedAllTracked?'#2e7d32':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedAllTracked?'pointer':'not-allowed'}}>
                 {processing === 'batch' ? <span className="spinner"/> : `✓ 발송처리${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
               </button>
               <button className="btn btn-s" onClick={fetchData} disabled={loading}>
