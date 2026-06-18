@@ -25,13 +25,14 @@ async function exportDeliveryRequests(groups) {
   const ymd = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
   const yymmdd = `${String(now.getFullYear()).slice(-2)}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
 
-  // 그룹의 각 라인을 한 행씩 추가, 라인별로 -NNNN 부여
-  let seq = 0;
+  // 그룹의 각 라인을 한 행씩 추가
+  // 주문번호: 요청건에 고정 — 판매일 + 그룹 대표 sale id 기반 (재다운로드해도 동일)
   for (const g of groups) {
     const storeFull = `${g.store_name || ''}${g.branch_name || ''}`;
+    const soldYmd = (g.sold_at || '').replace(/-/g, '') || ymd;
+    const repId = Math.min(...g.items.map(it => Number(it.id) || 0));
+    const orderNo = `${soldYmd}-${String(repId).padStart(6, '0')}`; // 그룹(주문) 단위 고정값
     for (const it of g.items) {
-      seq += 1;
-      const orderNo = `${ymd}-${String(seq).padStart(4,'0')}`;
       const soldDate = g.sold_at ? new Date(g.sold_at) : null;
       ws.addRow([
         soldDate,                                  // 0  발송일
@@ -84,7 +85,7 @@ async function exportDeliveryRequests(groups) {
 
   const buf = await wb.xlsx.writeBuffer();
   dlBlob(buf, `택배요청_${yymmdd}_전송건.xlsx`);
-  return seq;
+  return groups.reduce((s, g) => s + g.items.length, 0);
 }
 
 function groupKey(s) {
@@ -265,12 +266,13 @@ export default function HQDeliveryRequestPage({ profile }) {
     } finally { setProcessing(null); }
   };
 
-  // 승인된 그룹만 선택 가능 (발송 처리 대상)
+  // 승인된 그룹만 선택 가능 (발송 처리 대상). 단, 본사 담당자는 삭제 위해 미승인 건도 선택 가능
   const approvedGroups = groups.filter(g => g.approved);
-  // 선택 토글 — 승인된 그룹만
+  const selectableGroups = isApprover ? groups : approvedGroups;
+  // 선택 토글
   const toggleSelect = (key) => {
     const g = groups.find(x => x.key === key);
-    if (!g?.approved) { toast('본사 확인(승인)된 요청만 선택할 수 있습니다', 'inf'); return; }
+    if (!isApprover && !g?.approved) { toast('본사 확인(승인)된 요청만 선택할 수 있습니다', 'inf'); return; }
     setSelectedKeys(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
@@ -278,8 +280,26 @@ export default function HQDeliveryRequestPage({ profile }) {
     });
   };
   const toggleSelectAll = () => setSelectedKeys(prev =>
-    prev.size === approvedGroups.length ? new Set() : new Set(approvedGroups.map(g => g.key))
+    prev.size === selectableGroups.length ? new Set() : new Set(selectableGroups.map(g => g.key))
   );
+
+  // 본사 담당자 — 선택 요청 삭제 (재고 없음 등으로 발송 불가 시). 매장 매출에서도 사라짐
+  const handleDeleteSelected = async () => {
+    const target = groups.filter(g => selectedKeys.has(g.key));
+    if (target.length === 0) { toast('삭제할 요청을 선택해주세요', 'err'); return; }
+    const ids = target.flatMap(g => g.items.map(it => it.id));
+    if (!window.confirm(`선택한 ${target.length}건(${ids.length}개 상품)을 삭제하시겠습니까?\n\n해당 매장 본사요청 매출이 영구 삭제됩니다 (중복·재고없음 등 처리용). 되돌릴 수 없습니다.`)) return;
+    setProcessing('delete');
+    try {
+      const { error } = await supabase.from('sales').delete().in('id', ids);
+      if (error) throw error;
+      toast(`${target.length}건 삭제 완료`, 'inf');
+      setSelectedKeys(new Set());
+      fetchData();
+    } catch (err) {
+      toast('삭제 실패: ' + (err.message || err), 'err');
+    } finally { setProcessing(null); }
+  };
 
   // 선택 건 엑셀 다운로드 (선택 없으면 승인된 전체)
   const handleExportSelected = async () => {
@@ -418,6 +438,13 @@ export default function HQDeliveryRequestPage({ profile }) {
                 style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background: selectedAllTracked?'#e8f5e9':'#f5f5f5', color: selectedAllTracked?'#2e7d32':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedAllTracked?'pointer':'not-allowed'}}>
                 {processing === 'batch' ? <span className="spinner"/> : `✓ 발송처리${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
               </button>
+              {isApprover && (
+                <button type="button" onClick={handleDeleteSelected} disabled={selectedKeys.size === 0 || processing === 'delete'}
+                  title="선택 요청 삭제 (재고없음·중복 등) — 매장 매출에서도 제거"
+                  style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background: selectedKeys.size>0?'#ffebee':'#f5f5f5', color: selectedKeys.size>0?'var(--danger)':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedKeys.size>0?'pointer':'not-allowed'}}>
+                  {processing === 'delete' ? <span className="spinner"/> : `🗑 선택 삭제${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
+                </button>
+              )}
               <button className="btn btn-s" onClick={fetchData} disabled={loading}>
                 {loading ? <span className="spinner"/> : '🔄 새로고침'}
               </button>
@@ -442,10 +469,10 @@ export default function HQDeliveryRequestPage({ profile }) {
                   {tab === 'pending' && (
                     <th style={{textAlign:'center', width:36}}>
                       <input type="checkbox"
-                        checked={approvedGroups.length > 0 && selectedKeys.size === approvedGroups.length}
-                        ref={el => { if (el) el.indeterminate = selectedKeys.size > 0 && selectedKeys.size < approvedGroups.length; }}
+                        checked={selectableGroups.length > 0 && selectedKeys.size === selectableGroups.length}
+                        ref={el => { if (el) el.indeterminate = selectedKeys.size > 0 && selectedKeys.size < selectableGroups.length; }}
                         onChange={toggleSelectAll}
-                        title="승인된 요청 전체선택"
+                        title={isApprover ? '전체선택' : '승인된 요청 전체선택'}
                         style={{cursor:'pointer', width:15, height:15}}/>
                     </th>
                   )}
@@ -474,10 +501,10 @@ export default function HQDeliveryRequestPage({ profile }) {
                       {iIdx === 0 && tab === 'pending' && (
                         <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle, ...((!g.approved)?{background:'#fafafa'}:{})}}>
                           <input type="checkbox" checked={selectedKeys.has(g.key)}
-                            disabled={!g.approved}
+                            disabled={!isApprover && !g.approved}
                             onChange={() => toggleSelect(g.key)}
-                            title={g.approved ? '' : '본사 확인(승인) 후 선택 가능'}
-                            style={{cursor: g.approved ? 'pointer' : 'not-allowed', width:15, height:15}}/>
+                            title={(isApprover || g.approved) ? '' : '본사 확인(승인) 후 선택 가능'}
+                            style={{cursor: (isApprover || g.approved) ? 'pointer' : 'not-allowed', width:15, height:15}}/>
                         </td>
                       )}
                       {iIdx === 0 && (
