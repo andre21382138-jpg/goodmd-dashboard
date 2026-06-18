@@ -133,7 +133,13 @@ export default function SalesReturnPage({ profile }) {
     const { data, error } = await q;
     if (error) { toast(error.message, 'err'); setLoading(false); return; }
 
-    const active = (data || []).filter(s => (s.quantity - (s.returned_qty||0)) > 0);
+    // 회원반품 탭: 회원 구매건(customer_id 있음)만, 반품 음수 row 제외
+    const active = (data || []).filter(s =>
+      (s.quantity - (s.returned_qty||0)) > 0 &&
+      s.customer_id &&
+      s.payment !== '반품' &&
+      (Number(s.price) || 0) >= 0
+    );
     let filtered = active;
     if (fSearch.trim()) {
       const q2 = fSearch.toLowerCase();
