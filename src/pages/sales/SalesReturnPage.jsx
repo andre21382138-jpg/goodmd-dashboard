@@ -35,7 +35,7 @@ export default function SalesReturnPage({ profile }) {
   const [mProduct, setMProduct] = useState(null); // {id, name, code, brand_id}
   const [mShowSug, setMShowSug] = useState(false);
   const [mQty,     setMQty]     = useState(1);
-  const [mPrice,   setMPrice]   = useState('');
+  const [mRefund,  setMRefund]  = useState('');   // 환불 합계(직접 입력, 독립값)
   const [mMemo,    setMMemo]    = useState('');
   const [mSaving,  setMSaving]  = useState(false);
 
@@ -74,7 +74,7 @@ export default function SalesReturnPage({ profile }) {
             }
             setMProduct({ id: matched.id, name: matched.name, code: matched.code, brand_id: matched.brand_id });
             setMSearch(matched.name);
-            if (matched.price) setMPrice(String(matched.price));
+            if (matched.price) setMRefund(String(matched.price * (Number(mQty)||1)));
             toast(`📷 ${matched.name} 선택됨`, 'ok');
           } else if (tab === 'search') {
             // 반품접수 탭 안전망 — 포커스된 input에 들어간 스캔 꼬리 코드 자동 제거
@@ -97,7 +97,7 @@ export default function SalesReturnPage({ profile }) {
                 }
               }
             }
-            toast('📷 반품접수 탭에서는 스캔이 동작하지 않습니다 — [직접입력] 탭에서 사용해주세요', 'inf');
+            toast('📷 회원반품 탭에서는 스캔이 동작하지 않습니다 — [비회원반품] 탭에서 사용해주세요', 'inf');
           }
         }
       } else if (e.key.length === 1) {
@@ -325,17 +325,18 @@ export default function SalesReturnPage({ profile }) {
       toast('점포와 지점을 먼저 선택해주세요', 'err'); return;
     }
     if (!mProduct) { toast('상품을 선택해주세요', 'err'); return; }
-    if (!mDate)    { toast('날짜를 선택해주세요', 'err'); return; }
+    if (!mDate)    { toast('판매일자를 선택해주세요', 'err'); return; }
     const qty = Number(mQty) || 0;
-    const price = Number(String(mPrice).replace(/,/g,'')) || 0;
+    const refundTotal = Number(parseNumInput(mRefund)) || 0;
     if (qty <= 0)  { toast('수량을 입력해주세요', 'err'); return; }
-    if (price < 0) { toast('가격을 확인해주세요', 'err'); return; }
+    if (refundTotal < 0) { toast('환불 합계를 확인해주세요', 'err'); return; }
     if (!mReturnDate) { toast('반품 날짜를 선택해주세요', 'err'); return; }
-    if (!window.confirm(`수기 반품 처리하시겠습니까?\n\n반품 날짜: ${mReturnDate}\n원 판매일: ${mDate}\n상품: ${mProduct.name}\n수량: ${qty}개\n가격: ${price.toLocaleString()}원\n환불 금액: ${(qty*price).toLocaleString()}원`)) return;
+    if (!window.confirm(`비회원 반품 처리하시겠습니까?\n\n반품 날짜: ${mReturnDate}\n원 판매일: ${mDate}\n상품: ${mProduct.name}\n수량: ${qty}개\n환불 합계: ${refundTotal.toLocaleString()}원`)) return;
 
     setMSaving(true);
     try {
       const nowIso = new Date().toISOString();
+      const unitPrice = qty > 0 ? refundTotal / qty : refundTotal; // 합계 = 수량 × 단가가 정확히 맞도록
       // 수기 반품도 음수 매출 row로 저장 — sold_at은 '반품 날짜' (매출조회에 반품일로 잡힘)
       const { error } = await supabase.from('sales').insert({
         sold_at: mReturnDate,
@@ -344,7 +345,7 @@ export default function SalesReturnPage({ profile }) {
         brand_id: mProduct.brand_id,
         product_id: mProduct.id,
         quantity: qty,
-        price: -Math.abs(price),
+        price: -Math.abs(unitPrice),
         payment: '반품',
         memo: `수기 반품 접수 (원 판매일 ${mDate})` + (mMemo.trim() ? ` · ${mMemo.trim()}` : ''),
         created_by: profile.id,
@@ -372,7 +373,7 @@ export default function SalesReturnPage({ profile }) {
       }
 
       toast('수기 반품 접수 완료', 'ok');
-      setMProduct(null); setMSearch(''); setMQty(1); setMPrice(''); setMMemo(''); setMReturnDate(today);
+      setMProduct(null); setMSearch(''); setMQty(1); setMRefund(''); setMMemo(''); setMReturnDate(today);
     } catch (err) {
       toast('반품 실패: ' + err.message, 'err');
     }
@@ -393,8 +394,8 @@ export default function SalesReturnPage({ profile }) {
     <div>
       {/* 탭 */}
       <div className="tabs">
-        <button className={`tab ${tab==='search'?'on':''}`} onClick={() => setTab('search')}>반품접수</button>
-        <button className={`tab ${tab==='manual'?'on':''}`} onClick={() => setTab('manual')}>직접입력</button>
+        <button className={`tab ${tab==='search'?'on':''}`} onClick={() => setTab('search')}>회원반품</button>
+        <button className={`tab ${tab==='manual'?'on':''}`} onClick={() => setTab('manual')}>비회원반품</button>
       </div>
 
       {tab === 'search' && (<>
@@ -645,29 +646,28 @@ export default function SalesReturnPage({ profile }) {
             </div>
           )}
           <div style={{background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:14, fontSize:12, color:'#6d4c41'}}>
-            💡 주문건을 찾을 수 없는 경우, 날짜·상품·수량·가격을 직접 입력하여 반품을 접수합니다.
-            처리 시 매장재고는 자동 복구되며, 회원 적립금은 변동되지 않습니다.
+            💡 비회원 구매건 반품 — 판매일자·상품·수량·환불합계·반품일자를 입력해 접수합니다.
+            처리 시 매장재고는 자동 복구되며, 적립금은 변동되지 않습니다.
           </div>
 
-          <div style={{display:'grid', gridTemplateColumns:'180px 180px 1fr', gap:14, marginBottom:14}}>
+          {/* 세로 배치: 판매일자 → 상품검색 → 수량 → 환불합계 → 반품일자 → 접수 */}
+          <div style={{display:'flex', flexDirection:'column', gap:14, maxWidth:520}}>
+            {/* 1) 판매일자 */}
             <div>
-              <label style={{display:'block', fontSize:11, fontWeight:700, color:'#e65100', marginBottom:5}}>📅 반품 날짜</label>
-              <input type="date" value={mReturnDate} onChange={e => setMReturnDate(e.target.value)}
-                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, color:'var(--accent)', outline:'none', boxSizing:'border-box', background:'#fff3e0'}}/>
-            </div>
-            <div>
-              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>원 판매일 <span style={{color:'var(--text3)', fontWeight:400}}>(참고)</span></label>
+              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>① 판매일자</label>
               <input type="date" value={mDate} onChange={e => setMDate(e.target.value)}
-                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', boxSizing:'border-box'}}/>
+                style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, outline:'none', boxSizing:'border-box'}}/>
             </div>
+
+            {/* 2) 상품 검색 */}
             <div style={{position:'relative'}}>
-              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>상품 검색</label>
+              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>② 상품 검색</label>
               <input
                 value={mProduct ? mProduct.name : mSearch}
                 onChange={e => { setMSearch(e.target.value); setMProduct(null); setMShowSug(true); }}
                 onFocus={() => setMShowSug(true)}
                 onBlur={() => setTimeout(() => setMShowSug(false), 200)}
-                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', boxSizing:'border-box', background:'#fff'}}
+                style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, outline:'none', boxSizing:'border-box', background:'#fff'}}
                 placeholder="상품명 또는 상품코드로 검색"
                 autoComplete="off"
               />
@@ -675,7 +675,7 @@ export default function SalesReturnPage({ profile }) {
                 <div style={{position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:240, overflowY:'auto', marginTop:2}}>
                   {mSuggestions.map(p => (
                     <div key={p.id}
-                      onMouseDown={e => { e.preventDefault(); setMProduct(p); setMSearch(p.name); setMShowSug(false); if (p.price) setMPrice(String(p.price)); }}
+                      onMouseDown={e => { e.preventDefault(); setMProduct(p); setMSearch(p.name); setMShowSug(false); if (p.price) setMRefund(String(p.price * (Number(mQty)||1))); }}
                       style={{padding:'9px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0'}}
                       onMouseEnter={e => e.currentTarget.style.background='#f5f7fa'}
                       onMouseLeave={e => e.currentTarget.style.background='#fff'}>
@@ -694,47 +694,44 @@ export default function SalesReturnPage({ profile }) {
                 </div>
               )}
             </div>
-          </div>
 
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14, marginBottom:14}}>
+            {/* 3) 수량 */}
             <div>
-              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>수량</label>
+              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>③ 수량</label>
               <input type="number" min={1} value={mQty} onChange={e => setMQty(e.target.value)}
-                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', boxSizing:'border-box', textAlign:'right'}}/>
+                style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, outline:'none', boxSizing:'border-box', textAlign:'right'}}/>
             </div>
+
+            {/* 4) 환불 합계 (직접 입력) */}
             <div>
-              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>가격 (단가)</label>
-              <input type="text" inputMode="numeric" value={formatNumInput(mPrice)}
-                onChange={e => setMPrice(parseNumInput(e.target.value))}
-                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', boxSizing:'border-box', textAlign:'right'}}
+              <label style={{display:'block', fontSize:11, fontWeight:700, color:'#e65100', marginBottom:5}}>④ 환불 합계</label>
+              <input type="text" inputMode="numeric" value={formatNumInput(mRefund)}
+                onChange={e => setMRefund(parseNumInput(e.target.value))}
+                style={{width:'100%', height:44, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:16, fontWeight:700, fontFamily:'var(--mono)', outline:'none', boxSizing:'border-box', textAlign:'right', background:'#fff3e0', color:'var(--accent)'}}
                 placeholder="0"/>
             </div>
+
+            {/* 5) 반품 날짜 */}
             <div>
-              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>환불 합계 <span style={{color:'var(--text3)', fontWeight:400}}>(수정 시 단가 자동계산)</span></label>
-              <input type="text" inputMode="numeric"
-                value={formatNumInput(String((Number(mQty)||0) * (Number(parseNumInput(mPrice))||0)))}
-                onChange={e => {
-                  const total = Number(parseNumInput(e.target.value)) || 0;
-                  const q = Number(mQty) || 1;
-                  setMPrice(String(q > 0 ? Math.round(total / q) : total));
-                }}
-                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, fontFamily:'var(--mono)', outline:'none', boxSizing:'border-box', textAlign:'right', background:'#fff3e0', color:'var(--accent)'}}
-                placeholder="0"/>
+              <label style={{display:'block', fontSize:11, fontWeight:700, color:'#e65100', marginBottom:5}}>⑤ 📅 반품 날짜</label>
+              <input type="date" value={mReturnDate} onChange={e => setMReturnDate(e.target.value)}
+                style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, color:'var(--accent)', outline:'none', boxSizing:'border-box', background:'#fff3e0'}}/>
             </div>
-          </div>
 
-          <div style={{marginBottom:14}}>
-            <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>메모 (선택)</label>
-            <input value={mMemo} onChange={e => setMMemo(e.target.value)}
-              style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', boxSizing:'border-box'}}
-              placeholder="반품 사유 등"/>
-          </div>
+            {/* 메모 */}
+            <div>
+              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>메모 (선택)</label>
+              <input value={mMemo} onChange={e => setMMemo(e.target.value)}
+                style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, outline:'none', boxSizing:'border-box'}}
+                placeholder="반품 사유 등"/>
+            </div>
 
-          <button className="btn btn-p" disabled={mSaving || !mProduct || !mQty || mPrice === ''}
-            style={{width:'100%', justifyContent:'center', height:44, fontWeight:700}}
-            onClick={handleManualReturn}>
-            {mSaving ? <span className="spinner"/> : '↩️ 반품 접수'}
-          </button>
+            <button className="btn btn-p" disabled={mSaving || !mProduct || !mQty || mRefund === ''}
+              style={{width:'100%', justifyContent:'center', height:46, fontWeight:700, fontSize:15}}
+              onClick={handleManualReturn}>
+              {mSaving ? <span className="spinner"/> : '↩️ 반품 접수'}
+            </button>
+          </div>
         </div>
       )}
     </div>
