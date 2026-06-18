@@ -14,6 +14,7 @@ export default function SalesReturnPage({ profile }) {
 
   const today = new Date().toISOString().slice(0, 10);
   const [tab,      setTab]      = useState('search'); // 'search' | 'manual'
+  const [searchMode, setSearchMode] = useState('date'); // 'date' | 'customer'
   const [fFrom,    setFFrom]    = useState(today);
   const [fTo,      setFTo]      = useState(today);
   const [fSearch,  setFSearch]  = useState('');
@@ -118,15 +119,21 @@ export default function SalesReturnPage({ profile }) {
     if (!storeName || !branchName) {
       setOrders([]); setLoading(false); return;
     }
+    // 고객정보 조회 모드인데 검색어가 비어있으면 조회 안 함
+    if (searchMode === 'customer' && !fSearch.trim()) {
+      setOrders([]); setLoading(false);
+      toast('고객 이름 또는 연락처를 입력해주세요', 'inf');
+      return;
+    }
     setLoading(true);
-    const hasSearch = !!fSearch.trim();
     let q = supabase.from('sales')
       .select('*, product:products(name,code), brand:brands(name), customer:customers(id,name,phone,total_points,used_points,total_purchase,grade)')
       .eq('store_name', storeName)
       .eq('branch_name', branchName)
       .order('sold_at', { ascending: false })
       .order('created_at', { ascending: false });
-    if (!hasSearch) {
+    // 날짜 조회 모드일 때만 기간 필터 (고객 조회는 전체 기간)
+    if (searchMode === 'date') {
       if (fFrom) q = q.gte('sold_at', fFrom);
       if (fTo)   q = q.lte('sold_at', fTo);
     }
@@ -141,7 +148,7 @@ export default function SalesReturnPage({ profile }) {
       (Number(s.price) || 0) >= 0
     );
     let filtered = active;
-    if (fSearch.trim()) {
+    if (searchMode === 'customer' && fSearch.trim()) {
       const q2 = fSearch.toLowerCase();
       filtered = filtered.filter(s =>
         (s.customer?.name||'').toLowerCase().includes(q2) ||
@@ -159,7 +166,7 @@ export default function SalesReturnPage({ profile }) {
     setExpanded(null);
     setReturnMap({});
     setLoading(false);
-  }, [storeName, branchName, fFrom, fTo, fSearch]);
+  }, [storeName, branchName, fFrom, fTo, fSearch, searchMode]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -427,30 +434,48 @@ export default function SalesReturnPage({ profile }) {
             )}
           </div>
         )}
+        {/* 조회 모드 토글 */}
+        <div style={{display:'flex', gap:6, marginBottom:10}}>
+          <button type="button" onClick={() => setSearchMode('date')}
+            style={{height:34, padding:'0 14px', border:'1px solid', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+              borderColor: searchMode==='date' ? 'var(--accent)' : 'var(--border)',
+              background: searchMode==='date' ? '#fff3e0' : '#fff',
+              color: searchMode==='date' ? 'var(--accent)' : 'var(--text2)'}}>
+            📅 날짜로 조회
+          </button>
+          <button type="button" onClick={() => setSearchMode('customer')}
+            style={{height:34, padding:'0 14px', border:'1px solid', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, cursor:'pointer',
+              borderColor: searchMode==='customer' ? 'var(--accent)' : 'var(--border)',
+              background: searchMode==='customer' ? '#fff3e0' : '#fff',
+              color: searchMode==='customer' ? 'var(--accent)' : 'var(--text2)'}}>
+            👤 고객정보로 조회
+          </button>
+        </div>
+
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
-          <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)}
-            disabled={!!fSearch.trim()} title="판매일 시작"
-            style={{background: fSearch.trim() ? '#f0f0f0' : '#fff'}}/>
-          <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
-          <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)}
-            disabled={!!fSearch.trim()} title="판매일 종료"
-            style={{background: fSearch.trim() ? '#f0f0f0' : '#fff'}}/>
-          <input className="finput" value={fSearch} onChange={e => setFSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && fetchOrders()}
-            placeholder="고객명/연락처 검색 (입력 시 날짜 무시)" style={{flex:'1 1 280px'}}/>
-          {(fSearch || fFrom !== today || fTo !== today) &&
-            <button className="btn-ghost" onClick={() => { setFFrom(today); setFTo(today); setFSearch(''); }}>✕ 초기화</button>}
+          {searchMode === 'date' ? (
+            <>
+              <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="판매일 시작"/>
+              <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+              <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} title="판매일 종료"/>
+              <button className="btn btn-s" onClick={() => { setFFrom(today); setFTo(today); }}>오늘</button>
+            </>
+          ) : (
+            <input className="finput" value={fSearch} onChange={e => setFSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && fetchOrders()}
+              placeholder="고객명 또는 연락처 입력" style={{flex:'1 1 280px'}} autoFocus/>
+          )}
           <div className="fbar-right">
             <button className="btn btn-p" onClick={fetchOrders} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔍 조회'}
             </button>
           </div>
         </div>
-        {fSearch.trim() && (
-          <div style={{fontSize:11, color:'var(--text3)', marginTop:6, fontStyle:'italic'}}>
-            💡 고객 검색 중 — 전체 기간에서 해당 고객의 판매내역을 조회합니다
-          </div>
-        )}
+        <div style={{fontSize:11, color:'var(--text3)', marginTop:6}}>
+          {searchMode === 'date'
+            ? '💡 선택한 기간에 판매된 회원 구매내역을 조회합니다'
+            : '💡 해당 고객의 전체 기간 구매내역을 조회합니다'}
+        </div>
       </div>
 
       {/* 주문 목록 */}
