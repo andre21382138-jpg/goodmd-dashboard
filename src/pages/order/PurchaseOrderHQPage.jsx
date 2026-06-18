@@ -219,6 +219,24 @@ export default function PurchaseOrderHQPage({ profile }) {
       centerStockMap.set(c.product_id, (centerStockMap.get(c.product_id) || 0) + (c.quantity || 0));
     }
 
+    // 매장재고 fetch (페이징) → 매장|지점|상품코드 별 합산
+    const storeStockMap = new Map(); // `${store}|${branch}|${code}` → qty
+    {
+      const PAGE = 1000; let start = 0;
+      while (true) {
+        const { data: ss, error: ssErr } = await supabase.from('store_stock')
+          .select('store_name, branch_name, product_code, stock_qty')
+          .range(start, start + PAGE - 1);
+        if (ssErr || !ss || ss.length === 0) break;
+        for (const s of ss) {
+          const k = `${s.store_name}|${s.branch_name}|${String(s.product_code||'').trim()}`;
+          storeStockMap.set(k, (storeStockMap.get(k) || 0) + (s.stock_qty || 0));
+        }
+        if (ss.length < PAGE) break;
+        start += PAGE;
+      }
+    }
+
     // 집계: store+branch+product_id 별로 effQty 합산
     // 단, 본사 발송 요청건(delivery_type='hq')은 본사에서 대신 발송하므로 매장 발주에서 제외
     const map = new Map();
@@ -241,7 +259,8 @@ export default function PurchaseOrderHQPage({ profile }) {
         .map(it => {
           const alreadyOrdered = orderedKeys.has(`${grp.store}|${grp.branch}|${it.product_id}`);
           const center_stock = centerStockMap.get(it.product_id) || 0;
-          return { ...it, hq_qty: it.sold_qty, checked: !alreadyOrdered, alreadyOrdered, center_stock };
+          const store_stock = storeStockMap.get(`${grp.store}|${grp.branch}|${String(it.code||'').trim()}`) || 0;
+          return { ...it, hq_qty: it.sold_qty, checked: !alreadyOrdered, alreadyOrdered, center_stock, store_stock };
         });
       result.push({ store: grp.store, branch: grp.branch, items });
     }
@@ -295,6 +314,7 @@ export default function PurchaseOrderHQPage({ profile }) {
         manual: true,
         alreadyOrdered: false,
         center_stock: 0,
+        store_stock: 0,
       };
       return { ...g, items: [...g.items, newItem] };
     }));
@@ -380,6 +400,36 @@ export default function PurchaseOrderHQPage({ profile }) {
       toast('발주 실패: ' + err.message, 'err');
     }
     setSubmitting(false);
+  };
+
+  // 매장 단위 발주 진행 (해당 매장 그룹만)
+  const [submittingStore, setSubmittingStore] = useState(null);
+  const handleSubmitStore = async (g) => {
+    const items = g.items.filter(i => i.checked && i.hq_qty > 0 && !i.alreadyOrdered);
+    if (items.length === 0) { toast('발주할 상품이 없습니다 (선택·수량 확인)', 'err'); return; }
+    if (!window.confirm(`${g.store} ${g.branch} — ${items.length}개 상품을 발주 진행하시겠습니까?`)) return;
+    const sk = `${g.store}|${g.branch}`;
+    setSubmittingStore(sk);
+    try {
+      const { data: order, error: oErr } = await supabase.from('purchase_orders').insert({
+        store_name: g.store, branch_name: g.branch,
+        week_start: fFrom, week_end: fTo, status: 'sent', created_by: profile.id,
+      }).select().single();
+      if (oErr) throw oErr;
+      const itemRows = items.map(it => ({ order_id: order.id, product_id: it.product_id, sold_qty: it.sold_qty, hq_qty: it.hq_qty }));
+      const { error: iErr } = await supabase.from('purchase_order_items').insert(itemRows);
+      if (iErr) throw iErr;
+      toast(`${g.store} ${g.branch} 발주 발송 완료 (${items.length}건)`, 'ok');
+      // 발주한 라인을 alreadyOrdered로 표시 (전체 목록 유지, 재집계 없이)
+      setAggRows(prev => prev.map(gr => {
+        if (`${gr.store}|${gr.branch}` !== sk) return gr;
+        const orderedPids = new Set(items.map(i => i.product_id));
+        return { ...gr, items: gr.items.map(i => orderedPids.has(i.product_id) ? { ...i, alreadyOrdered: true, checked: false } : i) };
+      }));
+    } catch (err) {
+      toast('발주 실패: ' + (err.message || err), 'err');
+    }
+    setSubmittingStore(null);
   };
 
   // ── 3. 발주 현황 조회 ──
@@ -620,6 +670,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                         <th>상품명</th>
                         <th>코드</th>
                         <th className="r" style={{width:80}}>센터재고</th>
+                        <th className="r" style={{width:80}}>매장재고</th>
                         <th className="r">판매수량</th>
                         <th className="r" style={{width:120}}>발주수량</th>
                         <th style={{width:64, textAlign:'center'}}>{zeroStockOnly ? '삭제' : ''}</th>
@@ -645,6 +696,9 @@ export default function PurchaseOrderHQPage({ profile }) {
                           <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.code || '-'}</td>
                           <td className="r" style={{fontFamily:'var(--mono)', color: (it.center_stock || 0) === 0 ? 'var(--text3)' : 'var(--text)'}}>
                             {(it.center_stock || 0).toLocaleString()}
+                          </td>
+                          <td className="r" style={{fontFamily:'var(--mono)', color: (it.store_stock || 0) === 0 ? 'var(--text3)' : 'var(--text)'}}>
+                            {(it.store_stock || 0).toLocaleString()}
                           </td>
                           <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: it.manual ? 'var(--text3)' : 'var(--text)'}}>
                             {it.manual ? '-' : it.sold_qty}
@@ -706,6 +760,20 @@ export default function PurchaseOrderHQPage({ profile }) {
                         )}
                       </div>
                       <span style={{fontSize:10, color:'var(--text3)'}}>※ 지난주 미판매 상품 추가 가능</span>
+                      {/* 매장 단위 발주진행 — 스크롤 안 올려도 여기서 바로 */}
+                      {(() => {
+                        const storeChecked = g.items.filter(i => i.checked && i.hq_qty > 0 && !i.alreadyOrdered).length;
+                        const ssk = `${g.store}|${g.branch}`;
+                        return (
+                          <button type="button" onClick={() => handleSubmitStore(g)}
+                            disabled={storeChecked === 0 || submittingStore === ssk}
+                            style={{marginLeft:'auto', height:32, padding:'0 16px', border:'1px solid var(--accent)', borderRadius:'var(--radius)',
+                              background: storeChecked>0 ? 'var(--accent)' : '#f5f5f5', color: storeChecked>0 ? '#fff' : 'var(--text3)',
+                              fontSize:12, fontWeight:700, cursor: storeChecked>0 ? 'pointer' : 'not-allowed'}}>
+                            {submittingStore === ssk ? <span className="spinner"/> : `📋 이 매장 발주진행 (${storeChecked})`}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
