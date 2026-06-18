@@ -499,6 +499,12 @@ export default function SalesReturnPage({ profile }) {
                               <span style={{fontSize:12, color:'var(--text3)'}}>사용가능 적립금</span>
                               <strong style={{fontSize:12, fontFamily:'var(--mono)'}}>{(o.customer.total_points||0).toLocaleString()}원</strong>
                             </>}
+                            {/* 반품 날짜 */}
+                            <div style={{display:'flex', alignItems:'center', gap:6, padding:'4px 8px', background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:6}}>
+                              <span style={{fontSize:11, fontWeight:700, color:'#e65100'}}>📅 반품 날짜</span>
+                              <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)}
+                                style={{height:30, padding:'0 8px', border:'1px solid var(--accent)', borderRadius:4, fontSize:13, fontWeight:700, color:'var(--accent)', outline:'none', background:'#fff'}}/>
+                            </div>
                             <div style={{marginLeft:'auto', display:'flex', gap:6}}>
                               <button type="button" className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}} onClick={() => setAllZero(o)}>전체 0</button>
                               <button type="button" className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}} onClick={() => setAllFull(o)}>전체 반품</button>
@@ -560,13 +566,8 @@ export default function SalesReturnPage({ profile }) {
                           {/* 반품 미리보기 + 액션 */}
                           {preview && (
                             <div style={{marginTop:14, paddingTop:12, borderTop:'1px solid var(--border)'}}>
-                              {/* 반품 날짜 + 환불 합계 수정 */}
+                              {/* 환불 합계 수정 */}
                               <div style={{display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12}}>
-                                <div>
-                                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>반품 날짜</label>
-                                  <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)}
-                                    style={{height:34, padding:'0 10px', border:'1px solid var(--border)', borderRadius:4, fontSize:13, outline:'none'}}/>
-                                </div>
                                 <div>
                                   <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>환불 합계 <span style={{color:'var(--text3)', fontWeight:400}}>(비우면 자동계산 {preview.cash.toLocaleString()}원)</span></label>
                                   <input type="text" inputMode="numeric"
