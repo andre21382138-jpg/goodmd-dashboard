@@ -22,6 +22,10 @@ export default function SalesReturnPage({ profile }) {
   const [expanded, setExpanded] = useState(null);
   const [returnMap, setReturnMap] = useState({});
   const [saving,   setSaving]   = useState(false);
+  // 검색 반품: 반품 날짜 + 환불 합계 수정(빈값='' = 자동계산 그대로)
+  const kstToday = () => new Date(Date.now() + 9*60*60*1000).toISOString().slice(0, 10);
+  const [returnDate, setReturnDate] = useState(kstToday());
+  const [refundEdit, setRefundEdit] = useState('');
 
   // 직접입력 탭
   const [allProducts, setAllProducts] = useState([]);
@@ -166,6 +170,7 @@ export default function SalesReturnPage({ profile }) {
       const map = {};
       for (const i of order.items) map[i.id] = 0;
       setReturnMap(map);
+      setReturnDate(kstToday()); setRefundEdit('');
       setExpanded(order.key);
     }
   };
@@ -208,20 +213,41 @@ export default function SalesReturnPage({ profile }) {
       if (qty > remain) { toast(`${it.product?.name}: 남은 수량(${remain})을 초과합니다`, 'err'); return; }
     }
 
+    if (!returnDate) { toast('반품 날짜를 선택해주세요', 'err'); return; }
+    // 환불 합계 — 수정값(있으면) vs 자동계산값
+    const refundComputed = preview.cash;
+    const refundFinal = refundEdit.trim() !== '' ? Number(parseNumInput(refundEdit)) : refundComputed;
+    if (!Number.isFinite(refundFinal) || refundFinal < 0) { toast('환불 합계가 유효하지 않습니다', 'err'); return; }
+    const overridden = refundFinal !== refundComputed;
+
     if (!window.confirm(`총 ${toReturn.length}개 상품을 반품 처리하시겠습니까?\n\n` +
-      `환불 금액: ${preview.cash.toLocaleString()}원\n` +
+      `반품 날짜: ${returnDate}\n` +
+      `환불 금액: ${refundFinal.toLocaleString()}원${overridden ? ` (수정됨, 원래 ${refundComputed.toLocaleString()}원)` : ''}\n` +
       `복구 적립금: ${preview.pointsRestore.toLocaleString()}원\n` +
       `적립금 회수: ${preview.pointsRevoke.toLocaleString()}원`)) return;
 
     setSaving(true);
     try {
-      // 반품일 기준 KST 날짜 (음수 매출 row의 sold_at)
-      const nowKst = new Date(Date.now() + 9*60*60*1000).toISOString().slice(0, 10);
       const nowIso = new Date().toISOString();
-      for (const it of toReturn) {
+      // 환불 합계 수정 시 각 라인 음수 금액을 비례 배분(마지막 라인이 잔차 흡수)
+      const refundRatio = (overridden && refundComputed > 0) ? (refundFinal / refundComputed) : 1;
+      let allocated = 0;
+      for (let idx = 0; idx < toReturn.length; idx++) {
+        const it = toReturn[idx];
         const qty = Number(returnMap[it.id]);
         const newReturnedQty = (it.returned_qty||0) + qty;
         const fullyReturned = newReturnedQty >= it.quantity;
+
+        // 이 라인의 환불 합계(비례 배분, 마지막 라인은 잔차)
+        const lineOrig = Math.abs(Number(it.price) || 0) * qty;
+        let lineTotal;
+        if (idx === toReturn.length - 1) {
+          lineTotal = Math.max(0, refundFinal - allocated);
+        } else {
+          lineTotal = overridden ? Math.round(lineOrig * refundRatio) : lineOrig;
+          allocated += lineTotal;
+        }
+        const unitPrice = qty > 0 ? lineTotal / qty : 0;
 
         // 1) 원본 row — returned_qty 누적 (이중 반품 방지용. 매출 차감용으로는 더 이상 안 씀)
         await supabase.from('sales').update({
@@ -231,15 +257,15 @@ export default function SalesReturnPage({ profile }) {
 
         // 2) 반품일 기준 음수 매출 row INSERT — 매출조회는 이 row를 음수로 합산
         await supabase.from('sales').insert({
-          sold_at:    nowKst,
+          sold_at:    returnDate,
           store_name: it.store_name,
           branch_name: it.branch_name,
           brand_id:   it.brand_id,
           product_id: it.product_id,
           quantity:   qty,
-          price:      -Math.abs(Number(it.price) || 0),
+          price:      -Math.abs(unitPrice),
           payment:    '반품',
-          memo:       `반품 (원본 매출일 ${it.sold_at}, 매출 ID:${it.id})`,
+          memo:       `반품 (원본 매출일 ${it.sold_at}, 매출 ID:${it.id})${overridden ? ' · 환불합계 수정' : ''}`,
           created_by: profile.id,
           customer_id: it.customer_id,
           points_earned: 0,
@@ -267,7 +293,7 @@ export default function SalesReturnPage({ profile }) {
           const ratio = qty / it.quantity;
           const pointsUsedRefund    = Math.floor((it.points_used||0) * ratio);
           const pointsEarnedReverse = Math.floor((it.points_earned||0) * ratio);
-          const cashRefund = it.price * qty;
+          const cashRefund = lineTotal; // 실제 환불 금액(합계 수정 반영)
 
           const newTotalPoints   = Math.max(0, (it.customer.total_points||0) + pointsUsedRefund - pointsEarnedReverse);
           const newUsedPoints    = Math.max(0, (it.customer.used_points||0) - pointsUsedRefund);
@@ -533,30 +559,50 @@ export default function SalesReturnPage({ profile }) {
 
                           {/* 반품 미리보기 + 액션 */}
                           {preview && (
-                            <div style={{marginTop:14, display:'flex', gap:24, flexWrap:'wrap', alignItems:'center', paddingTop:12, borderTop:'1px solid var(--border)'}}>
-                              <div style={{display:'flex', gap:24, fontSize:13, flexWrap:'wrap'}}>
+                            <div style={{marginTop:14, paddingTop:12, borderTop:'1px solid var(--border)'}}>
+                              {/* 반품 날짜 + 환불 합계 수정 */}
+                              <div style={{display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12}}>
                                 <div>
-                                  <span style={{color:'var(--text3)', marginRight:6}}>환불 금액</span>
-                                  <strong style={{fontFamily:'var(--mono)'}}>{preview.cash.toLocaleString()}원</strong>
+                                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>반품 날짜</label>
+                                  <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)}
+                                    style={{height:34, padding:'0 10px', border:'1px solid var(--border)', borderRadius:4, fontSize:13, outline:'none'}}/>
                                 </div>
                                 <div>
-                                  <span style={{color:'var(--text3)', marginRight:6}}>복구 적립금</span>
-                                  <strong style={{fontFamily:'var(--mono)'}}>+{preview.pointsRestore.toLocaleString()}원</strong>
-                                </div>
-                                <div>
-                                  <span style={{color:'var(--text3)', marginRight:6}}>회수 적립금</span>
-                                  <strong style={{fontFamily:'var(--mono)'}}>-{preview.pointsRevoke.toLocaleString()}원</strong>
+                                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>환불 합계 <span style={{color:'var(--text3)', fontWeight:400}}>(비우면 자동계산 {preview.cash.toLocaleString()}원)</span></label>
+                                  <input type="text" inputMode="numeric"
+                                    value={refundEdit === '' ? '' : formatNumInput(refundEdit)}
+                                    onChange={e => setRefundEdit(parseNumInput(e.target.value))}
+                                    placeholder={preview.cash.toLocaleString()}
+                                    style={{width:160, height:34, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4, fontSize:14, fontWeight:700, fontFamily:'var(--mono)', textAlign:'right', outline:'none', background:'#fff3e0', color:'var(--accent)'}}/>
                                 </div>
                               </div>
-                              <div style={{marginLeft:'auto', display:'flex', gap:8}}>
-                                <button className="btn btn-s" style={{padding:'0 16px', height:36, fontSize:12}}
-                                  onClick={() => { setExpanded(null); setReturnMap({}); }} disabled={saving}>
-                                  접기
-                                </button>
-                                <button className="btn btn-p" style={{padding:'0 20px', height:36, fontSize:13, fontWeight:700}}
-                                  onClick={handleReturn} disabled={saving || preview.qtySum === 0}>
-                                  {saving ? <span className="spinner"/> : `반품 처리${preview.qtySum > 0 ? ` (${preview.qtySum}개)` : ''}`}
-                                </button>
+                              <div style={{display:'flex', gap:24, flexWrap:'wrap', alignItems:'center'}}>
+                                <div style={{display:'flex', gap:24, fontSize:13, flexWrap:'wrap'}}>
+                                  <div>
+                                    <span style={{color:'var(--text3)', marginRight:6}}>환불 금액</span>
+                                    <strong style={{fontFamily:'var(--mono)', color: refundEdit.trim()!=='' ? 'var(--accent)' : undefined}}>
+                                      {(refundEdit.trim()!=='' ? Number(parseNumInput(refundEdit))||0 : preview.cash).toLocaleString()}원
+                                    </strong>
+                                  </div>
+                                  <div>
+                                    <span style={{color:'var(--text3)', marginRight:6}}>복구 적립금</span>
+                                    <strong style={{fontFamily:'var(--mono)'}}>+{preview.pointsRestore.toLocaleString()}원</strong>
+                                  </div>
+                                  <div>
+                                    <span style={{color:'var(--text3)', marginRight:6}}>회수 적립금</span>
+                                    <strong style={{fontFamily:'var(--mono)'}}>-{preview.pointsRevoke.toLocaleString()}원</strong>
+                                  </div>
+                                </div>
+                                <div style={{marginLeft:'auto', display:'flex', gap:8}}>
+                                  <button className="btn btn-s" style={{padding:'0 16px', height:36, fontSize:12}}
+                                    onClick={() => { setExpanded(null); setReturnMap({}); }} disabled={saving}>
+                                    접기
+                                  </button>
+                                  <button className="btn btn-p" style={{padding:'0 20px', height:36, fontSize:13, fontWeight:700}}
+                                    onClick={handleReturn} disabled={saving || preview.qtySum === 0}>
+                                    {saving ? <span className="spinner"/> : `반품 처리${preview.qtySum > 0 ? ` (${preview.qtySum}개)` : ''}`}
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           )}
