@@ -170,6 +170,11 @@ export default function PurchaseOrderHQPage({ profile }) {
   // 발주 현황
   const [orders,        setOrders]        = useState([]);
   const [statusLoading, setStatusLoading] = useState(false);
+  // 발주현황 날짜 필터
+  const sToday = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const sMinus = (n) => { const d=new Date(); d.setDate(d.getDate()-n); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const [sFrom, setSFrom] = useState(sMinus(30));
+  const [sTo,   setSTo]   = useState(sToday());
   const [exporting,     setExporting]     = useState(false);
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [confirmEditMap, setConfirmEditMap] = useState({}); // { itemId: qty }
@@ -380,14 +385,16 @@ export default function PurchaseOrderHQPage({ profile }) {
   // ── 3. 발주 현황 조회 ──
   const fetchOrders = useCallback(async () => {
     setStatusLoading(true);
-    const { data, error } = await supabase.from('purchase_orders')
+    let q = supabase.from('purchase_orders')
       .select('*, items:purchase_order_items(*, product:products(name, code, erp_code))')
-      .order('created_at', { ascending: false })
-      .limit(100);
+      .order('created_at', { ascending: false });
+    if (sFrom) q = q.gte('created_at', `${sFrom}T00:00:00`);
+    if (sTo)   q = q.lte('created_at', `${sTo}T23:59:59`);
+    const { data, error } = await q.limit(500);
     if (error) toast(error.message, 'err');
     else setOrders(data || []);
     setStatusLoading(false);
-  }, []);
+  }, [sFrom, sTo]);
 
   useEffect(() => { if (tab === 'status') fetchOrders(); }, [tab, fetchOrders]);
 
@@ -766,15 +773,27 @@ export default function PurchaseOrderHQPage({ profile }) {
       {/* ── 발주 현황 ── */}
       {tab === 'status' && (
         <div className="card" style={{padding:'16px 20px'}}>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
             <div className="card-label" style={{margin:0}}>📊 발주 현황</div>
             <div style={{display:'flex', gap:8}}>
               <button className="btn btn-p" onClick={handleExport} disabled={exporting}
                 title="확정된 미출하 발주를 한 번에 묶어 매장발주 양식 xlsx 다운로드">
                 {exporting ? <span className="spinner"/> : '📥'} 매장발주 엑셀 다운로드
               </button>
+            </div>
+          </div>
+          {/* 날짜별 조회 */}
+          <div className="fbar" style={{flexWrap:'wrap', gap:8, marginBottom:12}}>
+            <input type="date" className="fsel" value={sFrom} onChange={e => setSFrom(e.target.value)} title="시작일"/>
+            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+            <input type="date" className="fsel" value={sTo} onChange={e => setSTo(e.target.value)} title="종료일"/>
+            <button className="btn btn-s" onClick={() => { setSFrom(sToday()); setSTo(sToday()); }}>오늘</button>
+            <button className="btn btn-s" onClick={() => { setSFrom(sMinus(7)); setSTo(sToday()); }}>최근 7일</button>
+            <button className="btn btn-s" onClick={() => { setSFrom(sMinus(30)); setSTo(sToday()); }}>최근 30일</button>
+            <div className="fbar-right">
+              <span className="fresult"><b>{orders.length}</b>건 <span style={{fontSize:11, color:'var(--text3)'}}>{sFrom} ~ {sTo}</span></span>
               <button className="btn btn-s" onClick={fetchOrders} disabled={statusLoading}>
-                {statusLoading ? <span className="spinner"/> : '🔄 새로고침'}
+                {statusLoading ? <span className="spinner"/> : '🔍 조회'}
               </button>
             </div>
           </div>
