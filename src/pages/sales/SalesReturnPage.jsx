@@ -29,7 +29,8 @@ export default function SalesReturnPage({ profile }) {
 
   // 직접입력 탭
   const [allProducts, setAllProducts] = useState([]);
-  const [mDate,    setMDate]    = useState(today);
+  const [mDate,    setMDate]    = useState(today);   // 원 판매일 (참고)
+  const [mReturnDate, setMReturnDate] = useState(today); // 반품 날짜 → 음수 매출 row의 sold_at
   const [mSearch,  setMSearch]  = useState('');
   const [mProduct, setMProduct] = useState(null); // {id, name, code, brand_id}
   const [mShowSug, setMShowSug] = useState(false);
@@ -329,14 +330,15 @@ export default function SalesReturnPage({ profile }) {
     const price = Number(String(mPrice).replace(/,/g,'')) || 0;
     if (qty <= 0)  { toast('수량을 입력해주세요', 'err'); return; }
     if (price < 0) { toast('가격을 확인해주세요', 'err'); return; }
-    if (!window.confirm(`수기 반품 처리하시겠습니까?\n\n날짜: ${mDate}\n상품: ${mProduct.name}\n수량: ${qty}개\n가격: ${price.toLocaleString()}원\n환불 금액: ${(qty*price).toLocaleString()}원`)) return;
+    if (!mReturnDate) { toast('반품 날짜를 선택해주세요', 'err'); return; }
+    if (!window.confirm(`수기 반품 처리하시겠습니까?\n\n반품 날짜: ${mReturnDate}\n원 판매일: ${mDate}\n상품: ${mProduct.name}\n수량: ${qty}개\n가격: ${price.toLocaleString()}원\n환불 금액: ${(qty*price).toLocaleString()}원`)) return;
 
     setMSaving(true);
     try {
       const nowIso = new Date().toISOString();
-      // 수기 반품도 음수 매출 row로 저장 (returned_qty 미사용 — 자기 자신 반품 마킹은 의미 없음)
+      // 수기 반품도 음수 매출 row로 저장 — sold_at은 '반품 날짜' (매출조회에 반품일로 잡힘)
       const { error } = await supabase.from('sales').insert({
-        sold_at: mDate,
+        sold_at: mReturnDate,
         store_name: storeName,
         branch_name: branchName,
         brand_id: mProduct.brand_id,
@@ -344,7 +346,7 @@ export default function SalesReturnPage({ profile }) {
         quantity: qty,
         price: -Math.abs(price),
         payment: '반품',
-        memo: '수기 반품 접수' + (mMemo.trim() ? ` · ${mMemo.trim()}` : ''),
+        memo: `수기 반품 접수 (원 판매일 ${mDate})` + (mMemo.trim() ? ` · ${mMemo.trim()}` : ''),
         created_by: profile.id,
         returned_qty: 0,
         returned_at: nowIso,
@@ -370,7 +372,7 @@ export default function SalesReturnPage({ profile }) {
       }
 
       toast('수기 반품 접수 완료', 'ok');
-      setMProduct(null); setMSearch(''); setMQty(1); setMPrice(''); setMMemo('');
+      setMProduct(null); setMSearch(''); setMQty(1); setMPrice(''); setMMemo(''); setMReturnDate(today);
     } catch (err) {
       toast('반품 실패: ' + err.message, 'err');
     }
@@ -647,9 +649,14 @@ export default function SalesReturnPage({ profile }) {
             처리 시 매장재고는 자동 복구되며, 회원 적립금은 변동되지 않습니다.
           </div>
 
-          <div style={{display:'grid', gridTemplateColumns:'200px 1fr', gap:14, marginBottom:14}}>
+          <div style={{display:'grid', gridTemplateColumns:'180px 180px 1fr', gap:14, marginBottom:14}}>
             <div>
-              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>판매 날짜</label>
+              <label style={{display:'block', fontSize:11, fontWeight:700, color:'#e65100', marginBottom:5}}>📅 반품 날짜</label>
+              <input type="date" value={mReturnDate} onChange={e => setMReturnDate(e.target.value)}
+                style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:13, fontWeight:700, color:'var(--accent)', outline:'none', boxSizing:'border-box', background:'#fff3e0'}}/>
+            </div>
+            <div>
+              <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:5}}>원 판매일 <span style={{color:'var(--text3)', fontWeight:400}}>(참고)</span></label>
               <input type="date" value={mDate} onChange={e => setMDate(e.target.value)}
                 style={{width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', boxSizing:'border-box'}}/>
             </div>
