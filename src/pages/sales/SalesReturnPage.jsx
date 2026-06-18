@@ -647,7 +647,7 @@ export default function SalesReturnPage({ profile }) {
           )}
           <div style={{background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:14, fontSize:12, color:'#6d4c41'}}>
             💡 비회원 구매건 반품 — 판매일자·상품·수량·환불합계·반품일자를 입력해 접수합니다.
-            처리 시 매장재고는 자동 복구되며, 적립금은 변동되지 않습니다.
+            처리 시 매장재고는 자동 복구됩니다.
           </div>
 
           {/* 세로 배치: 판매일자 → 상품검색 → 수량 → 환불합계 → 반품일자 → 접수 */}
