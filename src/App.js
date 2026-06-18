@@ -58,19 +58,21 @@ const GLOBAL_CSS = `
     --sidebar-hover: #9CCC65;
     --sidebar-active: #558B2F;
     --sidebar-text: #1a1a1a;
-    --accent:  #FF8F00;
+    --accent:  #E65100;
     --accent2: #1565C0;
     --danger:  #C62828;
     --success: #2E7D32;
     --text:    #0a0a0a;
-    --text2:   #333333;
-    --text3:   #666666;
+    --text2:   #2b2b2b;
+    --text3:   #555555;
     --radius:  6px;
     --mono:    'Pretendard', 'Apple SD Gothic Neo', sans-serif;
     --sans:    'Noto Sans KR', sans-serif;
     --sidebar-w: 220px;
   }
-  html, body, #root { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  html, body, #root { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  /* 고연령 사용자 가독성 — 아주 작은(10~11px) 글씨에 최소 크기 보정 */
+  table { font-size: 13px; }
 
   /* ── AUTH ── */
   .auth-wrap { display: flex; min-height: 100vh; background: #f8f8f8; }
