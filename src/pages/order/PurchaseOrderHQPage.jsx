@@ -939,18 +939,21 @@ export default function PurchaseOrderHQPage({ profile }) {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {(o.items||[]).map(it => {
+                                    {[...(o.items||[])]
+                                      .map(it => ({ it, isStoreAdded: (it.hq_qty || 0) === 0 && (it.store_qty || 0) > 0 }))
+                                      .sort((a, b) => (b.isStoreAdded ? 1 : 0) - (a.isStoreAdded ? 1 : 0)) // 매장요청 품목 최상단
+                                      .map(({ it, isStoreAdded }) => {
                                       const diff = it.store_qty != null ? (it.store_qty - it.hq_qty) : 0;
                                       return (
-                                      <tr key={it.id}>
+                                      <tr key={it.id} style={isStoreAdded ? { background:'#fff8e1' } : undefined}>
                                         <td>
-                                          {it.product?.name||'-'}
-                                          {((it.hq_qty || 0) === 0 && (it.store_qty || 0) > 0) && (
-                                            <span style={{marginLeft:6, fontSize:10, fontWeight:700, padding:'1px 6px',
-                                              background:'#fff3e0', color:'#bf360c', border:'1px solid #ffcc80', borderRadius:3}}>
-                                              🆕 매장 추가
+                                          {isStoreAdded && (
+                                            <span style={{marginRight:6, fontSize:11, fontWeight:800, padding:'2px 8px',
+                                              background:'#e65100', color:'#fff', borderRadius:4, letterSpacing:0.3}}>
+                                              매장요청
                                             </span>
                                           )}
+                                          {it.product?.name||'-'}
                                         </td>
                                         <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{it.product?.code||'-'}</td>
                                         <td className="r" style={{color:'var(--text3)'}}>{it.sold_qty}</td>
