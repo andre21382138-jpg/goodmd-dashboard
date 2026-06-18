@@ -111,12 +111,18 @@ function groupSales(rows) {
     }
     map.get(k).items.push(s);
   }
-  return [...map.values()].sort((a, b) =>
-    (b.sold_at || '').localeCompare(a.sold_at || '')
-  );
+  const list = [...map.values()];
+  // 그룹 승인 상태 — 모든 라인이 승인되면 approved
+  for (const g of list) {
+    g.approved = g.items.length > 0 && g.items.every(it => it.delivery_approved_at);
+  }
+  return list.sort((a, b) => (b.sold_at || '').localeCompare(a.sold_at || ''));
 }
 
 export default function HQDeliveryRequestPage({ profile }) {
+  // 본사 담당자(또는 admin)는 요청 [확인] 승인 가능, SCM은 승인된 건만 처리
+  const isApprover = profile?.role === 'admin' || profile?.job_title === '담당자';
+  const isScm = profile?.role === 'scm';
   const [mainTab, setMainTab] = useState('store'); // 'store' | 'biz_courier' | 'biz_truck'
   const [tab, setTab] = useState('pending');
   const [groups, setGroups] = useState([]);
@@ -146,6 +152,7 @@ export default function HQDeliveryRequestPage({ profile }) {
       .select(`id, sold_at, store_name, branch_name, quantity, price,
                recipient_name, recipient_phone, recipient_address, delivery_notes,
                dispatched_at, customer_id, tracking_number,
+               delivery_approved_at, delivery_approved_by,
                product:products(name, code, erp_code)`)
       .eq('delivery_type', 'hq')
       .eq('delivery_status', tab);
@@ -183,8 +190,11 @@ export default function HQDeliveryRequestPage({ profile }) {
       const wb = XLSX.read(buf, { type:'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      // 승인된 sale id만 송장 등록 허용 (본사 확인 안 된 건 차단)
+      const approvedIds = new Set(groups.filter(g => g.approved).flatMap(g => g.items.map(it => it.id)));
       const updates = [];
       let totalSaleRows = 0; // SID가 들어간 (= 다운로드된) 데이터 행 수
+      let notApproved = 0;
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || !Array.isArray(row) || row.length === 0) continue;
@@ -194,13 +204,19 @@ export default function HQDeliveryRequestPage({ profile }) {
         totalSaleRows++;
         const tracking = String(row[1] || '').trim();
         if (!tracking) continue; // 송장번호 미입력 → 처리에서 제외
-        updates.push({ saleId: Number(m[1]), tracking });
+        const saleId = Number(m[1]);
+        if (!approvedIds.has(saleId)) { notApproved++; continue; } // 미승인 건 차단
+        updates.push({ saleId, tracking });
       }
       if (totalSaleRows === 0) {
         toast('업로드 가능한 행이 없습니다 (SID 누락)', 'err');
         return;
       }
-      const noTrackingCount = totalSaleRows - updates.length;
+      if (notApproved > 0 && updates.length === 0) {
+        toast(`본사 확인(승인)되지 않은 요청입니다 — 담당자 확인 후 처리 가능 (${notApproved}건)`, 'err');
+        return;
+      }
+      const noTrackingCount = totalSaleRows - updates.length - notApproved;
       if (updates.length === 0) {
         toast(`송장번호 입력된 행이 없습니다 (전체 ${totalSaleRows}건 모두 미입력)`, 'err');
         return;
@@ -217,7 +233,8 @@ export default function HQDeliveryRequestPage({ profile }) {
       const parts = [`송장 매칭 ${ok}건`];
       if (fail > 0) parts.push(`실패 ${fail}건`);
       if (noTrackingCount > 0) parts.push(`미입력 ${noTrackingCount}건`);
-      toast(`송장번호 매칭 완료 — ${parts.join(' / ')} · 발송대기 유지`, fail > 0 ? 'err' : 'ok');
+      if (notApproved > 0) parts.push(`미승인 ${notApproved}건 제외`);
+      toast(`송장번호 매칭 완료 — ${parts.join(' / ')} · 발송대기 유지`, (fail > 0 || notApproved > 0) ? 'err' : 'ok');
       if (fail > 0 && lastError) {
         toast(`실패 사유: ${lastError.message || lastError}`, 'err');
       }
@@ -229,20 +246,45 @@ export default function HQDeliveryRequestPage({ profile }) {
     setUploading(false);
   };
 
-  // 선택 토글
-  const toggleSelect = (key) => setSelectedKeys(prev => {
-    const next = new Set(prev);
-    next.has(key) ? next.delete(key) : next.add(key);
-    return next;
-  });
+  // ── 본사 담당자 승인 ([확인]) — SCM은 승인된 건만 처리 가능 ──
+  const handleApprove = async (g, approve) => {
+    const ids = g.items.map(it => it.id);
+    if (approve && !window.confirm(`${g.recipient_name || ''} 요청 ${ids.length}건을 확인(승인)하시겠습니까?\n승인 후 SCM 담당자가 발송 처리할 수 있습니다.`)) return;
+    if (!approve && !window.confirm('승인을 취소하시겠습니까? SCM 처리가 다시 막힙니다.')) return;
+    setProcessing(g.key);
+    try {
+      const { error } = await supabase.from('sales').update({
+        delivery_approved_at: approve ? new Date().toISOString() : null,
+        delivery_approved_by: approve ? profile.id : null,
+      }).in('id', ids);
+      if (error) throw error;
+      toast(approve ? '확인(승인) 완료' : '승인 취소', approve ? 'ok' : 'inf');
+      fetchData();
+    } catch (err) {
+      toast('처리 실패: ' + (err.message || err), 'err');
+    } finally { setProcessing(null); }
+  };
+
+  // 승인된 그룹만 선택 가능 (발송 처리 대상)
+  const approvedGroups = groups.filter(g => g.approved);
+  // 선택 토글 — 승인된 그룹만
+  const toggleSelect = (key) => {
+    const g = groups.find(x => x.key === key);
+    if (!g?.approved) { toast('본사 확인(승인)된 요청만 선택할 수 있습니다', 'inf'); return; }
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
   const toggleSelectAll = () => setSelectedKeys(prev =>
-    prev.size === groups.length ? new Set() : new Set(groups.map(g => g.key))
+    prev.size === approvedGroups.length ? new Set() : new Set(approvedGroups.map(g => g.key))
   );
 
-  // 선택 건 엑셀 다운로드 (선택 없으면 전체)
+  // 선택 건 엑셀 다운로드 (선택 없으면 승인된 전체)
   const handleExportSelected = async () => {
-    const target = selectedKeys.size > 0 ? groups.filter(g => selectedKeys.has(g.key)) : groups;
-    if (target.length === 0) { toast('다운로드할 요청이 없습니다', 'err'); return; }
+    const target = selectedKeys.size > 0 ? groups.filter(g => selectedKeys.has(g.key)) : approvedGroups;
+    if (target.length === 0) { toast('다운로드할 (승인된) 요청이 없습니다', 'err'); return; }
     try {
       const count = await exportDeliveryRequests(target);
       toast(`엑셀 다운로드 완료 (${count}건${selectedKeys.size>0?' · 선택분':' · 전체'})`, 'ok');
@@ -354,7 +396,7 @@ export default function HQDeliveryRequestPage({ profile }) {
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, gap:8, flexWrap:'wrap'}}>
           <span className="fresult">
             {tab === 'pending'
-              ? <>발송 대기 중인 본사 택배 요청 — <b>{groups.length}</b>건{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>
+              ? <>발송 대기 중인 본사 택배 요청 — <b>{groups.length}</b>건 · 확인됨 <b style={{color:'#2e7d32'}}>{approvedGroups.length}</b> / 대기 <b style={{color:'#e65100'}}>{groups.length - approvedGroups.length}</b>{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>
               : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>{fFrom} ~ {fTo}</span></>}
           </span>
           {tab === 'pending' && (
@@ -400,9 +442,10 @@ export default function HQDeliveryRequestPage({ profile }) {
                   {tab === 'pending' && (
                     <th style={{textAlign:'center', width:36}}>
                       <input type="checkbox"
-                        checked={groups.length > 0 && selectedKeys.size === groups.length}
-                        ref={el => { if (el) el.indeterminate = selectedKeys.size > 0 && selectedKeys.size < groups.length; }}
+                        checked={approvedGroups.length > 0 && selectedKeys.size === approvedGroups.length}
+                        ref={el => { if (el) el.indeterminate = selectedKeys.size > 0 && selectedKeys.size < approvedGroups.length; }}
                         onChange={toggleSelectAll}
+                        title="승인된 요청 전체선택"
                         style={{cursor:'pointer', width:15, height:15}}/>
                     </th>
                   )}
@@ -415,6 +458,7 @@ export default function HQDeliveryRequestPage({ profile }) {
                   <th>연락처</th>
                   <th>요청사항</th>
                   <th style={{textAlign:'center', width:140}}>송장번호</th>
+                  {tab === 'pending' && <th style={{textAlign:'center', width:130}}>본사 확인</th>}
                   {tab === 'dispatched' && <th style={{textAlign:'center', width:110}}>발송일</th>}
                 </tr>
               </thead>
@@ -426,12 +470,14 @@ export default function HQDeliveryRequestPage({ profile }) {
                   const mergedStyle = { verticalAlign:'middle', background: groupBg };
                   const lineBorder = { borderBottom: '1px solid var(--border)' };
                   return g.items.map((it, iIdx) => (
-                    <tr key={it.id} style={{background: groupBg, ...(iIdx === 0 ? {borderTop:'2px solid var(--border2)'} : {})}}>
+                    <tr key={it.id} style={{background: (tab==='pending' && !g.approved) ? '#fafafa' : groupBg, ...(iIdx === 0 ? {borderTop:'2px solid var(--border2)'} : {})}}>
                       {iIdx === 0 && tab === 'pending' && (
-                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
+                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle, ...((!g.approved)?{background:'#fafafa'}:{})}}>
                           <input type="checkbox" checked={selectedKeys.has(g.key)}
+                            disabled={!g.approved}
                             onChange={() => toggleSelect(g.key)}
-                            style={{cursor:'pointer', width:15, height:15}}/>
+                            title={g.approved ? '' : '본사 확인(승인) 후 선택 가능'}
+                            style={{cursor: g.approved ? 'pointer' : 'not-allowed', width:15, height:15}}/>
                         </td>
                       )}
                       {iIdx === 0 && (
@@ -474,6 +520,26 @@ export default function HQDeliveryRequestPage({ profile }) {
                           </td>
                         );
                       })()}
+                      {iIdx === 0 && tab === 'pending' && (
+                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle, ...((!g.approved)?{background:'#fafafa'}:{})}}>
+                          {g.approved ? (
+                            <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:4}}>
+                              <span style={{fontSize:11, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'2px 8px', borderRadius:4}}>✅ 확인됨</span>
+                              {isApprover && (
+                                <button type="button" onClick={() => handleApprove(g, false)} disabled={processing === g.key}
+                                  style={{fontSize:10, color:'var(--text3)', background:'none', border:'none', cursor:'pointer', textDecoration:'underline'}}>승인취소</button>
+                              )}
+                            </div>
+                          ) : isApprover ? (
+                            <button type="button" onClick={() => handleApprove(g, true)} disabled={processing === g.key}
+                              style={{height:30, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'var(--accent)', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                              {processing === g.key ? <span className="spinner"/> : '✓ 확인'}
+                            </button>
+                          ) : (
+                            <span style={{fontSize:11, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'2px 8px', borderRadius:4}}>본사 확인 대기</span>
+                          )}
+                        </td>
+                      )}
                       {iIdx === 0 && tab === 'dispatched' && (
                         <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
                           {g.dispatched_at && (
