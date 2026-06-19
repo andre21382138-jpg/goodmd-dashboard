@@ -176,6 +176,7 @@ export default function PurchaseOrderHQPage({ profile }) {
   const [sFrom, setSFrom] = useState(sMinus(30));
   const [sTo,   setSTo]   = useState(sToday());
   const [exporting,     setExporting]     = useState(false);
+  const [checkedOrders, setCheckedOrders] = useState(new Set()); // 발주현황 선택 다운로드
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [confirmEditMap, setConfirmEditMap] = useState({}); // { itemId: qty }
   const [confirming, setConfirming] = useState(false);
@@ -443,8 +444,37 @@ export default function PurchaseOrderHQPage({ profile }) {
     const { data, error } = await q.limit(500);
     if (error) toast(error.message, 'err');
     else setOrders(data || []);
+    setCheckedOrders(new Set());
     setStatusLoading(false);
   }, [sFrom, sTo]);
+
+  // 선택한 발주를 매장발주 양식으로 다운로드 (이미 출하된 건도 재다운로드)
+  const handleExportSelected = async () => {
+    if (exporting) return;
+    const ids = [...checkedOrders];
+    if (ids.length === 0) { toast('선택된 발주가 없습니다', 'inf'); return; }
+    setExporting(true);
+    try {
+      const { count } = await exportPurchaseOrders({ orderIds: ids });
+      if (count > 0) toast(`선택 발주 ${count}건 다운로드 완료`, 'ok');
+      else toast('다운로드 실패: 발주를 찾을 수 없습니다', 'err');
+      fetchOrders();
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const toggleOrderCheck = (id) => setCheckedOrders(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+  const allOrdersChecked = orders.length > 0 && orders.every(o => checkedOrders.has(o.id));
+  const toggleAllOrders = () => setCheckedOrders(
+    allOrdersChecked ? new Set() : new Set(orders.map(o => o.id))
+  );
 
   useEffect(() => { if (tab === 'status') fetchOrders(); }, [tab, fetchOrders]);
 
@@ -844,6 +874,13 @@ export default function PurchaseOrderHQPage({ profile }) {
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
             <div className="card-label" style={{margin:0}}>📊 발주 현황</div>
             <div style={{display:'flex', gap:8}}>
+              {checkedOrders.size > 0 && (
+                <button className="btn btn-p" onClick={handleExportSelected} disabled={exporting}
+                  title="선택한 발주를 매장발주 양식으로 다운로드 (이미 출하된 건도 재다운로드)"
+                  style={{background:'#6a1b9a'}}>
+                  {exporting ? <span className="spinner"/> : '📥'} 선택 {checkedOrders.size}건 다운로드
+                </button>
+              )}
               <button className="btn btn-p" onClick={handleExport} disabled={exporting}
                 title="확정된 미출하 발주를 한 번에 묶어 매장발주 양식 xlsx 다운로드">
                 {exporting ? <span className="spinner"/> : '📥'} 매장발주 엑셀 다운로드
@@ -871,6 +908,10 @@ export default function PurchaseOrderHQPage({ profile }) {
               <table>
                 <thead>
                   <tr>
+                    <th style={{width:34, textAlign:'center'}}>
+                      <input type="checkbox" checked={allOrdersChecked} onChange={toggleAllOrders}
+                        title="전체 선택" style={{cursor:'pointer'}}/>
+                    </th>
                     <th style={{width:30}}></th>
                     <th>발주일</th>
                     <th>매장</th>
@@ -889,6 +930,10 @@ export default function PurchaseOrderHQPage({ profile }) {
                     <React.Fragment key={o.id}>
                       <tr style={{cursor:'pointer', background: open ? '#f8f9fa' : 'transparent'}}
                         onClick={() => toggleExpandWithEdit(o)}>
+                        <td style={{textAlign:'center'}} onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={checkedOrders.has(o.id)}
+                            onChange={() => toggleOrderCheck(o.id)} style={{cursor:'pointer'}}/>
+                        </td>
                         <td style={{textAlign:'center', color:'var(--text2)'}}>{open ? '▼' : '▶'}</td>
                         <td className="mono" style={{fontSize:11}}>{new Date(o.created_at).toLocaleDateString('ko-KR')}</td>
                         <td><span className="badge badge-dept">{o.store_name}</span></td>
@@ -914,7 +959,7 @@ export default function PurchaseOrderHQPage({ profile }) {
                       </tr>
                       {open && (
                         <tr>
-                          <td colSpan={8} style={{background:'#fff', padding:'12px 18px', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)'}}>
+                          <td colSpan={9} style={{background:'#fff', padding:'12px 18px', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)'}}>
                             {o.store_note && (
                               <div style={{padding:'8px 12px', background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:4, fontSize:12, marginBottom:10}}>
                                 💬 매장 메모: {o.store_note}
