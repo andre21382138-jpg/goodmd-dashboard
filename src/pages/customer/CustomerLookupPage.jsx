@@ -42,10 +42,15 @@ export default function CustomerLookupPage({ profile }) {
   const [fBranch,    setFBranch]   = useState('');
   const [fFrom,      setFFrom]     = useState('');
   const [fTo,        setFTo]       = useState('');
-  const [fSms,       setFSms]      = useState(false);
+  const [fConsent,   setFConsent]  = useState(''); // '' | valid | expired | none
   const [fNewOnly,   setFNewOnly]  = useState(false);
-  const [fExpired,   setFExpired]  = useState(false); // 마케팅동의 만료 회원만
   const [fGrade,     setFGrade]    = useState('');
+  const [consentStats, setConsentStats] = useState(null); // {total, valid, expired, none}
+
+  // 동의일+1년 만료 기준 시각 (now-1년)
+  const consentCutoffISO = useMemo(() => {
+    const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString();
+  }, []);
   const [customers,  setCustomers] = useState([]);
   const [selected,   setSelected]  = useState(null);
   const [purchases,  setPurchases] = useState([]);
@@ -83,6 +88,19 @@ export default function CustomerLookupPage({ profile }) {
       });
   }, []);
 
+  // 마케팅 동의 현황 집계 (전체/유효/만료/미동의) — head count만 조회
+  const loadConsentStats = useCallback(async () => {
+    const base = () => supabase.from('customers').select('*', { count: 'exact', head: true });
+    const [tot, none, valid] = await Promise.all([
+      base(),
+      base().eq('sms_consent', false),
+      base().eq('sms_consent', true).gte('sms_consent_at', consentCutoffISO),
+    ]);
+    const total = tot.count || 0, noneC = none.count || 0, validC = valid.count || 0;
+    setConsentStats({ total, valid: validC, none: noneC, expired: Math.max(0, total - noneC - validC) });
+  }, [consentCutoffISO]);
+  useEffect(() => { loadConsentStats(); }, [loadConsentStats]);
+
   const [allBranches, setAllBranches] = useState([]);
   useEffect(() => {
     if (!fStore) { setAllBranches([]); return; }
@@ -96,7 +114,8 @@ export default function CustomerLookupPage({ profile }) {
 
   const PAGE_SIZE = 200;
 
-  const fetchCustomers = useCallback(async (pg = 0) => {
+  const fetchCustomers = useCallback(async (pg = 0, consentOverride) => {
+    const consent = consentOverride !== undefined ? consentOverride : fConsent;
     setLoading(true);
     setPage(pg);
     setCheckedIds(new Set());
@@ -108,18 +127,19 @@ export default function CustomerLookupPage({ profile }) {
     if (fBranch) q = q.eq('branch_name', fBranch);
     if (fFrom)   q = q.gte('joined_at', fFrom);
     if (fTo)     q = q.lte('joined_at', fTo);
-    if (fSms)    q = q.eq('sms_consent', true);
     if (fGrade)  q = q.eq('grade', fGrade);
     if (fNewOnly) {
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
       q = q.gte('joined_at', oneYearAgo.toISOString().slice(0,10));
     }
-    if (fExpired) {
-      // 마케팅 동의는 했으나 동의일+1년이 지난(만료된) 회원 = 동의일 < 오늘-1년
-      const cutoff = new Date();
-      cutoff.setFullYear(cutoff.getFullYear() - 1);
-      q = q.eq('sms_consent', true).lt('sms_consent_at', cutoff.toISOString());
+    // 마케팅 동의 상태 필터
+    if (consent === 'valid') {        // 동의 + 유효(동의일+1년 안 지남)
+      q = q.eq('sms_consent', true).gte('sms_consent_at', consentCutoffISO);
+    } else if (consent === 'expired') { // 동의했으나 만료(동의일 < 오늘-1년 또는 동의일 없음)
+      q = q.eq('sms_consent', true).or(`sms_consent_at.lt.${consentCutoffISO},sms_consent_at.is.null`);
+    } else if (consent === 'none') {  // 미동의
+      q = q.eq('sms_consent', false);
     }
     const { data, count, error } = await q.range(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE - 1);
     if (error) { toast(error.message, 'err'); setLoading(false); return; }
@@ -127,7 +147,7 @@ export default function CustomerLookupPage({ profile }) {
     setTotalCount(count || 0);
     setSelected(null); setPurchases([]);
     setLoading(false);
-  }, [search, fStore, fBranch, fFrom, fTo, fSms, fNewOnly, fExpired, fGrade]);
+  }, [search, fStore, fBranch, fFrom, fTo, fConsent, fNewOnly, fGrade, consentCutoffISO]);
 
   // 필터 조건 전체 SMS동의 회원 가져오기 (Supabase 1000행 제한 우회)
   const fetchAllSmsTargets = useCallback(async () => {
@@ -152,11 +172,9 @@ export default function CustomerLookupPage({ profile }) {
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
         q = q.gte('joined_at', oneYearAgo.toISOString().slice(0,10));
       }
-      if (fExpired) {
-        const cutoff = new Date();
-        cutoff.setFullYear(cutoff.getFullYear() - 1);
-        q = q.lt('sms_consent_at', cutoff.toISOString());
-      }
+      // 발송 대상은 항상 동의자(true) — 유효/만료만 추가로 구분
+      if (fConsent === 'valid')   q = q.gte('sms_consent_at', consentCutoffISO);
+      if (fConsent === 'expired') q = q.or(`sms_consent_at.lt.${consentCutoffISO},sms_consent_at.is.null`);
       return q;
     };
 
@@ -173,7 +191,7 @@ export default function CustomerLookupPage({ profile }) {
     if (!all.length) { toast('SMS동의 회원이 없습니다', 'inf'); return; }
     setBulkTargets(all);
     setSmsModal(true);
-  }, [search, fStore, fBranch, fFrom, fTo, fGrade, fNewOnly, fExpired]);
+  }, [search, fStore, fBranch, fFrom, fTo, fGrade, fNewOnly, fConsent, consentCutoffISO]);
 
   // 점포 변경시 지점 초기화
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
@@ -562,6 +580,28 @@ export default function CustomerLookupPage({ profile }) {
       {/* 검색·필터 */}
       <div className="card">
         <div className="card-label">회원 조회</div>
+        {/* 마케팅 동의 현황 — 클릭하면 해당 조건으로 조회 */}
+        {consentStats && (
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:12 }}>
+            {[
+              { key:'',        label:'전체 회원',          val:consentStats.total,   color:'#37474f', bg:'#eceff1' },
+              { key:'valid',   label:'동의 (유효·1년미만)', val:consentStats.valid,   color:'#2e7d32', bg:'#e8f5e9' },
+              { key:'expired', label:'동의 (만료)',         val:consentStats.expired, color:'#e65100', bg:'#fff3e0' },
+              { key:'none',    label:'미동의',             val:consentStats.none,    color:'#c62828', bg:'#ffebee' },
+            ].map(s => (
+              <button key={s.key || 'all'} type="button"
+                onClick={() => { setFConsent(s.key); fetchCustomers(0, s.key); }}
+                style={{ flex:'1 1 160px', minWidth:140, textAlign:'left', cursor:'pointer',
+                  padding:'10px 14px', borderRadius:'var(--radius)', background:s.bg,
+                  border:`2px solid ${fConsent === s.key ? s.color : 'transparent'}` }}>
+                <div style={{ fontSize:12, fontWeight:700, color:s.color }}>{s.label}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:s.color, fontFamily:'var(--mono)' }}>
+                  {s.val.toLocaleString()}<span style={{ fontSize:12, fontWeight:600, marginLeft:2 }}>명</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="fbar" style={{ flexWrap:'wrap', gap:8 }}>
           <input className="finput" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="이름 또는 연락처 검색" style={{ height:34 }}
@@ -578,30 +618,22 @@ export default function CustomerLookupPage({ profile }) {
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="가입일 시작" />
           <span style={{fontSize:12,color:'var(--text3)'}}>~</span>
           <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} title="가입일 종료" />
-          <button type="button"
-            onClick={() => setFSms(p => !p)}
-            style={{ height:34, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
-              borderColor: fSms ? 'var(--success)' : 'var(--border)',
-              background: fSms ? '#e8f5e9' : '#fff',
-              color: fSms ? 'var(--success)' : 'var(--text2)' }}>
-            {fSms ? '✅ 마케팅동의만' : '📱 마케팅동의만'}
-          </button>
+          <select className="fsel" value={fConsent}
+            onChange={e => { setFConsent(e.target.value); fetchCustomers(0, e.target.value); }}
+            title="마케팅 수신동의 상태">
+            <option value="">마케팅동의 전체</option>
+            <option value="valid">동의(유효·1년미만)</option>
+            <option value="expired">동의(만료)</option>
+            <option value="none">미동의</option>
+          </select>
           <button type="button"
             onClick={() => setFNewOnly(p => !p)}
+            title="가입한 지 1년 미만인 회원"
             style={{ height:34, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
               borderColor: fNewOnly ? '#1565C0' : 'var(--border)',
               background: fNewOnly ? '#e3f2fd' : '#fff',
               color: fNewOnly ? '#1565C0' : 'var(--text2)' }}>
-            {fNewOnly ? '✅ 1년 미만' : '📅 1년 미만'}
-          </button>
-          <button type="button"
-            onClick={() => setFExpired(p => !p)}
-            title="마케팅 수신동의가 만료된 회원만 조회 (적립금 소멸 등 정보성 안내 대상)"
-            style={{ height:34, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
-              borderColor: fExpired ? '#c62828' : 'var(--border)',
-              background: fExpired ? '#ffebee' : '#fff',
-              color: fExpired ? '#c62828' : 'var(--text2)' }}>
-            {fExpired ? '✅ 동의만료' : '⏰ 동의만료'}
+            {fNewOnly ? '✅ 가입 1년 미만' : '📅 가입 1년 미만'}
           </button>
           <select className="fsel" value={fGrade} onChange={e => setFGrade(e.target.value)}>
             <option value="">전체 등급</option>
@@ -609,8 +641,8 @@ export default function CustomerLookupPage({ profile }) {
               <option key={g} value={g}>{g}</option>
             ))}
           </select>
-          {(search||fStore||fBranch||fFrom||fTo||fSms||fNewOnly||fExpired||fGrade) &&
-            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setFExpired(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); setCheckedIds(new Set()); }}>✕ 초기화</button>}
+          {(search||fStore||fBranch||fFrom||fTo||fConsent||fNewOnly||fGrade) &&
+            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFConsent(''); setFNewOnly(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); setCheckedIds(new Set()); }}>✕ 초기화</button>}
           <div className="fbar-right" style={{display:'flex', gap:8, alignItems:'center'}}>
             {canUpload && (
               <>
