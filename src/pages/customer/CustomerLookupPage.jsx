@@ -500,7 +500,13 @@ export default function CustomerLookupPage({ profile }) {
         if (id) {
           updates.push({ id, fields }); // manager_name·sms_consent_at은 보존(미포함)
         } else {
-          inserts.push({ ...fields, manager_name: null, created_by: profile?.id || null });
+          // 신규: 동의일은 가입일을 기준으로 설정 (엑셀에 동의일 컬럼이 없음)
+          inserts.push({
+            ...fields,
+            sms_consent_at: fields.sms_consent ? fields.joined_at : null,
+            manager_name: null,
+            created_by: profile?.id || null,
+          });
         }
       }
 
