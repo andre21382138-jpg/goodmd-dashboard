@@ -203,6 +203,24 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
     setProcessing(null);
   };
 
+  // 선택한 재고요청 일괄 삭제
+  const deleteSelected = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) { toast('삭제할 요청을 선택해주세요', 'err'); return; }
+    if (!window.confirm(`선택한 ${ids.length}건의 재고요청을 삭제하시겠습니까?\n\n매장에는 해당 요청 이력이 사라지며, 되돌릴 수 없습니다.`)) return;
+    setExporting(true);
+    try {
+      const { error } = await supabase.from('order_requests').delete().in('id', ids);
+      if (error) throw error;
+      toast(`${ids.length}건 삭제 완료`, 'ok');
+      setSelectedIds(new Set());
+      fetchData();
+    } catch (err) {
+      toast('삭제 실패: ' + (err.message || err), 'err');
+    }
+    setExporting(false);
+  };
+
   // 선택 토글
   const toggleOne = (id) => {
     setSelectedIds(prev => {
@@ -372,6 +390,13 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
               style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background: selectedIds.size > 0 ? '#fff3e0' : '#f5f5f5', color: selectedIds.size > 0 ? 'var(--accent)' : 'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed'}}>
               {exporting ? <span className="spinner"/> : `📥 엑셀 다운로드${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
             </button>
+            {isPendingMode && selectedIds.size > 0 && (
+              <button type="button" onClick={deleteSelected} disabled={exporting}
+                title="선택한 재고요청을 일괄 삭제"
+                style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background:'#ffebee', color:'var(--danger)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                🗑 선택 삭제 ({selectedIds.size})
+              </button>
+            )}
             <button className="btn btn-s" onClick={fetchData} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔄 새로고침'}
             </button>
