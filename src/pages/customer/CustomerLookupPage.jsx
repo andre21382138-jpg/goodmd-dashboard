@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, GradeBadge } from '../../lib/utils';
+import { toast, GradeBadge, formatPhone } from '../../lib/utils';
 
 function byteLen(str) {
   let len = 0;
@@ -30,6 +30,12 @@ function consentStatus(c) {
 
 export default function CustomerLookupPage({ profile }) {
   const isManager = profile?.job_title === '매니저';
+  const canUpload = profile?.role === 'admin' || profile?.job_title === '담당자'; // 본사 일괄 업데이트 전용
+
+  // 회원정보 엑셀 일괄 업데이트
+  const memberUploadRef = useRef(null);
+  const [memberUploading, setMemberUploading] = useState(false);
+  const [memberProgress, setMemberProgress] = useState('');
   const [search,     setSearch]    = useState('');
   const [fStore,     setFStore]    = useState('');
   const [fBranch,    setFBranch]   = useState('');
@@ -351,6 +357,185 @@ export default function CustomerLookupPage({ profile }) {
 
   const msgBytes = byteLen(smsMsg);
 
+  // ══════════════════════════════════════════════════════════
+  // 회원정보 엑셀 일괄 업데이트 (본사 전용)
+  // - 헤더가 6~7행 2줄로 나뉘어 있어 토큰별로 컬럼을 탐지
+  // - 매칭 기준: 휴대폰(숫자만) + 이름  → 같으면 갱신, 없으면 신규 추가
+  // - 가입그룹의 'D _ ' 접두어 제거. 앱에 없는 매장도 엑셀 값 그대로 등록
+  // ══════════════════════════════════════════════════════════
+  const handleMemberUploadClick = () => memberUploadRef.current?.click();
+  const handleMemberUploadFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!window.confirm(
+      '회원정보 엑셀을 앱에 일괄 반영합니다.\n\n' +
+      '• 휴대폰+이름이 같은 기존 회원 → 적립금·등급 등 엑셀 값으로 갱신\n' +
+      '• 없는 회원 → 신규 추가\n\n' +
+      '대량(수만 건) 처리라 수 분이 걸릴 수 있습니다. 계속할까요?'
+    )) return;
+
+    setMemberUploading(true);
+    setMemberProgress('파일 읽는 중...');
+    try {
+      const XLSX = await import('xlsx');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // 헤더 토큰 → 컬럼 인덱스 (첫 12행에서 탐색, 줄바꿈/공백 무시)
+      const norm = v => String(v ?? '').replace(/\s/g, '');
+      const findCol = (...tokens) => {
+        for (let i = 0; i < Math.min(rows.length, 12); i++) {
+          const r = rows[i] || [];
+          for (let c = 0; c < r.length; c++) {
+            if (tokens.some(t => norm(r[c]) === norm(t))) return c;
+          }
+        }
+        return -1;
+      };
+      const col = {
+        name:   findCol('고객명'),
+        phone:  findCol('휴대전화번호'),
+        group:  findCol('가입그룹'),
+        store:  findCol('가입매장'),
+        joined: findCol('가입일'),
+        birth:  findCol('생년월일'),
+        gender: findCol('성별'),
+        grade:  findCol('등급'),
+        avail:  findCol('가용포인트'),
+        used:   findCol('사용포인트'),
+        pcnt:   findCol('구매횟수'),
+        pqty:   findCol('구매수량'),
+        pamt:   findCol('구매금액'),
+        sms:    findCol('SMS수신여부'),
+      };
+      if (col.name === -1 || col.phone === -1) {
+        toast('헤더(고객명/휴대전화번호 컬럼)를 찾지 못했습니다', 'err');
+        setMemberUploading(false); setMemberProgress(''); return;
+      }
+
+      // 엑셀 날짜 직렬값 → YYYY-MM-DD (UTC 기준, 타임존 오차 방지)
+      const serialToYmd = (v) => {
+        if (v == null || v === '') return null;
+        if (typeof v === 'number' && v > 0) {
+          const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+          if (isNaN(d)) return null;
+          const p = n => String(n).padStart(2, '0');
+          return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}`;
+        }
+        const s = String(v).trim();
+        const m = s.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+        if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+        return null;
+      };
+      const numOf = (v) => {
+        const n = Number(String(v ?? '').replace(/[^0-9.-]/g, ''));
+        return Number.isFinite(n) ? n : 0;
+      };
+      const cell = (r, c) => (c === -1 ? '' : r[c]);
+
+      // 유효 데이터 추출 + 파일 내 중복(휴대폰+이름) 제거(마지막 행 우선)
+      const byKey = new Map();
+      let skipped = 0;
+      for (const r of rows) {
+        const name = String(cell(r, col.name) ?? '').trim();
+        const phoneRaw = String(cell(r, col.phone) ?? '').trim();
+        const digits = phoneRaw.replace(/\D/g, '');
+        if (!name || digits.length < 10) { skipped++; continue; } // 합계행·빈행 제외
+        const groupRaw = String(cell(r, col.group) ?? '').trim();
+        if (groupRaw.includes('테스트')) { skipped++; continue; }   // 테스트 데이터 제외
+        const store_name = groupRaw.replace(/^D\s*_\s*/, '').trim();
+        const rec = {
+          key: `${digits}|${name}`,
+          name,
+          phone: formatPhone(phoneRaw),
+          store_name,
+          branch_name: String(cell(r, col.store) ?? '').trim() || null,
+          joined_at: serialToYmd(cell(r, col.joined)),
+          birthday: serialToYmd(cell(r, col.birth)),
+          gender: ['여','남'].includes(String(cell(r, col.gender)).trim()) ? String(cell(r, col.gender)).trim() : null,
+          grade: String(cell(r, col.grade) ?? '').trim() || null,
+          total_points: numOf(cell(r, col.avail)),
+          used_points: numOf(cell(r, col.used)),
+          purchase_count: numOf(cell(r, col.pcnt)),
+          purchase_qty: numOf(cell(r, col.pqty)),
+          total_purchase: numOf(cell(r, col.pamt)),
+          sms_consent: String(cell(r, col.sms)).trim() === '1',
+        };
+        byKey.set(rec.key, rec); // 같은 휴대폰+이름이면 마지막 행으로 덮어씀
+      }
+      const records = [...byKey.values()];
+      if (records.length === 0) {
+        toast('반영할 회원 데이터가 없습니다', 'err');
+        setMemberUploading(false); setMemberProgress(''); return;
+      }
+
+      // 기존 회원 전체 조회 (휴대폰숫자+이름 → id) — 1000행 제한 페이징
+      setMemberProgress('기존 회원 확인 중...');
+      const existing = new Map();
+      let start = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await supabase.from('customers')
+          .select('id, phone, name').order('id').range(start, start + PAGE - 1);
+        if (error) break;
+        if (!data || data.length === 0) break;
+        for (const ex of data) {
+          const k = `${String(ex.phone || '').replace(/\D/g, '')}|${String(ex.name || '').trim()}`;
+          if (!existing.has(k)) existing.set(k, ex.id);
+        }
+        if (data.length < PAGE) break;
+        start += PAGE;
+      }
+
+      const updates = [];
+      const inserts = [];
+      for (const rec of records) {
+        const { key, ...fields } = rec;
+        const id = existing.get(key);
+        if (id) {
+          updates.push({ id, fields }); // manager_name·sms_consent_at은 보존(미포함)
+        } else {
+          inserts.push({ ...fields, manager_name: null, created_by: profile?.id || null });
+        }
+      }
+
+      let ok = 0, fail = 0;
+      // INSERT (배치 500)
+      const INS = 500;
+      for (let i = 0; i < inserts.length; i += INS) {
+        const slice = inserts.slice(i, i + INS);
+        const { error } = await supabase.from('customers').insert(slice);
+        if (error) fail += slice.length; else ok += slice.length;
+        setMemberProgress(`신규 추가 ${Math.min(i + INS, inserts.length).toLocaleString()} / ${inserts.length.toLocaleString()}`);
+      }
+      // UPDATE (id별, 동시 80건)
+      const UPD = 80;
+      for (let i = 0; i < updates.length; i += UPD) {
+        const slice = updates.slice(i, i + UPD);
+        const results = await Promise.all(slice.map(u =>
+          supabase.from('customers').update(u.fields).eq('id', u.id)
+        ));
+        for (const { error } of results) { if (error) fail++; else ok++; }
+        setMemberProgress(`기존 갱신 ${Math.min(i + UPD, updates.length).toLocaleString()} / ${updates.length.toLocaleString()}`);
+      }
+
+      const parts = [
+        `신규 ${inserts.length.toLocaleString()}건`,
+        `갱신 ${updates.length.toLocaleString()}건`,
+      ];
+      if (fail > 0) parts.push(`실패 ${fail.toLocaleString()}건`);
+      if (skipped > 0) parts.push(`제외 ${skipped.toLocaleString()}행`);
+      toast(`회원 반영 완료 — ${parts.join(' / ')}`, fail > 0 ? 'err' : 'ok');
+    } catch (err) {
+      toast('업로드 실패: ' + (err.message || err), 'err');
+    }
+    setMemberUploading(false);
+    setMemberProgress('');
+  };
+
   return (
     <div>
       {/* 검색·필터 */}
@@ -396,11 +581,30 @@ export default function CustomerLookupPage({ profile }) {
           </select>
           {(search||fStore||fBranch||fFrom||fTo||fSms||fNewOnly||fGrade) &&
             <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); setCheckedIds(new Set()); }}>✕ 초기화</button>}
-          <div className="fbar-right">
+          <div className="fbar-right" style={{display:'flex', gap:8, alignItems:'center'}}>
+            {canUpload && (
+              <>
+                <input ref={memberUploadRef} type="file" accept=".xls,.xlsx"
+                  onChange={handleMemberUploadFile} style={{display:'none'}}/>
+                <button type="button" onClick={handleMemberUploadClick} disabled={memberUploading}
+                  title="회원정보 취합 엑셀을 일괄 반영 (휴대폰+이름 기준 갱신/추가)"
+                  style={{height:34, padding:'0 14px', border:'1px solid #2e7d32', borderRadius:'var(--radius)',
+                    background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700,
+                    cursor: memberUploading ? 'not-allowed' : 'pointer', whiteSpace:'nowrap'}}>
+                  {memberUploading ? <span className="spinner"/> : '📥 회원 일괄 업데이트'}
+                </button>
+              </>
+            )}
             <button className="btn btn-p" onClick={() => fetchCustomers(0)} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔍 조회'}
             </button>
           </div>
+          {memberUploading && memberProgress && (
+            <div style={{width:'100%', marginTop:8, padding:'8px 12px', background:'#e8f5e9',
+              border:'1px solid #a5d6a7', borderRadius:'var(--radius)', fontSize:12, color:'#2e7d32', fontWeight:600}}>
+              ⏳ {memberProgress} — 창을 닫지 마세요
+            </div>
+          )}
         </div>
       </div>
 
