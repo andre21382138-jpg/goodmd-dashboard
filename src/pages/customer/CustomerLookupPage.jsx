@@ -44,6 +44,7 @@ export default function CustomerLookupPage({ profile }) {
   const [fTo,        setFTo]       = useState('');
   const [fSms,       setFSms]      = useState(false);
   const [fNewOnly,   setFNewOnly]  = useState(false);
+  const [fExpired,   setFExpired]  = useState(false); // 마케팅동의 만료 회원만
   const [fGrade,     setFGrade]    = useState('');
   const [customers,  setCustomers] = useState([]);
   const [selected,   setSelected]  = useState(null);
@@ -114,13 +115,19 @@ export default function CustomerLookupPage({ profile }) {
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
       q = q.gte('joined_at', oneYearAgo.toISOString().slice(0,10));
     }
+    if (fExpired) {
+      // 마케팅 동의는 했으나 동의일+1년이 지난(만료된) 회원 = 동의일 < 오늘-1년
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - 1);
+      q = q.eq('sms_consent', true).lt('sms_consent_at', cutoff.toISOString());
+    }
     const { data, count, error } = await q.range(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE - 1);
     if (error) { toast(error.message, 'err'); setLoading(false); return; }
     setCustomers(data || []);
     setTotalCount(count || 0);
     setSelected(null); setPurchases([]);
     setLoading(false);
-  }, [search, fStore, fBranch, fFrom, fTo, fSms, fNewOnly, fGrade]);
+  }, [search, fStore, fBranch, fFrom, fTo, fSms, fNewOnly, fExpired, fGrade]);
 
   // 필터 조건 전체 SMS동의 회원 가져오기 (Supabase 1000행 제한 우회)
   const fetchAllSmsTargets = useCallback(async () => {
@@ -145,6 +152,11 @@ export default function CustomerLookupPage({ profile }) {
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
         q = q.gte('joined_at', oneYearAgo.toISOString().slice(0,10));
       }
+      if (fExpired) {
+        const cutoff = new Date();
+        cutoff.setFullYear(cutoff.getFullYear() - 1);
+        q = q.lt('sms_consent_at', cutoff.toISOString());
+      }
       return q;
     };
 
@@ -161,7 +173,7 @@ export default function CustomerLookupPage({ profile }) {
     if (!all.length) { toast('SMS동의 회원이 없습니다', 'inf'); return; }
     setBulkTargets(all);
     setSmsModal(true);
-  }, [search, fStore, fBranch, fFrom, fTo, fGrade, fNewOnly]);
+  }, [search, fStore, fBranch, fFrom, fTo, fGrade, fNewOnly, fExpired]);
 
   // 점포 변경시 지점 초기화
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
@@ -582,14 +594,23 @@ export default function CustomerLookupPage({ profile }) {
               color: fNewOnly ? '#1565C0' : 'var(--text2)' }}>
             {fNewOnly ? '✅ 1년 미만' : '📅 1년 미만'}
           </button>
+          <button type="button"
+            onClick={() => setFExpired(p => !p)}
+            title="마케팅 수신동의가 만료된 회원만 조회 (적립금 소멸 등 정보성 안내 대상)"
+            style={{ height:34, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+              borderColor: fExpired ? '#c62828' : 'var(--border)',
+              background: fExpired ? '#ffebee' : '#fff',
+              color: fExpired ? '#c62828' : 'var(--text2)' }}>
+            {fExpired ? '✅ 동의만료' : '⏰ 동의만료'}
+          </button>
           <select className="fsel" value={fGrade} onChange={e => setFGrade(e.target.value)}>
             <option value="">전체 등급</option>
             {['VVIP','VIP','로얄','골드','실버','패밀리'].map(g => (
               <option key={g} value={g}>{g}</option>
             ))}
           </select>
-          {(search||fStore||fBranch||fFrom||fTo||fSms||fNewOnly||fGrade) &&
-            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); setCheckedIds(new Set()); }}>✕ 초기화</button>}
+          {(search||fStore||fBranch||fFrom||fTo||fSms||fNewOnly||fExpired||fGrade) &&
+            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setFSms(false); setFNewOnly(false); setFExpired(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); setCheckedIds(new Set()); }}>✕ 초기화</button>}
           <div className="fbar-right" style={{display:'flex', gap:8, alignItems:'center'}}>
             {canUpload && (
               <>
