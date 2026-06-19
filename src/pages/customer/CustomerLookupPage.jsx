@@ -36,6 +36,7 @@ export default function CustomerLookupPage({ profile }) {
   const memberUploadRef = useRef(null);
   const [memberUploading, setMemberUploading] = useState(false);
   const [memberProgress, setMemberProgress] = useState('');
+  const [memberResult, setMemberResult] = useState(null); // {ins, upd, fail, skipped}
   const [search,     setSearch]    = useState('');
   const [fStore,     setFStore]    = useState('');
   const [fBranch,    setFBranch]   = useState('');
@@ -376,6 +377,7 @@ export default function CustomerLookupPage({ profile }) {
     )) return;
 
     setMemberUploading(true);
+    setMemberResult(null);
     setMemberProgress('파일 읽는 중...');
     try {
       const XLSX = await import('xlsx');
@@ -529,6 +531,7 @@ export default function CustomerLookupPage({ profile }) {
       if (fail > 0) parts.push(`실패 ${fail.toLocaleString()}건`);
       if (skipped > 0) parts.push(`제외 ${skipped.toLocaleString()}행`);
       toast(`회원 반영 완료 — ${parts.join(' / ')}`, fail > 0 ? 'err' : 'ok');
+      setMemberResult({ ins: inserts.length, upd: updates.length, fail, skipped });
     } catch (err) {
       toast('업로드 실패: ' + (err.message || err), 'err');
     }
@@ -603,6 +606,27 @@ export default function CustomerLookupPage({ profile }) {
             <div style={{width:'100%', marginTop:8, padding:'8px 12px', background:'#e8f5e9',
               border:'1px solid #a5d6a7', borderRadius:'var(--radius)', fontSize:12, color:'#2e7d32', fontWeight:600}}>
               ⏳ {memberProgress} — 창을 닫지 마세요
+            </div>
+          )}
+          {!memberUploading && memberResult && (
+            <div style={{width:'100%', marginTop:8, padding:'12px 14px',
+              background: memberResult.fail > 0 ? '#fff3e0' : '#e8f5e9',
+              border:`1px solid ${memberResult.fail > 0 ? '#ffb74d' : '#a5d6a7'}`,
+              borderRadius:'var(--radius)', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+              <span style={{fontSize:13, fontWeight:700, color: memberResult.fail > 0 ? '#e65100' : '#2e7d32'}}>
+                ✅ 회원 일괄 업데이트 완료
+              </span>
+              <span style={{fontSize:13, color:'var(--text)'}}>
+                신규 추가 <b>{memberResult.ins.toLocaleString()}</b>건 ·
+                기존 갱신 <b>{memberResult.upd.toLocaleString()}</b>건
+                {memberResult.fail > 0 && <> · <span style={{color:'var(--danger)'}}>실패 <b>{memberResult.fail.toLocaleString()}</b>건</span></>}
+                {memberResult.skipped > 0 && <span style={{color:'var(--text3)'}}> · 제외 {memberResult.skipped.toLocaleString()}행</span>}
+              </span>
+              <button type="button" onClick={() => setMemberResult(null)}
+                style={{marginLeft:'auto', height:28, padding:'0 12px', border:'1px solid var(--border)',
+                  borderRadius:'var(--radius)', background:'#fff', fontSize:12, fontWeight:600, cursor:'pointer'}}>
+                닫기
+              </button>
             </div>
           )}
         </div>
