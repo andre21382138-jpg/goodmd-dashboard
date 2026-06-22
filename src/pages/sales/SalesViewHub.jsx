@@ -75,7 +75,7 @@ export default function SalesViewHub({ setPage }) {
     for (const r of rows) {
       const k = keyFn(r);
       if (!k) continue;
-      const amt = amountFn(r);
+      const amt = Math.round(amountFn(r)); // 특판 supply_price 소수점 → 원단위 정수화
       let g = map.get(k);
       if (!g) {
         g = { key: k, label: labelFn(r), count: 0, total: 0, daily: new Map() };

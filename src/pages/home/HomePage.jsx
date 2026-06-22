@@ -163,10 +163,10 @@ export default function HomePage({ profile, setPage }) {
         for (const r of bRows) {
           const key = r.company_name||'미지정';
           if (!bMap.has(key)) bMap.set(key, {company:key, count:0, qty:0, amt:0});
-          const e = bMap.get(key); e.count++; e.qty += r.quantity; e.amt += r.supply_price * r.quantity;
+          const e = bMap.get(key); e.count++; e.qty += r.quantity; e.amt += Math.round(r.supply_price * r.quantity);
         }
         setBizSummary({
-          amt:   bRows.reduce((s,r)=>s+r.supply_price*r.quantity, 0),
+          amt:   bRows.reduce((s,r)=>s+Math.round(r.supply_price*r.quantity), 0),
           count: bRows.length,
           qty:   bRows.reduce((s,r)=>s+r.quantity, 0),
         });
@@ -183,7 +183,7 @@ export default function HomePage({ profile, setPage }) {
         ]);
         const prevStore   = (prevSales   ||[]).reduce((s,r)=>s+r.price*Math.max(0,(r.quantity||0)-(r.returned_qty||0)), 0);
         const prevLect    = (prevLecture ||[]).reduce((s,r)=>s+r.price*r.quantity, 0);
-        const prevBizAmt  = (prevBiz     ||[]).reduce((s,r)=>s+r.supply_price*r.quantity, 0);
+        const prevBizAmt  = (prevBiz     ||[]).reduce((s,r)=>s+Math.round(r.supply_price*r.quantity), 0);
         setPrevTotalAmt(prevStore + prevLect + prevBizAmt);
       }
       setLoading(false);

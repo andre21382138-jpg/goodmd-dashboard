@@ -308,7 +308,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
   const totalQty = lines.reduce((s,l) => s + (Number(l.quantity)||0), 0);
 
   // 조회 합계
-  const listTotalAmt = sales.reduce((s,r) => s + (r.supply_price||0) * (r.quantity||0), 0);
+  const listTotalAmt = sales.reduce((s,r) => s + Math.round((r.supply_price||0) * (r.quantity||0)), 0);
   const listTotalQty = sales.reduce((s,r) => s + (r.quantity||0), 0);
 
   const inputStyle = {height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none', width:'100%'};
@@ -619,11 +619,11 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
                           ? <input type="text" inputMode="numeric" value={formatNumInput(editData.supply_price)}
                               onChange={e => setEditData(p => ({...p, supply_price:parseNumInput(e.target.value)}))}
                               style={numInput}/>
-                          : `${(s.supply_price||0).toLocaleString()}원`}
+                          : `${Math.round(s.supply_price||0).toLocaleString()}원`}
                       </td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>
-                        {(((isEditing ? Number(editData.supply_price) : s.supply_price) || 0) *
-                          ((isEditing ? Number(editData.quantity) : s.quantity) || 0)).toLocaleString()}원
+                        {Math.round((((isEditing ? Number(editData.supply_price) : s.supply_price) || 0) *
+                          ((isEditing ? Number(editData.quantity) : s.quantity) || 0))).toLocaleString()}원
                       </td>
                       <td style={{fontSize:11}}>
                         {isEditing
