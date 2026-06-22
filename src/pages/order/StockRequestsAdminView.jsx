@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, uniq, dlBlob } from '../../lib/utils';
-import { ORDER_CONSTANTS } from '../../lib/constants';
-import { DELIVERY_HEADERS } from '../customer/HQDeliveryRequestPage';
+import { toast, uniq } from '../../lib/utils';
 
 // 본사 — 매장에서 들어온 재고요청 조회 (order_requests 테이블)
 // mode: 'pending' (매장재고요청 탭) | 'completed' (매장발주완료 탭)
@@ -26,9 +24,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
   const [editingQty, setEditingQty]   = useState({}); // { [id]: '입력중인 값' }
   const [savingQty,  setSavingQty]    = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [exporting,  setExporting]    = useState(false);
-  const [uploading,  setUploading]    = useState(false);
-  const uploadInputRef = React.useRef(null);
+  const [exporting,  setExporting]    = useState(false); // 삭제 처리 중 표시용
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -106,94 +102,6 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
     setSavingQty(p => { const n = {...p}; delete n[r.id]; return n; });
   };
 
-  // 송장 업로드 — 31컬럼 양식의 row[23] SIDR:<order_requests.id> + row[1] 송장번호
-  // 송장이 등록된 라인은 자동으로 status='ordered' (발주진행 처리) + tracking_number 저장
-  const handleUploadClick = () => uploadInputRef.current?.click();
-  const handleUploadFile = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setUploading(true);
-    try {
-      const XLSX = await import('xlsx');
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type:'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      let totalRows = 0;
-      const updates = [];
-      for (let i = 1; i < data.length; i++) {
-        const r = data[i];
-        if (!r || !Array.isArray(r) || r.length === 0) continue;
-        const sidCell = String(r[23] || '').trim();
-        const m = sidCell.match(/SIDR:(\d+)/);
-        if (!m) continue;
-        totalRows++;
-        const trk = String(r[1] || '').trim();
-        if (!trk) continue;
-        updates.push({ id: Number(m[1]), tracking: trk });
-      }
-      if (totalRows === 0) {
-        toast('업로드 가능한 행이 없습니다 (SIDR 누락)', 'err');
-        setUploading(false);
-        return;
-      }
-      if (updates.length === 0) {
-        toast(`송장번호 입력된 행이 없습니다 (전체 ${totalRows}건 모두 미입력)`, 'err');
-        setUploading(false);
-        return;
-      }
-      const nowIso = new Date().toISOString();
-      let ok = 0, fail = 0, lastError = null;
-      for (const u of updates) {
-        const { error } = await supabase.from('order_requests').update({
-          tracking_number: u.tracking,
-          status: 'ordered',
-          ordered_at: nowIso,
-          ordered_by: profile?.id || null,
-          updated_at: nowIso,
-        }).eq('id', u.id);
-        if (error) { lastError = error; fail++; }
-        else ok++;
-      }
-      const parts = [`${ok}건 발주진행 완료`];
-      if (fail > 0) parts.push(`실패 ${fail}건`);
-      const noTracking = totalRows - updates.length;
-      if (noTracking > 0) parts.push(`미입력 ${noTracking}건은 대기 그대로`);
-      toast(parts.join(' / '), fail > 0 ? 'err' : 'ok');
-      if (fail > 0 && lastError) toast(`실패 사유: ${lastError.message || lastError}`, 'err');
-      setSelectedIds(new Set());
-      fetchData();
-    } catch (err) {
-      toast('업로드 실패: ' + (err.message || err), 'err');
-    }
-    setUploading(false);
-  };
-
-  // 선택된 pending 항목을 ordered로 일괄 전환 = 본사 발주진행 (현재 비활성, 송장 업로드로 대체)
-  const processOrder = async () => {
-    if (selectedIds.size === 0) { toast('발주진행할 요청을 선택해주세요', 'err'); return; }
-    const items = rows.filter(r => selectedIds.has(r.id) && r.status === 'pending');
-    if (items.length === 0) { toast('선택된 항목 중 pending 상태가 없습니다', 'err'); return; }
-    if (!window.confirm(`${items.length}건을 발주진행 처리하시겠습니까?\n\n매장에서는 '발주진행중'으로 표시됩니다.`)) return;
-    setExporting(true);
-    try {
-      const nowIso = new Date().toISOString();
-      const { error } = await supabase.from('order_requests').update({
-        status: 'ordered',
-        ordered_at: nowIso,
-        ordered_by: profile?.id || null,
-        updated_at: nowIso,
-      }).in('id', items.map(it => it.id));
-      if (error) throw error;
-      toast(`${items.length}건 발주진행 처리 완료`, 'ok');
-      setSelectedIds(new Set());
-      fetchData();
-    } catch (err) {
-      toast('처리 실패: ' + (err.message || err), 'err');
-    }
-    setExporting(false);
-  };
 
   const deleteRequest = async (r) => {
     if (!window.confirm(`이 재고요청을 삭제하시겠습니까?\n\n매장: ${r.store_name} ${r.branch_name}\n상품: ${r.product?.name || '-'}\n수량: ${r.quantity}\n\n매장에는 이 요청 이력이 사라집니다.`)) return;
@@ -267,88 +175,6 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
   const selectAll = () => setSelectedIds(new Set(rows.map(r => r.id)));
   const clearSelection = () => setSelectedIds(new Set());
 
-  // 31컬럼 매장발주 양식으로 엑셀 다운로드
-  const exportSelected = async () => {
-    if (selectedIds.size === 0) { toast('다운로드할 요청을 선택해주세요', 'err'); return; }
-    setExporting(true);
-    try {
-      const items = rows.filter(r => selectedIds.has(r.id));
-      // 매장 주소 일괄 조회
-      const storeNames  = uniq(items.map(it => it.store_name));
-      const { data: addrs } = await supabase.from('store_addresses').select('*')
-        .in('store_name', storeNames);
-      const addrMap = new Map();
-      for (const a of (addrs || [])) addrMap.set(`${a.store_name}|${a.branch_name}`, a);
-
-      const ExcelJS = (await import('exceljs')).default;
-      const wb = new ExcelJS.Workbook();
-      const ws = wb.addWorksheet('매장재고요청');
-      ws.addRow(DELIVERY_HEADERS);
-
-      const now = new Date();
-      const pad = n => String(n).padStart(2,'0');
-      const ymd    = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}`;
-      const yymmdd = `${String(now.getFullYear()).slice(-2)}.${pad(now.getMonth()+1)}.${pad(now.getDate())}`;
-
-      let seq = 0;
-      for (const r of items) {
-        seq += 1;
-        const orderNo = `${ymd}-${String(seq).padStart(4,'0')}`;
-        const storeFull = `${r.store_name || ''}${r.branch_name || ''}`;
-        const addr = addrMap.get(`${r.store_name}|${r.branch_name}`) || {};
-        ws.addRow([
-          now,                                       // 0  발송일
-          '',                                        // 1  송장번호
-          orderNo,                                   // 2  주문번호
-          ORDER_CONSTANTS.CHANNEL,                   // 3  채널
-          storeFull,                                 // 4  매장명
-          storeFull,                                 // 5  수취인명 (매장이 수취인)
-          0,                                         // 6  결제금액
-          1,                                         // 7  주문수량
-          '',                                        // 8  상품명
-          '',                                        // 9  옵션
-          r.product?.name || '',                     // 10 품명
-          storeFull,                                 // 11 수취인명
-          addr.postal_code || '',                    // 12 우편번호
-          addr.address || '',                        // 13 주소
-          addr.recipient_phone || '',                // 14 수취인 전화1
-          '',                                        // 15 수취인 전화2
-          r.memo || '',                              // 16 배송메세지
-          '',                                        // 17 상품번호
-          storeFull,                                 // 18 주문자명 (본사가 매장명으로)
-          ORDER_CONSTANTS.ORDERER_PHONE,             // 19 주문자 연락처1
-          ORDER_CONSTANTS.ORDERER_PHONE,             // 20 주문자 연락처2
-          '',                                        // 21 수수료
-          '',                                        // 22 수수료액
-          `SIDR:${r.id}`,                            // 23 공란 — order_requests.id (재고요청 prefix)
-          '',                                        // 24 사방넷
-          '',                                        // 25 주문일
-          '',                                        // 26 주문자 ID
-          '',                                        // 27 물류바코드
-          '',                                        // 28 송장전송일
-          r.product?.erp_code || '',                 // 29 ERP코드
-          r.quantity || 0,                           // 30 수량
-        ]);
-      }
-
-      ws.getColumn(1).numFmt = 'yyyy-mm-dd';
-      ws.columns.forEach(col => {
-        let max = 8;
-        col.eachCell({ includeEmpty:false }, cell => {
-          const v = cell.value == null ? '' : String(cell.value);
-          if (v.length > max) max = Math.min(40, v.length + 2);
-        });
-        col.width = Math.max(max, 8);
-      });
-      const buf = await wb.xlsx.writeBuffer();
-      dlBlob(buf, `매장재고요청_${yymmdd}_전송건.xlsx`);
-      toast(`엑셀 다운로드 완료 (${seq}건)`, 'ok');
-    } catch (err) {
-      toast('다운로드 실패: ' + (err.message || err), 'err');
-    }
-    setExporting(false);
-  };
-
   const markFulfilled = async (id) => {
     if (!window.confirm('이 요청을 처리완료로 표시하시겠습니까?')) return;
     setProcessing(id);
@@ -400,22 +226,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                 ? <button className="btn btn-s" onClick={clearSelection}>✕ 선택 해제</button>
                 : <button className="btn btn-s" onClick={selectAll}>☑ 전체 선택</button>
             )}
-            {isPendingMode && (
-              <>
-                <input ref={uploadInputRef} type="file" accept=".xls,.xlsx"
-                  onChange={handleUploadFile} style={{display:'none'}}/>
-                <button type="button" onClick={handleUploadClick} disabled={uploading}
-                  title="송장번호 입력된 엑셀 업로드 → 자동으로 발주진행 처리 + 송장번호 등록"
-                  style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer'}}>
-                  {uploading ? <span className="spinner"/> : '📤 송장 업로드'}
-                </button>
-              </>
-            )}
-            <button type="button" onClick={exportSelected} disabled={exporting || selectedIds.size === 0}
-              title="선택된 재고요청을 매장발주 31컬럼 양식(.xlsx)으로 다운로드"
-              style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background: selectedIds.size > 0 ? '#fff3e0' : '#f5f5f5', color: selectedIds.size > 0 ? 'var(--accent)' : 'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed'}}>
-              {exporting ? <span className="spinner"/> : `📥 엑셀 다운로드${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
-            </button>
+            {/* 송장업로드·엑셀다운로드는 SCM 담당 — 본사는 검토 후 [발송요청]만 */}
             {isPendingMode && selectedIds.size > 0 && (
               <button type="button" onClick={deleteSelected} disabled={exporting}
                 title="선택한 재고요청을 일괄 삭제"
@@ -435,7 +246,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
         : rows.length === 0 ? <div className="empty">조회된 재고요청이 없습니다</div>
         : (
           <>
-          <div style={{fontSize:11, color:'var(--text3)', marginBottom:8}}>매장 행 클릭 시 상품 내역 펼침 · 체크박스로 선택 후 엑셀 다운로드</div>
+          <div style={{fontSize:11, color:'var(--text3)', marginBottom:8}}>매장 행 클릭 시 상품 내역 펼침 · 수량 수정/행 삭제 후 매장별 [📤 발송요청]으로 SCM 전송</div>
           <div className="twrap">
             <table>
               <thead>
