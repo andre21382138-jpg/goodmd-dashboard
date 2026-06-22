@@ -741,7 +741,7 @@ export default function App() {
     store_delivery_status: '본사 발송내역',
     purchase_hq:    '발주진행',
     order_request_hq: '발주요청',
-    scm_shipping:   '발송요청',
+    scm_shipping:   '매장 발주요청',
     purchase_check: '발주 확인',
     customer_input: '회원 등록',
     customer_qr:    'QR 가입',

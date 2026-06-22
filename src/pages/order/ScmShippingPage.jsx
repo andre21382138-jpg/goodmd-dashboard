@@ -188,7 +188,7 @@ export default function ScmShippingPage({ profile }) {
   return (
     <div>
       <div className="card">
-        <div className="card-label">🚚 SCM 발송요청 처리</div>
+        <div className="card-label">🚚 매장 발주요청 처리</div>
         <div className="fbar" style={{flexWrap:'wrap', gap:8}}>
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
           <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
