@@ -23,7 +23,12 @@ export default function StockRequestPage({ profile }) {
     ? allProducts.filter(p =>
         p.name.toLowerCase().includes(prodSearch.toLowerCase()) &&
         (!brandId || String(p.brand_id) === String(brandId))
-      ).sort((a,b) => (a.name.includes('[단종]')?1:0)-(b.name.includes('[단종]')?1:0)).slice(0, 10)
+      ).sort((a,b) => {
+        // 판매중지·단종 상품은 하단으로 (발주불가 표시)
+        const aD = (a.is_sales_stopped || a.name.includes('[단종]')) ? 1 : 0;
+        const bD = (b.is_sales_stopped || b.name.includes('[단종]')) ? 1 : 0;
+        return aD - bD;
+      }).slice(0, 10)
     : [];
 
   useEffect(() => {
@@ -109,6 +114,10 @@ export default function StockRequestPage({ profile }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!prodId) { toast('상품을 선택해주세요', 'err'); return; }
+    const selProd = allProducts.find(p => String(p.id) === String(prodId));
+    if (selProd?.is_sales_stopped) {
+      toast(`'${selProd.name}'은(는) 판매중지 상품이라 발주할 수 없습니다`, 'err'); return;
+    }
     setSaving(true);
     const { error } = await supabase.from('order_requests').insert({
       store_name:  profile.department,
@@ -172,14 +181,17 @@ export default function StockRequestPage({ profile }) {
                 <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100, background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:220, overflowY:'auto' }}>
                   {filteredProds.map(p => {
                     const br = brands.find(b => b.id === p.brand_id);
+                    const stopped = !!p.is_sales_stopped;
                     return (
                       <div key={p.id}
-                        onMouseDown={e => { e.preventDefault(); handleSelectProd(p); }}
-                        style={{ padding:'9px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0' }}
-                        onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
-                        onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                        onMouseDown={stopped ? undefined : (e => { e.preventDefault(); handleSelectProd(p); })}
+                        title={stopped ? '판매중지 상품 — 발주할 수 없습니다' : undefined}
+                        style={{ padding:'9px 12px', cursor: stopped ? 'not-allowed' : 'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0', display:'flex', alignItems:'center', color: stopped ? 'var(--text3)' : undefined, background: stopped ? '#fafafa' : undefined }}
+                        onMouseEnter={e => { if (!stopped) e.currentTarget.style.background='#fffde7'; }}
+                        onMouseLeave={e => { if (!stopped) e.currentTarget.style.background='#fff'; }}>
                         {!brandId && br && <span style={{fontSize:11, color:'var(--accent)', fontWeight:700, marginRight:6}}>[{br.name}]</span>}
-                        {p.name}
+                        <span>{p.name}</span>
+                        {stopped && <span style={{fontSize:10, fontWeight:700, color:'var(--danger)', background:'#ffebee', border:'1px solid #ef9a9a', borderRadius:4, padding:'1px 5px', marginLeft:6}}>발주불가</span>}
                       </div>
                     );
                   })}

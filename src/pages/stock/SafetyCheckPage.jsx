@@ -18,7 +18,7 @@ export default function SafetyCheckPage({ profile }) {
     const fromDate = oneMonthAgo.toISOString().slice(0,10);
 
     const { data: salesData } = await supabase.from('sales')
-      .select('store_name, branch_name, brand_id, product_id, quantity, brand:brands(name), product:products(name)')
+      .select('store_name, branch_name, brand_id, product_id, quantity, brand:brands(name), product:products(name, is_sales_stopped)')
       .gte('sold_at', fromDate);
 
     const { data: stockData } = await supabase.from('stock_status')
@@ -55,6 +55,7 @@ export default function SafetyCheckPage({ profile }) {
         stockId: stockRec?.id || null,
         safety: s.sales, stock, shortage,
         isPending: orderSet.has(orderKey),
+        isSalesStopped: !!s.product?.is_sales_stopped,
       };
     }).sort((a,b) => b.shortage - a.shortage);
 
@@ -79,6 +80,9 @@ export default function SafetyCheckPage({ profile }) {
   const shortCount = useMemo(() => rows.filter(r => r.shortage > 0).length, [rows]);
 
   const requestOrder = async (row) => {
+    if (row.isSalesStopped) {
+      toast(`'${row.productName}'은(는) 판매중지 상품이라 발주할 수 없습니다`, 'err'); return;
+    }
     const key = `${row.store}|||${row.branch}|||${row.productId}`;
     setRequesting(p => ({...p, [key]: true}));
     const { error } = await supabase.from('order_requests').insert({
@@ -154,7 +158,9 @@ export default function SafetyCheckPage({ profile }) {
                           }
                         </td>
                         <td>
-                          {isShort && (
+                          {r.isSalesStopped
+                            ? <span style={{fontSize:11, fontWeight:700, color:'var(--danger)'}} title="판매중지 상품 — 발주 불가">발주불가</span>
+                            : isShort && (
                             r.isPending
                               ? <span style={{fontSize:11, color:'var(--text3)', fontWeight:600}}>요청중</span>
                               : <button className="btn btn-p" style={{padding:'4px 10px', fontSize:11}}

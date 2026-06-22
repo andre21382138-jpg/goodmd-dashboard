@@ -134,8 +134,8 @@ export default function SalesInputPage({ profile }) {
             return;
           }
           if (prod.is_sales_stopped) {
-            toast(`'${prod.name}'은(는) 판매중지된 상품입니다`, 'err');
-            return;
+            // 판매중지 상품도 매장 재고 소진을 위해 판매는 허용 (발주만 차단)
+            toast(`'${prod.name}'은(는) 판매중지 상품입니다 (재고 소진 판매)`, 'inf');
           }
           setLines(prev => {
             const idx = prev.findIndex(l => String(l.productId) === String(prod.id));
@@ -526,7 +526,6 @@ export default function SalesInputPage({ profile }) {
             {lines.map((l, idx) => {
               const suggestions = l.productSearch && l.productSearch.length >= 1
                 ? allProducts
-                    .filter(p => !p.is_sales_stopped)
                     .filter(p => {
                       const q = l.productSearch.toLowerCase();
                       return (p.name||'').toLowerCase().includes(q)
@@ -534,8 +533,9 @@ export default function SalesInputPage({ profile }) {
                           || (p.erp_code||'').toLowerCase().includes(q);
                     })
                     .sort((a,b) => {
-                      const aD = a.name.includes('[단종]') ? 1 : 0;
-                      const bD = b.name.includes('[단종]') ? 1 : 0;
+                      // 판매중지·단종 상품은 목록 하단으로
+                      const aD = (a.is_sales_stopped || a.name.includes('[단종]')) ? 1 : 0;
+                      const bD = (b.is_sales_stopped || b.name.includes('[단종]')) ? 1 : 0;
                       return aD - bD;
                     })
                     .slice(0, 10)
@@ -580,7 +580,8 @@ export default function SalesInputPage({ profile }) {
                             onMouseLeave={e => e.currentTarget.style.background='#fff'}>
                             <div style={{display:'flex', alignItems:'center'}}>
                               {brand && <span style={{fontSize:11, color:'var(--accent)', fontWeight:700, marginRight:6}}>[{brand.name}]</span>}
-                              <span>{p.name}</span>
+                              <span style={{color: p.is_sales_stopped ? 'var(--text3)' : undefined}}>{p.name}</span>
+                              {p.is_sales_stopped && <span style={{fontSize:10, fontWeight:700, color:'var(--danger)', background:'#ffebee', border:'1px solid #ef9a9a', borderRadius:4, padding:'1px 5px', marginLeft:6}}>판매중지</span>}
                               <span style={{ fontSize:11, color:'var(--text3)', marginLeft:'auto', fontFamily:'var(--mono)' }}>{Number(p.price).toLocaleString()}원</span>
                             </div>
                             {(p.code || p.erp_code) && (

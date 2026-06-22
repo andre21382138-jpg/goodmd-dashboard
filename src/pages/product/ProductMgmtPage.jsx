@@ -85,7 +85,7 @@ export default function ProductMgmtPage({ subPage }) {
   const toggleSalesStop = async (p) => {
     const next = !p.is_sales_stopped;
     const msg = next
-      ? `'${p.name}'을(를) 판매중지 하시겠습니까?\n매장에서 더 이상 판매할 수 없게 됩니다.`
+      ? `'${p.name}'을(를) 판매중지 하시겠습니까?\n\n매장 발주요청에서는 발주할 수 없게 됩니다.\n(남은 재고 소진을 위해 매장 판매는 계속 가능)`
       : `'${p.name}'을(를) 판매재개 하시겠습니까?`;
     if (!window.confirm(msg)) return;
     const { error } = await supabase.from('products').update({ is_sales_stopped: next }).eq('id', p.id);
