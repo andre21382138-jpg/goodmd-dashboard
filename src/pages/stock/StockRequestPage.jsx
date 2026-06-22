@@ -158,6 +158,8 @@ export default function StockRequestPage({ profile }) {
   const [requests, setRequests] = useState([]);
   const [histLoading, setHistLoading] = useState(true);
   const [receiving, setReceiving] = useState({});
+  const [scanTarget, setScanTarget] = useState(null); // 입고확인 바코드 스캔 대상 row
+  const [scanCode, setScanCode] = useState('');
 
   const fetchRequests = useCallback(async () => {
     setHistLoading(true);
@@ -172,8 +174,25 @@ export default function StockRequestPage({ profile }) {
 
   useEffect(() => { if (tab === 'status') fetchRequests(); }, [tab, fetchRequests]);
 
-  const receiveOrder = async (r) => {
-    if (!window.confirm(`'${r.product?.name}' ${r.quantity}개를 입고 처리하시겠습니까?\n매장 재고에 +${r.quantity}개 반영됩니다.`)) return;
+  // 입고확인: 바코드 스캔 모달 → 코드 일치 시 입고
+  const openScan = (r) => { setScanTarget(r); setScanCode(''); };
+  const confirmScan = async () => {
+    if (!scanTarget) return;
+    const expected = [scanTarget.product?.code, scanTarget.product?.erp_code]
+      .filter(Boolean).map(c => String(c).trim().toLowerCase());
+    const scanned = scanCode.trim().toLowerCase();
+    if (!scanned) { toast('바코드를 스캔해주세요', 'err'); return; }
+    if (expected.length && !expected.includes(scanned)) {
+      toast(`바코드 불일치 — 다른 상품입니다 (예상: ${scanTarget.product?.code || '-'})`, 'err');
+      setScanCode('');
+      return;
+    }
+    const r = scanTarget;
+    setScanTarget(null);
+    await doReceive(r);
+  };
+
+  const doReceive = async (r) => {
     setReceiving(prev => ({ ...prev, [r.id]: true }));
     try {
       const code = r.product?.code;
@@ -352,7 +371,7 @@ export default function StockRequestPage({ profile }) {
                         </td>
                         <td style={{ textAlign:'center' }}>
                           {(r.status === 'shipped' || r.status === 'ordered') && (
-                            <button type="button" onClick={() => receiveOrder(r)} disabled={receiving[r.id]}
+                            <button type="button" onClick={() => openScan(r)} disabled={receiving[r.id]}
                               style={{ height:28, padding:'0 12px', border:'1px solid var(--success)', borderRadius:4, background:'#e8f5e9', color:'var(--success)', fontSize:11, fontWeight:700, cursor:'pointer' }}>
                               {receiving[r.id] ? <span className="spinner"/> : '📥 입고확인'}
                             </button>
@@ -364,6 +383,38 @@ export default function StockRequestPage({ profile }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 입고확인 바코드 스캔 모달 */}
+      {scanTarget && (
+        <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={() => setScanTarget(null)}>
+          <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)' }}/>
+          <div style={{ position:'relative', background:'#fff', borderRadius:12, width:'min(420px, 92vw)', padding:'22px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.2)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>📥 입고확인 — 바코드 스캔</div>
+            <div style={{ fontSize:13, color:'var(--text2)', marginBottom:4 }}>
+              <strong>{scanTarget.product?.name}</strong> · {scanTarget.quantity}개
+            </div>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:14, fontFamily:'var(--mono)' }}>
+              상품코드: {scanTarget.product?.code || '-'}
+            </div>
+            <input autoFocus value={scanCode}
+              onChange={e => setScanCode(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmScan(); }}
+              placeholder="바코드 스캔 또는 코드 입력 후 Enter"
+              style={{ width:'100%', height:42, padding:'0 12px', border:'2px solid var(--accent)', borderRadius:'var(--radius)', fontSize:14, fontFamily:'var(--mono)', outline:'none' }}/>
+            <div style={{ fontSize:11, color:'var(--text3)', marginTop:8 }}>
+              스캔한 코드가 상품과 일치하면 매장 재고에 +{scanTarget.quantity}개 반영됩니다.
+            </div>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
+              <button type="button" onClick={() => setScanTarget(null)}
+                style={{ height:38, padding:'0 18px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>취소</button>
+              <button type="button" onClick={confirmScan}
+                style={{ height:38, padding:'0 18px', border:'none', borderRadius:'var(--radius)', background:'var(--success)', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer' }}>입고확인</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

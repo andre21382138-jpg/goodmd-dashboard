@@ -21,6 +21,7 @@ export default function NotificationCenter({ profile, setPage }) {
   const isManager = profile?.job_title === '매니저';
   const isHQ      = profile?.job_title === '담당자';
   const isAdmin   = profile?.role === 'admin';
+  const isScm     = profile?.role === 'scm';
   const canHQ     = isAdmin || isHQ;
 
   const fetchDismissed = useCallback(async () => {
@@ -49,6 +50,19 @@ export default function NotificationCenter({ profile, setPage }) {
           title:'본사 발주 도착',
           msg: `상품 ${o.items?.length||0}종 · ${totalQty}개 (${o.week_start}~${o.week_end})`,
           page:'purchase_check',
+        });
+      }
+      // 2-1. 발주요청 발송완료(도착) — 입고확인 대기
+      const { count: shippedCnt } = await supabase.from('order_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('store_name', profile.department).eq('branch_name', profile.branch)
+        .eq('status', 'shipped');
+      if (shippedCnt && shippedCnt > 0) {
+        list.push({
+          key: `or_shipped_${shippedCnt}`, color:'purple', icon:'📦',
+          title:`발주 상품 발송완료 ${shippedCnt}건`,
+          msg: '도착 시 발송현황에서 입고확인을 해주세요',
+          page:'stock_request',
         });
       }
       // 2. 입고 확인 대기
@@ -149,8 +163,23 @@ export default function NotificationCenter({ profile, setPage }) {
       }
     }
 
+    if (isScm) {
+      // SCM 발송요청 대기 (본사가 발송요청한 건)
+      const { count: scmCnt } = await supabase.from('order_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'scm_requested');
+      if (scmCnt && scmCnt > 0) {
+        list.push({
+          key: `scm_req_${scmCnt}`, color:'blue', icon:'🚚',
+          title:`발송요청 ${scmCnt}건`,
+          msg: '엑셀 다운로드 → 송장 업로드 → 발송처리',
+          page:'scm_shipping',
+        });
+      }
+    }
+
     setNotifs(list);
-  }, [profile, isManager, canHQ]);
+  }, [profile, isManager, canHQ, isScm]);
 
   useEffect(() => {
     fetchDismissed(); buildNotifs();
