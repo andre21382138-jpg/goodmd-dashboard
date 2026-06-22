@@ -68,7 +68,10 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
     for (const g of list) {
       g.items.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
       g.totalQty = g.items.reduce((s, x) => s + (Number(x.quantity)||0), 0);
-      g.pendingCount = g.items.filter(x => x.status === 'pending').length;
+      g.pendingCount   = g.items.filter(x => x.status === 'pending').length;
+      g.scmReqCount    = g.items.filter(x => x.status === 'scm_requested').length;
+      g.shippedCount   = g.items.filter(x => x.status === 'shipped').length;
+      g.receivedCount  = g.items.filter(x => x.status === 'received').length;
       g.latestAt = g.items[0]?.created_at || '';
     }
     list.sort((a, b) => (b.latestAt || '').localeCompare(a.latestAt || ''));
@@ -287,7 +290,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                   <th>지점</th>
                   <th className="r" style={{width:90}}>요청 건수</th>
                   <th className="r" style={{width:90}}>총 수량</th>
-                  <th className="r" style={{width:90}}>대기 건수</th>
+                  <th style={{width:170, textAlign:'center'}}>{isPendingMode ? '대기 건수' : '상태'}</th>
                   <th>최근 요청</th>
                   <th style={{width:90, textAlign:'center'}}></th>
                 </tr>
@@ -312,9 +315,19 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                       <td><span className="badge badge-store">{g.branch_name}</span></td>
                       <td className="r" style={{fontWeight:700}}>{g.items.length}건</td>
                       <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{g.totalQty}개</td>
-                      <td className="r" style={{fontWeight:700, color: g.pendingCount > 0 ? '#e65100' : 'var(--text3)', fontFamily:'var(--mono)'}}>
-                        {g.pendingCount > 0 ? `${g.pendingCount}건` : '0'}
-                      </td>
+                      {isPendingMode ? (
+                        <td className="r" style={{fontWeight:700, color: g.pendingCount > 0 ? '#e65100' : 'var(--text3)', fontFamily:'var(--mono)'}}>
+                          {g.pendingCount > 0 ? `${g.pendingCount}건` : '0'}
+                        </td>
+                      ) : (
+                        <td style={{textAlign:'center'}}>
+                          <div style={{display:'flex', gap:4, justifyContent:'center', flexWrap:'wrap'}}>
+                            {g.scmReqCount  > 0 && <span className="badge" style={{background:'#e3f2fd', color:'#1565C0', border:'1px solid #90caf9', fontSize:10}}>발송요청 {g.scmReqCount}</span>}
+                            {g.shippedCount > 0 && <span className="badge" style={{background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', fontSize:10}}>발송완료 {g.shippedCount}</span>}
+                            {g.receivedCount> 0 && <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:10}}>입고완료 {g.receivedCount}</span>}
+                          </div>
+                        </td>
+                      )}
                       <td className="mono" style={{fontSize:11, color:'var(--text2)'}}>
                         {g.latestAt ? new Date(g.latestAt).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-'}
                       </td>
@@ -411,6 +424,9 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                                         : r.status === 'received'
                                         ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>입고완료</span>
                                         : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
+                                      {r.tracking_number && (
+                                        <div style={{fontSize:10, fontFamily:'var(--mono)', color:'var(--text3)', marginTop:3}}>📦 {r.tracking_number}</div>
+                                      )}
                                     </td>
                                     <td style={{textAlign:'center'}}>
                                       {isPendingMode && (
