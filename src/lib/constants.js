@@ -47,21 +47,20 @@ export const HQ_MENUS = [
   { key: 'stock_mgmt', icon: '📦', label: '재고관리', sub: [
     { key: 'stock_center',    icon: '🏭', label: '센터재고' },
     { key: 'stock_store',     icon: '🏬', label: '매장재고' },
-    { key: 'purchase_hq',     icon: '📋', label: '발주진행' },
     { key: 'store_info',      icon: '📍', label: '매장주소정보' },
   ]},
-  { key: 'order_request_hq', icon: '📦', label: '발주요청' },
-  { key: 'incentive',      icon: '💰', label: '급여관리' },
+  { key: 'sales_view',     icon: '📋', label: '매출조회' },
   { key: 'attendance_mgmt',icon: '🗓️', label: '근태관리' },
+  { key: 'incentive',      icon: '💰', label: '급여관리' },
   { key: 'member_mgmt', icon: '👥', label: '고객관리', sub: [
     { key: 'member_mgmt',          icon: '🔍', label: '회원 조회' },
     { key: 'sms_history',          icon: '📨', label: '문자 내역' },
     { key: 'sms_unsubscribe_sync', icon: '🚫', label: '수신거부 동기화' },
   ]},
+  { key: 'order_request_hq', icon: '📦', label: '매장 발주요청' },
   { key: 'hq_delivery_request', icon: '📦', label: '고객 택배요청' },
   { key: 'biz_delivery_request', icon: '🏭', label: '특판 발주요청' },
   { key: 'scm_shipping',   icon: '🚚', label: '매장 발주요청' },
-  { key: 'sales_view',     icon: '📋', label: '매출조회' },
 ];
 export const MANAGER_MENUS = [
   { key: 'home',           icon: '🏠', label: '홈 대시보드' },

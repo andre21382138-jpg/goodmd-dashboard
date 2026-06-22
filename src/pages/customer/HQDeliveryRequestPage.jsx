@@ -267,9 +267,11 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     } finally { setProcessing(null); }
   };
 
-  // 승인된 그룹만 선택 가능 (발송 처리 대상). 단, 본사 담당자는 삭제 위해 미승인 건도 선택 가능
+  // 승인(발송요청)된 그룹만 선택 가능. 단, 본사 담당자는 삭제 위해 미요청 건도 선택 가능
   const approvedGroups = groups.filter(g => g.approved);
   const selectableGroups = isApprover ? groups : approvedGroups;
+  // SCM은 본사가 [발송요청]한 건만 목록에 표시 (발송대기 탭)
+  const displayGroups = (isScm && tab === 'pending') ? approvedGroups : groups;
   // 선택 토글
   const toggleSelect = (key) => {
     const g = groups.find(x => x.key === key);
@@ -418,7 +420,9 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, gap:8, flexWrap:'wrap'}}>
           <span className="fresult">
             {tab === 'pending'
-              ? <>발송 대기 중인 본사 택배 요청 — <b>{groups.length}</b>건 · 확인됨 <b style={{color:'#2e7d32'}}>{approvedGroups.length}</b> / 대기 <b style={{color:'#e65100'}}>{groups.length - approvedGroups.length}</b>{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>
+              ? (isScm
+                  ? <>발송요청 받은 건 — <b>{displayGroups.length}</b>건{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>
+                  : <>발송 대기 중인 고객 택배 요청 — <b>{groups.length}</b>건 · 발송요청됨 <b style={{color:'#2e7d32'}}>{approvedGroups.length}</b> / 대기 <b style={{color:'#e65100'}}>{groups.length - approvedGroups.length}</b>{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>)
               : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>{fFrom} ~ {fTo}</span></>}
           </span>
           {tab === 'pending' && (
@@ -460,8 +464,8 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
         </div>
 
         {loading ? <div className="empty"><span className="spinner"/></div>
-          : groups.length === 0 ? <div className="empty">
-              {tab === 'pending' ? '발송 대기 중인 요청이 없습니다' : '발송 완료 이력이 없습니다'}
+          : (tab === 'pending' ? displayGroups.length === 0 : groups.length === 0) ? <div className="empty">
+              {tab === 'pending' ? (isScm ? '본사가 발송요청한 건이 없습니다' : '발송 대기 중인 요청이 없습니다') : '발송 완료 이력이 없습니다'}
             </div>
           : (
           <div className="twrap">
@@ -487,12 +491,12 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                   <th>연락처</th>
                   <th>요청사항</th>
                   <th style={{textAlign:'center', width:140}}>송장번호</th>
-                  {tab === 'pending' && <th style={{textAlign:'center', width:130}}>본사 확인</th>}
+                  {tab === 'pending' && <th style={{textAlign:'center', width:130}}>발송요청</th>}
                   {tab === 'dispatched' && <th style={{textAlign:'center', width:110}}>발송일</th>}
                 </tr>
               </thead>
               <tbody>
-                {groups.flatMap((g, gIdx) => {
+                {displayGroups.flatMap((g, gIdx) => {
                   // 그룹 시각적 구분: 짝수 그룹 흰색, 홀수 그룹 매우 옅은 노랑
                   const groupBg = gIdx % 2 === 0 ? '#fff' : '#fffdf5';
                   const rs = g.items.length;
@@ -553,19 +557,19 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                         <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle, ...((!g.approved)?{background:'#fafafa'}:{})}}>
                           {g.approved ? (
                             <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:4}}>
-                              <span style={{fontSize:11, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'2px 8px', borderRadius:4}}>✅ 확인됨</span>
+                              <span style={{fontSize:11, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'2px 8px', borderRadius:4}}>✅ 발송요청됨</span>
                               {isApprover && (
                                 <button type="button" onClick={() => handleApprove(g, false)} disabled={processing === g.key}
-                                  style={{fontSize:10, color:'var(--text3)', background:'none', border:'none', cursor:'pointer', textDecoration:'underline'}}>승인취소</button>
+                                  style={{fontSize:10, color:'var(--text3)', background:'none', border:'none', cursor:'pointer', textDecoration:'underline'}}>요청취소</button>
                               )}
                             </div>
                           ) : isApprover ? (
                             <button type="button" onClick={() => handleApprove(g, true)} disabled={processing === g.key}
-                              style={{height:30, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'var(--accent)', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer'}}>
-                              {processing === g.key ? <span className="spinner"/> : '✓ 확인'}
+                              style={{height:30, padding:'0 14px', border:'1px solid #6a1b9a', borderRadius:'var(--radius)', background:'#6a1b9a', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                              {processing === g.key ? <span className="spinner"/> : '📤 발송요청'}
                             </button>
                           ) : (
-                            <span style={{fontSize:11, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'2px 8px', borderRadius:4}}>본사 확인 대기</span>
+                            <span style={{fontSize:11, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'2px 8px', borderRadius:4}}>발송요청 대기</span>
                           )}
                         </td>
                       )}

@@ -97,16 +97,17 @@ export default function NotificationCenter({ profile, setPage }) {
     }
 
     if (canHQ) {
-      // 본사 택배발송 대기
-      const { count: pendingDelivery } = await supabase.from('sales')
+      // 본사 — 고객 택배 발송요청 대기 (아직 발송요청 안 누른 건)
+      const { count: needApprove } = await supabase.from('sales')
         .select('id', { count: 'exact', head: true })
         .eq('delivery_type', 'hq')
-        .eq('delivery_status', 'pending');
-      if (pendingDelivery && pendingDelivery > 0) {
+        .eq('delivery_status', 'pending')
+        .is('delivery_approved_at', null);
+      if (needApprove && needApprove > 0) {
         list.push({
-          key: `hq_delivery_pending`, color:'orange', icon:'📦',
-          title:`택배 발송요청 ${pendingDelivery}건`,
-          msg:'본사 발송 처리 대기 중',
+          key: `hq_delivery_need_approve`, color:'orange', icon:'📦',
+          title:`고객 택배 발송요청 대기 ${needApprove}건`,
+          msg:'내용 확인 후 [발송요청]을 눌러주세요',
           page:'hq_delivery_request',
         });
       }
@@ -163,16 +164,30 @@ export default function NotificationCenter({ profile, setPage }) {
     }
 
     if (isScm) {
-      // SCM 발송요청 대기 (본사가 발송요청한 건)
+      // SCM 매장 발주요청 — 본사가 발송요청한 건
       const { count: scmCnt } = await supabase.from('order_requests')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'scm_requested');
       if (scmCnt && scmCnt > 0) {
         list.push({
           key: `scm_req_${scmCnt}`, color:'blue', icon:'🚚',
-          title:`발송요청 ${scmCnt}건`,
+          title:`매장 발주요청 ${scmCnt}건`,
           msg: '엑셀 다운로드 → 송장 업로드 → 발송처리',
           page:'scm_shipping',
+        });
+      }
+      // SCM 고객 택배 — 본사가 발송요청(승인)한 건
+      const { count: custCnt } = await supabase.from('sales')
+        .select('id', { count: 'exact', head: true })
+        .eq('delivery_type', 'hq')
+        .eq('delivery_status', 'pending')
+        .not('delivery_approved_at', 'is', null);
+      if (custCnt && custCnt > 0) {
+        list.push({
+          key: `scm_cust_${custCnt}`, color:'orange', icon:'📦',
+          title:`고객 택배 발송 ${custCnt}건`,
+          msg: '본사 발송요청 완료 — 발송 처리해주세요',
+          page:'hq_delivery_request',
         });
       }
     }
