@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
+import StoreStockPage from './StoreStockPage';
 
 // 매장 발주요청 — 역할별 단일 메뉴
 //  탭1 발주요청: 매장재고 상품별 (기간판매량 / 현재고 / 발주수량 자동) 작성 → [발주요청]
@@ -12,7 +13,7 @@ export default function StockRequestPage({ profile }) {
   const branch = profile.branch;
   const today  = new Date().toISOString().slice(0, 10);
 
-  const [tab, setTab] = useState('request'); // 'request' | 'status'
+  const [tab, setTab] = useState('request'); // 'stock' | 'request' | 'status'
 
   // ── 발주요청 작성 ──
   const [sheetLoading, setSheetLoading] = useState(true);
@@ -245,9 +246,13 @@ export default function StockRequestPage({ profile }) {
   return (
     <div>
       <div className="tabbar" style={{ display:'flex', gap:4, marginBottom:14 }}>
+        <button className={`tab ${tab==='stock'?'on':''}`} onClick={() => setTab('stock')}>📊 재고현황</button>
         <button className={`tab ${tab==='request'?'on':''}`} onClick={() => setTab('request')}>📝 발주요청</button>
-        <button className={`tab ${tab==='status'?'on':''}`} onClick={() => setTab('status')}>🚚 발송현황</button>
+        <button className={`tab ${tab==='status'?'on':''}`} onClick={() => setTab('status')}>📥 입고확인</button>
       </div>
+
+      {/* ── 재고현황 ── */}
+      {tab === 'stock' && <StoreStockPage profile={profile}/>}
 
       {/* ── 발주요청 ── */}
       {tab === 'request' && (
@@ -346,7 +351,7 @@ export default function StockRequestPage({ profile }) {
       {/* ── 발송현황 ── */}
       {tab === 'status' && (
         <div className="card">
-          <div className="card-label">🚚 발송현황 / 요청이력</div>
+          <div className="card-label">📥 입고확인 / 발송현황</div>
           {histLoading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
