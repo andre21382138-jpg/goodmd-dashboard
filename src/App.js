@@ -617,6 +617,7 @@ export default function App() {
   // SCM 담당자는 본사 택배요청 + 재고관리 메뉴만 접근 가능 — 그 외 페이지로 가지 못하도록 자동 리다이렉트
   const SCM_ALLOWED_PAGES = useMemo(() => new Set([
     'hq_delivery_request',
+    'biz_delivery_request',
     'scm_shipping',
     'help',
   ]), []);
@@ -727,7 +728,8 @@ export default function App() {
     member_mgmt:    '회원 조회',
     sms_history:    '문자 내역',
     sms_unsubscribe_sync: '수신거부 동기화',
-    hq_delivery_request: '택배요청',
+    hq_delivery_request: '고객 택배요청',
+    biz_delivery_request: '특판 발주요청',
     store_info:     '매장주소정보',
     sales_view:          '매출조회',
     sales_list:          '매장 매출',
@@ -820,7 +822,8 @@ export default function App() {
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
             {page === 'sms_unsubscribe_sync' && canSeeMain && <SmsUnsubscribeSyncPage/>}
-            {page === 'hq_delivery_request' && (canSeeMain || isScm) && <HQDeliveryRequestPage profile={profile}/>}
+            {page === 'hq_delivery_request' && (canSeeMain || isScm) && <HQDeliveryRequestPage profile={profile} view="customer"/>}
+            {page === 'biz_delivery_request' && (canSeeMain || isScm) && <HQDeliveryRequestPage profile={profile} view="biz"/>}
             {page === 'store_info'     && (canSeeMain || isScm) && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}

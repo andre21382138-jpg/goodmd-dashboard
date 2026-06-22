@@ -120,11 +120,12 @@ function groupSales(rows) {
   return list.sort((a, b) => (b.sold_at || '').localeCompare(a.sold_at || ''));
 }
 
-export default function HQDeliveryRequestPage({ profile }) {
+export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
+  // view='customer' → 고객 택배요청(매장 본사요청)만 / view='biz' → 특판 택배·용차만
   // 본사 담당자(또는 admin)는 요청 [확인] 승인 가능, SCM은 승인된 건만 처리
   const isApprover = profile?.role === 'admin' || profile?.job_title === '담당자';
   const isScm = profile?.role === 'scm';
-  const [mainTab, setMainTab] = useState('store'); // 'store' | 'biz_courier' | 'biz_truck'
+  const [mainTab, setMainTab] = useState(view === 'biz' ? 'biz_courier' : 'store'); // 'store' | 'biz_courier' | 'biz_truck'
   const [tab, setTab] = useState('pending');
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -349,24 +350,25 @@ export default function HQDeliveryRequestPage({ profile }) {
 
   return (
     <div>
-      {/* 메인 탭: 매장 본사요청 / 특판 택배 / 특판 용차 */}
-      <div style={{display:'flex', gap:8, marginBottom:14, borderBottom:'2px solid var(--border)'}}>
-        {[
-          { key:'store',       label:'📦 매장 본사요청' },
-          { key:'biz_courier', label:'🏭 특판 택배' },
-          { key:'biz_truck',   label:'🚚 특판 용차' },
-        ].map(t => (
-          <button key={t.key} type="button" onClick={() => setMainTab(t.key)}
-            style={{
-              padding:'10px 18px', border:'none', background:'transparent',
-              borderBottom: mainTab === t.key ? '3px solid var(--accent)' : '3px solid transparent',
-              marginBottom:-2, fontSize:14, fontWeight:700, cursor:'pointer',
-              color: mainTab === t.key ? 'var(--accent)' : 'var(--text2)',
-            }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* 특판 뷰에서만 택배/용차 메인 탭 노출. 고객 택배요청 뷰는 단일 화면 */}
+      {view === 'biz' && (
+        <div style={{display:'flex', gap:8, marginBottom:14, borderBottom:'2px solid var(--border)'}}>
+          {[
+            { key:'biz_courier', label:'🏭 특판 택배' },
+            { key:'biz_truck',   label:'🚚 특판 용차' },
+          ].map(t => (
+            <button key={t.key} type="button" onClick={() => setMainTab(t.key)}
+              style={{
+                padding:'10px 18px', border:'none', background:'transparent',
+                borderBottom: mainTab === t.key ? '3px solid var(--accent)' : '3px solid transparent',
+                marginBottom:-2, fontSize:14, fontWeight:700, cursor:'pointer',
+                color: mainTab === t.key ? 'var(--accent)' : 'var(--text2)',
+              }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 특판 탭은 별도 컴포넌트 */}
       {mainTab === 'biz_courier' && <HQDeliveryBizView kind="courier" profile={profile}/>}

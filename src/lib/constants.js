@@ -58,7 +58,8 @@ export const HQ_MENUS = [
     { key: 'sms_history',          icon: '📨', label: '문자 내역' },
     { key: 'sms_unsubscribe_sync', icon: '🚫', label: '수신거부 동기화' },
   ]},
-  { key: 'hq_delivery_request', icon: '📦', label: '택배요청' },
+  { key: 'hq_delivery_request', icon: '📦', label: '고객 택배요청' },
+  { key: 'biz_delivery_request', icon: '🏭', label: '특판 발주요청' },
   { key: 'scm_shipping',   icon: '🚚', label: '매장 발주요청' },
   { key: 'sales_view',     icon: '📋', label: '매출조회' },
 ];
