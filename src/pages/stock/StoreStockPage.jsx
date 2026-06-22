@@ -289,14 +289,20 @@ export default function StoreStockPage({ profile }) {
       });
   }, [isManager, fetchAllPaged]);
 
+  const [sortQty, setSortQty] = useState(''); // '' 기본 | 'desc' 많은순 | 'asc' 적은순
   const filtered = useMemo(() => {
-    if (!fSearch.trim()) return stocks;
-    const kw = fSearch.trim().toLowerCase();
-    return stocks.filter(s =>
-      (s.product_name||'').toLowerCase().includes(kw) ||
-      (s.product_code||'').toLowerCase().includes(kw)
-    );
-  }, [stocks, fSearch]);
+    let list = stocks;
+    if (fSearch.trim()) {
+      const kw = fSearch.trim().toLowerCase();
+      list = list.filter(s =>
+        (s.product_name||'').toLowerCase().includes(kw) ||
+        (s.product_code||'').toLowerCase().includes(kw)
+      );
+    }
+    if (sortQty === 'desc')      list = [...list].sort((a,b) => (b.stock_qty||0) - (a.stock_qty||0));
+    else if (sortQty === 'asc')  list = [...list].sort((a,b) => (a.stock_qty||0) - (b.stock_qty||0));
+    return list;
+  }, [stocks, fSearch, sortQty]);
 
   const totalQty = useMemo(() => filtered.reduce((s,r) => s+(r.stock_qty||0), 0), [filtered]);
 
@@ -409,8 +415,13 @@ export default function StoreStockPage({ profile }) {
           )}
           <input className="finput" value={fSearch} onChange={e=>setFSearch(e.target.value)}
             placeholder="🔍 상품명·상품코드 검색" style={{height:34, minWidth:200}}/>
-          {(fStore||fBranch||fSearch) && !isManager &&
-            <button className="btn-ghost" onClick={()=>{setFStore('');setFBranch('');setFSearch('');}}>✕ 초기화</button>}
+          <select className="fsel" value={sortQty} onChange={e=>setSortQty(e.target.value)} title="재고 수량 정렬">
+            <option value="">기본 정렬</option>
+            <option value="desc">재고 많은순</option>
+            <option value="asc">재고 적은순</option>
+          </select>
+          {(fStore||fBranch||fSearch||sortQty) && !isManager &&
+            <button className="btn-ghost" onClick={()=>{setFStore('');setFBranch('');setFSearch('');setSortQty('');}}>✕ 초기화</button>}
           <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:10}}>
             <span className="fresult">
               <b>{filtered.length.toLocaleString()}</b>개 상품 · 총 재고 <b>{totalQty.toLocaleString()}</b>개

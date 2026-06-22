@@ -67,7 +67,7 @@ export const MANAGER_MENUS = [
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
   { key: 'mgr_sales_view', icon: '📊', label: '매출 조회' },
   { key: 'sales_return',   icon: '↩️', label: '반품 접수' },
-  { key: 'store_delivery_status', icon: '🚚', label: '본사 발송내역' },
+  { key: 'store_delivery_status', icon: '🚚', label: '고객택배 발송현황' },
   { key: 'customer_reg',   icon: '👤', label: '회원 관리', sub: [
     { key: 'customer_qr',  icon: '📱', label: 'QR 가입' },
     { key: 'customer_doc', icon: '📝', label: '서류 가입' },

@@ -739,7 +739,7 @@ export default function App() {
     sales_input:    '판매 입력',
     sales_return:   '반품 접수',
     mgr_sales_view: '매출 조회',
-    store_delivery_status: '본사 발송내역',
+    store_delivery_status: '고객택배 발송현황',
     purchase_hq:    '발주진행',
     order_request_hq: '매장 발주요청',
     scm_shipping:   '매장 발주요청',
