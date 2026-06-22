@@ -50,6 +50,7 @@ export const HQ_MENUS = [
     { key: 'purchase_hq',     icon: '📋', label: '발주진행' },
     { key: 'store_info',      icon: '📍', label: '매장주소정보' },
   ]},
+  { key: 'order_request_hq', icon: '📦', label: '발주요청' },
   { key: 'incentive',      icon: '💰', label: '급여관리' },
   { key: 'attendance_mgmt',icon: '🗓️', label: '근태관리' },
   { key: 'member_mgmt', icon: '👥', label: '고객관리', sub: [

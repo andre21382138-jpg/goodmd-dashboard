@@ -119,10 +119,9 @@ export default function NotificationCenter({ profile, setPage }) {
         const sampleNames = stockReq.slice(0, 3).map(r => `${r.store_name} ${r.branch_name}`).join(', ');
         list.push({
           key: `stock_request_pending`, color:'blue', icon:'📋',
-          title:`새 재고요청 ${stockReq.length}건`,
+          title:`새 발주요청 ${stockReq.length}건`,
           msg: stockReq.length <= 3 ? sampleNames : `${sampleNames} 외 ${stockReq.length - 3}건`,
-          page:'purchase_hq',
-          tab: 'stock_request',
+          page:'order_request_hq',
         });
       }
       // 매장 발주요청
