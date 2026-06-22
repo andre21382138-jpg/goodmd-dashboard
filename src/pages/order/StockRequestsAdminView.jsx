@@ -136,6 +136,30 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
     setSendingScm(null);
   };
 
+  // 선택분 일괄 [발송요청] — 선택된 모든 매장의 pending 항목을 한 번에 SCM 전송
+  const sendSelectedToScm = async () => {
+    const ids = rows.filter(r => selectedIds.has(r.id) && r.status === 'pending').map(r => r.id);
+    if (ids.length === 0) { toast('발송요청할 대기 항목을 선택해주세요', 'err'); return; }
+    const storeCount = new Set(rows.filter(r => ids.includes(r.id)).map(r => `${r.store_name}|${r.branch_name}`)).size;
+    if (!window.confirm(`선택한 ${storeCount}개 매장 / ${ids.length}건을 SCM으로 발송요청하시겠습니까?`)) return;
+    setSendingScm('__bulk__');
+    try {
+      const { error } = await supabase.from('order_requests').update({
+        status: 'scm_requested',
+        scm_requested_at: new Date().toISOString(),
+        scm_requested_by: profile?.id || null,
+        updated_at: new Date().toISOString(),
+      }).in('id', ids);
+      if (error) throw error;
+      toast(`${ids.length}건 SCM 발송요청 완료`, 'ok');
+      setSelectedIds(new Set());
+      fetchData();
+    } catch (err) {
+      toast('발송요청 실패: ' + (err.message || err), 'err');
+    }
+    setSendingScm(null);
+  };
+
   // 선택한 재고요청 일괄 삭제
   const deleteSelected = async () => {
     const ids = [...selectedIds];
@@ -228,11 +252,18 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
             )}
             {/* 송장업로드·엑셀다운로드는 SCM 담당 — 본사는 검토 후 [발송요청]만 */}
             {isPendingMode && selectedIds.size > 0 && (
-              <button type="button" onClick={deleteSelected} disabled={exporting}
-                title="선택한 재고요청을 일괄 삭제"
-                style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background:'#ffebee', color:'var(--danger)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
-                🗑 선택 삭제 ({selectedIds.size})
-              </button>
+              <>
+                <button type="button" onClick={sendSelectedToScm} disabled={sendingScm === '__bulk__'}
+                  title="선택한 모든 매장의 발주요청을 한 번에 SCM으로 발송요청"
+                  style={{height:30, padding:'0 12px', border:'1px solid #6a1b9a', borderRadius:'var(--radius)', background:'#f3e5f5', color:'#6a1b9a', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                  {sendingScm === '__bulk__' ? <span className="spinner"/> : `📤 선택 발송요청 (${selectedIds.size})`}
+                </button>
+                <button type="button" onClick={deleteSelected} disabled={exporting}
+                  title="선택한 재고요청을 일괄 삭제"
+                  style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background:'#ffebee', color:'var(--danger)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                  🗑 선택 삭제 ({selectedIds.size})
+                </button>
+              </>
             )}
             <button className="btn btn-s" onClick={fetchData} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔄 새로고침'}
