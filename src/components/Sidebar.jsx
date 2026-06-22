@@ -444,7 +444,7 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
         {isScm && (
           <>
             <div className="sidebar-section">본사</div>
-            {HQ_MENUS.filter(m => m.key === 'hq_delivery_request' || m.key === 'stock_mgmt').map(m => {
+            {HQ_MENUS.filter(m => m.key === 'hq_delivery_request' || m.key === 'scm_shipping' || m.key === 'stock_mgmt').map(m => {
               const hasSub = m.sub && m.sub.length > 0;
               const isActive = isOn(m.key) || (hasSub && m.sub.some(s => isOn(s.key)));
               const isOpen = flyoutKey === m.key;
@@ -464,7 +464,7 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
         {canSeeMain && (
           <>
             <div className="sidebar-section">본사</div>
-            {HQ_MENUS.map(m => {
+            {HQ_MENUS.filter(m => m.key !== 'scm_shipping').map(m => {
               const hasSub = m.sub && m.sub.length > 0;
               const isActive = isOn(m.key) || (hasSub && m.sub.some(s => isOn(s.key)));
               const isOpen = flyoutKey === m.key;

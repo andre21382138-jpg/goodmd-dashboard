@@ -19,6 +19,7 @@ import MgrSalesViewPage from './pages/sales/MgrSalesViewPage';
 import StoreDeliveryStatusPage from './pages/customer/StoreDeliveryStatusPage';
 import PurchaseOrderHQPage from './pages/order/PurchaseOrderHQPage';
 import PurchaseOrderMgrPage from './pages/order/PurchaseOrderMgrPage';
+import ScmShippingPage from './pages/order/ScmShippingPage';
 import SalesListPage from './pages/sales/SalesListPage';
 import LectureSalesPage from './pages/sales/LectureSalesPage';
 import BizSalesPage from './pages/sales/BizSalesPage';
@@ -615,6 +616,7 @@ export default function App() {
   // SCM 담당자는 본사 택배요청 + 재고관리 메뉴만 접근 가능 — 그 외 페이지로 가지 못하도록 자동 리다이렉트
   const SCM_ALLOWED_PAGES = useMemo(() => new Set([
     'hq_delivery_request',
+    'scm_shipping',
     'help',
     // 본사 재고관리 sub 메뉴
     'stock_mgmt', 'stock_center', 'stock_store', 'purchase_hq', 'store_info',
@@ -737,6 +739,7 @@ export default function App() {
     mgr_sales_view: '매출 조회',
     store_delivery_status: '본사 발송내역',
     purchase_hq:    '발주진행',
+    scm_shipping:   '발송요청',
     purchase_check: '발주 확인',
     customer_input: '회원 등록',
     customer_qr:    'QR 가입',
@@ -828,6 +831,7 @@ export default function App() {
             {page === 'mgr_sales_view' && (isManager || isAdmin || isHQ) && <MgrSalesViewPage profile={profile}/>}
             {page === 'store_delivery_status' && (isManager || isAdmin || isHQ) && <StoreDeliveryStatusPage profile={profile}/>}
             {page === 'purchase_hq'    && (isAdmin || isHQ || isScm) && <PurchaseOrderHQPage profile={profile}/>}
+            {page === 'scm_shipping'   && (isScm || isAdmin || isHQ) && <ScmShippingPage profile={profile}/>}
             {page === 'purchase_check' && (isManager || isAdmin || isHQ) && <PurchaseOrderMgrPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'customer_qr'    && (isManager || isAdmin || isHQ) && <CustomerQRPage profile={profile}/>}
