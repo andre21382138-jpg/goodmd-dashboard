@@ -180,11 +180,14 @@ export default function SalesInputPage({ profile }) {
   }, [allProducts]);
 
   const fetchRecent = useCallback(async () => {
+    // 당일(로컬 0시 이후) 입력한 판매 전체 — created_at 기준
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
     const { data } = await supabase.from('sales')
       .select('*, brand:brands(name), product:products(name), customer:customers(name,phone)')
       .eq('created_by', profile.id)
+      .gte('created_at', startOfToday.toISOString())
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(1000);
     setRecent(data || []);
   }, [profile.id]);
 
@@ -1027,9 +1030,9 @@ export default function SalesInputPage({ profile }) {
         );
       })()}
 
-      {/* 최근 입력 내역 */}
+      {/* 오늘 입력 내역 */}
       <div className="card">
-        <div className="card-label">최근 입력 내역 (10건)</div>
+        <div className="card-label">오늘 입력 내역 ({recentSales.length}건)</div>
         <div className="twrap">
           <table>
             <thead>
