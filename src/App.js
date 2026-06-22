@@ -827,7 +827,7 @@ export default function App() {
             {page === 'store_info'     && (canSeeMain || isScm) && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
-            {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage}/>}
+            {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage} mode="view"/>}
             {page === 'lecture_sales_view'  && canSeeMain && <LectureSalesPage profile={profile} setPage={setPage}/>}
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
             {page === 'sales_return'   && (isManager || isAdmin || isHQ) && <SalesReturnPage profile={profile}/>}

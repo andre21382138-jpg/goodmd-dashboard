@@ -3,9 +3,10 @@ import { supabase } from '../../lib/supabase';
 import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
 import SalesTabNav from './SalesTabNav';
 
-export default function BizSalesPage({ profile, setPage }) {
+// mode: 'full'(조회+입력 탭) | 'view'(현황 조회만) | 'input'(매출 입력만)
+export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
   const today = new Date().toISOString().slice(0,10);
-  const [tab, setTab] = useState('list'); // 'list' | 'input'
+  const [tab, setTab] = useState(mode === 'input' ? 'input' : 'list'); // 'list' | 'input'
 
   // 입력 폼 (거래 단위)
   const [soldAt,         setSoldAt]         = useState(today);
@@ -317,18 +318,20 @@ export default function BizSalesPage({ profile, setPage }) {
   return (
     <div>
       {setPage && <SalesTabNav current="biz_sales_view" setPage={setPage}/>}
-      {/* 탭 */}
-      <div style={{display:'flex', gap:8, marginBottom:16}}>
-        {[{key:'list',label:'📋 특판 매출 조회'},{key:'input',label:'➕ 매출 입력'}].map(t=>(
-          <button key={t.key} onClick={()=>setTab(t.key)}
-            style={{height:36, padding:'0 18px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
-              borderColor: tab===t.key?'var(--accent)':'var(--border)',
-              background:  tab===t.key?'#fff3e0':'#fff',
-              color:       tab===t.key?'var(--accent)':'var(--text2)'}}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* 탭 — full 모드에서만 노출 (view/input은 단일 화면) */}
+      {mode === 'full' && (
+        <div style={{display:'flex', gap:8, marginBottom:16}}>
+          {[{key:'list',label:'📋 특판 매출 조회'},{key:'input',label:'➕ 매출 입력'}].map(t=>(
+            <button key={t.key} onClick={()=>setTab(t.key)}
+              style={{height:36, padding:'0 18px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+                borderColor: tab===t.key?'var(--accent)':'var(--border)',
+                background:  tab===t.key?'#fff3e0':'#fff',
+                color:       tab===t.key?'var(--accent)':'var(--text2)'}}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 매출 입력 탭 */}
       {tab==='input' && (

@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { toast, dlBlob } from '../../lib/utils';
 import { ORDER_CONSTANTS, STORE_MAP, STORE_NAMES } from '../../lib/constants';
 import HQDeliveryBizView from './HQDeliveryBizView';
+import BizSalesPage from '../sales/BizSalesPage';
 
 // 31-컬럼 발주 양식 헤더 (sample: 매장발주_26.05.21_전송건.xls)
 export const DELIVERY_HEADERS = [
@@ -125,7 +126,7 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
   // 본사 담당자(또는 admin)는 요청 [확인] 승인 가능, SCM은 승인된 건만 처리
   const isApprover = profile?.role === 'admin' || profile?.job_title === '담당자';
   const isScm = profile?.role === 'scm';
-  const [mainTab, setMainTab] = useState(view === 'biz' ? 'biz_courier' : 'store'); // 'store' | 'biz_courier' | 'biz_truck'
+  const [mainTab, setMainTab] = useState(view === 'biz' ? (isApprover ? 'biz_input' : 'biz_courier') : 'store'); // 'biz_input' | 'biz_courier' | 'biz_truck' | 'store'
   const [tab, setTab] = useState('pending');
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -352,10 +353,11 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
 
   return (
     <div>
-      {/* 특판 뷰에서만 택배/용차 메인 탭 노출. 고객 택배요청 뷰는 단일 화면 */}
+      {/* 특판 뷰에서만 메인 탭 노출. 발주입력은 본사만 */}
       {view === 'biz' && (
         <div style={{display:'flex', gap:8, marginBottom:14, borderBottom:'2px solid var(--border)'}}>
           {[
+            ...(isApprover ? [{ key:'biz_input', label:'📝 특판 발주입력' }] : []),
             { key:'biz_courier', label:'🏭 특판 택배' },
             { key:'biz_truck',   label:'🚚 특판 용차' },
           ].map(t => (
@@ -372,7 +374,9 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
         </div>
       )}
 
-      {/* 특판 탭은 별도 컴포넌트 */}
+      {/* 특판 발주입력 (본사) — 특판 매출 등록 = 발송 요청 생성 */}
+      {mainTab === 'biz_input'   && isApprover && <BizSalesPage profile={profile} mode="input"/>}
+      {/* 특판 발송 처리 */}
       {mainTab === 'biz_courier' && <HQDeliveryBizView kind="courier" profile={profile}/>}
       {mainTab === 'biz_truck'   && <HQDeliveryBizView kind="truck"   profile={profile}/>}
 
