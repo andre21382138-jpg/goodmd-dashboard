@@ -252,8 +252,9 @@ const GLOBAL_CSS = `
   tr:hover td { background: #fffde7; }
   tr:last-child td { border-bottom: none; }
   .badge { display: inline-flex; padding: 2px 9px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-  .badge-dept  { background: #fff3e0; color: #BF360C; border: 1px solid #ffcc80; }
-  .badge-store { background: #e3f2fd; color: #0D47A1; border: 1px solid #90caf9; }
+  /* 매장/점포 배지 — 알록달록함 줄이고 회색 톤으로 통일 (점포=옅은 채움, 지점=외곽선) */
+  .badge-dept  { background: #eef0f2; color: #2b2b2b; border: 1px solid #d6dadf; }
+  .badge-store { background: #ffffff; color: #555555; border: 1px solid #d6dadf; }
   .safety-num { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--accent); }
   .wk-head { text-align: center !important; }
   .wk-head.latest { color: #C62828 !important; }

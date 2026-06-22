@@ -522,7 +522,10 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                       )}
                       {iIdx === 0 && (
                         <td rowSpan={rs} style={{fontSize:11, ...mergedStyle}}>
-                          <span className="badge badge-dept">{g.store_name}</span> <span className="badge badge-store">{g.branch_name}</span>
+                          <div style={{display:'flex', flexDirection:'column', gap:2, alignItems:'flex-start'}}>
+                            <span className="badge badge-dept">{g.store_name}</span>
+                            <span className="badge badge-store">{g.branch_name}</span>
+                          </div>
                         </td>
                       )}
                       <td style={{fontSize:12, ...lineBorder}}>{it.product?.name || '-'}</td>
