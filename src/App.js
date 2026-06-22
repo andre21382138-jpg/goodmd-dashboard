@@ -619,8 +619,6 @@ export default function App() {
     'hq_delivery_request',
     'scm_shipping',
     'help',
-    // 본사 재고관리 sub 메뉴
-    'stock_mgmt', 'stock_center', 'stock_store', 'purchase_hq', 'store_info',
   ]), []);
   useEffect(() => {
     if (profile?.role === 'scm' && !SCM_ALLOWED_PAGES.has(page)) {
