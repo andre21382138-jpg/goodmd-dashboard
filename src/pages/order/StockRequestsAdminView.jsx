@@ -44,9 +44,10 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
       // 매장재고요청 탭은 pending(또는 fulfilled - 별도 처리)만 보여줌
       if (fStatus !== 'all') q = q.eq('status', fStatus);
     } else {
-      // 매장발주완료 탭은 ordered/received만 보여줌
-      if (fStatus === 'ordered' || fStatus === 'received') q = q.eq('status', fStatus);
-      else q = q.in('status', ['ordered', 'received']);
+      // 매장발주완료(발송현황) 탭 — SCM 발송요청/발송완료/입고완료
+      const completedSet = ['scm_requested', 'shipped', 'received', 'ordered'];
+      if (completedSet.includes(fStatus)) q = q.eq('status', fStatus);
+      else q = q.in('status', completedSet);
     }
     const { data, error } = await q;
     if (error) toast(error.message, 'err');
@@ -201,6 +202,30 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
     if (error) toast(error.message, 'err');
     else { toast('재고요청 삭제 완료', 'inf'); fetchData(); }
     setProcessing(null);
+  };
+
+  // 매장(그룹) 단위 [발송요청] — 해당 그룹의 pending 항목을 SCM으로 전송(scm_requested)
+  const [sendingScm, setSendingScm] = useState(null);
+  const sendToScm = async (g) => {
+    const ids = g.items.filter(it => it.status === 'pending').map(it => it.id);
+    if (ids.length === 0) { toast('발송요청할 대기 항목이 없습니다', 'err'); return; }
+    if (!window.confirm(`${g.store_name} ${g.branch_name}\n발주요청 ${ids.length}건을 SCM으로 발송요청하시겠습니까?`)) return;
+    setSendingScm(g.key);
+    try {
+      const { error } = await supabase.from('order_requests').update({
+        status: 'scm_requested',
+        scm_requested_at: new Date().toISOString(),
+        scm_requested_by: profile?.id || null,
+        updated_at: new Date().toISOString(),
+      }).in('id', ids);
+      if (error) throw error;
+      toast(`${g.store_name} ${g.branch_name} — ${ids.length}건 SCM 발송요청 완료`, 'ok');
+      setSelectedIds(new Set());
+      fetchData();
+    } catch (err) {
+      toast('발송요청 실패: ' + (err.message || err), 'err');
+    }
+    setSendingScm(null);
   };
 
   // 선택한 재고요청 일괄 삭제
@@ -358,8 +383,9 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
             </select>
           ) : (
             <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
-              <option value="all_completed">전체 (발주중+입고완료)</option>
-              <option value="ordered">발주진행중</option>
+              <option value="all_completed">전체</option>
+              <option value="scm_requested">SCM 발송요청</option>
+              <option value="shipped">발송완료</option>
               <option value="received">입고완료</option>
             </select>
           )}
@@ -450,11 +476,20 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                       <td className="mono" style={{fontSize:11, color:'var(--text2)'}}>
                         {g.latestAt ? new Date(g.latestAt).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-'}
                       </td>
-                      <td style={{textAlign:'center'}}>
-                        <button className="btn btn-s" style={{padding:'3px 10px', fontSize:11}}
-                          onClick={(e) => { e.stopPropagation(); setExpandedKey(open ? null : g.key); }}>
-                          {open ? '▲ 닫기' : '▼ 펼침'}
-                        </button>
+                      <td style={{textAlign:'center'}} onClick={e => e.stopPropagation()}>
+                        <div style={{display:'flex', gap:4, justifyContent:'center', alignItems:'center'}}>
+                          {isPendingMode && g.pendingCount > 0 && (
+                            <button type="button" onClick={() => sendToScm(g)} disabled={sendingScm === g.key}
+                              title="이 매장의 발주요청을 SCM으로 발송요청"
+                              style={{padding:'3px 10px', fontSize:11, fontWeight:700, border:'1px solid #6a1b9a', borderRadius:4, background:'#f3e5f5', color:'#6a1b9a', cursor:'pointer', whiteSpace:'nowrap'}}>
+                              {sendingScm === g.key ? <span className="spinner"/> : `📤 발송요청 (${g.pendingCount})`}
+                            </button>
+                          )}
+                          <button className="btn btn-s" style={{padding:'3px 10px', fontSize:11}}
+                            onClick={() => setExpandedKey(open ? null : g.key)}>
+                            {open ? '▲ 닫기' : '▼ 펼침'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     {open && (
@@ -523,6 +558,10 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                                     <td style={{textAlign:'center'}}>
                                       {isPending
                                         ? <span className="badge" style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', fontSize:11}}>대기</span>
+                                        : r.status === 'scm_requested'
+                                        ? <span className="badge" style={{background:'#e3f2fd', color:'#1565C0', border:'1px solid #90caf9', fontSize:11}}>SCM 발송요청</span>
+                                        : r.status === 'shipped'
+                                        ? <span className="badge" style={{background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', fontSize:11}}>발송완료</span>
                                         : r.status === 'fulfilled'
                                         ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>자체처리완료</span>
                                         : r.status === 'ordered'
