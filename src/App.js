@@ -399,6 +399,9 @@ function LoginForm({ onGoSignup }) {
       if (isNetworkError(err)) {
         userMsg = '네트워크가 일시적으로 불안정합니다. 잠시 후 다시 시도해주세요';
       }
+      if (String(err.message || err).toLowerCase().includes('rate limit')) {
+        userMsg = '로그인 시도가 너무 많습니다. 10분 정도 기다린 뒤 정확한 비밀번호로 한 번만 다시 시도해주세요. (계속 누르면 제한이 길어집니다)';
+      }
       setMsg(userMsg);
     }
     setLoading(false);
