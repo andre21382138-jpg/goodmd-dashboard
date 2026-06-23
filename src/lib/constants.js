@@ -65,15 +65,15 @@ export const HQ_MENUS = [
 export const MANAGER_MENUS = [
   { key: 'home',           icon: '🏠', label: '홈 대시보드' },
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
-  { key: 'mgr_sales_view', icon: '📊', label: '매출 조회' },
   { key: 'sales_return',   icon: '↩️', label: '반품 접수' },
-  { key: 'store_delivery_status', icon: '🚚', label: '고객택배 발송현황' },
+  { key: 'stock_request', icon: '📦', label: '발주요청' },
+  { key: 'store_delivery_status', icon: '🚚', label: '고객 택배' },
   { key: 'customer_reg',   icon: '👤', label: '회원 관리', sub: [
     { key: 'customer_qr',  icon: '📱', label: 'QR 가입' },
     { key: 'customer_doc', icon: '📝', label: '서류 가입' },
     { key: 'my_members',   icon: '📋', label: '회원 목록' },
   ]},
-  { key: 'stock_request', icon: '📦', label: '발주요청' },
+  { key: 'mgr_sales_view', icon: '📊', label: '매출 조회' },
   { key: 'attendance',     icon: '🗓️', label: '근태 관리', sub: [
     { key: 'my_attendance', icon: '📊', label: '근무 현황' },
     { key: 'leave_plan',    icon: '📅', label: '휴무 신청' },
