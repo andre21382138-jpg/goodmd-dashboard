@@ -80,10 +80,10 @@ export default function HomePage({ profile, setPage }) {
         const key = `${r.store_name}|||${r.branch_name}`;
         if (!sMap.has(key)) sMap.set(key, {store:r.store_name, branch:r.branch_name, count:0, qty:0, amt:0});
         const e = sMap.get(key);
-        e.count++; e.qty += r._eff; e.amt += r.price * r._eff;
+        e.count++; e.qty += r._eff; e.amt += Math.round(r.price * r._eff);
       }
       setStoreSummary({
-        amt:   sRows.reduce((s,r)=>s+r.price*r._eff, 0),
+        amt:   sRows.reduce((s,r)=>s+Math.round(r.price*r._eff), 0),
         count: sRows.filter(r => r._eff > 0).length,
         qty:   sRows.reduce((s,r)=>s+r._eff, 0),
       });
@@ -98,7 +98,7 @@ export default function HomePage({ profile, setPage }) {
           const d = r.sold_at;
           if (!dMap.has(d)) dMap.set(d, { date: d, count: 0, qty: 0, amt: 0 });
           const e = dMap.get(d);
-          e.count++; e.qty += r._eff; e.amt += r.price * r._eff;
+          e.count++; e.qty += r._eff; e.amt += Math.round(r.price * r._eff);
           if (!dDetails[d]) dDetails[d] = [];
           dDetails[d].push(r);
         }
@@ -129,7 +129,7 @@ export default function HomePage({ profile, setPage }) {
             const key = (r.sold_at || '').slice(0, 7);
             if (!monthAmt.has(key)) continue;
             const eff = Math.max(0, (r.quantity||0) - (r.returned_qty||0));
-            monthAmt.set(key, monthAmt.get(key) + (r.price||0) * eff);
+            monthAmt.set(key, monthAmt.get(key) + Math.round((r.price||0) * eff));
           }
           setPrevMonthsSales(months.map(m => ({ label: m.label, amt: monthAmt.get(m.key) || 0 })));
         }
@@ -145,10 +145,10 @@ export default function HomePage({ profile, setPage }) {
         for (const r of lRows) {
           const key = `${r.store_name}|||${r.branch_name}`;
           if (!lMap.has(key)) lMap.set(key, {store:r.store_name, branch:r.branch_name, count:0, qty:0, amt:0});
-          const e = lMap.get(key); e.count++; e.qty += r.quantity; e.amt += r.price * r.quantity;
+          const e = lMap.get(key); e.count++; e.qty += r.quantity; e.amt += Math.round(r.price * r.quantity);
         }
         setLectureSummary({
-          amt:   lRows.reduce((s,r)=>s+r.price*r.quantity, 0),
+          amt:   lRows.reduce((s,r)=>s+Math.round(r.price*r.quantity), 0),
           count: lRows.length,
           qty:   lRows.reduce((s,r)=>s+r.quantity, 0),
         });
@@ -181,8 +181,8 @@ export default function HomePage({ profile, setPage }) {
           supabase.from('biz_sales').select('quantity, supply_price')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
         ]);
-        const prevStore   = (prevSales   ||[]).reduce((s,r)=>s+r.price*Math.max(0,(r.quantity||0)-(r.returned_qty||0)), 0);
-        const prevLect    = (prevLecture ||[]).reduce((s,r)=>s+r.price*r.quantity, 0);
+        const prevStore   = (prevSales   ||[]).reduce((s,r)=>s+Math.round(r.price*Math.max(0,(r.quantity||0)-(r.returned_qty||0))), 0);
+        const prevLect    = (prevLecture ||[]).reduce((s,r)=>s+Math.round(r.price*r.quantity), 0);
         const prevBizAmt  = (prevBiz     ||[]).reduce((s,r)=>s+Math.round(r.supply_price*r.quantity), 0);
         setPrevTotalAmt(prevStore + prevLect + prevBizAmt);
       }
@@ -453,8 +453,8 @@ export default function HomePage({ profile, setPage }) {
                                         {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {it.returned_qty}</span>}
                                       </td>
                                       <td className="r" style={strike}>{eff}</td>
-                                      <td className="r" style={{fontFamily:'var(--mono)', ...strike}}>{Number(it.price).toLocaleString()}원</td>
-                                      <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)', ...strike}}>{(it.price*eff).toLocaleString()}원</td>
+                                      <td className="r" style={{fontFamily:'var(--mono)', ...strike}}>{Math.round(Number(it.price)).toLocaleString()}원</td>
+                                      <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)', ...strike}}>{Math.round(it.price*eff).toLocaleString()}원</td>
                                       <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{it.payment}</span></td>
                                       <td style={{fontSize:12}}>{it.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {it.customer.name}</span> : '-'}</td>
                                       <td style={{fontSize:11,color:'var(--text2)'}}>{it.memo||'-'}</td>

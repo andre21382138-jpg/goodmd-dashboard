@@ -150,7 +150,7 @@ export default function MgrSalesViewPage({ profile }) {
     for (const g of txnGroups) {
       const d = g.date;
       const gQty = g.rows.reduce((s, r) => s + r._eff, 0);
-      const gAmt = g.rows.reduce((s, r) => s + r.price * r._eff, 0);
+      const gAmt = g.rows.reduce((s, r) => s + Math.round(r.price * r._eff), 0);
       if (!dMap.has(d)) dMap.set(d, { date: d, count: 0, qty: 0, amt: 0 });
       const e = dMap.get(d);
       e.count++; e.qty += gQty; e.amt += gAmt;
@@ -159,7 +159,7 @@ export default function MgrSalesViewPage({ profile }) {
       totC++; totQ += gQty; totA += gAmt;
       // 택배는 라인 단위(트랜잭션 일부만 택배일 수도 있음)
       for (const r of g.rows) {
-        if (r.delivery_requested) { delC++; delA += r.price * r._eff; }
+        if (r.delivery_requested) { delC++; delA += Math.round(r.price * r._eff); }
       }
     }
     const list = [...dMap.values()].sort((a,b) => b.date.localeCompare(a.date));
@@ -319,7 +319,7 @@ export default function MgrSalesViewPage({ profile }) {
                                   const allFully = false; // 새 정책: 반품은 별도 음수 row, 원본은 그대로
                                   const isAllReturnEntries = g.rows.every(x => (Number(x.price)||0) < 0 || x.payment === '반품');
                                   const gQty = g.rows.reduce((s, x) => s + x._eff, 0);
-                                  const gAmt = g.rows.reduce((s, x) => s + x.price * x._eff, 0);
+                                  const gAmt = g.rows.reduce((s, x) => s + Math.round(x.price * x._eff), 0);
                                   const gPts = g.rows.reduce((s, x) => s + (Number(x.points_used)||0), 0);
                                   const paymentSet = Array.from(new Set(g.rows.map(x => x.payment).filter(p => p && p !== '적립금사용')));
                                   const extraCount = g.rows.length - 1;
@@ -393,8 +393,8 @@ export default function MgrSalesViewPage({ profile }) {
                                                     {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {it.returned_qty}</span>}
                                                   </td>
                                                   <td className="r" style={lineStrike}>{eff}</td>
-                                                  <td className="r" style={{fontFamily:'var(--mono)', ...lineStrike}}>{Number(it.price).toLocaleString()}원</td>
-                                                  <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)', ...lineStrike}}>{(it.price*eff).toLocaleString()}원</td>
+                                                  <td className="r" style={{fontFamily:'var(--mono)', ...lineStrike}}>{Math.round(Number(it.price)).toLocaleString()}원</td>
+                                                  <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)', ...lineStrike}}>{Math.round(it.price*eff).toLocaleString()}원</td>
                                                   <td className="r" style={{color:(it.points_used||0)>0?'#6a1b9a':'var(--text3)', fontFamily:'var(--mono)', ...(fully?{opacity:0.5}:{})}}>
                                                     {(it.points_used||0) > 0 ? `-${Number(it.points_used).toLocaleString()}` : '-'}
                                                   </td>
