@@ -15,6 +15,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
   const [fFrom, setFFrom] = useState(monthStart);
   const [fTo,   setFTo]   = useState(todayStr);
   const [fStore,setFStore]= useState('');
+  const [prodSearch, setProdSearch] = useState(''); // 상품 검색(상품 중심 보기·일괄삭제)
   // pending 모드: pending만 기본, completed 모드: ordered/received 표시
   const [fStatus, setFStatus] = useState(isPendingMode ? 'pending' : 'all_completed');
   const [rows,  setRows]  = useState([]);
@@ -216,6 +217,44 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
   const totalQty = rows.reduce((s, r) => s + (Number(r.quantity)||0), 0);
   const pendingCount = rows.filter(r => r.status === 'pending').length;
 
+  // 상품 검색 — 상품 단위로 묶어 (요청한 매장·수량) 표시 + 일괄 삭제
+  const productGroups = useMemo(() => {
+    const kw = prodSearch.trim().toLowerCase();
+    if (!kw) return [];
+    const map = new Map();
+    for (const r of rows) {
+      const name = r.product?.name || '';
+      const code = r.product?.code || '';
+      if (!name.toLowerCase().includes(kw) && !String(code).toLowerCase().includes(kw)) continue;
+      const key = r.product_id ?? `name:${name}`;
+      if (!map.has(key)) map.set(key, { key, name, code, items: [], totalQty: 0 });
+      const g = map.get(key);
+      g.items.push(r);
+      g.totalQty += Number(r.quantity) || 0;
+    }
+    const list = [...map.values()];
+    for (const g of list) g.items.sort((a,b) => (a.store_name||'').localeCompare(b.store_name||''));
+    list.sort((a,b) => b.items.length - a.items.length || a.name.localeCompare(b.name));
+    return list;
+  }, [rows, prodSearch]);
+
+  // 특정 상품의 (현재 조회된) 발주요청 전체 삭제
+  const deleteByProduct = async (g) => {
+    const ids = g.items.map(it => it.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(`'${g.name}' 발주요청을 ${new Set(g.items.map(it=>`${it.store_name}|${it.branch_name}`)).size}개 매장 / ${ids.length}건 모두 삭제하시겠습니까?\n\n각 매장의 해당 요청이 사라지며 되돌릴 수 없습니다.`)) return;
+    setExporting(true);
+    try {
+      const { error } = await supabase.from('order_requests').delete().in('id', ids);
+      if (error) throw error;
+      toast(`'${g.name}' ${ids.length}건 삭제 완료`, 'ok');
+      fetchData();
+    } catch (err) {
+      toast('삭제 실패: ' + (err.message || err), 'err');
+    }
+    setExporting(false);
+  };
+
   return (
     <>
       <div className="card">
@@ -228,6 +267,9 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
             <option value="">전체 매장</option>
             {stores.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <input className="fsel" value={prodSearch} onChange={e => setProdSearch(e.target.value)}
+            placeholder="🔍 상품명·코드 검색 (상품별 보기)" style={{minWidth:220}}/>
+          {prodSearch && <button className="btn-ghost" onClick={() => setProdSearch('')}>✕</button>}
           {isPendingMode ? (
             <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
               <option value="pending">대기</option>
@@ -274,6 +316,65 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
           </div>
         </div>
       </div>
+
+      {/* 상품 검색 결과 — 상품별로 요청 매장·수량 + 일괄삭제 */}
+      {prodSearch.trim() && (
+        <div className="card" style={{padding:'16px 20px', marginBottom:12, border:'2px solid var(--accent)'}}>
+          <div className="card-label" style={{color:'var(--accent)'}}>🔍 상품별 발주요청 — "{prodSearch.trim()}"</div>
+          {productGroups.length === 0 ? <div className="empty">검색된 상품이 없습니다</div> : (
+            <div style={{display:'flex', flexDirection:'column', gap:14}}>
+              {productGroups.map(g => (
+                <div key={g.key} style={{border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'hidden'}}>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, padding:'10px 14px', background:'#fff8e1', flexWrap:'wrap'}}>
+                    <div style={{fontSize:13, fontWeight:700}}>
+                      {g.name}
+                      {g.code && <span style={{fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginLeft:8}}>{g.code}</span>}
+                      <span style={{marginLeft:10, fontSize:12, color:'var(--text2)'}}>
+                        {new Set(g.items.map(it=>`${it.store_name}|${it.branch_name}`)).size}개 매장 · 총 <b style={{color:'var(--accent)'}}>{g.totalQty}</b>개 · {g.items.length}건
+                      </span>
+                    </div>
+                    {isPendingMode && (
+                      <button type="button" onClick={() => deleteByProduct(g)} disabled={exporting}
+                        title="이 상품의 발주요청을 모든 매장에서 일괄 삭제"
+                        style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background:'#ffebee', color:'var(--danger)', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                        🗑 이 상품 발주 전체 삭제
+                      </button>
+                    )}
+                  </div>
+                  <div className="twrap">
+                    <table>
+                      <thead>
+                        <tr><th>매장</th><th>지점</th><th className="r" style={{width:90}}>수량</th><th style={{width:90, textAlign:'center'}}>상태</th><th style={{width:60, textAlign:'center'}}>삭제</th></tr>
+                      </thead>
+                      <tbody>
+                        {g.items.map(r => (
+                          <tr key={r.id}>
+                            <td><span className="badge badge-dept">{r.store_name}</span></td>
+                            <td><span className="badge badge-store">{r.branch_name}</span></td>
+                            <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
+                            <td style={{textAlign:'center'}}>
+                              {r.status === 'pending'
+                                ? <span className="badge" style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', fontSize:11}}>대기</span>
+                                : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
+                            </td>
+                            <td style={{textAlign:'center'}}>
+                              {isPendingMode && (
+                                <button type="button" onClick={() => deleteRequest(r)} disabled={processing === r.id}
+                                  title="이 매장 요청만 삭제"
+                                  style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--border)', borderRadius:4, background:'#fff', color:'var(--danger)', cursor:'pointer'}}>✕</button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card" style={{padding:'16px 20px'}}>
         {loading ? <div className="empty"><span className="spinner"/></div>
