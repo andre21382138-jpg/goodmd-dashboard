@@ -53,6 +53,11 @@ export default function CustomerLookupPage({ profile }) {
   }, []);
   const [customers,  setCustomers] = useState([]);
   const [selected,   setSelected]  = useState(null);
+  // 회원 정보 수정 (이름·휴대폰만)
+  const [editInfo,   setEditInfo]  = useState(false);
+  const [eName,      setEName]     = useState('');
+  const [ePhone,     setEPhone]    = useState('');
+  const [savingInfo, setSavingInfo]= useState(false);
   const [purchases,  setPurchases] = useState([]);
   const [loading,    setLoading]   = useState(false);
   const [loadingP,   setLoadingP]  = useState(false);
@@ -206,7 +211,24 @@ export default function CustomerLookupPage({ profile }) {
     setLoadingP(false);
   };
 
-  const handleSelect = (c) => { setSelected(c); fetchPurchases(c.id); };
+  const handleSelect = (c) => { setSelected(c); setEditInfo(false); fetchPurchases(c.id); };
+
+  // 회원 이름·휴대폰 수정
+  const openEditInfo = () => { setEName(selected?.name || ''); setEPhone(selected?.phone || ''); setEditInfo(true); };
+  const saveInfo = async () => {
+    const name = eName.trim();
+    const phone = formatPhone(ePhone);
+    if (!name) { toast('이름을 입력해주세요', 'err'); return; }
+    if (phone.replace(/\D/g, '').length < 10) { toast('휴대폰 번호를 정확히 입력해주세요', 'err'); return; }
+    setSavingInfo(true);
+    const { error } = await supabase.from('customers').update({ name, phone }).eq('id', selected.id);
+    if (error) { toast(error.message, 'err'); setSavingInfo(false); return; }
+    toast('회원 정보 수정 완료', 'ok');
+    setSelected({ ...selected, name, phone });
+    setCustomers(prev => prev.map(c => c.id === selected.id ? { ...c, name, phone } : c));
+    setEditInfo(false);
+    setSavingInfo(false);
+  };
 
   const handleToggleConsent = async (customer) => {
     if (customer.sms_consent) {
@@ -1073,12 +1095,33 @@ export default function CustomerLookupPage({ profile }) {
           <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(900px,95vw)', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
             onClick={e => e.stopPropagation()}>
             {/* 모달 헤더 */}
-            <div style={{padding:'20px 24px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10}}>
-              <div style={{fontSize:18, fontWeight:700}}>{selected.name}</div>
-              <GradeBadge grade={selected.grade || '패밀리'}/>
-              {selected.gender && <span style={{fontSize:13, color:'var(--text2)'}}>{selected.gender}</span>}
-              <div style={{fontFamily:'var(--mono)', fontSize:13, color:'var(--text2)'}}>{selected.phone}</div>
-              {selected.birthday && <div style={{fontSize:12, color:'var(--text3)'}}>🎂 {selected.birthday}</div>}
+            <div style={{padding:'20px 24px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
+              {editInfo ? (
+                <>
+                  <input value={eName} onChange={e => setEName(e.target.value)} placeholder="이름"
+                    style={{height:34, width:130, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, outline:'none'}}/>
+                  <input value={ePhone} onChange={e => setEPhone(formatPhone(e.target.value))} placeholder="휴대폰번호" inputMode="numeric"
+                    style={{height:34, width:150, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--mono)', outline:'none'}}/>
+                  <button onClick={saveInfo} disabled={savingInfo} className="btn btn-p" style={{height:34, padding:'0 14px', fontSize:13}}>
+                    {savingInfo ? <span className="spinner"/> : '저장'}
+                  </button>
+                  <button onClick={() => setEditInfo(false)} className="btn btn-s" style={{height:34, padding:'0 12px', fontSize:13}}>취소</button>
+                </>
+              ) : (
+                <>
+                  <div style={{fontSize:18, fontWeight:700}}>{selected.name}</div>
+                  <GradeBadge grade={selected.grade || '패밀리'}/>
+                  {selected.gender && <span style={{fontSize:13, color:'var(--text2)'}}>{selected.gender}</span>}
+                  <div style={{fontFamily:'var(--mono)', fontSize:13, color:'var(--text2)'}}>{selected.phone}</div>
+                  {selected.birthday && <div style={{fontSize:12, color:'var(--text3)'}}>🎂 {selected.birthday}</div>}
+                  {canUpload && (
+                    <button onClick={openEditInfo} title="이름·휴대폰 수정"
+                      style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                      ✏️ 정보 수정
+                    </button>
+                  )}
+                </>
+              )}
               <button onClick={() => setSelected(null)}
                 style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999', lineHeight:1}}>✕</button>
             </div>
