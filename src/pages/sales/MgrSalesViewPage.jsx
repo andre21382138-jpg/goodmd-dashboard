@@ -85,6 +85,43 @@ export default function MgrSalesViewPage({ profile }) {
     setSavingLine(false);
   };
 
+  // 본사 반려된 본사택배 건 → 매장발송으로 전환 + 매장재고 차감
+  const [convertingTxn, setConvertingTxn] = useState(null);
+  const convertToStore = async (rows) => {
+    const targets = rows.filter(r => r.delivery_type === 'hq' && r.delivery_status === 'rejected');
+    if (targets.length === 0) return;
+    if (!window.confirm(`이 건을 '매장발송'으로 변경하시겠습니까?\n\n본사가 발송하지 않으므로, 해당 상품 ${targets.length}건의 수량만큼 매장 재고가 차감됩니다.`)) return;
+    setConvertingTxn(rows[0].id);
+    try {
+      // 1) 매장발송으로 전환
+      const ids = targets.map(r => r.id);
+      const { error } = await supabase.from('sales').update({
+        delivery_type: 'store', delivery_status: null, delivery_requested: true,
+      }).in('id', ids);
+      if (error) throw error;
+      // 2) 매장재고 차감 (상품코드 기준)
+      for (const r of targets) {
+        const code = r.product?.code;
+        if (!code) continue;
+        const { data: stockRow } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name', r.store_name).eq('branch_name', r.branch_name)
+          .eq('product_code', code).maybeSingle();
+        if (stockRow) {
+          await supabase.from('store_stock').update({
+            stock_qty: Math.max(0, (stockRow.stock_qty||0) - (Number(r.quantity)||0)),
+            updated_at: new Date().toISOString(),
+          }).eq('id', stockRow.id);
+        }
+      }
+      toast('매장발송으로 변경 완료 — 매장 재고 차감됨', 'ok');
+      fetchSales();
+    } catch (err) {
+      toast('변경 실패: ' + (err.message || err), 'err');
+    }
+    setConvertingTxn(null);
+  };
+
   const setRange = (type) => {
     if (type === 'today') {
       setFFrom(todayStr); setFTo(todayStr);
@@ -321,6 +358,7 @@ export default function MgrSalesViewPage({ profile }) {
                                   const gQty = g.rows.reduce((s, x) => s + x._eff, 0);
                                   const gAmt = g.rows.reduce((s, x) => s + Math.round(x.price * x._eff), 0);
                                   const gPts = g.rows.reduce((s, x) => s + (Number(x.points_used)||0), 0);
+                                  const hasRejected = g.rows.some(x => x.delivery_type === 'hq' && x.delivery_status === 'rejected');
                                   const paymentSet = Array.from(new Set(g.rows.map(x => x.payment).filter(p => p && p !== '적립금사용')));
                                   const extraCount = g.rows.length - 1;
                                   const strike = allFully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
@@ -349,7 +387,17 @@ export default function MgrSalesViewPage({ profile }) {
                                     <td style={strike}>
                                       {(!head.delivery_type || head.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
                                       {head.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
-                                      {head.delivery_type === 'hq' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                                      {head.delivery_type === 'hq' && !hasRejected && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                                      {hasRejected && (
+                                        <div onClick={e => e.stopPropagation()} style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap'}}>
+                                          <span style={{fontSize:10, fontWeight:700, color:'var(--danger)', background:'#ffebee', border:'1px solid #ef9a9a', padding:'1px 6px', borderRadius:3}}>본사반려</span>
+                                          <button type="button" onClick={() => convertToStore(g.rows)} disabled={convertingTxn === txnId}
+                                            title="본사가 반려함 → 매장발송으로 변경 (매장 재고 차감)"
+                                            style={{height:24, padding:'0 8px', border:'1px solid #e65100', borderRadius:4, background:'#fff3e0', color:'#e65100', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                                            {convertingTxn === txnId ? '…' : '🏪 매장발송 전환'}
+                                          </button>
+                                        </div>
+                                      )}
                                     </td>
                                     <td style={{fontSize:12}}>{head.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {head.customer.name}</span> : '-'}</td>
                                     <td style={{textAlign:'center'}}>
@@ -402,7 +450,8 @@ export default function MgrSalesViewPage({ profile }) {
                                                   <td style={lineStrike}>
                                                     {(!it.delivery_type || it.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
                                                     {it.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
-                                                    {it.delivery_type === 'hq' && it.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                                                    {it.delivery_type === 'hq' && it.delivery_status === 'rejected' && <span style={{fontSize:10, fontWeight:700, color:'var(--danger)', background:'#ffebee', border:'1px solid #ef9a9a', padding:'1px 6px', borderRadius:3}}>본사반려</span>}
+                                                    {it.delivery_type === 'hq' && it.delivery_status !== 'dispatched' && it.delivery_status !== 'rejected' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                                                     {it.delivery_type === 'hq' && it.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                                                   </td>
                                                   <td style={{fontSize:11,color:'var(--text2)'}}>{it.memo||'-'}</td>

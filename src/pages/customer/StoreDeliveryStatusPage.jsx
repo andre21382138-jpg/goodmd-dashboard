@@ -29,8 +29,8 @@ export default function StoreDeliveryStatusPage({ profile }) {
       .eq('delivery_type', 'hq');
 
     if (tab === 'pending') {
-      // 발송 대기 — 미발송 (delivery_status가 'dispatched' 아닌 것)
-      q = q.or('delivery_status.is.null,delivery_status.neq.dispatched')
+      // 발송 대기 — 미발송(null 또는 pending). dispatched/rejected 제외
+      q = q.or('delivery_status.is.null,delivery_status.eq.pending')
         .order('sold_at', { ascending: false })
         .limit(300);
     } else {

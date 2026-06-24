@@ -305,6 +305,26 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     } finally { setProcessing(null); }
   };
 
+  // 본사 담당자 — 선택 요청 반려 (재고 없음 등 발송 불가). 매장이 매출조회에서 매장발송으로 전환 가능
+  const handleRejectSelected = async () => {
+    const target = groups.filter(g => selectedKeys.has(g.key));
+    if (target.length === 0) { toast('반려할 요청을 선택해주세요', 'err'); return; }
+    const ids = target.flatMap(g => g.items.map(it => it.id));
+    if (!window.confirm(`선택한 ${target.length}건을 반려하시겠습니까?\n\n발송대기에서 빠지고, 해당 매장이 매출조회에서 '매장발송'으로 전환할 수 있습니다.`)) return;
+    setProcessing('reject');
+    try {
+      const { error } = await supabase.from('sales').update({
+        delivery_status: 'rejected',
+      }).in('id', ids);
+      if (error) throw error;
+      toast(`${target.length}건 반려 처리 완료`, 'ok');
+      setSelectedKeys(new Set());
+      fetchData();
+    } catch (err) {
+      toast('반려 실패: ' + (err.message || err), 'err');
+    } finally { setProcessing(null); }
+  };
+
   // 선택 건 엑셀 다운로드 (선택 없으면 승인된 전체)
   const handleExportSelected = async () => {
     const target = selectedKeys.size > 0 ? groups.filter(g => selectedKeys.has(g.key)) : approvedGroups;
@@ -449,10 +469,10 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                 {processing === 'batch' ? <span className="spinner"/> : `✓ 발송처리${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
               </button>
               {isApprover && (
-                <button type="button" onClick={handleDeleteSelected} disabled={selectedKeys.size === 0 || processing === 'delete'}
-                  title="선택 요청 삭제 (재고없음·중복 등) — 매장 매출에서도 제거"
+                <button type="button" onClick={handleRejectSelected} disabled={selectedKeys.size === 0 || processing === 'reject'}
+                  title="선택 요청 반려 (재고없음 등) — 매장이 매출조회에서 매장발송으로 전환"
                   style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background: selectedKeys.size>0?'#ffebee':'#f5f5f5', color: selectedKeys.size>0?'var(--danger)':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedKeys.size>0?'pointer':'not-allowed'}}>
-                  {processing === 'delete' ? <span className="spinner"/> : `🗑 선택 삭제${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
+                  {processing === 'reject' ? <span className="spinner"/> : `⛔ 반려${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
                 </button>
               )}
               <button className="btn btn-s" onClick={fetchData} disabled={loading}>
