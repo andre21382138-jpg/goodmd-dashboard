@@ -161,6 +161,8 @@ export default function StockRequestPage({ profile }) {
   const [receiving, setReceiving] = useState({});
   const [scanTarget, setScanTarget] = useState(null); // 입고확인 바코드 스캔 대상 row
   const [scanCode, setScanCode] = useState('');
+  const [editReq, setEditReq]   = useState({}); // 대기 요청 수량 인라인 수정 {id: '값'}
+  const [savingReq, setSavingReq] = useState({});
 
   const fetchRequests = useCallback(async () => {
     setHistLoading(true);
@@ -174,6 +176,39 @@ export default function StockRequestPage({ profile }) {
   }, [store, branch]);
 
   useEffect(() => { if (tab === 'status') fetchRequests(); }, [tab, fetchRequests]);
+
+  // 대기 상태 발주요청 수량 수정 (본사 발송요청 전까지만 가능)
+  const saveReqQty = async (r) => {
+    const next = Number(editReq[r.id]);
+    if (!Number.isFinite(next) || next < 1) { toast('수량은 1 이상으로 입력해주세요', 'err'); return; }
+    setSavingReq(p => ({ ...p, [r.id]: true }));
+    // 본사가 이미 발송요청했으면 차단 (동시성 보호)
+    const { data: cur } = await supabase.from('order_requests').select('status').eq('id', r.id).maybeSingle();
+    if (cur && cur.status !== 'pending') {
+      toast('본사가 이미 발송요청하여 수정할 수 없습니다', 'err');
+      setSavingReq(p => { const n = { ...p }; delete n[r.id]; return n; });
+      fetchRequests();
+      return;
+    }
+    const { error } = await supabase.from('order_requests')
+      .update({ quantity: next, updated_at: new Date().toISOString() })
+      .eq('id', r.id).eq('status', 'pending'); // pending일 때만 반영
+    if (error) toast(error.message, 'err');
+    else {
+      toast(`수량 ${r.quantity} → ${next} 수정 완료`, 'ok');
+      setEditReq(p => { const n = { ...p }; delete n[r.id]; return n; });
+      fetchRequests();
+    }
+    setSavingReq(p => { const n = { ...p }; delete n[r.id]; return n; });
+  };
+  const cancelReq = async (r) => {
+    if (!window.confirm(`'${r.product?.name}' 발주요청을 취소(삭제)하시겠습니까?`)) return;
+    setSavingReq(p => ({ ...p, [r.id]: true }));
+    const { error } = await supabase.from('order_requests').delete().eq('id', r.id).eq('status', 'pending');
+    if (error) toast(error.message, 'err');
+    else { toast('발주요청 취소 완료', 'inf'); fetchRequests(); }
+    setSavingReq(p => { const n = { ...p }; delete n[r.id]; return n; });
+  };
 
   // 입고확인: 바코드 스캔 모달 → 코드 일치 시 입고
   const openScan = (r) => { setScanTarget(r); setScanCode(''); };
@@ -356,17 +391,29 @@ export default function StockRequestPage({ profile }) {
             <div className="twrap">
               <table>
                 <thead>
-                  <tr><th>요청일</th><th>브랜드</th><th>상품명</th><th className="r">수량</th><th>상태</th><th>송장</th><th style={{ width:110, textAlign:'center' }}>입고</th></tr>
+                  <tr><th>요청일</th><th>브랜드</th><th>상품명</th><th className="r">수량</th><th>상태</th><th>송장</th><th style={{ width:160, textAlign:'center' }}>수정/입고</th></tr>
                 </thead>
                 <tbody>
                   {requests.length === 0
                     ? <tr><td colSpan={7} className="empty">요청 내역이 없습니다</td></tr>
-                    : requests.map(r => (
+                    : requests.map(r => {
+                      const isPending = r.status === 'pending';
+                      const editing = editReq[r.id] !== undefined;
+                      return (
                       <tr key={r.id}>
                         <td className="mono" style={{ fontSize:11 }}>{r.request_date || (r.created_at||'').slice(0,10)}</td>
                         <td><span className="badge badge-dept">{r.brand?.name || '-'}</span></td>
                         <td style={{ fontSize:12 }}>{r.product?.name || '-'}</td>
-                        <td className="r" style={{ fontWeight:700, color:'var(--accent)' }}>{r.quantity}</td>
+                        <td className="r">
+                          {isPending && editing ? (
+                            <input type="number" min={1} value={editReq[r.id]} autoFocus
+                              onChange={e => setEditReq(p => ({ ...p, [r.id]: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Enter') saveReqQty(r); }}
+                              style={{ width:64, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:4, textAlign:'right', fontFamily:'var(--mono)', fontWeight:700, fontSize:13 }}/>
+                          ) : (
+                            <span style={{ fontWeight:700, color:'var(--accent)' }}>{r.quantity}</span>
+                          )}
+                        </td>
                         <td>{statusBadge(r.status)}</td>
                         <td style={{ fontSize:11 }}>
                           {r.tracking_number
@@ -375,15 +422,36 @@ export default function StockRequestPage({ profile }) {
                             : <span style={{ color:'var(--text3)' }}>-</span>}
                         </td>
                         <td style={{ textAlign:'center' }}>
-                          {(r.status === 'shipped' || r.status === 'ordered') && (
+                          {isPending ? (
+                            <div style={{ display:'flex', gap:4, justifyContent:'center' }}>
+                              {editing ? (
+                                <>
+                                  <button type="button" onClick={() => saveReqQty(r)} disabled={savingReq[r.id]}
+                                    style={{ height:26, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4, background:'var(--accent)', color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                                    {savingReq[r.id] ? '…' : '저장'}</button>
+                                  <button type="button" onClick={() => setEditReq(p => { const n={...p}; delete n[r.id]; return n; })}
+                                    style={{ height:26, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>취소</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button type="button" onClick={() => setEditReq(p => ({ ...p, [r.id]: String(r.quantity) }))}
+                                    title="수량 수정 (본사 발송요청 전까지)"
+                                    style={{ height:26, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4, background:'#fff3e0', color:'var(--accent)', fontSize:11, fontWeight:700, cursor:'pointer' }}>✏️ 수정</button>
+                                  <button type="button" onClick={() => cancelReq(r)} disabled={savingReq[r.id]}
+                                    title="발주요청 취소"
+                                    style={{ height:26, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, background:'#fff', color:'var(--danger)', fontSize:11, fontWeight:700, cursor:'pointer' }}>✕</button>
+                                </>
+                              )}
+                            </div>
+                          ) : (r.status === 'shipped' || r.status === 'ordered') ? (
                             <button type="button" onClick={() => openScan(r)} disabled={receiving[r.id]}
                               style={{ height:28, padding:'0 12px', border:'1px solid var(--success)', borderRadius:4, background:'#e8f5e9', color:'var(--success)', fontSize:11, fontWeight:700, cursor:'pointer' }}>
                               {receiving[r.id] ? <span className="spinner"/> : '📥 입고확인'}
                             </button>
-                          )}
+                          ) : null}
                         </td>
                       </tr>
-                    ))}
+                    )})}
                 </tbody>
               </table>
             </div>
