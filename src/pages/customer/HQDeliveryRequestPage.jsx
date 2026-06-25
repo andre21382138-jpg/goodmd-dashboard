@@ -224,24 +224,28 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
         toast(`송장번호 입력된 행이 없습니다 (전체 ${totalSaleRows}건 모두 미입력)`, 'err');
         return;
       }
-      // 송장번호만 매칭(등록) — 발송대기 상태 유지. 발송처리는 별도 [발송처리] 버튼으로
+      // 송장번호 있는 행 = 발송완료(dispatched) 처리, 없는 행은 발송대기로 남김
+      const nowIso = new Date().toISOString();
       let ok = 0, fail = 0, lastError = null;
       for (const u of updates) {
         const { error } = await supabase.from('sales').update({
           tracking_number: u.tracking,
+          delivery_status: 'dispatched',
+          dispatched_at: nowIso,
+          dispatched_by: profile.id,
         }).eq('id', u.saleId);
         if (error) lastError = error;
         if (error) fail++; else ok++;
       }
-      const parts = [`송장 매칭 ${ok}건`];
+      const parts = [`송장 ${ok}건 발송완료`];
       if (fail > 0) parts.push(`실패 ${fail}건`);
-      if (noTrackingCount > 0) parts.push(`미입력 ${noTrackingCount}건`);
+      if (noTrackingCount > 0) parts.push(`송장 미입력 ${noTrackingCount}건은 발송대기 유지`);
       if (notApproved > 0) parts.push(`미승인 ${notApproved}건 제외`);
-      toast(`송장번호 매칭 완료 — ${parts.join(' / ')} · 발송대기 유지`, (fail > 0 || notApproved > 0) ? 'err' : 'ok');
+      toast(parts.join(' / '), (fail > 0 || notApproved > 0) ? 'err' : 'ok');
       if (fail > 0 && lastError) {
         toast(`실패 사유: ${lastError.message || lastError}`, 'err');
       }
-      // 발송대기에 머무름 (송장번호 표시됨) → 선택 후 [발송처리]로 완료
+      // 송장 없는 건은 발송대기에 남음 → 선택 반려 처리
       fetchData();
     } catch (err) {
       toast('업로드 실패: ' + (err.message || err), 'err');
@@ -470,14 +474,9 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
               <input ref={fileInputRef} type="file" accept=".xls,.xlsx"
                 onChange={handleUploadFile} style={{display:'none'}}/>
               <button type="button" onClick={handleUploadClick} disabled={uploading}
-                title="송장번호 채워진 엑셀 업로드 → 송장번호 매칭(발송대기 유지)"
-                style={{height:30, padding:'0 12px', border:'1px solid #1565C0', borderRadius:'var(--radius)', background:'#e3f2fd', color:'#1565C0', fontSize:12, fontWeight:700, cursor:'pointer'}}>
-                {uploading ? <span className="spinner"/> : '📤 송장 업로드'}
-              </button>
-              <button type="button" onClick={handleDispatchSelected} disabled={!selectedAllTracked || processing === 'batch'}
-                title={selectedKeys.size === 0 ? '발송처리할 요청을 선택하세요' : !selectedAllTracked ? '송장 업로드 후 발송처리할 수 있습니다' : '선택 건을 발송처리 → 발송완료 탭으로'}
-                style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background: selectedAllTracked?'#e8f5e9':'#f5f5f5', color: selectedAllTracked?'#2e7d32':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedAllTracked?'pointer':'not-allowed'}}>
-                {processing === 'batch' ? <span className="spinner"/> : `✓ 발송처리${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
+                title="송장번호 채워진 엑셀 업로드 → 송장 있는 건 발송완료, 없는 건 발송대기 유지"
+                style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                {uploading ? <span className="spinner"/> : '📤 송장 업로드 → 발송완료'}
               </button>
               {(isScm || isApprover) && (
                 <button type="button" onClick={openBulkReject} disabled={rejectSel.size === 0}
