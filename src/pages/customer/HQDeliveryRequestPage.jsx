@@ -305,6 +305,29 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     } finally { setProcessing(null); }
   };
 
+  // 상품 단위 반려 (SCM/본사) — 품절 등 사유 입력. 해당 sale row만 rejected 처리
+  const [rejectItem, setRejectItem] = useState(null);   // { it, g }
+  const [rejectItemReason, setRejectItemReason] = useState('');
+  const [rejectingItem, setRejectingItem] = useState(false);
+  const openRejectItem = (it, g) => { setRejectItem({ it, g }); setRejectItemReason(''); };
+  const confirmRejectItem = async () => {
+    const reason = rejectItemReason.trim();
+    if (!reason) { toast('반려 사유를 입력해주세요', 'err'); return; }
+    setRejectingItem(true);
+    try {
+      const { error } = await supabase.from('sales').update({
+        delivery_status: 'rejected', delivery_reject_reason: reason,
+      }).eq('id', rejectItem.it.id);
+      if (error) throw error;
+      toast('해당 상품 반려 완료 — 발송요청에서 제외', 'ok');
+      setRejectItem(null);
+      fetchData();
+    } catch (err) {
+      toast('반려 실패: ' + (err.message || err), 'err');
+    }
+    setRejectingItem(false);
+  };
+
   // 본사 담당자 — 선택 요청 반려 (재고 없음 등 발송 불가). 매장이 매출조회에서 매장발송으로 전환 가능
   const handleRejectSelected = async () => {
     const target = groups.filter(g => selectedKeys.has(g.key));
@@ -548,7 +571,18 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                           </div>
                         </td>
                       )}
-                      <td style={{fontSize:12, ...lineBorder}}>{it.product?.name || '-'}</td>
+                      <td style={{fontSize:12, ...lineBorder}}>
+                        <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
+                          <span>{it.product?.name || '-'}</span>
+                          {tab === 'pending' && (isScm || isApprover) && (
+                            <button type="button" onClick={() => openRejectItem(it, g)}
+                              title="품절 등으로 이 상품 반려 (사유 입력)"
+                              style={{height:22, padding:'0 8px', border:'1px solid var(--danger)', borderRadius:4, background:'#ffebee', color:'var(--danger)', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                              ⛔ 반려
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, ...lineBorder}}>{it.quantity}</td>
                       {iIdx === 0 && (
                         <td rowSpan={rs} style={{fontSize:12, fontWeight:700, ...mergedStyle}}>{g.recipient_name}</td>
@@ -618,6 +652,36 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
         )}
       </div>
       </>)}
+
+      {/* 상품 반려 사유 입력 모달 */}
+      {rejectItem && (
+        <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
+          onClick={() => setRejectItem(null)}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, width:'min(440px, 92vw)', padding:'22px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:6, color:'var(--danger)'}}>⛔ 상품 반려</div>
+            <div style={{fontSize:13, color:'var(--text2)', marginBottom:4}}>
+              <span className="badge badge-dept">{rejectItem.g.store_name}</span> <span className="badge badge-store">{rejectItem.g.branch_name}</span>
+              {rejectItem.g.recipient_name && <span style={{marginLeft:6}}>· 받는분 {rejectItem.g.recipient_name}</span>}
+            </div>
+            <div style={{fontSize:13, fontWeight:700, marginBottom:14}}>{rejectItem.it.product?.name} · {rejectItem.it.quantity}개</div>
+            <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:6}}>반려 사유 *</label>
+            <textarea value={rejectItemReason} onChange={e => setRejectItemReason(e.target.value)} autoFocus
+              placeholder="예) 본사 품절 / 단종 / 입고 지연 등"
+              style={{width:'100%', minHeight:72, padding:'10px 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none', resize:'vertical'}}/>
+            <div style={{fontSize:11, color:'var(--text3)', marginTop:6}}>확인 시 이 상품은 발송요청에서 제외되고, 매장에 '본사반려'와 사유가 표시됩니다.</div>
+            <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:16}}>
+              <button type="button" onClick={() => setRejectItem(null)}
+                style={{height:38, padding:'0 18px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer'}}>취소</button>
+              <button type="button" onClick={confirmRejectItem} disabled={rejectingItem}
+                style={{height:38, padding:'0 18px', border:'none', borderRadius:'var(--radius)', background:'var(--danger)', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer'}}>
+                {rejectingItem ? '처리 중...' : '확인 (반려)'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
