@@ -28,7 +28,7 @@ export default function ScmShippingPage({ profile }) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     let q = supabase.from('order_requests')
-      .select('id, store_name, branch_name, quantity, memo, status, request_date, created_at, scm_requested_at, tracking_number, shipped_at, brand:brands(name), product:products(name, code, erp_code)')
+      .select('id, batch_id, store_name, branch_name, quantity, memo, status, request_date, created_at, scm_requested_at, tracking_number, shipped_at, brand:brands(name), product:products(name, code, erp_code)')
       .order('scm_requested_at', { ascending: false, nullsFirst: false })
       .limit(1000);
     if (fFrom) q = q.gte('created_at', `${fFrom}T00:00:00`);
@@ -186,6 +186,36 @@ export default function ScmShippingPage({ profile }) {
   };
 
   const selCount = selectedIds.size;
+  const fmtTime = (iso) => iso ? new Date(iso).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+
+  // 매장 → 발주건(batch=한 번의 발주요청)별로 묶기
+  const grouped = useMemo(() => {
+    const sMap = new Map();
+    for (const r of filtered) {
+      const sKey = `${r.store_name}|${r.branch_name}`;
+      if (!sMap.has(sKey)) sMap.set(sKey, { sKey, store_name: r.store_name, branch_name: r.branch_name, bMap: new Map() });
+      const s = sMap.get(sKey);
+      const bKey = r.batch_id || `t:${r.created_at || r.id}`; // batch 없으면 시각/ID로
+      if (!s.bMap.has(bKey)) s.bMap.set(bKey, { bKey, time: r.created_at, items: [] });
+      const b = s.bMap.get(bKey);
+      b.items.push(r);
+      if ((r.created_at || '') < (b.time || '')) b.time = r.created_at; // 가장 이른 시각
+    }
+    const stores = [...sMap.values()].map(s => ({
+      store_name: s.store_name, branch_name: s.branch_name, sKey: s.sKey,
+      batches: [...s.bMap.values()].sort((a, b) => (b.time || '').localeCompare(a.time || '')),
+      itemIds: [...s.bMap.values()].flatMap(b => b.items.map(it => it.id)),
+    }));
+    stores.sort((a, b) => (a.store_name||'').localeCompare(b.store_name||'') || (a.branch_name||'').localeCompare(b.branch_name||''));
+    return stores;
+  }, [filtered]);
+
+  const toggleMany = (ids, on) => setSelectedIds(prev => {
+    const n = new Set(prev);
+    if (on) ids.forEach(id => n.add(id)); else ids.forEach(id => n.delete(id));
+    return n;
+  });
+  const allIn = (ids) => ids.length > 0 && ids.every(id => selectedIds.has(id));
 
   return (
     <div>
@@ -230,45 +260,63 @@ export default function ScmShippingPage({ profile }) {
 
       <div className="card" style={{padding:'16px 20px'}}>
         {loading ? <div className="empty"><span className="spinner"/></div>
-        : filtered.length === 0 ? <div className="empty">해당하는 발송요청이 없습니다</div>
+        : grouped.length === 0 ? <div className="empty">해당하는 발송요청이 없습니다</div>
         : (
-          <div className="twrap">
-            <table>
-              <thead>
-                <tr>
-                  <th style={{width:36, textAlign:'center'}}>
-                    <input type="checkbox" checked={allChecked} onChange={toggleAll} style={{cursor:'pointer'}}/>
-                  </th>
-                  <th>요청일</th><th>매장</th><th>지점</th><th>상품명</th>
-                  <th className="r" style={{width:70}}>수량</th>
-                  <th>송장번호</th>
-                  <th style={{textAlign:'center', width:130}}>상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(r => (
-                  <tr key={r.id} style={selectedIds.has(r.id) ? {background:'#f3e5f5'} : {}}>
-                    <td style={{textAlign:'center'}}>
-                      <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleOne(r.id)} style={{cursor:'pointer'}}/>
-                    </td>
-                    <td className="mono" style={{fontSize:11}}>{r.request_date || (r.created_at||'').slice(0,10)}</td>
-                    <td><span className="badge badge-dept">{r.store_name}</span></td>
-                    <td><span className="badge badge-store">{r.branch_name}</span></td>
-                    <td style={{fontSize:12, fontWeight:600}}>
-                      {r.product?.name || '-'}
-                      {r.product?.code && <span style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginLeft:6}}>{r.product.code}</span>}
-                    </td>
-                    <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
-                    <td style={{fontSize:11, fontFamily:'var(--mono)'}}>{r.tracking_number || <span style={{color:'var(--text3)'}}>-</span>}</td>
-                    <td style={{textAlign:'center'}}>{statusBadge(r.status, !!r.tracking_number)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{display:'flex', flexDirection:'column', gap:14}}>
+            {grouped.map(s => (
+              <div key={s.sKey} style={{border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'hidden'}}>
+                {/* 매장 헤더 */}
+                <div style={{display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'#eceff1', flexWrap:'wrap'}}>
+                  <input type="checkbox" checked={allIn(s.itemIds)}
+                    onChange={e => toggleMany(s.itemIds, e.target.checked)} style={{cursor:'pointer', width:16, height:16}}
+                    title="이 매장 전체 선택"/>
+                  <span className="badge badge-dept">{s.store_name}</span>
+                  <span className="badge badge-store">{s.branch_name}</span>
+                  <span style={{fontSize:12, color:'var(--text2)'}}>발주건 {s.batches.length} · 상품 {s.itemIds.length}</span>
+                </div>
+                {/* 발주건(요청시각)별 */}
+                {s.batches.map(b => {
+                  const bIds = b.items.map(it => it.id);
+                  return (
+                  <div key={b.bKey} style={{borderTop:'1px solid var(--border)'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8, padding:'7px 14px', background:'#fffdf5'}}>
+                      <input type="checkbox" checked={allIn(bIds)}
+                        onChange={e => toggleMany(bIds, e.target.checked)} style={{cursor:'pointer'}}
+                        title="이 발주건 전체 선택"/>
+                      <span style={{fontSize:12, fontWeight:700, color:'#6a1b9a'}}>🕒 {fmtTime(b.time)}</span>
+                      <span style={{fontSize:11, color:'var(--text3)'}}>요청 · {b.items.length}개 상품</span>
+                    </div>
+                    <div className="twrap">
+                      <table>
+                        <thead>
+                          <tr><th style={{width:36}}></th><th>상품명</th><th className="r" style={{width:70}}>수량</th><th>송장번호</th><th style={{textAlign:'center', width:130}}>상태</th></tr>
+                        </thead>
+                        <tbody>
+                          {b.items.map(r => (
+                            <tr key={r.id} style={selectedIds.has(r.id) ? {background:'#f3e5f5'} : {}}>
+                              <td style={{textAlign:'center'}}>
+                                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleOne(r.id)} style={{cursor:'pointer'}}/>
+                              </td>
+                              <td style={{fontSize:12, fontWeight:600}}>
+                                {r.product?.name || '-'}
+                                {r.product?.code && <span style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginLeft:6}}>{r.product.code}</span>}
+                              </td>
+                              <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
+                              <td style={{fontSize:11, fontFamily:'var(--mono)'}}>{r.tracking_number || <span style={{color:'var(--text3)'}}>-</span>}</td>
+                              <td style={{textAlign:'center'}}>{statusBadge(r.status, !!r.tracking_number)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )})}
+              </div>
+            ))}
           </div>
         )}
         <div style={{fontSize:11, color:'var(--text3)', marginTop:10}}>
-          ① 선택 → 엑셀 다운로드 → ② 송장 입력 후 업로드 → ③ 송장 등록건 선택 → 발송처리
+          매장 → 발주건(요청시각)별로 묶음 · 같은 날 따로 요청한 건은 시각으로 구분됩니다 · ① 선택 → 엑셀 → ② 송장 업로드 → ③ 발송처리
         </div>
       </div>
     </div>
