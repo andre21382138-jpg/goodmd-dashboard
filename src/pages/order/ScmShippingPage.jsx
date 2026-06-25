@@ -23,17 +23,20 @@ export default function ScmShippingPage({ profile }) {
   const [exporting, setExporting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [shipping, setShipping] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState(null); // 발송불가 처리할 row
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
   const uploadRef = React.useRef(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     let q = supabase.from('order_requests')
-      .select('id, batch_id, store_name, branch_name, quantity, memo, status, request_date, created_at, scm_requested_at, tracking_number, shipped_at, brand:brands(name), product:products(name, code, erp_code)')
+      .select('id, batch_id, store_name, branch_name, quantity, memo, status, reject_reason, request_date, created_at, scm_requested_at, tracking_number, shipped_at, brand:brands(name), product:products(name, code, erp_code)')
       .order('scm_requested_at', { ascending: false, nullsFirst: false })
       .limit(1000);
     if (fFrom) q = q.gte('created_at', `${fFrom}T00:00:00`);
     if (fTo)   q = q.lte('created_at', `${fTo}T23:59:59`);
-    if (fStatus === 'all') q = q.in('status', ['scm_requested', 'shipped']);
+    if (fStatus === 'all') q = q.in('status', ['scm_requested', 'shipped', 'rejected']);
     else q = q.eq('status', fStatus);
     const { data, error } = await q;
     if (error) toast(error.message, 'err');
@@ -177,8 +180,29 @@ export default function ScmShippingPage({ profile }) {
     setShipping(false);
   };
 
+  // 발송불가(본사반려) — 사유 입력 후 처리
+  const openReject = (r) => { setRejectTarget(r); setRejectReason(''); };
+  const confirmReject = async () => {
+    const reason = rejectReason.trim();
+    if (!reason) { toast('발송불가 사유를 입력해주세요', 'err'); return; }
+    setRejecting(true);
+    try {
+      const { error } = await supabase.from('order_requests').update({
+        status: 'rejected', reject_reason: reason, updated_at: new Date().toISOString(),
+      }).eq('id', rejectTarget.id);
+      if (error) throw error;
+      toast('발송불가(반려) 처리 완료', 'ok');
+      setRejectTarget(null);
+      fetchData();
+    } catch (err) {
+      toast('처리 실패: ' + (err.message || err), 'err');
+    }
+    setRejecting(false);
+  };
+
   const statusBadge = (s, hasTrk) => {
     if (s === 'shipped') return <span className="badge" style={{background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', fontSize:11}}>발송완료</span>;
+    if (s === 'rejected') return <span className="badge" style={{background:'#ffebee', color:'var(--danger)', border:'1px solid #ef9a9a', fontSize:11}}>본사반려</span>;
     if (s === 'scm_requested') return hasTrk
       ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>송장등록·발송대기</span>
       : <span className="badge" style={{background:'#e3f2fd', color:'#1565C0', border:'1px solid #90caf9', fontSize:11}}>발송요청</span>;
@@ -203,6 +227,7 @@ export default function ScmShippingPage({ profile }) {
           <select className="fsel" value={fStatus} onChange={e => setFStatus(e.target.value)}>
             <option value="scm_requested">발송요청 대기</option>
             <option value="shipped">발송완료</option>
+            <option value="rejected">발송불가(반려)</option>
             <option value="all">전체</option>
           </select>
           <div className="fbar-right" style={{display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'}}>
@@ -244,6 +269,7 @@ export default function ScmShippingPage({ profile }) {
                   <th className="r" style={{width:70}}>수량</th>
                   <th>송장번호</th>
                   <th style={{textAlign:'center', width:130}}>상태</th>
+                  <th style={{textAlign:'center', width:90}}>처리</th>
                 </tr>
               </thead>
               <tbody>
@@ -261,7 +287,21 @@ export default function ScmShippingPage({ profile }) {
                     </td>
                     <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
                     <td style={{fontSize:11, fontFamily:'var(--mono)'}}>{r.tracking_number || <span style={{color:'var(--text3)'}}>-</span>}</td>
-                    <td style={{textAlign:'center'}}>{statusBadge(r.status, !!r.tracking_number)}</td>
+                    <td style={{textAlign:'center'}}>
+                      {statusBadge(r.status, !!r.tracking_number)}
+                      {r.status === 'rejected' && r.reject_reason && (
+                        <div style={{fontSize:10, color:'var(--danger)', marginTop:3}}>사유: {r.reject_reason}</div>
+                      )}
+                    </td>
+                    <td style={{textAlign:'center'}}>
+                      {r.status === 'scm_requested' && (
+                        <button type="button" onClick={() => openReject(r)}
+                          title="재고없음 등으로 발송 불가 처리 (사유 입력)"
+                          style={{height:26, padding:'0 10px', border:'1px solid var(--danger)', borderRadius:4, background:'#ffebee', color:'var(--danger)', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                          ⛔ 발송불가
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -272,6 +312,35 @@ export default function ScmShippingPage({ profile }) {
           ① 선택 → 엑셀 다운로드 → ② 송장 입력 후 업로드 → ③ 송장 등록건 선택 → 발송처리
         </div>
       </div>
+
+      {/* 발송불가 사유 입력 모달 */}
+      {rejectTarget && (
+        <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
+          onClick={() => setRejectTarget(null)}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, width:'min(440px, 92vw)', padding:'22px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:6, color:'var(--danger)'}}>⛔ 발송불가 처리</div>
+            <div style={{fontSize:13, color:'var(--text2)', marginBottom:4}}>
+              <span className="badge badge-dept">{rejectTarget.store_name}</span> <span className="badge badge-store">{rejectTarget.branch_name}</span>
+            </div>
+            <div style={{fontSize:13, fontWeight:700, marginBottom:14}}>{rejectTarget.product?.name} · {rejectTarget.quantity}개</div>
+            <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:6}}>발송불가 사유 *</label>
+            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} autoFocus
+              placeholder="예) 재고 없음 / 단종 / 입고 지연 등"
+              style={{width:'100%', minHeight:72, padding:'10px 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none', resize:'vertical'}}/>
+            <div style={{fontSize:11, color:'var(--text3)', marginTop:6}}>입력한 사유는 본사·매장에 '본사반려'로 표시됩니다.</div>
+            <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:16}}>
+              <button type="button" onClick={() => setRejectTarget(null)}
+                style={{height:38, padding:'0 18px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer'}}>취소</button>
+              <button type="button" onClick={confirmReject} disabled={rejecting}
+                style={{height:38, padding:'0 18px', border:'none', borderRadius:'var(--radius)', background:'var(--danger)', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer'}}>
+                {rejecting ? '처리 중...' : '확인 (발송불가)'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

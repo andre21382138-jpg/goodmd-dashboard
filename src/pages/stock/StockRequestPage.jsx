@@ -268,7 +268,7 @@ export default function StockRequestPage({ profile }) {
       received:      { t:'✅ 입고완료',   bg:'#e8f5e9', c:'#2e7d32' },
       ordered:       { t:'📦 발주진행중', bg:'#f3e5f5', c:'#6a1b9a' },
       fulfilled:     { t:'✅ 자체완료',   bg:'#e8f5e9', c:'#2e7d32' },
-      rejected:      { t:'반려',          bg:'#ffebee', c:'#c62828' },
+      rejected:      { t:'본사반려',      bg:'#ffebee', c:'#c62828' },
     };
     const m = map[s] || { t:s, bg:'#f5f5f5', c:'#666' };
     return <span style={{ padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600, background:m.bg, color:m.c }}>{m.t}</span>;
@@ -414,7 +414,12 @@ export default function StockRequestPage({ profile }) {
                             <span style={{ fontWeight:700, color:'var(--accent)' }}>{r.quantity}</span>
                           )}
                         </td>
-                        <td>{statusBadge(r.status)}</td>
+                        <td>
+                          {statusBadge(r.status)}
+                          {r.status === 'rejected' && r.reject_reason && (
+                            <div style={{ fontSize:10, color:'var(--danger)', marginTop:3 }}>사유: {r.reject_reason}</div>
+                          )}
+                        </td>
                         <td style={{ fontSize:11 }}>
                           {r.tracking_number
                             ? <button type="button" onClick={() => window.open(`https://tracker.delivery/#/kr.cjlogistics/${r.tracking_number}`, '_blank', 'noopener,noreferrer')}

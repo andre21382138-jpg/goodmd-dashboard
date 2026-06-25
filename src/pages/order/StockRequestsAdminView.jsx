@@ -30,7 +30,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     let q = supabase.from('order_requests')
-      .select('id, store_name, branch_name, quantity, memo, status, request_date, created_at, brand:brands(name), product:products(name, code, erp_code)')
+      .select('id, store_name, branch_name, quantity, memo, status, reject_reason, request_date, created_at, brand:brands(name), product:products(name, code, erp_code)')
       .order('created_at', { ascending: false })
       .limit(500);
     if (fFrom)   q = q.gte('created_at', `${fFrom}T00:00:00`);
@@ -42,7 +42,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
       if (fStatus !== 'all') q = q.eq('status', fStatus);
     } else {
       // 매장발주완료(발송현황) 탭 — SCM 발송요청/발송완료/입고완료
-      const completedSet = ['scm_requested', 'shipped', 'received', 'ordered'];
+      const completedSet = ['scm_requested', 'shipped', 'received', 'ordered', 'rejected'];
       if (completedSet.includes(fStatus)) q = q.eq('status', fStatus);
       else q = q.in('status', completedSet);
     }
@@ -73,6 +73,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
       g.scmReqCount    = g.items.filter(x => x.status === 'scm_requested').length;
       g.shippedCount   = g.items.filter(x => x.status === 'shipped').length;
       g.receivedCount  = g.items.filter(x => x.status === 'received').length;
+      g.rejectedCount  = g.items.filter(x => x.status === 'rejected').length;
       g.latestAt = g.items[0]?.created_at || '';
     }
     list.sort((a, b) => (b.latestAt || '').localeCompare(a.latestAt || ''));
@@ -282,6 +283,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
               <option value="scm_requested">SCM 발송요청</option>
               <option value="shipped">발송완료</option>
               <option value="received">입고완료</option>
+              <option value="rejected">본사반려(발송불가)</option>
             </select>
           )}
           <div className="fbar-right">
@@ -426,6 +428,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                             {g.scmReqCount  > 0 && <span className="badge" style={{background:'#e3f2fd', color:'#1565C0', border:'1px solid #90caf9', fontSize:10}}>발송요청 {g.scmReqCount}</span>}
                             {g.shippedCount > 0 && <span className="badge" style={{background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', fontSize:10}}>발송완료 {g.shippedCount}</span>}
                             {g.receivedCount> 0 && <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:10}}>입고완료 {g.receivedCount}</span>}
+                            {g.rejectedCount> 0 && <span className="badge" style={{background:'#ffebee', color:'var(--danger)', border:'1px solid #ef9a9a', fontSize:10}}>본사반려 {g.rejectedCount}</span>}
                           </div>
                         </td>
                       )}
@@ -524,7 +527,12 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                                         ? <span className="badge" style={{background:'#f3e5f5', color:'#6a1b9a', border:'1px solid #ce93d8', fontSize:11}}>발주진행중</span>
                                         : r.status === 'received'
                                         ? <span className="badge" style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', fontSize:11}}>입고완료</span>
+                                        : r.status === 'rejected'
+                                        ? <span className="badge" style={{background:'#ffebee', color:'var(--danger)', border:'1px solid #ef9a9a', fontSize:11}}>본사반려</span>
                                         : <span className="badge" style={{fontSize:11}}>{r.status}</span>}
+                                      {r.status === 'rejected' && r.reject_reason && (
+                                        <div style={{fontSize:10, color:'var(--danger)', marginTop:3}}>사유: {r.reject_reason}</div>
+                                      )}
                                       {r.tracking_number && (
                                         <div style={{fontSize:10, fontFamily:'var(--mono)', color:'var(--text3)', marginTop:3}}>📦 {r.tracking_number}</div>
                                       )}
