@@ -51,23 +51,23 @@ export default function QrBatchPrintPage() {
     const w = window.open('');
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>매장 QR 일괄 인쇄 (${targets.length})</title>
       <style>
-        @page { size: A4; margin: 12mm; }
+        @page { size: A5; margin: 10mm; }
         body { font-family: 'Malgun Gothic', sans-serif; margin:0; }
         .toolbar { position:sticky; top:0; background:#fff8f0; border-bottom:1px solid #ffcc80;
           padding:10px 16px; display:flex; align-items:center; gap:12px; z-index:10; }
         .toolbar button { height:36px; padding:0 18px; border:none; border-radius:6px; background:#E65100;
           color:#fff; font-size:14px; font-weight:700; cursor:pointer; }
         .toolbar span { font-size:13px; color:#6d4c41; }
-        /* 매장 1개 = A4 1페이지 */
-        .page { box-sizing:border-box; width:100%; min-height:271mm;
+        /* 매장 1개 = A5 1페이지 (A5 = 148 x 210mm) */
+        .page { box-sizing:border-box; width:100%; min-height:190mm;
           display:flex; flex-direction:column; align-items:center; justify-content:center;
           text-align:center; page-break-after:always; }
         .page:last-child { page-break-after:auto; }
-        .qr-store { font-size:34px; font-weight:800; margin-bottom:6px; }
-        .qr-sub { font-size:18px; color:#777; margin-bottom:18px; }
-        .page img { width:120mm; height:120mm; }
-        .qr-guide { font-size:22px; font-weight:700; color:#2e7d32; margin-top:18px; }
-        .qr-url { font-size:11px; color:#bbb; word-break:break-all; margin-top:10px; }
+        .qr-store { font-size:26px; font-weight:800; margin-bottom:5px; }
+        .qr-sub { font-size:14px; color:#777; margin-bottom:14px; }
+        .page img { width:90mm; height:90mm; }
+        .qr-guide { font-size:16px; font-weight:700; color:#2e7d32; margin-top:14px; }
+        .qr-url { font-size:9px; color:#bbb; word-break:break-all; margin-top:8px; }
         @media screen { .page { border-bottom:2px dashed #ddd; } }
         @media print { .toolbar { display:none !important; } }
       </style></head>
