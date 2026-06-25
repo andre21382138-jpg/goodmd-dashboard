@@ -188,36 +188,6 @@ export default function ScmShippingPage({ profile }) {
   const selCount = selectedIds.size;
   const fmtTime = (iso) => iso ? new Date(iso).toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
 
-  // 매장(점포·지점) 단위로 합치기 — 같은 매장이면 요청시각이 달라도 한 그룹.
-  // 각 상품 행에 요청시각을 표시해 구분.
-  const grouped = useMemo(() => {
-    const sMap = new Map();
-    for (const r of filtered) {
-      const sKey = `${r.store_name}|${r.branch_name}`;
-      if (!sMap.has(sKey)) sMap.set(sKey, { sKey, store_name: r.store_name, branch_name: r.branch_name, items: [] });
-      sMap.get(sKey).items.push(r);
-    }
-    const stores = [...sMap.values()].map(s => ({
-      ...s,
-      items: s.items.slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')),
-      itemIds: s.items.map(it => it.id),
-      latest: s.items.reduce((mx, it) => (it.created_at || '') > mx ? (it.created_at || '') : mx, ''),
-    }));
-    stores.sort((a, b) => (b.latest || '').localeCompare(a.latest || '') || (a.store_name||'').localeCompare(b.store_name||''));
-    return stores;
-  }, [filtered]);
-
-  const [expandedStores, setExpandedStores] = useState(new Set()); // 기본 접힘
-  const toggleStoreOpen = (sKey) => setExpandedStores(prev => {
-    const n = new Set(prev); n.has(sKey) ? n.delete(sKey) : n.add(sKey); return n;
-  });
-  const toggleMany = (ids, on) => setSelectedIds(prev => {
-    const n = new Set(prev);
-    if (on) ids.forEach(id => n.add(id)); else ids.forEach(id => n.delete(id));
-    return n;
-  });
-  const allIn = (ids) => ids.length > 0 && ids.every(id => selectedIds.has(id));
-
   return (
     <div>
       <div className="card">
@@ -261,61 +231,45 @@ export default function ScmShippingPage({ profile }) {
 
       <div className="card" style={{padding:'16px 20px'}}>
         {loading ? <div className="empty"><span className="spinner"/></div>
-        : grouped.length === 0 ? <div className="empty">해당하는 발송요청이 없습니다</div>
+        : filtered.length === 0 ? <div className="empty">해당하는 발송요청이 없습니다</div>
         : (
-          <div style={{display:'flex', flexDirection:'column', gap:14}}>
-            {grouped.map(s => {
-              const open = expandedStores.has(s.sKey);
-              const selInStore = s.itemIds.filter(id => selectedIds.has(id)).length;
-              return (
-              <div key={s.sKey} style={{border:'1px solid var(--border)', borderRadius:'var(--radius)', overflow:'hidden'}}>
-                {/* 매장 헤더 (클릭 시 펼침/접힘) */}
-                <div onClick={() => toggleStoreOpen(s.sKey)}
-                  style={{display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'#eceff1', flexWrap:'wrap', cursor:'pointer'}}>
-                  <span style={{fontSize:12, color:'var(--text2)', width:14}}>{open ? '▼' : '▶'}</span>
-                  <input type="checkbox" checked={allIn(s.itemIds)}
-                    onClick={e => e.stopPropagation()}
-                    onChange={e => toggleMany(s.itemIds, e.target.checked)} style={{cursor:'pointer', width:16, height:16}}
-                    title="이 매장 전체 선택"/>
-                  <span className="badge badge-dept">{s.store_name}</span>
-                  <span className="badge badge-store">{s.branch_name}</span>
-                  <span style={{fontSize:12, color:'var(--text2)'}}>상품 {s.itemIds.length}개 · 총 {s.items.reduce((t,it)=>t+(Number(it.quantity)||0),0)}개</span>
-                  <span style={{fontSize:11, color:'var(--text3)'}}>최근 {fmtTime(s.latest)}</span>
-                  {selInStore > 0 && <span style={{fontSize:12, fontWeight:700, color:'#6a1b9a'}}>· 선택 {selInStore}</span>}
-                </div>
-                {/* 매장 내 상품 — 펼쳤을 때만. 같은 매장이면 합쳐서, 행마다 요청시각 표시 */}
-                {open && (
-                  <div className="twrap" style={{borderTop:'1px solid var(--border)'}}>
-                    <table>
-                      <thead>
-                        <tr><th style={{width:36}}></th><th style={{width:120}}>요청시각</th><th>상품명</th><th className="r" style={{width:70}}>수량</th><th>송장번호</th><th style={{textAlign:'center', width:130}}>상태</th></tr>
-                      </thead>
-                      <tbody>
-                        {s.items.map(r => (
-                          <tr key={r.id} style={selectedIds.has(r.id) ? {background:'#f3e5f5'} : {}}>
-                            <td style={{textAlign:'center'}}>
-                              <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleOne(r.id)} style={{cursor:'pointer'}}/>
-                            </td>
-                            <td className="mono" style={{fontSize:11, color:'#6a1b9a', whiteSpace:'nowrap'}}>🕒 {fmtTime(r.created_at)}</td>
-                            <td style={{fontSize:12, fontWeight:600}}>
-                              {r.product?.name || '-'}
-                              {r.product?.code && <span style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginLeft:6}}>{r.product.code}</span>}
-                            </td>
-                            <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
-                            <td style={{fontSize:11, fontFamily:'var(--mono)'}}>{r.tracking_number || <span style={{color:'var(--text3)'}}>-</span>}</td>
-                            <td style={{textAlign:'center'}}>{statusBadge(r.status, !!r.tracking_number)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )})}
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{width:36, textAlign:'center'}}>
+                    <input type="checkbox" checked={allChecked} onChange={toggleAll} style={{cursor:'pointer'}}/>
+                  </th>
+                  <th style={{width:120}}>요청시각</th><th>매장</th><th>지점</th><th>상품명</th>
+                  <th className="r" style={{width:70}}>수량</th>
+                  <th>송장번호</th>
+                  <th style={{textAlign:'center', width:130}}>상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(r => (
+                  <tr key={r.id} style={selectedIds.has(r.id) ? {background:'#f3e5f5'} : {}}>
+                    <td style={{textAlign:'center'}}>
+                      <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleOne(r.id)} style={{cursor:'pointer'}}/>
+                    </td>
+                    <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>{fmtTime(r.created_at)}</td>
+                    <td><span className="badge badge-dept">{r.store_name}</span></td>
+                    <td><span className="badge badge-store">{r.branch_name}</span></td>
+                    <td style={{fontSize:12, fontWeight:600}}>
+                      {r.product?.name || '-'}
+                      {r.product?.code && <span style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginLeft:6}}>{r.product.code}</span>}
+                    </td>
+                    <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
+                    <td style={{fontSize:11, fontFamily:'var(--mono)'}}>{r.tracking_number || <span style={{color:'var(--text3)'}}>-</span>}</td>
+                    <td style={{textAlign:'center'}}>{statusBadge(r.status, !!r.tracking_number)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
         <div style={{fontSize:11, color:'var(--text3)', marginTop:10}}>
-          매장 → 발주건(요청시각)별로 묶음 · 같은 날 따로 요청한 건은 시각으로 구분됩니다 · ① 선택 → 엑셀 → ② 송장 업로드 → ③ 발송처리
+          ① 선택 → 엑셀 다운로드 → ② 송장 입력 후 업로드 → ③ 송장 등록건 선택 → 발송처리
         </div>
       </div>
     </div>
