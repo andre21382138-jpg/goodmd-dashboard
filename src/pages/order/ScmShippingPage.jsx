@@ -75,7 +75,9 @@ export default function ScmShippingPage({ profile }) {
       let seq = 0;
       for (const r of items) {
         seq += 1;
-        const orderNo = `${ymd}-${String(seq).padStart(4,'0')}`;
+        // 주문번호는 발주건 고정값(요청일+요청ID) — 매번 다운로드해도 동일
+        const reqYmd = String(r.request_date || r.created_at || '').slice(0,10).replace(/-/g,'') || ymd;
+        const orderNo = `${reqYmd}-${String(r.id).padStart(6,'0')}`;
         const storeFull = `${r.store_name || ''}${r.branch_name || ''}`;
         const addr = addrMap.get(`${r.store_name}|${r.branch_name}`) || {};
         ws.addRow([
