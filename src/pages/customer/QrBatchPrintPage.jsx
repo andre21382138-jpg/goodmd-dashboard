@@ -40,33 +40,48 @@ export default function QrBatchPrintPage() {
   const printSelected = () => {
     const targets = stores.filter(s => selected.has(s.id));
     if (targets.length === 0) return;
-    const cards = targets.map(s => `
-      <div class="qr-card">
+    const pages = targets.map(s => `
+      <div class="page">
         <div class="qr-store">${s.department} ${s.branch}</div>
         <div class="qr-sub">(주)한국생활건강 회원가입</div>
-        <img src="${qrImg(s.id, 320)}" />
+        <img src="${qrImg(s.id, 600)}" />
         <div class="qr-guide">📱 스캔 후 담당자 선택 → 가입</div>
         <div class="qr-url">${qrUrl(s.id)}</div>
       </div>`).join('');
     const w = window.open('');
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>매장 QR 일괄 인쇄 (${targets.length})</title>
       <style>
-        @page { margin: 10mm; }
+        @page { size: A4; margin: 12mm; }
         body { font-family: 'Malgun Gothic', sans-serif; margin:0; }
-        .grid { display:flex; flex-wrap:wrap; gap:6mm; }
-        .qr-card { width:88mm; box-sizing:border-box; border:1px dashed #999; border-radius:6px;
-          padding:7mm 4mm; text-align:center; page-break-inside:avoid; }
-        .qr-store { font-size:17px; font-weight:800; margin-bottom:2mm; }
-        .qr-sub { font-size:11px; color:#777; margin-bottom:4mm; }
-        .qr-card img { width:58mm; height:58mm; }
-        .qr-guide { font-size:12px; font-weight:700; color:#2e7d32; margin-top:3mm; }
-        .qr-url { font-size:8px; color:#bbb; word-break:break-all; margin-top:2mm; }
+        .toolbar { position:sticky; top:0; background:#fff8f0; border-bottom:1px solid #ffcc80;
+          padding:10px 16px; display:flex; align-items:center; gap:12px; z-index:10; }
+        .toolbar button { height:36px; padding:0 18px; border:none; border-radius:6px; background:#E65100;
+          color:#fff; font-size:14px; font-weight:700; cursor:pointer; }
+        .toolbar span { font-size:13px; color:#6d4c41; }
+        /* 매장 1개 = A4 1페이지 */
+        .page { box-sizing:border-box; width:100%; min-height:271mm;
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          text-align:center; page-break-after:always; }
+        .page:last-child { page-break-after:auto; }
+        .qr-store { font-size:34px; font-weight:800; margin-bottom:6px; }
+        .qr-sub { font-size:18px; color:#777; margin-bottom:18px; }
+        .page img { width:120mm; height:120mm; }
+        .qr-guide { font-size:22px; font-weight:700; color:#2e7d32; margin-top:18px; }
+        .qr-url { font-size:11px; color:#bbb; word-break:break-all; margin-top:10px; }
+        @media screen { .page { border-bottom:2px dashed #ddd; } }
+        @media print { .toolbar { display:none !important; } }
       </style></head>
-      <body><div class="grid">${cards}</div>
+      <body>
+        <div class="toolbar">
+          <button onclick="window.print()">🖨️ 인쇄하기</button>
+          <span id="st">QR 이미지 불러오는 중…</span>
+        </div>
+        ${pages}
       <script>
         window.onload = function(){
           var imgs = Array.prototype.slice.call(document.images), n = 0;
-          function done(){ if(++n >= imgs.length) setTimeout(function(){ window.print(); }, 300); }
+          var st = document.getElementById('st');
+          function done(){ if(++n >= imgs.length){ if(st) st.textContent = '준비 완료 — [인쇄하기] 또는 Ctrl+P'; setTimeout(function(){ window.print(); }, 300); } }
           if(imgs.length === 0){ window.print(); return; }
           imgs.forEach(function(im){ if(im.complete) done(); else { im.onload = done; im.onerror = done; } });
         };
