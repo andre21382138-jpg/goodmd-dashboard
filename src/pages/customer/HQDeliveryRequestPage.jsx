@@ -305,47 +305,35 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     } finally { setProcessing(null); }
   };
 
-  // 상품 단위 반려 (SCM/본사) — 품절 등 사유 입력. 해당 sale row만 rejected 처리
-  const [rejectItem, setRejectItem] = useState(null);   // { it, g }
+  // 상품 단위 반려 (SCM/본사) — 품절 등. 상품 체크 후 한 번에 사유 입력하여 일괄 반려
+  const [rejectSel, setRejectSel] = useState(new Set()); // 반려할 sale id 집합
+  const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
   const [rejectItemReason, setRejectItemReason] = useState('');
   const [rejectingItem, setRejectingItem] = useState(false);
-  const openRejectItem = (it, g) => { setRejectItem({ it, g }); setRejectItemReason(''); };
+  const toggleRejectSel = (id) => setRejectSel(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+  const openBulkReject = () => {
+    if (rejectSel.size === 0) { toast('반려할 상품을 선택해주세요', 'err'); return; }
+    setRejectItemReason(''); setBulkRejectOpen(true);
+  };
   const confirmRejectItem = async () => {
     const reason = rejectItemReason.trim();
     if (!reason) { toast('반려 사유를 입력해주세요', 'err'); return; }
+    const ids = [...rejectSel];
     setRejectingItem(true);
     try {
       const { error } = await supabase.from('sales').update({
         delivery_status: 'rejected', delivery_reject_reason: reason,
-      }).eq('id', rejectItem.it.id);
+      }).in('id', ids);
       if (error) throw error;
-      toast('해당 상품 반려 완료 — 발송요청에서 제외', 'ok');
-      setRejectItem(null);
+      toast(`${ids.length}개 상품 반려 완료 — 발송요청에서 제외`, 'ok');
+      setBulkRejectOpen(false); setRejectSel(new Set());
       fetchData();
     } catch (err) {
       toast('반려 실패: ' + (err.message || err), 'err');
     }
     setRejectingItem(false);
-  };
-
-  // 본사 담당자 — 선택 요청 반려 (재고 없음 등 발송 불가). 매장이 매출조회에서 매장발송으로 전환 가능
-  const handleRejectSelected = async () => {
-    const target = groups.filter(g => selectedKeys.has(g.key));
-    if (target.length === 0) { toast('반려할 요청을 선택해주세요', 'err'); return; }
-    const ids = target.flatMap(g => g.items.map(it => it.id));
-    if (!window.confirm(`선택한 ${target.length}건을 반려하시겠습니까?\n\n발송대기에서 빠지고, 해당 매장이 매출조회에서 '매장발송'으로 전환할 수 있습니다.`)) return;
-    setProcessing('reject');
-    try {
-      const { error } = await supabase.from('sales').update({
-        delivery_status: 'rejected',
-      }).in('id', ids);
-      if (error) throw error;
-      toast(`${target.length}건 반려 처리 완료`, 'ok');
-      setSelectedKeys(new Set());
-      fetchData();
-    } catch (err) {
-      toast('반려 실패: ' + (err.message || err), 'err');
-    } finally { setProcessing(null); }
   };
 
   // 선택 건 엑셀 다운로드 (선택 없으면 승인된 전체)
@@ -491,11 +479,11 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                 style={{height:30, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background: selectedAllTracked?'#e8f5e9':'#f5f5f5', color: selectedAllTracked?'#2e7d32':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedAllTracked?'pointer':'not-allowed'}}>
                 {processing === 'batch' ? <span className="spinner"/> : `✓ 발송처리${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
               </button>
-              {isApprover && (
-                <button type="button" onClick={handleRejectSelected} disabled={selectedKeys.size === 0 || processing === 'reject'}
-                  title="선택 요청 반려 (재고없음 등) — 매장이 매출조회에서 매장발송으로 전환"
-                  style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background: selectedKeys.size>0?'#ffebee':'#f5f5f5', color: selectedKeys.size>0?'var(--danger)':'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedKeys.size>0?'pointer':'not-allowed'}}>
-                  {processing === 'reject' ? <span className="spinner"/> : `⛔ 반려${selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}`}
+              {(isScm || isApprover) && (
+                <button type="button" onClick={openBulkReject} disabled={rejectSel.size === 0}
+                  title="상품명 앞 체크박스로 선택한 상품들을 한 번에 반려 (사유 1회 입력)"
+                  style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background: rejectSel.size>0?'#ffebee':'#f5f5f5', color: rejectSel.size>0?'var(--danger)':'var(--text3)', fontSize:12, fontWeight:700, cursor: rejectSel.size>0?'pointer':'not-allowed'}}>
+                  {`⛔ 선택 반려${rejectSel.size > 0 ? ` (${rejectSel.size})` : ''}`}
                 </button>
               )}
               <button className="btn btn-s" onClick={fetchData} disabled={loading}>
@@ -572,15 +560,14 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                         </td>
                       )}
                       <td style={{fontSize:12, ...lineBorder}}>
-                        <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
-                          <span>{it.product?.name || '-'}</span>
+                        <div style={{display:'flex', alignItems:'center', gap:8}}>
                           {tab === 'pending' && (isScm || isApprover) && (
-                            <button type="button" onClick={() => openRejectItem(it, g)}
-                              title="품절 등으로 이 상품 반려 (사유 입력)"
-                              style={{height:22, padding:'0 8px', border:'1px solid var(--danger)', borderRadius:4, background:'#ffebee', color:'var(--danger)', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
-                              ⛔ 반려
-                            </button>
+                            <input type="checkbox" checked={rejectSel.has(it.id)}
+                              onChange={() => toggleRejectSel(it.id)}
+                              title="반려할 상품 선택"
+                              style={{cursor:'pointer', width:15, height:15, accentColor:'#c62828'}}/>
                           )}
+                          <span>{it.product?.name || '-'}</span>
                         </div>
                       </td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, ...lineBorder}}>{it.quantity}</td>
@@ -653,30 +640,26 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
       </div>
       </>)}
 
-      {/* 상품 반려 사유 입력 모달 */}
-      {rejectItem && (
+      {/* 상품 일괄 반려 사유 입력 모달 */}
+      {bulkRejectOpen && (
         <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
-          onClick={() => setRejectItem(null)}>
+          onClick={() => setBulkRejectOpen(false)}>
           <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}}/>
           <div style={{position:'relative', background:'#fff', borderRadius:12, width:'min(440px, 92vw)', padding:'22px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
             onClick={e => e.stopPropagation()}>
-            <div style={{fontSize:16, fontWeight:700, marginBottom:6, color:'var(--danger)'}}>⛔ 상품 반려</div>
-            <div style={{fontSize:13, color:'var(--text2)', marginBottom:4}}>
-              <span className="badge badge-dept">{rejectItem.g.store_name}</span> <span className="badge badge-store">{rejectItem.g.branch_name}</span>
-              {rejectItem.g.recipient_name && <span style={{marginLeft:6}}>· 받는분 {rejectItem.g.recipient_name}</span>}
-            </div>
-            <div style={{fontSize:13, fontWeight:700, marginBottom:14}}>{rejectItem.it.product?.name} · {rejectItem.it.quantity}개</div>
-            <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:6}}>반려 사유 *</label>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:6, color:'var(--danger)'}}>⛔ 선택 상품 반려</div>
+            <div style={{fontSize:13, fontWeight:700, marginBottom:14}}>선택한 <span style={{color:'var(--danger)'}}>{rejectSel.size}개</span> 상품을 반려합니다</div>
+            <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:6}}>반려 사유 * (선택 상품 공통)</label>
             <textarea value={rejectItemReason} onChange={e => setRejectItemReason(e.target.value)} autoFocus
               placeholder="예) 본사 품절 / 단종 / 입고 지연 등"
               style={{width:'100%', minHeight:72, padding:'10px 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none', resize:'vertical'}}/>
-            <div style={{fontSize:11, color:'var(--text3)', marginTop:6}}>확인 시 이 상품은 발송요청에서 제외되고, 매장에 '본사반려'와 사유가 표시됩니다.</div>
+            <div style={{fontSize:11, color:'var(--text3)', marginTop:6}}>확인 시 선택 상품은 발송요청에서 제외되고, 매장에 '본사반려'와 사유가 표시됩니다.</div>
             <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:16}}>
-              <button type="button" onClick={() => setRejectItem(null)}
+              <button type="button" onClick={() => setBulkRejectOpen(false)}
                 style={{height:38, padding:'0 18px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer'}}>취소</button>
               <button type="button" onClick={confirmRejectItem} disabled={rejectingItem}
                 style={{height:38, padding:'0 18px', border:'none', borderRadius:'var(--radius)', background:'var(--danger)', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer'}}>
-                {rejectingItem ? '처리 중...' : '확인 (반려)'}
+                {rejectingItem ? '처리 중...' : `확인 (${rejectSel.size}개 반려)`}
               </button>
             </div>
           </div>
