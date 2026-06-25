@@ -56,6 +56,7 @@ export const HQ_MENUS = [
     { key: 'member_mgmt',          icon: '🔍', label: '회원 조회' },
     { key: 'sms_history',          icon: '📨', label: '문자 내역' },
     { key: 'sms_unsubscribe_sync', icon: '🚫', label: '수신거부 동기화' },
+    { key: 'qr_print_all',         icon: '🖨️', label: '매장 QR 인쇄' },
   ]},
   { key: 'order_request_hq', icon: '📦', label: '매장 발주요청' },
   { key: 'hq_delivery_request', icon: '📦', label: '고객 택배요청' },
