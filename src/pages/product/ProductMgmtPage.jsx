@@ -189,6 +189,29 @@ export default function ProductMgmtPage({ subPage }) {
     return list;
   })();
 
+  // 엑셀 다운로드 — 현재 목록(전체/브랜드별/검색 결과) 그대로 내보내기 (업로드 양식과 동일 컬럼)
+  const handleExportExcel = () => {
+    if (filteredProducts.length === 0) { toast('내보낼 상품이 없습니다', 'err'); return; }
+    const rows = filteredProducts.map(p => ({
+      '브랜드명': p.brand?.name || '',
+      '상품명': p.name || '',
+      '상품코드': p.code || '',
+      'ERP코드': p.erp_code || '',
+      '원가': Number(p.cost) || 0,
+      '판매가': Number(p.price) || 0,
+      '판매상태': p.is_sales_stopped ? '판매중지' : '판매중',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch:14 },{ wch:30 },{ wch:14 },{ wch:14 },{ wch:10 },{ wch:10 },{ wch:10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '상품목록');
+    const label = selBrand ? selBrand.name : '전체';
+    const d = new Date();
+    const ymd = `${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    XLSX.writeFile(wb, `상품목록_${label}_${ymd}.xlsx`);
+    toast(`${rows.length}개 상품 다운로드`, 'ok');
+  };
+
   const startEdit = (p) => setEditing(prev => ({...prev, [p.id]: { cost: p.cost||0, price: p.price||0 }}));
   const cancelEdit = (id) => setEditing(prev => { const n={...prev}; delete n[id]; return n; });
   const saveEdit = async (p) => {
@@ -312,6 +335,11 @@ export default function ProductMgmtPage({ subPage }) {
             <input className="finput" value={pSearch} onChange={e => setPSearch(e.target.value)}
               placeholder="🔍 상품명·코드·ERP코드 검색" style={{height:32, fontSize:12, marginLeft:'auto', width:220}}/>
             {pSearch && <button className="btn-ghost" style={{fontSize:11}} onClick={() => setPSearch('')}>✕</button>}
+            <button type="button" onClick={handleExportExcel} disabled={loading || filteredProducts.length === 0}
+              title={`${selBrand ? selBrand.name : '전체'} 상품을 엑셀로 다운로드`}
+              style={{height:32, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+              📥 엑셀 다운로드
+            </button>
           </div>
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
