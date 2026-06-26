@@ -173,11 +173,14 @@ export default function ProductMgmtPage({ subPage }) {
 
   const inputStyle = { height:34, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontFamily:'var(--sans)', outline:'none' };
   const [pSearch,  setPSearch]  = useState('');
+  const [pStatus,  setPStatus]  = useState(''); // '' 전체 | selling 판매중 | stopped 판매중지
   const [editing,  setEditing]  = useState({});
   const [saving,   setSavingP]  = useState({});
 
   const filteredProducts = (() => {
     let list = selBrand ? products.filter(p => p.brand_id === selBrand.id) : products;
+    if (pStatus === 'selling') list = list.filter(p => !p.is_sales_stopped);
+    else if (pStatus === 'stopped') list = list.filter(p => p.is_sales_stopped);
     if (pSearch.trim()) {
       const kw = pSearch.trim().toLowerCase();
       list = list.filter(p =>
@@ -206,9 +209,10 @@ export default function ProductMgmtPage({ subPage }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '상품목록');
     const label = selBrand ? selBrand.name : '전체';
+    const statusLabel = pStatus === 'selling' ? '_판매중' : pStatus === 'stopped' ? '_판매중지' : '';
     const d = new Date();
     const ymd = `${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-    XLSX.writeFile(wb, `상품목록_${label}_${ymd}.xlsx`);
+    XLSX.writeFile(wb, `상품목록_${label}${statusLabel}_${ymd}.xlsx`);
     toast(`${rows.length}개 상품 다운로드`, 'ok');
   };
 
@@ -332,8 +336,14 @@ export default function ProductMgmtPage({ subPage }) {
         <div className="card">
           <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12}}>
             <div className="card-label" style={{marginBottom:0}}>{selBrand ? selBrand.name : '전체'} 상품 현황 ({filteredProducts.length}개)</div>
+            <select className="fsel" value={pStatus} onChange={e => setPStatus(e.target.value)}
+              style={{ height:32, fontSize:12, marginLeft:'auto' }} title="판매상태 필터">
+              <option value="">판매상태 전체</option>
+              <option value="selling">판매중만</option>
+              <option value="stopped">판매중지만</option>
+            </select>
             <input className="finput" value={pSearch} onChange={e => setPSearch(e.target.value)}
-              placeholder="🔍 상품명·코드·ERP코드 검색" style={{height:32, fontSize:12, marginLeft:'auto', width:220}}/>
+              placeholder="🔍 상품명·코드·ERP코드 검색" style={{height:32, fontSize:12, width:200}}/>
             {pSearch && <button className="btn-ghost" style={{fontSize:11}} onClick={() => setPSearch('')}>✕</button>}
             <button type="button" onClick={handleExportExcel} disabled={loading || filteredProducts.length === 0}
               title={`${selBrand ? selBrand.name : '전체'} 상품을 엑셀로 다운로드`}
