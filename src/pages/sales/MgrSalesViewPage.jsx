@@ -90,11 +90,16 @@ export default function MgrSalesViewPage({ profile }) {
     if (!window.confirm(`선택한 ${ids.length}개 라인을 영구 삭제하시겠습니까?\n\n주문(결제 묶음) 단위로 선택된 매출이 모두 삭제되며, 되돌릴 수 없습니다.`)) return;
     setDeletingSel(true);
     try {
-      const { error } = await supabase.from('sales').delete().in('id', ids);
+      const { data, error } = await supabase.from('sales').delete().in('id', ids).select('id');
       if (error) throw error;
-      toast(`${ids.length}건 삭제 완료`, 'ok');
-      setSelDel(new Set());
-      fetchSales();
+      const deleted = (data || []).length;
+      if (deleted === 0) {
+        toast('삭제 권한이 없습니다 (RLS). 본사 담당자 삭제 정책이 필요합니다.', 'err');
+      } else {
+        toast(`${deleted}건 삭제 완료${deleted < ids.length ? ` (권한 없어 ${ids.length - deleted}건 제외)` : ''}`, deleted < ids.length ? 'err' : 'ok');
+        setSelDel(new Set());
+        fetchSales();
+      }
     } catch (err) {
       toast('삭제 실패: ' + (err.message || err), 'err');
     }
