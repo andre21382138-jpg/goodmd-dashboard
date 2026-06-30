@@ -35,6 +35,8 @@ export default function MgrSalesViewPage({ profile }) {
   const [editingLine, setEditingLine] = useState(null);  // sale id
   const [editDraft,   setEditDraft]   = useState({});    // { quantity, price, payment, memo }
   const [savingLine,  setSavingLine]  = useState(false);
+  const [selDel,      setSelDel]      = useState(new Set()); // 본사 선택삭제 — sale row id 집합
+  const [deletingSel, setDeletingSel] = useState(false);
 
   const startEditLine = (it) => {
     setEditingLine(it.id);
@@ -70,6 +72,35 @@ export default function MgrSalesViewPage({ profile }) {
     }
     setSavingLine(false);
   };
+  // 본사 — 주문건(결제 묶음) 선택 + 일괄/선택 삭제
+  const toggleTxnDel = (rows) => setSelDel(prev => {
+    const ids = rows.map(x => x.id);
+    const allOn = ids.every(id => prev.has(id));
+    const n = new Set(prev);
+    if (allOn) ids.forEach(id => n.delete(id)); else ids.forEach(id => n.add(id));
+    return n;
+  });
+  const txnChecked = (rows) => rows.length > 0 && rows.every(x => selDel.has(x.id));
+  const allSaleIds = sales.map(s => s.id);
+  const allDelOn = allSaleIds.length > 0 && allSaleIds.every(id => selDel.has(id));
+  const toggleAllDel = () => setSelDel(allDelOn ? new Set() : new Set(allSaleIds));
+  const deleteSelected = async () => {
+    const ids = [...selDel];
+    if (ids.length === 0) { toast('삭제할 주문건을 선택해주세요', 'err'); return; }
+    if (!window.confirm(`선택한 ${ids.length}개 라인을 영구 삭제하시겠습니까?\n\n주문(결제 묶음) 단위로 선택된 매출이 모두 삭제되며, 되돌릴 수 없습니다.`)) return;
+    setDeletingSel(true);
+    try {
+      const { error } = await supabase.from('sales').delete().in('id', ids);
+      if (error) throw error;
+      toast(`${ids.length}건 삭제 완료`, 'ok');
+      setSelDel(new Set());
+      fetchSales();
+    } catch (err) {
+      toast('삭제 실패: ' + (err.message || err), 'err');
+    }
+    setDeletingSel(false);
+  };
+
   const deleteLine = async (it) => {
     if (!window.confirm(`이 라인을 삭제하시겠습니까?\n\n상품: ${it.product?.name || '-'}\n수량: ${it.quantity}\n단가: ${Number(it.price).toLocaleString()}원\n\n해당 sales row가 영구 삭제됩니다.`)) return;
     setSavingLine(true);
@@ -154,6 +185,7 @@ export default function MgrSalesViewPage({ profile }) {
     if (error) toast(error.message, 'err');
     // 새 정책: 반품은 음수 매출 row로 처리되므로 returned_qty는 무시 (이중 반품 방지용으로만 보존)
     else setSales((data || []).map(r => ({...r, _eff: (r.quantity || 0)})));
+    setSelDel(new Set());
     setLoading(false);
   }, [fFrom, fTo, storeName, branchName]);
 
@@ -293,9 +325,20 @@ export default function MgrSalesViewPage({ profile }) {
       )}
       {dailyRows.length > 0 && (
         <div className="card" style={{padding:'16px 20px'}}>
-          <div style={{marginBottom:10}}>
+          <div style={{marginBottom:10, display:'flex', alignItems:'center', gap:10, flexWrap:'wrap'}}>
             <span className="fresult"><b>{dailyRows.length}</b>일 / 총 <b>{totals.count.toLocaleString()}</b>건 · <b>{totals.amt.toLocaleString()}</b>원</span>
-            <span style={{fontSize:11, color:'var(--text3)', marginLeft:8}}>(행 클릭 시 판매 상세 펼쳐짐)</span>
+            <span style={{fontSize:11, color:'var(--text3)'}}>(날짜 행 클릭 → 주문건 펼침)</span>
+            {isHQ && (
+              <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:8}}>
+                {selDel.size > 0 && <span style={{fontSize:12, fontWeight:700, color:'#6a1b9a'}}>선택 {selDel.size}</span>}
+                <button className="btn btn-s" onClick={toggleAllDel}>{allDelOn ? '✕ 전체 해제' : '☑ 전체 선택'}</button>
+                <button type="button" onClick={deleteSelected} disabled={deletingSel || selDel.size === 0}
+                  title="선택한 주문건(결제 묶음) 일괄 삭제"
+                  style={{height:30, padding:'0 12px', border:'1px solid var(--danger)', borderRadius:'var(--radius)', background: selDel.size>0?'#ffebee':'#f5f5f5', color: selDel.size>0?'var(--danger)':'var(--text3)', fontSize:12, fontWeight:700, cursor: selDel.size>0?'pointer':'not-allowed'}}>
+                  {deletingSel ? <span className="spinner"/> : `🗑 선택 삭제${selDel.size>0?` (${selDel.size})`:''}`}
+                </button>
+              </div>
+            )}
           </div>
           <div className="twrap">
             <table>
@@ -365,8 +408,18 @@ export default function MgrSalesViewPage({ profile }) {
                                   const strike = allFully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
                                   return (
                                   <React.Fragment key={txnId}>
-                                  <tr style={{...(allFully?{background:'#fafafa'}:{}), ...(isTxnOpen?{background:'#fff8e1'}:{})}}>
-                                    <td style={strike}>{head.brand?.name || '-'}</td>
+                                  <tr style={{...(allFully?{background:'#fafafa'}:{}), ...(isTxnOpen?{background:'#fff8e1'}:{}), ...(txnChecked(g.rows)?{background:'#f3e5f5'}:{})}}>
+                                    <td style={strike}>
+                                      <div style={{display:'flex', alignItems:'center', gap:6}}>
+                                        {isHQ && (
+                                          <input type="checkbox" checked={txnChecked(g.rows)}
+                                            onClick={e => e.stopPropagation()}
+                                            onChange={() => toggleTxnDel(g.rows)}
+                                            title="이 주문건 선택(삭제용)" style={{cursor:'pointer'}}/>
+                                        )}
+                                        <span>{head.brand?.name || '-'}</span>
+                                      </div>
+                                    </td>
                                     <td style={{fontSize:12, ...strike}}>
                                       <strong>{head.product?.name || '-'}</strong>
                                       {extraCount > 0 && (
