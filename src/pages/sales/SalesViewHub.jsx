@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
+import { SPECIAL_SALES_STORES } from '../../lib/constants';
 
 export default function SalesViewHub({ setPage }) {
   const items = [
@@ -101,24 +102,39 @@ export default function SalesViewHub({ setPage }) {
 
   // 매장매출 = 강좌매출(결제='강좌매출') 제외
   const storeRegularRows = useMemo(() => storeRows.filter(r => r.payment !== '강좌매출'), [storeRows]);
+  // 특판매출로 잡을 sales (store_name='특판' 또는 과거 통합 점포명) / 그 외는 일반 매장
+  const isSpecialStore = (r) => SPECIAL_SALES_STORES.includes(r.store_name);
+  const specialSalesRows = useMemo(() => storeRegularRows.filter(isSpecialStore), [storeRegularRows]);
+  const realStoreRows    = useMemo(() => storeRegularRows.filter(r => !isSpecialStore(r)), [storeRegularRows]);
   // 강좌매출(신규) = 판매입력에서 결제 '강좌매출'로 잡힌 sales
   const lectureSalesTotal = useMemo(() => storeRows
     .filter(r => r.payment === '강좌매출')
     .reduce((s, r) => s + Math.round((Number(r.price)||0) * (Number(r.quantity)||0)), 0), [storeRows]);
 
   const storeGroups   = useMemo(() => groupBy(
-    storeRegularRows,
+    realStoreRows,
     r => `${r.store_name||''}|${r.branch_name||''}`,
     r => `${r.store_name||''} ${r.branch_name||''}`.trim(),
     r => (Number(r.price)||0) * (Number(r.quantity)||0)
-  ), [storeRegularRows]);
+  ), [realStoreRows]);
 
-  const bizGroups     = useMemo(() => groupBy(
+  // 특판매출 = biz_sales(B2B 거래처) + 특판 sales(지점별)
+  const bizSalesGroups = useMemo(() => groupBy(
     bizRows,
-    r => r.company_name || '(미지정)',
+    r => `biz|${r.company_name || '(미지정)'}`,
     r => r.company_name || '(미지정)',
     r => (Number(r.supply_price)||0) * (Number(r.quantity)||0)
   ), [bizRows]);
+  const specialSalesGroups = useMemo(() => groupBy(
+    specialSalesRows,
+    r => `특판|${r.branch_name || r.store_name || '미지정'}`,
+    r => r.branch_name || r.store_name || '(미지정)',
+    r => (Number(r.price)||0) * (Number(r.quantity)||0)
+  ), [specialSalesRows]);
+  const bizGroups = useMemo(
+    () => [...bizSalesGroups, ...specialSalesGroups].sort((a,b) => b.total - a.total),
+    [bizSalesGroups, specialSalesGroups]
+  );
 
   const lectureGroups = useMemo(() => groupBy(
     lectureRows,
