@@ -14,6 +14,11 @@ export default function HomePage({ profile, setPage }) {
   };
   const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
   const yesterdayStr = toLocalDate(yesterday);
+  const todayStr = toLocalDate(now);
+  // 매월 1일엔 '어제'가 지난달이라 범위가 뒤집힘 → 1일엔 '오늘까지'로 처리
+  const isFirstOfMonth = yesterdayStr < monthStart;
+  const rangeEndStr = isFirstOfMonth ? todayStr : yesterdayStr;
+  const rangeEndLabel = isFirstOfMonth ? '오늘까지' : '어제까지';
   const monthLabel = `${year}년 ${month}월`;
 
   const [storeSummary,   setStoreSummary]   = useState({amt:0,count:0,qty:0});
@@ -36,7 +41,8 @@ export default function HomePage({ profile, setPage }) {
   const prevMon  = String(prevMonthDate.getMonth() + 1).padStart(2, '0');
   const prevMonthStart = `${prevYear}-${prevMon}-01`;
   const prevMonthLastDay = new Date(prevYear, prevMonthDate.getMonth() + 1, 0).getDate();
-  const prevMonthEndDay  = Math.min(yesterday.getDate(), prevMonthLastDay);
+  const rangeEndDay      = isFirstOfMonth ? now.getDate() : yesterday.getDate();
+  const prevMonthEndDay  = Math.min(rangeEndDay, prevMonthLastDay);
   const prevMonthEnd = `${prevYear}-${prevMon}-${String(prevMonthEndDay).padStart(2, '0')}`;
 
   const isManager = profile?.job_title === '매니저';
@@ -66,7 +72,7 @@ export default function HomePage({ profile, setPage }) {
         : 'store_name, branch_name, quantity, price, returned_qty';
       let storeQ = supabase.from('sales')
         .select(selectCols)
-        .gte('sold_at', monthStart).lte('sold_at', yesterdayStr)
+        .gte('sold_at', monthStart).lte('sold_at', rangeEndStr)
         .order('sold_at', { ascending: false });
       if (isManager && profile?.department)
         storeQ = storeQ.eq('store_name', profile.department).eq('branch_name', profile.branch);
@@ -139,7 +145,7 @@ export default function HomePage({ profile, setPage }) {
         // 2. 강좌 매출
         const { data: lectureData } = await supabase.from('lecture_sales')
           .select('store_name, branch_name, quantity, price')
-          .gte('sold_at', monthStart).lte('sold_at', yesterdayStr);
+          .gte('sold_at', monthStart).lte('sold_at', rangeEndStr);
         const lRows = lectureData || [];
         const lMap = new Map();
         for (const r of lRows) {
@@ -157,7 +163,7 @@ export default function HomePage({ profile, setPage }) {
         // 3. 특판 매출
         const { data: bizData } = await supabase.from('biz_sales')
           .select('company_name, quantity, supply_price')
-          .gte('sold_at', monthStart).lte('sold_at', yesterdayStr);
+          .gte('sold_at', monthStart).lte('sold_at', rangeEndStr);
         const bRows = bizData || [];
         const bMap = new Map();
         for (const r of bRows) {
@@ -243,7 +249,7 @@ export default function HomePage({ profile, setPage }) {
             {isManager && <span style={{ fontSize:13, fontWeight:500, color:'var(--text3)', marginLeft:8 }}>({profile?.branch})</span>}
           </div>
           <div style={{ fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)' }}>
-            {monthStart} ~ {yesterdayStr} (어제까지)
+            {monthStart} ~ {rangeEndStr} ({rangeEndLabel})
           </div>
         </div>
         {canSeeAll && (() => {
