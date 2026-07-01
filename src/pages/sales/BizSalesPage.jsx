@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
-import { RETAIL_STORES } from '../../lib/constants';
+import { RETAIL_STORES, STORE_MAP } from '../../lib/constants';
 import SalesTabNav from './SalesTabNav';
 
 // mode: 'full'(조회+입력 탭) | 'view'(현황 조회만) | 'input'(매출 입력만)
@@ -619,11 +619,15 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
               style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
               <option value="">전체 업체</option>
               {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-              {specialNames.length > 0 && (
-                <optgroup label="특판(매장 판매입력)">
-                  {specialNames.map(n=><option key={'sp:'+n} value={'sp:'+n}>{n}</option>)}
-                </optgroup>
-              )}
+              {(() => {
+                // 설정상 특판 지점(STORE_MAP) + 실제 데이터에서 발견된 특판 store/branch 병합
+                const opts = [...new Set([...(STORE_MAP['특판']||[]), ...specialNames])].sort();
+                return opts.length > 0 ? (
+                  <optgroup label="특판(매장 판매입력)">
+                    {opts.map(n=><option key={'sp:'+n} value={'sp:'+n}>{n}</option>)}
+                  </optgroup>
+                ) : null;
+              })()}
             </select>
             {fCompany && <button className="btn-ghost" onClick={()=>setFCompany('')}>✕</button>}
             <div style={{marginLeft:'auto', textAlign:'right'}}>
