@@ -17,6 +17,8 @@ export default function SalesSettlementPage() {
   const [fTo,   setFTo]   = useState(todayStr);
   const [fStore, setFStore] = useState(''); // '' = 전체 점포
   const [fBranch, setFBranch] = useState(''); // '' = 전체 지점
+  const [cmpFrom, setCmpFrom] = useState(''); // 비교기간 시작 (비우면 자동 전월동기)
+  const [cmpTo,   setCmpTo]   = useState(''); // 비교기간 종료 (비우면 자동 전월동기)
   const [rows, setRows] = useState([]);
   const [prevFrom, setPrevFrom] = useState('');
   const [prevTo,   setPrevTo]   = useState('');
@@ -82,7 +84,7 @@ export default function SalesSettlementPage() {
   const search = useCallback(async () => {
     setLoading(true);
     try {
-      const [pf, pt] = prevRange(fFrom, fTo);
+      const [pf, pt] = (cmpFrom && cmpTo) ? [cmpFrom, cmpTo] : prevRange(fFrom, fTo);
       const [curAll, prevAll] = await Promise.all([fetchRange(fFrom, fTo), fetchRange(pf, pt)]);
       const curMap = aggregate(curAll), prevMap = aggregate(prevAll);
       const list = [...curMap.entries()].map(([id, g]) => {
@@ -104,7 +106,7 @@ export default function SalesSettlementPage() {
       toast('조회 실패: ' + (err.message || err), 'err');
     }
     setLoading(false);
-  }, [fFrom, fTo, fStore, fBranch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fFrom, fTo, fStore, fBranch, cmpFrom, cmpTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totals = rows.reduce((t, r) => ({
     qty: t.qty + r.qty, gross: t.gross + r.gross, discount: t.discount + r.discount,
@@ -223,6 +225,15 @@ export default function SalesSettlementPage() {
             <option value="">{fStore ? '전체 지점' : '점포 먼저 선택'}</option>
             {fStore && (STORE_MAP[fStore] || []).map(b => <option key={b} value={b}>{b}</option>)}
           </select>
+          <span style={{ fontSize:12, color:'var(--text3)', marginLeft:6 }}>비교</span>
+          <input type="date" className="fsel" value={cmpFrom} onChange={e => setCmpFrom(e.target.value)} title="비교기간 시작 (비우면 전월 동기간 자동)" />
+          <span style={{ fontSize:12, color:'var(--text3)' }}>~</span>
+          <input type="date" className="fsel" value={cmpTo} onChange={e => setCmpTo(e.target.value)} title="비교기간 종료 (비우면 전월 동기간 자동)" />
+          {(cmpFrom || cmpTo) && (
+            <button type="button" onClick={() => { setCmpFrom(''); setCmpTo(''); }}
+              style={{ height:34, padding:'0 8px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', color:'var(--text3)', fontSize:12, cursor:'pointer' }}
+              title="비교기간 자동으로 되돌리기">↺ 자동</button>
+          )}
           <div className="fbar-right" style={{ display:'flex', gap:8 }}>
             {searched && rows.length > 0 && (
               <button type="button" onClick={exportExcel}
@@ -245,7 +256,7 @@ export default function SalesSettlementPage() {
           <>
           <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)' }}>
             <b>{rows.length}</b>개 상품 · {fStore || '전체 점포'} · 조회 <b>{fFrom} ~ {fTo}</b>
-            <span style={{ marginLeft:10, color:'#6a1b9a' }}>· 전월동기 <b>{prevFrom} ~ {prevTo}</b></span>
+            <span style={{ marginLeft:10, color:'#6a1b9a' }}>· 비교 <b>{prevFrom} ~ {prevTo}</b> {(cmpFrom && cmpTo) ? '(수동)' : '(전월동기 자동)'}</span>
           </div>
           <div className="twrap">
             <table>
