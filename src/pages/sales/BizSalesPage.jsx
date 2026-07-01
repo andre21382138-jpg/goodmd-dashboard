@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
+import { SPECIAL_SALES_STORES } from '../../lib/constants';
 import SalesTabNav from './SalesTabNav';
 
 // mode: 'full'(조회+입력 탭) | 'view'(현황 조회만) | 'input'(매출 입력만)
@@ -61,6 +62,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
   });
   const [fMonth,  setFMonth]  = useState(curMonStr);
   const [fCompany,setFCompany]= useState('');
+  const [specialNames, setSpecialNames] = useState([]); // 특판(매장 판매입력) 지점명 목록
 
   useEffect(() => {
     supabase.from('biz_companies').select('*').order('name').then(({data}) => setCompanies(data||[]));
@@ -73,13 +75,56 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
     const from = `${fMonth}-01`;
     const lastDay = new Date(fMonth.split('-')[0], fMonth.split('-')[1], 0).getDate();
     const to = `${fMonth}-${pad(lastDay)}`;
-    let q = supabase.from('biz_sales')
-      .select('*, company:biz_companies(name), brand:brands(name), product:products(name)')
-      .gte('sold_at', from).lte('sold_at', to)
-      .order('sold_at', {ascending:false});
-    if (fCompany) q = q.eq('company_id', fCompany);
-    const {data} = await q;
-    setSales(data||[]);
+    const isSp = String(fCompany).startsWith('sp:');
+
+    // 1) biz_sales (B2B 거래처)
+    let bizData = [];
+    if (!isSp) {
+      let q = supabase.from('biz_sales')
+        .select('*, company:biz_companies(name), brand:brands(name), product:products(name)')
+        .gte('sold_at', from).lte('sold_at', to)
+        .order('sold_at', {ascending:false});
+      if (fCompany) q = q.eq('company_id', fCompany);
+      const {data} = await q;
+      bizData = data || [];
+    }
+
+    // 2) 특판 sales (sales 테이블, store_name in SPECIAL) — 페이징
+    let spAll = [];
+    let start = 0; const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase.from('sales')
+        .select('id, sold_at, store_name, branch_name, price, quantity, payment, brand:brands(name), product:products(name)')
+        .in('store_name', SPECIAL_SALES_STORES)
+        .gte('sold_at', from).lte('sold_at', to)
+        .order('id').range(start, start + PAGE - 1);
+      if (error) break;
+      if (!data || data.length === 0) break;
+      spAll.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    spAll = spAll.filter(r => r.payment !== '강좌매출'); // 강좌매출 제외
+    const names = [...new Set(spAll.map(r => r.branch_name || r.store_name).filter(Boolean))].sort();
+    setSpecialNames(names);
+
+    let spRows = spAll.map(r => ({
+      id: 'sp-' + r.id,
+      _special: true,
+      sold_at: r.sold_at,
+      company_name: r.branch_name || r.store_name,
+      brand_name: r.brand?.name || null,
+      product_name: r.product?.name || null,
+      quantity: r.quantity,
+      supply_price: r.price, // 단가 (반품은 음수)
+      delivery_method: null,
+      memo: null,
+    }));
+    if (isSp) spRows = spRows.filter(r => r.company_name === fCompany.slice(3));
+    else if (fCompany) spRows = []; // 특정 B2B 업체 선택 시 특판 sales 제외
+
+    const merged = [...bizData, ...spRows].sort((a, b) => String(b.sold_at).localeCompare(String(a.sold_at)));
+    setSales(merged);
     setLoading(false);
   }, [fMonth, fCompany]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -571,6 +616,11 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
               style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
               <option value="">전체 업체</option>
               {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+              {specialNames.length > 0 && (
+                <optgroup label="특판(매장 판매입력)">
+                  {specialNames.map(n=><option key={'sp:'+n} value={'sp:'+n}>{n}</option>)}
+                </optgroup>
+              )}
             </select>
             {fCompany && <button className="btn-ghost" onClick={()=>setFCompany('')}>✕</button>}
             <div style={{marginLeft:'auto', textAlign:'right'}}>
@@ -604,7 +654,10 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
                               style={{width:130, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, outline:'none'}}/>
                           : s.sold_at}
                       </td>
-                      <td style={{fontWeight:600}}>{s.company?.name||s.company_name}</td>
+                      <td style={{fontWeight:600}}>
+                        {s.company?.name||s.company_name}
+                        {s._special && <span className="badge badge-store" style={{marginLeft:6}}>매장</span>}
+                      </td>
                       <td><span className="badge badge-dept">{s.brand?.name||s.brand_name||'-'}</span></td>
                       <td style={{fontSize:13}}>{s.product?.name||s.product_name}</td>
                       <td className="r" style={{fontFamily:'var(--mono)'}}>
@@ -645,7 +698,9 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
                       </td>
                       {canManage && (
                         <td style={{textAlign:'center'}}>
-                          {isEditing ? (
+                          {s._special ? (
+                            <span style={{fontSize:11, color:'var(--text3)'}}>판매입력</span>
+                          ) : isEditing ? (
                             <div style={{display:'flex', gap:4, justifyContent:'center'}}>
                               <button className="btn btn-p" style={{height:26, padding:'0 10px', fontSize:11}} disabled={savingEdit} onClick={() => saveEdit(s.id)}>
                                 {savingEdit ? <span className="spinner"/> : '저장'}
