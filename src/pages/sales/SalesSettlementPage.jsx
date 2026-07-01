@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
-import { STORE_NAMES } from '../../lib/constants';
+import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 // 본사 매출정산 — 기간·점포별 상품 단위 정산 + 전월 동기간 비교
 //  조회기간: 상품코드/상품명/원가/판매가/판매수량/매출액/할인금액/실제매출/이익/원가비중(%)
@@ -16,6 +16,7 @@ export default function SalesSettlementPage() {
   const [fFrom, setFFrom] = useState(monthStart);
   const [fTo,   setFTo]   = useState(todayStr);
   const [fStore, setFStore] = useState(''); // '' = 전체 점포
+  const [fBranch, setFBranch] = useState(''); // '' = 전체 지점
   const [rows, setRows] = useState([]);
   const [prevFrom, setPrevFrom] = useState('');
   const [prevTo,   setPrevTo]   = useState('');
@@ -42,6 +43,7 @@ export default function SalesSettlementPage() {
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
       if (fStore) q = q.eq('store_name', fStore);
+      if (fBranch) q = q.eq('branch_name', fBranch);
       const { data, error } = await q;
       if (error) throw error;
       if (!data || data.length === 0) break;
@@ -102,7 +104,7 @@ export default function SalesSettlementPage() {
       toast('조회 실패: ' + (err.message || err), 'err');
     }
     setLoading(false);
-  }, [fFrom, fTo, fStore]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fFrom, fTo, fStore, fBranch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totals = rows.reduce((t, r) => ({
     qty: t.qty + r.qty, gross: t.gross + r.gross, discount: t.discount + r.discount,
@@ -133,8 +135,8 @@ export default function SalesSettlementPage() {
     ws.addRow([]);                                          // 2
     ws.addRow([`조회기간-시작  = ${ymd(fFrom)}`]);           // 3
     ws.addRow([`조회기간-종료  = ${ymd(fTo)}`]);             // 4
-    ws.addRow([`그룹 =  ${fStore || '전체'}`]);              // 5
-    ws.addRow(['매장 =  전체']);                            // 6
+    ws.addRow([`그룹 =  ${fStore || '전체'}`]);              // 5 점포
+    ws.addRow([`매장 =  ${fBranch || '전체'}`]);             // 6 지점
     ws.addRow([]);                                          // 7
     ws.addRow([]);                                          // 8
     ws.addRow(['순번','상품코드','상품명','원가','판매가','조회기간','','','','','','전월 동기간','','','','전월증감비교']); // 9
@@ -197,7 +199,8 @@ export default function SalesSettlementPage() {
     }
 
     const buf = await wb.xlsx.writeBuffer();
-    dlBlob(buf, `기간별상품매출현황_${fStore || '전체'}_${fFrom}~${fTo}.xlsx`);
+    const scope = fBranch || fStore || '전체';
+    dlBlob(buf, `기간별상품매출현황_${scope}_${fFrom}~${fTo}.xlsx`);
     toast(`${rows.length}개 상품 다운로드`, 'ok');
   };
 
@@ -212,9 +215,13 @@ export default function SalesSettlementPage() {
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
           <span style={{ fontSize:12, color:'var(--text3)' }}>~</span>
           <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} />
-          <select className="fsel" value={fStore} onChange={e => setFStore(e.target.value)}>
+          <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
             <option value="">전체 점포</option>
             {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={!fStore}>
+            <option value="">{fStore ? '전체 지점' : '점포 먼저 선택'}</option>
+            {fStore && (STORE_MAP[fStore] || []).map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <div className="fbar-right" style={{ display:'flex', gap:8 }}>
             {searched && rows.length > 0 && (
