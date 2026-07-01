@@ -95,19 +95,11 @@ export default function LectureSalesPage({ profile, setPage }) {
   return (
     <div>
       {setPage && <SalesTabNav current="lecture_sales_view" setPage={setPage}/>}
-      <div style={{display:'flex',gap:8,marginBottom:16}}>
-        {[{key:'list',label:'📋 강좌 매출 조회'},{key:'input',label:'➕ 매출 입력'}].map(t=>(
-          <button key={t.key} onClick={()=>setTab(t.key)}
-            style={{height:36,padding:'0 18px',border:'2px solid',borderRadius:'var(--radius)',fontSize:12,fontWeight:700,cursor:'pointer',
-              borderColor:tab===t.key?'var(--accent)':'var(--border)',
-              background:tab===t.key?'#fff3e0':'#fff',
-              color:tab===t.key?'var(--accent)':'var(--text2)'}}>
-            {t.label}
-          </button>
-        ))}
+      <div style={{background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:16, fontSize:12, color:'#6a1b9a', lineHeight:1.7}}>
+        ℹ️ 강좌매출 입력은 이제 <strong>매장 판매입력</strong>에서 출고방식을 <strong>'강좌매출'</strong>로 선택합니다. 이 화면은 <strong>과거 강좌매출 조회</strong> 전용입니다.
       </div>
 
-      {tab==='input' && (
+      {false && tab==='input' && (
         <div className="card">
           <div className="card-label">강좌 매출 입력</div>
           <div style={{display:'grid',gridTemplateColumns:'150px 1fr 1fr',gap:12,marginBottom:12}}>

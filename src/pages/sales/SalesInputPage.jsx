@@ -397,6 +397,8 @@ export default function SalesInputPage({ profile }) {
             }
           : dType === 'store'
           ? { delivery_type: 'store', delivery_requested: true }
+          : dType === 'lecture'
+          ? { delivery_type: 'lecture', delivery_requested: false } // 강좌매출 — 재고차감 없음
           : { delivery_type: 'none', delivery_requested: false };
         const { error } = await supabase.from('sales').insert({
           sold_at: soldAt, store_name: storeName, branch_name: branchName,
@@ -419,9 +421,9 @@ export default function SalesInputPage({ profile }) {
           }).eq('id', l.pointCustomer.id);
         }
 
-        // 매장재고 자동 차감 — 단, 본사 택배요청(hq)은 본사 창고에서 발송하므로 매장 재고 차감 제외
+        // 매장재고 자동 차감 — 본사 택배요청(hq)·강좌매출(lecture)은 매장 재고 차감 제외
         const prod = allProducts.find(p => String(p.id) === String(l.productId));
-        if (prod?.code && dType !== 'hq') {
+        if (prod?.code && dType !== 'hq' && dType !== 'lecture') {
           const { data: stockRow } = await supabase.from('store_stock')
             .select('id, stock_qty')
             .eq('store_name',  storeName)
@@ -650,6 +652,7 @@ export default function SalesInputPage({ profile }) {
                     <option value="none">없음</option>
                     <option value="store">매장발송</option>
                     <option value="hq">본사요청</option>
+                    <option value="lecture">강좌매출</option>
                   </select>
                   {/* 추가 (마지막 라인에만) */}
                   {isLast ? (
@@ -1065,6 +1068,7 @@ export default function SalesInputPage({ profile }) {
                     <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9', ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
                     <td style={strike}>
                       {(!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
+                      {s.delivery_type === 'lecture' && <span style={{fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>강좌매출</span>}
                       {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
                       {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                       {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}

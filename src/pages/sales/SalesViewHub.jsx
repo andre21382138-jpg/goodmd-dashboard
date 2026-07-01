@@ -37,7 +37,7 @@ export default function SalesViewHub({ setPage }) {
       let start = 0;
       while (true) {
         const { data, error } = await supabase.from('sales')
-          .select('sold_at, store_name, branch_name, price, quantity')
+          .select('sold_at, store_name, branch_name, price, quantity, delivery_type')
           .gte('sold_at', appliedFrom).lte('sold_at', appliedTo)
           .range(start, start + PAGE - 1);
         if (error) throw error;
@@ -99,12 +99,19 @@ export default function SalesViewHub({ setPage }) {
     return list;
   };
 
+  // 매장매출 = 강좌매출(delivery_type='lecture') 제외
+  const storeRegularRows = useMemo(() => storeRows.filter(r => r.delivery_type !== 'lecture'), [storeRows]);
+  // 강좌매출(신규) = 판매입력에서 출고방식 강좌매출로 잡힌 sales
+  const lectureSalesTotal = useMemo(() => storeRows
+    .filter(r => r.delivery_type === 'lecture')
+    .reduce((s, r) => s + Math.round((Number(r.price)||0) * (Number(r.quantity)||0)), 0), [storeRows]);
+
   const storeGroups   = useMemo(() => groupBy(
-    storeRows,
+    storeRegularRows,
     r => `${r.store_name||''}|${r.branch_name||''}`,
     r => `${r.store_name||''} ${r.branch_name||''}`.trim(),
     r => (Number(r.price)||0) * (Number(r.quantity)||0)
-  ), [storeRows]);
+  ), [storeRegularRows]);
 
   const bizGroups     = useMemo(() => groupBy(
     bizRows,
@@ -122,7 +129,8 @@ export default function SalesViewHub({ setPage }) {
 
   const storeTotal   = useMemo(() => storeGroups.reduce((s,g) => s + g.total, 0), [storeGroups]);
   const bizTotal     = useMemo(() => bizGroups.reduce((s,g) => s + g.total, 0), [bizGroups]);
-  const lectureTotal = useMemo(() => lectureGroups.reduce((s,g) => s + g.total, 0), [lectureGroups]);
+  const oldLectureTotal = useMemo(() => lectureGroups.reduce((s,g) => s + g.total, 0), [lectureGroups]);
+  const lectureTotal = oldLectureTotal + lectureSalesTotal; // 과거 lecture_sales + 신규 판매입력 강좌
   const grandTotal   = storeTotal + bizTotal + lectureTotal;
 
   const filtersDirty = (fFrom !== appliedFrom) || (fTo !== appliedTo);
@@ -249,7 +257,7 @@ export default function SalesViewHub({ setPage }) {
       </div>
 
       {/* 총 매출액 카드 */}
-      <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', gap:12, marginBottom:14}}>
+      <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:12, marginBottom:14}}>
         <div style={{background:'#fff', border:'2px solid var(--sidebar)', borderRadius:'var(--radius)', padding:'16px 20px'}}>
           <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:6}}>총 매출액</div>
           <div style={{fontSize:24, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)'}}>
@@ -259,25 +267,27 @@ export default function SalesViewHub({ setPage }) {
             {appliedFrom} ~ {appliedTo}
           </div>
         </div>
-        {[
-          { label:'🏬 매장매출', value: storeTotal,   color:'var(--accent)' },
-          { label:'🤝 특판매출', value: bizTotal,     color:'#1565C0' },
-          { label:'🎓 강좌매출', value: lectureTotal, color:'#6a1b9a' },
-        ].map(c => (
-          <div key={c.label} style={{background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px'}}>
-            <div style={{fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:6}}>{c.label}</div>
-            <div style={{fontSize:16, fontWeight:700, color:c.color, fontFamily:'var(--mono)'}}>
-              {c.value.toLocaleString()}원
-            </div>
+        <div style={{background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px'}}>
+          <div style={{fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:6}}>🏬 매장매출</div>
+          <div style={{fontSize:16, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>
+            {storeTotal.toLocaleString()}원
           </div>
-        ))}
+          <div style={{fontSize:11, color:'#6a1b9a', marginTop:6, fontWeight:600}}>
+            🎓 그 중 강좌매출 <b style={{fontFamily:'var(--mono)'}}>{lectureTotal.toLocaleString()}</b>원
+          </div>
+        </div>
+        <div style={{background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px'}}>
+          <div style={{fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:6}}>🤝 특판매출</div>
+          <div style={{fontSize:16, fontWeight:700, color:'#1565C0', fontFamily:'var(--mono)'}}>
+            {bizTotal.toLocaleString()}원
+          </div>
+        </div>
       </div>
 
       {/* 매출 내역 3개 섹션 — 주체별 그룹 */}
       <div style={{display:'grid', gap:14}}>
-        <SectionCard title="매장 매출 내역" icon="🏬" groups={storeGroups}   total={storeTotal}   color="var(--accent)" kind="store"   subjectLabel="매장 / 지점" headerOnClick={() => setPage('sales_list')}/>
+        <SectionCard title="매장 매출 내역 (강좌매출 포함)" icon="🏬" groups={storeGroups}   total={storeTotal}   color="var(--accent)" kind="store"   subjectLabel="매장 / 지점" headerOnClick={() => setPage('sales_list')}/>
         <SectionCard title="특판 매출 내역" icon="🤝" groups={bizGroups}     total={bizTotal}     color="#1565C0"       kind="biz"     subjectLabel="거래처"     headerOnClick={() => setPage('biz_sales_view')}/>
-        <SectionCard title="강좌 매출 내역" icon="🎓" groups={lectureGroups} total={lectureTotal} color="#6a1b9a"       kind="lecture" subjectLabel="강좌 매장"   headerOnClick={() => setPage('lecture_sales_view')}/>
       </div>
 
       {/* 상세보기 모달 — 그룹의 일자별 분포 */}
