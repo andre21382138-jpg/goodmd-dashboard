@@ -278,13 +278,15 @@ export default function CustomerLookupPage({ profile }) {
   const withdrawCustomer = async (c, e) => {
     e.stopPropagation();
     if (!window.confirm(`[${c.name}] 회원을 탈퇴 처리하시겠습니까?\n\n이름: ${c.name}\n연락처: ${c.phone}\n점포: ${c.store_name} ${c.branch_name}\n\n탈퇴 후에는 회원 정보가 삭제됩니다.`)) return;
-    const { error } = await supabase.from('customers').delete().eq('id', c.id);
-    if (error) toast(error.message, 'err');
-    else {
-      toast(`${c.name} 회원 탈퇴 처리 완료`, 'ok');
-      if (selected?.id === c.id) setSelected(null);
-      fetchCustomers();
+    const { data, error } = await supabase.from('customers').delete().eq('id', c.id).select('id');
+    if (error) { toast(error.message, 'err'); return; }
+    if (!data || data.length === 0) {
+      toast('탈퇴 권한이 없습니다 (RLS). 본사 담당자 삭제 정책이 필요합니다.', 'err');
+      return;
     }
+    toast(`${c.name} 회원 탈퇴 처리 완료`, 'ok');
+    if (selected?.id === c.id) setSelected(null);
+    fetchCustomers();
   };
 
   // 테스트 발송 (본인 번호)
