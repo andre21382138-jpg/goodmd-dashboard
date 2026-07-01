@@ -14,9 +14,12 @@ export const STORE_MAP = {
 };
 export const STORE_NAMES = Object.keys(STORE_MAP);
 
-// 매출조회에서 '특판매출'로 집계할 sales.store_name 목록
-//  - '특판': 신규 판매입력(점포=특판)
-//  - 나머지: 과거 개별 점포로 저장된 매출 (특판 지점으로 통합됨)
+// 정식 백화점/매장 (매출조회에서 '매장매출'로 집계)
+export const RETAIL_STORES = ['롯데백화점','신세계백화점','현대백화점','AK백화점','갤러리아백화점','그린푸드','농협_SHOP','대동백화점'];
+// 위 정식 매장이 아닌 store_name(특판/영남실업/동화상사/창원지점/중소기업명품마루 등,
+// 표기 편차 포함)은 모두 '특판매출'로 집계한다.
+export const isSpecialSalesStore = (storeName) => !!storeName && !RETAIL_STORES.includes(storeName);
+// 하위호환: 명시적 특판 store_name 목록 (참고용)
 export const SPECIAL_SALES_STORES = ['특판', '영남실업', '동화상사', '창원지점(박경원님)', '중소기업명품마루'];
 
 // ════════════════════════════════════════════════════════

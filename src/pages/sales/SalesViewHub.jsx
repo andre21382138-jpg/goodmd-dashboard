@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
-import { SPECIAL_SALES_STORES } from '../../lib/constants';
+import { isSpecialSalesStore } from '../../lib/constants';
 
 export default function SalesViewHub({ setPage }) {
   const items = [
@@ -103,7 +103,7 @@ export default function SalesViewHub({ setPage }) {
   // 매장매출 = 강좌매출(결제='강좌매출') 제외
   const storeRegularRows = useMemo(() => storeRows.filter(r => r.payment !== '강좌매출'), [storeRows]);
   // 특판매출로 잡을 sales (store_name='특판' 또는 과거 통합 점포명) / 그 외는 일반 매장
-  const isSpecialStore = (r) => SPECIAL_SALES_STORES.includes(r.store_name);
+  const isSpecialStore = (r) => isSpecialSalesStore(r.store_name);
   const specialSalesRows = useMemo(() => storeRegularRows.filter(isSpecialStore), [storeRegularRows]);
   const realStoreRows    = useMemo(() => storeRegularRows.filter(r => !isSpecialStore(r)), [storeRegularRows]);
   // 강좌매출(신규) = 판매입력에서 결제 '강좌매출'로 잡힌 sales

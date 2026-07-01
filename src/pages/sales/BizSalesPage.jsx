@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
-import { SPECIAL_SALES_STORES } from '../../lib/constants';
+import { RETAIL_STORES } from '../../lib/constants';
 import SalesTabNav from './SalesTabNav';
 
 // mode: 'full'(조회+입력 탭) | 'view'(현황 조회만) | 'input'(매출 입력만)
@@ -89,13 +89,16 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
       bizData = data || [];
     }
 
-    // 2) 특판 sales (sales 테이블, store_name in SPECIAL) — 페이징
+    // 2) 특판 sales = sales 테이블에서 정식 백화점(RETAIL_STORES)이 아닌 store_name — 페이징
+    //    (표기 편차와 무관하게 잡히도록 화이트리스트가 아닌 '정식 매장 제외' 방식)
+    const notInList = '(' + RETAIL_STORES.map(s => `"${s}"`).join(',') + ')';
     let spAll = [];
     let start = 0; const PAGE = 1000;
     while (true) {
       const { data, error } = await supabase.from('sales')
         .select('id, sold_at, store_name, branch_name, price, quantity, payment, brand:brands(name), product:products(name)')
-        .in('store_name', SPECIAL_SALES_STORES)
+        .not('store_name', 'in', notInList)
+        .not('store_name', 'is', null)
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
       if (error) break;
