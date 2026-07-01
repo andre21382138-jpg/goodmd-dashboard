@@ -107,7 +107,20 @@ export default function SalesInputPage({ profile }) {
 
   useEffect(() => {
     supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || []));
-    supabase.from('products').select('*').order('name').then(({ data }) => setAllProducts(data || []));
+    // 상품 전량 로드 — 1000행 제한 회피 위해 페이징
+    (async () => {
+      const all = []; let start = 0; const PAGE = 1000;
+      while (true) {
+        const { data, error } = await supabase.from('products').select('*')
+          .order('name').range(start, start + PAGE - 1);
+        if (error) break;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < PAGE) break;
+        start += PAGE;
+      }
+      setAllProducts(all);
+    })();
   }, []);
 
   // 바코드 스캐너 (페이지 내 한정)

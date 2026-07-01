@@ -38,9 +38,20 @@ export default function StockRequestPage({ profile }) {
       const sMap = new Map();
       for (const s of (stockRows || [])) sMap.set(String(s.product_code || '').trim(), Number(s.stock_qty) || 0);
 
-      // 2) 상품 마스터 (code/erp_code → product)
-      const { data: prods } = await supabase.from('products')
-        .select('id, code, erp_code, brand_id, name, is_sales_stopped, brand:brands(name)');
+      // 2) 상품 마스터 (code/erp_code → product) — 1000행 제한 회피 위해 전량 페이징
+      const prods = [];
+      { let start = 0; const PAGE = 1000;
+        while (true) {
+          const { data, error } = await supabase.from('products')
+            .select('id, code, erp_code, brand_id, name, is_sales_stopped, brand:brands(name)')
+            .order('id').range(start, start + PAGE - 1);
+          if (error) break;
+          if (!data || data.length === 0) break;
+          prods.push(...data);
+          if (data.length < PAGE) break;
+          start += PAGE;
+        }
+      }
       const codeMap = new Map();
       for (const p of (prods || [])) {
         if (p.code)     codeMap.set(String(p.code).trim(), p);
