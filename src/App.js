@@ -26,6 +26,7 @@ import SalesListPage from './pages/sales/SalesListPage';
 import LectureSalesPage from './pages/sales/LectureSalesPage';
 import BizSalesPage from './pages/sales/BizSalesPage';
 import SalesViewHub from './pages/sales/SalesViewHub';
+import SalesSettlementPage from './pages/sales/SalesSettlementPage';
 import AdminTab from './pages/admin/AdminTab';
 import ManagerMgmtPage from './pages/admin/ManagerMgmtPage';
 import CenterStockPage from './pages/stock/CenterStockPage';
@@ -738,6 +739,7 @@ export default function App() {
     biz_delivery_request: '특판 발주요청',
     store_info:     '매장주소정보',
     sales_view:          '매출조회',
+    sales_settlement:    '매출정산',
     sales_list:          '매장 매출',
     biz_sales_view:      '특판 매출',
     lecture_sales_view:  '강좌 매출',
@@ -833,6 +835,7 @@ export default function App() {
             {page === 'biz_delivery_request' && (canSeeMain || isScm) && <HQDeliveryRequestPage profile={profile} view="biz"/>}
             {page === 'store_info'     && (canSeeMain || isScm) && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
+            {page === 'sales_settlement'   && canSeeMain && <SalesSettlementPage/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
             {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage} mode="view"/>}
             {page === 'lecture_sales_view'  && canSeeMain && <LectureSalesPage profile={profile} setPage={setPage}/>}
