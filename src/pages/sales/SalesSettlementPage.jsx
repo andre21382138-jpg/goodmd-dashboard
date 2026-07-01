@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 import { STORE_NAMES } from '../../lib/constants';
@@ -119,21 +118,81 @@ export default function SalesSettlementPage() {
     return <span style={{ color: up ? '#1b5e20' : '#c62828', fontWeight:700 }}>{up ? '▲' : '▼'} {won(Math.abs(v))}</span>;
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (rows.length === 0) { toast('조회된 데이터가 없습니다', 'err'); return; }
-    const data = rows.map(r => ({
-      '상품코드': r.code, '상품명': r.name,
-      '원가': Math.round(r.unitCost), '판매가': Math.round(r.listPrice), '판매수량': r.qty,
-      '매출액': Math.round(r.gross), '할인금액': Math.round(r.discount), '실제매출': Math.round(r.net),
-      '이익': Math.round(r.profit), '원가비중(%)': Number(r.costPct.toFixed(1)),
-      '전월_판매수량': r.prevQty, '전월_판매금액': Math.round(r.prevGross),
-      '전월_할인금액': Math.round(r.prevDiscount), '전월_실제매출': Math.round(r.prevNet),
-      '실제매출_증감': Math.round(r.diffNet),
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '매출정산');
-    XLSX.writeFile(wb, `매출정산_${fStore||'전체'}_${fFrom}~${fTo}.xlsx`);
+    const ExcelJS = (await import('exceljs')).default;
+    const { dlBlob } = await import('../../lib/utils');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('매출정산');
+
+    ws.columns = [
+      { width:17 }, { width:36 },
+      { width:11 }, { width:11 }, { width:10 }, { width:13 }, { width:12 }, { width:13 }, { width:13 }, { width:10 },
+      { width:10 }, { width:13 }, { width:12 }, { width:13 },
+      { width:14 },
+    ];
+
+    // 1행: 그룹 헤더 (병합)
+    ws.addRow(['', '', '조회기간', '', '', '', '', '', '', '', '전월 동기간', '', '', '', '전월증감']);
+    ws.mergeCells('A1:B1'); ws.mergeCells('C1:J1'); ws.mergeCells('K1:N1');
+    // 2행: 컬럼 헤더
+    ws.addRow(['상품코드','상품명','원가','판매가','판매수량','매출액','할인금액','실제매출','이익','원가비중(%)','판매수량','판매금액','할인금액','실제매출','실제매출증감']);
+
+    for (const r of rows) {
+      ws.addRow([
+        r.code, r.name,
+        Math.round(r.unitCost), Math.round(r.listPrice), r.qty, Math.round(r.gross), Math.round(r.discount), Math.round(r.net), Math.round(r.profit), Number(r.costPct.toFixed(1)),
+        r.prevQty, Math.round(r.prevGross), Math.round(r.prevDiscount), Math.round(r.prevNet),
+        Math.round(r.diffNet),
+      ]);
+    }
+    const totalRow = ws.addRow([
+      '합계', '', '', '', totals.qty, Math.round(totals.gross), Math.round(totals.discount), Math.round(totals.net), Math.round(totals.profit), Number(totalCostPct.toFixed(1)),
+      totals.pQty, Math.round(totals.pGross), Math.round(totals.pDiscount), Math.round(totals.pNet),
+      Math.round(totalDiff),
+    ]);
+
+    // ── 스타일 ──
+    const RED='FFC62828', ORANGE='FFE65100', GREEN='FF1B5E20', PURPLE='FF6A1B9A';
+    const moneyCols = [3,4,6,7,8,9,12,13,14,15];
+    const qtyCols   = [5,11];
+    const thin = { style:'thin', color:{argb:'FFD0D0D0'} };
+    const grpBorder = { style:'medium', color:{argb:'FF9E9E9E'} };
+    const colColor = { 7:RED, 8:ORANGE, 13:RED, 14:PURPLE }; // 고정 색
+    const grpStartCols = [3, 11, 15];
+    const lastRow = ws.rowCount;
+
+    ws.eachRow((row, rn) => {
+      row.height = rn <= 2 ? 20 : 17;
+      row.eachCell((cell, cn) => {
+        cell.font = { name:'맑은 고딕', size: 10, bold: rn <= 2 || rn === lastRow };
+        cell.alignment = { horizontal: cn <= 2 ? (rn>=3 ? 'left':'center') : (rn<=2 ? 'center':'right'), vertical:'middle' };
+        cell.border = {
+          bottom: rn === 2 ? { style:'medium', color:{argb:'FF9E9E9E'} } : thin,
+          top: rn === lastRow ? { style:'medium', color:{argb:'FF9E9E9E'} } : undefined,
+          left: grpStartCols.includes(cn) ? grpBorder : thin,
+          right: thin,
+        };
+        if (rn === 1) { cell.font = { name:'맑은 고딕', size: 11, bold: true }; cell.alignment = { horizontal:'center', vertical:'middle' }; }
+        if (rn >= 3) {
+          if (moneyCols.includes(cn)) cell.numFmt = '#,##0';
+          if (qtyCols.includes(cn))   cell.numFmt = '#,##0';
+          if (cn === 10) cell.numFmt = '0.0"%"';
+          // 색상
+          if (colColor[cn]) cell.font = { ...cell.font, color:{argb: colColor[cn]}, bold: cn===8 || rn===lastRow };
+          if (cn === 9)  cell.font = { ...cell.font, color:{argb: (cell.value<0? RED: GREEN)}, bold: rn===lastRow };
+          if (cn === 15) cell.font = { ...cell.font, color:{argb: (cell.value<0? RED: GREEN)}, bold:true };
+        }
+      });
+    });
+    // 헤더 배경(연회색)로 살짝 구분
+    for (const rn of [1,2]) ws.getRow(rn).eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF2F2F2'} }; });
+    totalRow.eachCell(c => { c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF7F3EC'} }; });
+    ws.views = [{ state:'frozen', xSplit:2, ySplit:2 }];
+
+    const buf = await wb.xlsx.writeBuffer();
+    dlBlob(buf, `매출정산_${fStore||'전체'}_${fFrom}~${fTo}.xlsx`);
+    toast(`${rows.length}개 상품 다운로드`, 'ok');
   };
 
   const grp = { borderLeft: '2px solid var(--border2)' }; // 그룹 구분 세로선
