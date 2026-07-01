@@ -37,7 +37,7 @@ export default function SalesViewHub({ setPage }) {
       let start = 0;
       while (true) {
         const { data, error } = await supabase.from('sales')
-          .select('sold_at, store_name, branch_name, price, quantity, delivery_type')
+          .select('sold_at, store_name, branch_name, price, quantity, payment')
           .gte('sold_at', appliedFrom).lte('sold_at', appliedTo)
           .range(start, start + PAGE - 1);
         if (error) throw error;
@@ -99,11 +99,11 @@ export default function SalesViewHub({ setPage }) {
     return list;
   };
 
-  // 매장매출 = 강좌매출(delivery_type='lecture') 제외
-  const storeRegularRows = useMemo(() => storeRows.filter(r => r.delivery_type !== 'lecture'), [storeRows]);
-  // 강좌매출(신규) = 판매입력에서 출고방식 강좌매출로 잡힌 sales
+  // 매장매출 = 강좌매출(결제='강좌매출') 제외
+  const storeRegularRows = useMemo(() => storeRows.filter(r => r.payment !== '강좌매출'), [storeRows]);
+  // 강좌매출(신규) = 판매입력에서 결제 '강좌매출'로 잡힌 sales
   const lectureSalesTotal = useMemo(() => storeRows
-    .filter(r => r.delivery_type === 'lecture')
+    .filter(r => r.payment === '강좌매출')
     .reduce((s, r) => s + Math.round((Number(r.price)||0) * (Number(r.quantity)||0)), 0), [storeRows]);
 
   const storeGroups   = useMemo(() => groupBy(

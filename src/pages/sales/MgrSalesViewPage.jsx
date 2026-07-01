@@ -445,7 +445,6 @@ export default function MgrSalesViewPage({ profile }) {
                                     </td>
                                     <td style={strike}>
                                       {(!head.delivery_type || head.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
-                                      {head.delivery_type === 'lecture' && <span style={{fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>강좌매출</span>}
                                       {head.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
                                       {head.delivery_type === 'hq' && !hasRejected && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
                                       {hasRejected && (
@@ -510,7 +509,6 @@ export default function MgrSalesViewPage({ profile }) {
                                                   <td>{it.payment && it.payment !== '적립금사용' && <span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9',fontSize:11, ...(fully?{opacity:0.5}:{})}}>{it.payment}</span>}</td>
                                                   <td style={lineStrike}>
                                                     {(!it.delivery_type || it.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
-                                                    {it.delivery_type === 'lecture' && <span style={{fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>강좌매출</span>}
                                                     {it.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
                                                     {it.delivery_type === 'hq' && it.delivery_status === 'rejected' && <span style={{fontSize:10, fontWeight:700, color:'var(--danger)', background:'#ffebee', border:'1px solid #ef9a9a', padding:'1px 6px', borderRadius:3}} title={it.delivery_reject_reason ? `사유: ${it.delivery_reject_reason}` : ''}>본사반려{it.delivery_reject_reason ? ` · ${it.delivery_reject_reason}` : ''}</span>}
                                                     {it.delivery_type === 'hq' && it.delivery_status !== 'dispatched' && it.delivery_status !== 'rejected' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
