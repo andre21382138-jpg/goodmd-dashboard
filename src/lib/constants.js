@@ -72,7 +72,7 @@ export const MANAGER_MENUS = [
   { key: 'home',           icon: '🏠', label: '홈 대시보드' },
   { key: 'sales_input',    icon: '🛒', label: '판매 입력' },
   { key: 'sales_return',   icon: '↩️', label: '반품 접수' },
-  { key: 'stock_request', icon: '📦', label: '발주요청' },
+  { key: 'stock_request', icon: '📦', label: '발주 요청' },
   { key: 'store_delivery_status', icon: '🚚', label: '고객 택배' },
   { key: 'customer_reg',   icon: '👤', label: '회원 관리', sub: [
     { key: 'customer_qr',  icon: '📱', label: 'QR 가입' },

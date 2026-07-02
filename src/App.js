@@ -755,7 +755,7 @@ export default function App() {
     customer_qr:    'QR 가입',
     customer_doc:   '서류 가입',
     my_members:     '회원 목록',
-    stock_request:   '발주요청',
+    stock_request:   '발주 요청',
     stock_mgmt_mgr:  '재고 관리',
     stock_mgr_view:  '재고 현황',
     attendance_mgmt: '근태 관리',
