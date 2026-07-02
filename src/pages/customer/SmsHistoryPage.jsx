@@ -24,7 +24,7 @@ const SCH_STATUS_STYLE = {
 const PAGE_SIZE = 200;
 
 export default function SmsHistoryPage() {
-  const [tab,      setTab]      = useState('history'); // 'history' | 'schedule'
+  const [tab,      setTab]      = useState('history'); // 'history' | 'schedule' | 'renewal'
 
   // 발송 내역
   const [fFrom,    setFFrom]    = useState('');
@@ -68,8 +68,14 @@ export default function SmsHistoryPage() {
   }, []);
 
   useEffect(() => {
-    if (tab === 'schedule') fetchSchedules();
+    if (tab === 'schedule' || tab === 'renewal') fetchSchedules();
   }, [tab, fetchSchedules]);
+
+  // 재동의 안내(marketing_renewal_notice)와 일반 예약 분리
+  const RENEWAL_KIND = 'marketing_renewal_notice';
+  const manualSchedules  = schedules.filter(s => s.kind !== RENEWAL_KIND);
+  const renewalSchedules = schedules.filter(s => s.kind === RENEWAL_KIND);
+  const renewalSummary = renewalSchedules.reduce((a, s) => { a[s.status] = (a[s.status] || 0) + 1; return a; }, {});
 
   const cancelSchedule = async (id) => {
     if (!window.confirm('예약을 취소하시겠습니까?')) return;
@@ -93,6 +99,7 @@ export default function SmsHistoryPage() {
       <div className="tabs">
         <button className={`tab ${tab==='history'?'on':''}`} onClick={() => setTab('history')}>발송 내역</button>
         <button className={`tab ${tab==='schedule'?'on':''}`} onClick={() => setTab('schedule')}>예약 내역</button>
+        <button className={`tab ${tab==='renewal'?'on':''}`} onClick={() => setTab('renewal')}>🔁 재동의 안내</button>
       </div>
 
       {/* ── 발송 내역 탭 ── */}
@@ -193,7 +200,7 @@ export default function SmsHistoryPage() {
               {loadingSch ? <span className="spinner"/> : '🔄 새로고침'}
             </button>
           </div>
-          {loadingSch ? <div className="empty"><span className="spinner"/></div> : schedules.length === 0 ? (
+          {loadingSch ? <div className="empty"><span className="spinner"/></div> : manualSchedules.length === 0 ? (
             <div className="empty">예약된 발송이 없습니다</div>
           ) : (
             <div className="twrap">
@@ -212,7 +219,7 @@ export default function SmsHistoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {schedules.map(sch => {
+                  {manualSchedules.map(sch => {
                     const { style, label } = schBadge(sch.status);
                     return (
                       <tr key={sch.id}>
@@ -237,6 +244,72 @@ export default function SmsHistoryPage() {
                           {sch.status === 'pending' && (
                             <button className="btn-danger" style={{padding:'3px 8px', fontSize:11}} onClick={() => cancelSchedule(sch.id)}>취소</button>
                           )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 재동의 안내 탭 ── */}
+      {tab === 'renewal' && (
+        <div className="card" style={{padding:'16px 20px'}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
+            <span className="card-label" style={{margin:0}}>🔁 마케팅 재동의 안내 내역</span>
+            <button className="btn btn-s" onClick={fetchSchedules} disabled={loadingSch}>
+              {loadingSch ? <span className="spinner"/> : '🔄 새로고침'}
+            </button>
+          </div>
+          {renewalSchedules.length > 0 && (
+            <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12}}>
+              <span className="fresult">총 <b>{renewalSchedules.length.toLocaleString()}</b>건</span>
+              {['sent','sending','pending','failed','cancelled'].filter(s => renewalSummary[s]).map(s => {
+                const { style, label } = schBadge(s);
+                return <span key={s} style={style}>{label} {renewalSummary[s]}</span>;
+              })}
+            </div>
+          )}
+          {loadingSch ? <div className="empty"><span className="spinner"/></div> : renewalSchedules.length === 0 ? (
+            <div className="empty">재동의 안내 발송 내역이 없습니다 (매일 자정 자동 등록)</div>
+          ) : (
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>예약일시</th>
+                    <th style={{textAlign:'center'}}>상태</th>
+                    <th>수신자</th>
+                    <th>수신번호</th>
+                    <th>내용</th>
+                    <th>발신번호</th>
+                    <th>발송일시</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {renewalSchedules.map(sch => {
+                    const { style, label } = schBadge(sch.status);
+                    const rcv = sch.receivers?.[0] || {};
+                    return (
+                      <tr key={sch.id}>
+                        <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>
+                          {new Date(sch.scheduled_at).toLocaleString('ko-KR', {year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                        </td>
+                        <td style={{textAlign:'center'}}><span style={style}>{label}</span></td>
+                        <td style={{fontSize:12}}>{rcv.name || '-'}</td>
+                        <td className="mono" style={{fontSize:12}}>{rcv.phone || '-'}</td>
+                        <td>
+                          <button style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',fontWeight:600,fontSize:12,padding:0,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}
+                            onClick={() => setPreviewSch(sch)}>
+                            {sch.message.length > 18 ? sch.message.slice(0,18)+'…' : sch.message}
+                          </button>
+                        </td>
+                        <td className="mono" style={{fontSize:12}}>{sch.sender}</td>
+                        <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>
+                          {sch.sent_at ? new Date(sch.sent_at).toLocaleString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-'}
                         </td>
                       </tr>
                     );
