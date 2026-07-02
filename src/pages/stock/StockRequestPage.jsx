@@ -119,14 +119,16 @@ export default function StockRequestPage({ profile }) {
   const addMatches = (() => {
     const q = addSearch.trim().toLowerCase();
     if (!q) return [];
+    const inSheet = new Set(rows.map(r => r.productId));
     return allProducts
-      .filter(p => !p.is_sales_stopped)                       // 판매중지 제외 (판매중은 모두 노출)
-      .filter(p => !rows.some(r => r.productId === p.id))     // 이미 발주시트에 있는 상품 제외
+      .filter(p => !p.is_sales_stopped)                       // 판매중지만 제외 (판매중은 모두 노출)
       .filter(p =>
         (p.name || '').toLowerCase().includes(q)
         || (p.code || '').toLowerCase().includes(q)
         || (p.erp_code || '').toLowerCase().includes(q))
+      .map(p => ({ ...p, _inSheet: inSheet.has(p.id) }))      // 이미 목록에 있는지 표시(숨기지 않음)
       .sort((a, b) => {
+        if (a._inSheet !== b._inSheet) return a._inSheet ? 1 : -1; // 아직 없는 것 먼저
         const an = (a.name || '').toLowerCase(), bn = (b.name || '').toLowerCase();
         const as = an.startsWith(q) ? 0 : 1, bs = bn.startsWith(q) ? 0 : 1; // 이름 시작 일치 우선
         return as - bs || an.localeCompare(bn);
@@ -135,6 +137,11 @@ export default function StockRequestPage({ profile }) {
   const addSuggestions = addMatches.slice(0, SUGGEST_LIMIT);
 
   const addProduct = (p) => {
+    if (rows.some(r => r.productId === p.id)) { // 이미 목록에 있으면 추가 안 함
+      toast('이미 발주 목록에 있는 상품입니다', 'inf');
+      setAddSearch(''); setShowAdd(false);
+      return;
+    }
     const code = String(p.code || '').trim();
     const stock = stockMap.get(code) || 0;
     const soldQty = salesMap.get(String(p.id)) || 0;
@@ -326,12 +333,13 @@ export default function StockRequestPage({ profile }) {
                 <div style={{ position:'absolute', top:'100%', right:0, zIndex:100, width:300, background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:240, overflowY:'auto' }}>
                   {addSuggestions.map(p => (
                     <div key={p.id} onMouseDown={e => { e.preventDefault(); addProduct(p); }}
-                      style={{ padding:'8px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0' }}
+                      style={{ padding:'8px 12px', cursor:'pointer', fontSize:13, borderBottom:'1px solid #f0f0f0', opacity: p._inSheet ? 0.55 : 1 }}
                       onMouseEnter={e => e.currentTarget.style.background='#fffde7'}
                       onMouseLeave={e => e.currentTarget.style.background='#fff'}>
                       {p.brand?.name && <span style={{ fontSize:11, color:'var(--accent)', fontWeight:700, marginRight:6 }}>[{p.brand.name}]</span>}
                       {p.name}
                       {p.code && <span style={{ fontSize:10, color:'var(--text3)', marginLeft:6, fontFamily:'var(--mono)' }}>{p.code}</span>}
+                      {p._inSheet && <span style={{ fontSize:10, color:'#1565C0', marginLeft:6, fontWeight:700 }}>✓ 이미 목록에 있음</span>}
                     </div>
                   ))}
                   {addMatches.length > SUGGEST_LIMIT && (
