@@ -79,6 +79,12 @@ export default async function handler(req, res) {
 
   const encodedMsg = encodeEucKr(message);
 
+  // 90바이트 초과 → LMS(장문). 제목(subject)이 있어야 장문으로 발송되며, 없으면 단문(90byte)으로 잘림.
+  // 단문(≤90byte)은 subject 없이 SMS 유지 (LMS는 요금이 더 비쌈).
+  const isLong = iconv.encode(message, 'EUC-KR').length > 90;
+  const subjectText = (message.split('\n').find(l => l.trim())?.trim() || '안내').slice(0, 20);
+  const encodedSubject = isLong ? encodeEucKr(subjectText) : '';
+
   const sendOne = async (r) => {
     const phone = String(r.phone || '').replace(/\D/g, '');
     if (phone.length < 10) return { ok: false, name: r.name || '', phone, status: '번호오류' };
@@ -91,6 +97,7 @@ export default async function handler(req, res) {
       `&receiver=${phone}` +
       `&encode=1` +
       `&end_alert=0` +
+      (isLong ? `&subject=${encodedSubject}` : '') +
       `&message=${encodedMsg}`;
 
     try {
