@@ -72,7 +72,9 @@ export default function CustomerLookupPage({ profile }) {
   // SMS 모달
   const [smsModal,      setSmsModal]      = useState(false);
   const [smsMsg,        setSmsMsg]        = useState('');
-  const [smsSender,     setSmsSender]     = useState('');
+  const [smsSender,     setSmsSender]     = useState(() => {
+    try { return localStorage.getItem('sms_sender') || '07078742777'; } catch { return '07078742777'; }
+  });
   const [sending,       setSending]       = useState(false);
   const [bulkTargets,   setBulkTargets]   = useState(null); // 전체 발송 시 override
   const [loadingBulk,   setLoadingBulk]   = useState(false);
@@ -897,7 +899,7 @@ export default function CustomerLookupPage({ profile }) {
               <label style={{fontSize:12, fontWeight:600, color:'var(--text2)', display:'block', marginBottom:6}}>발신번호 <span style={{fontWeight:400, color:'var(--text3)'}}>(문자나라에 사전등록된 번호)</span></label>
               <input
                 value={smsSender}
-                onChange={e => setSmsSender(e.target.value)}
+                onChange={e => { setSmsSender(e.target.value); try { localStorage.setItem('sms_sender', e.target.value); } catch {} }}
                 placeholder="01012345678"
                 style={{width:'100%', height:36, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--mono)', outline:'none', boxSizing:'border-box'}}
               />
