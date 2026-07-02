@@ -43,6 +43,9 @@ export default function SmsHistoryPage() {
   const [schedules,    setSchedules]    = useState([]);
   const [loadingSch,   setLoadingSch]   = useState(false);
   const [previewSch,   setPreviewSch]   = useState(null);
+  const [schFrom,      setSchFrom]      = useState(daysAgoStr(30));
+  const [schTo,        setSchTo]        = useState(dstr(new Date()));
+  const [schSearched,  setSchSearched]  = useState(false);
 
   // 재동의 안내 (날짜별 조회)
   const [rnFrom,    setRnFrom]    = useState(daysAgoStr(7));
@@ -70,16 +73,26 @@ export default function SmsHistoryPage() {
   const RENEWAL_KIND = 'marketing_renewal_notice';
 
   const fetchSchedules = useCallback(async () => {
-    setLoadingSch(true);
-    // 예약 내역 탭은 일반 예약만 (재동의 안내 제외)
-    const { data, error } = await supabase.from('sms_schedules')
-      .select('*')
-      .or(`kind.is.null,kind.neq.${RENEWAL_KIND}`)
-      .order('scheduled_at', { ascending: false });
-    if (error) { toast(error.message, 'err'); }
-    else setSchedules(data || []);
+    setLoadingSch(true); setSchSearched(true);
+    // 예약 내역 탭은 일반 예약만 (재동의 안내 제외) — 예약일시 기간 필터 + 페이징
+    const all = []; let start = 0; const PAGE = 1000;
+    while (true) {
+      let q = supabase.from('sms_schedules').select('*')
+        .or(`kind.is.null,kind.neq.${RENEWAL_KIND}`)
+        .order('scheduled_at', { ascending: false })
+        .range(start, start + PAGE - 1);
+      if (schFrom) q = q.gte('scheduled_at', schFrom);
+      if (schTo)   q = q.lte('scheduled_at', schTo + 'T23:59:59');
+      const { data, error } = await q;
+      if (error) { toast(error.message, 'err'); break; }
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    setSchedules(all);
     setLoadingSch(false);
-  }, []);
+  }, [schFrom, schTo]);
 
   // 재동의 안내 — 날짜(예약일시) 범위로 서버 조회 (누적량 많아 페이징)
   const fetchRenewal = useCallback(async () => {
@@ -111,6 +124,13 @@ export default function SmsHistoryPage() {
 
   const manualSchedules = schedules.filter(s => s.kind !== RENEWAL_KIND);
   const rnSummary = rnRows.reduce((a, s) => { a[s.status] = (a[s.status] || 0) + 1; return a; }, {});
+  // 예약 발송 합계: 대상 수신자 / 성공(실제 발송) / 실패
+  const schSummary = manualSchedules.reduce((a, s) => {
+    a.count += 1;
+    a.recipients += (s.receivers?.length || 0);
+    if (s.status === 'sent') { a.ok += (s.ok_count || 0); a.fail += (s.fail_count || 0); }
+    return a;
+  }, { count: 0, recipients: 0, ok: 0, fail: 0 });
 
   const cancelSchedule = async (id) => {
     if (!window.confirm('예약을 취소하시겠습니까?')) return;
@@ -231,12 +251,30 @@ export default function SmsHistoryPage() {
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
             <span className="card-label" style={{margin:0}}>예약 발송 내역</span>
-            <button className="btn btn-s" onClick={fetchSchedules} disabled={loadingSch}>
-              {loadingSch ? <span className="spinner"/> : '🔄 새로고침'}
-            </button>
           </div>
+          <div className="fbar" style={{flexWrap:'wrap', gap:8, marginBottom:12}}>
+            <input type="date" className="fsel" value={schFrom} onChange={e => setSchFrom(e.target.value)} title="예약일시 시작"/>
+            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+            <input type="date" className="fsel" value={schTo} onChange={e => setSchTo(e.target.value)} title="예약일시 종료"/>
+            <button className="btn btn-s" onClick={() => { setSchFrom(dstr(new Date())); setSchTo(dstr(new Date())); }}>오늘</button>
+            <button className="btn btn-s" onClick={() => { setSchFrom(daysAgoStr(7)); setSchTo(dstr(new Date())); }}>최근 7일</button>
+            <button className="btn btn-s" onClick={() => { setSchFrom(daysAgoStr(30)); setSchTo(dstr(new Date())); }}>최근 30일</button>
+            <div className="fbar-right">
+              <button className="btn btn-p" onClick={fetchSchedules} disabled={loadingSch}>
+                {loadingSch ? <span className="spinner"/> : '🔍 조회'}
+              </button>
+            </div>
+          </div>
+          {manualSchedules.length > 0 && (
+            <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12}}>
+              <span className="fresult">예약 <b>{schSummary.count.toLocaleString()}</b>건</span>
+              <span style={{fontSize:12, color:'var(--text2)'}}>· 대상 <b>{schSummary.recipients.toLocaleString()}</b>명</span>
+              <span style={{fontSize:12, color:'var(--success)', fontWeight:700}}>· 발송성공 {schSummary.ok.toLocaleString()}명</span>
+              {schSummary.fail > 0 && <span style={{fontSize:12, color:'#c62828', fontWeight:700}}>· 실패 {schSummary.fail.toLocaleString()}명</span>}
+            </div>
+          )}
           {loadingSch ? <div className="empty"><span className="spinner"/></div> : manualSchedules.length === 0 ? (
-            <div className="empty">예약된 발송이 없습니다</div>
+            <div className="empty">{schSearched ? '해당 기간 예약 발송 내역이 없습니다' : '기간을 선택하고 조회하세요'}</div>
           ) : (
             <div className="twrap">
               <table>
