@@ -27,6 +27,9 @@ export default function StockRequestPage({ profile }) {
   const [salesMap, setSalesMap] = useState(new Map());  // productId → soldQty
   const [addSearch, setAddSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  // 목록 내 찾기 / 0수량 숨기기
+  const [listQuery, setListQuery] = useState('');
+  const [hideZero, setHideZero] = useState(false);
 
   const loadSheet = useCallback(async () => {
     setSheetLoading(true);
@@ -112,8 +115,20 @@ export default function StockRequestPage({ profile }) {
     r.productId === productId ? { ...r, checked: val } : r));
   const removeRow = (productId) => setRows(prev => prev.filter(r => r.productId !== productId));
 
-  const allChecked = rows.length > 0 && rows.every(r => r.checked);
-  const toggleAll = () => { const v = !allChecked; setRows(prev => prev.map(r => ({ ...r, checked: v }))); };
+  // 화면 표시용(찾기/0숨기기 적용) — 실제 rows/발주 로직에는 영향 없음
+  const visibleRows = rows.filter(r => {
+    if (hideZero && (Number(r.qty) || 0) <= 0) return false;
+    const q = listQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (r.name || '').toLowerCase().includes(q) || (r.code || '').toLowerCase().includes(q);
+  });
+
+  const allChecked = visibleRows.length > 0 && visibleRows.every(r => r.checked);
+  const toggleAll = () => {
+    const v = !allChecked;
+    const ids = new Set(visibleRows.map(r => r.productId));
+    setRows(prev => prev.map(r => ids.has(r.productId) ? { ...r, checked: v } : r));
+  };
 
   const SUGGEST_LIMIT = 50;
   const addMatches = (() => {
@@ -356,6 +371,26 @@ export default function StockRequestPage({ profile }) {
           : rows.length === 0 ? <div className="empty">매장재고에 등록된 상품이 없습니다 (상품 추가로 직접 담을 수 있습니다)</div>
           : (
             <>
+            {/* 목록 내 찾기 */}
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10, flexWrap:'wrap' }}>
+              <div style={{ position:'relative', width:260 }}>
+                <input value={listQuery} onChange={e => setListQuery(e.target.value)}
+                  placeholder="🔍 목록에서 상품 찾기 (상품명/코드)" style={{ ...inputStyle }} />
+                {listQuery && (
+                  <button type="button" onClick={() => setListQuery('')}
+                    style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', border:'none', background:'none', cursor:'pointer', color:'var(--text3)', fontSize:14 }}>✕</button>
+                )}
+              </div>
+              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:'var(--text2)', cursor:'pointer' }}>
+                <input type="checkbox" checked={hideZero} onChange={e => setHideZero(e.target.checked)} style={{ cursor:'pointer' }}/>
+                발주수량 0 숨기기
+              </label>
+              <span style={{ fontSize:12, color:'var(--text3)' }}>표시 <b>{visibleRows.length}</b> / 전체 {rows.length}개</span>
+            </div>
+
+            {visibleRows.length === 0 ? (
+              <div className="empty">조건에 맞는 상품이 없습니다 {listQuery && `("${listQuery}")`}</div>
+            ) : (
             <div className="twrap">
               <table>
                 <thead>
@@ -371,7 +406,7 @@ export default function StockRequestPage({ profile }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(r => (
+                  {visibleRows.map(r => (
                     <tr key={r.productId} style={{ background: r.checked ? '' : '#fafafa' }}>
                       <td style={{ textAlign:'center' }}>
                         <input type="checkbox" checked={r.checked} onChange={e => setRowChecked(r.productId, e.target.checked)} style={{ cursor:'pointer' }}/>
@@ -397,6 +432,7 @@ export default function StockRequestPage({ profile }) {
                 </tbody>
               </table>
             </div>
+            )}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:14, flexWrap:'wrap', gap:10 }}>
               <span style={{ fontSize:13, color:'var(--text2)' }}>
                 선택 <b>{rows.filter(r => r.checked && (Number(r.qty)||0) > 0).length}</b>개 상품 · 총 <b style={{ color:'var(--accent)' }}>{totalReqQty.toLocaleString()}</b>개
