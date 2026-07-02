@@ -2,6 +2,18 @@ import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 
+// 숫자 전화번호 → 하이픈 포맷 (010-1234-5678 등). customers.phone이 하이픈 저장이라 매칭용.
+function hyphenatePhone(digits) {
+  const d = String(digits || '').replace(/\D/g, '');
+  if (d.length === 11) return `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`;
+  if (d.length === 10) {
+    if (d.startsWith('02')) return `${d.slice(0,2)}-${d.slice(2,6)}-${d.slice(6)}`;
+    return `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`;
+  }
+  if (d.length === 9 && d.startsWith('02')) return `${d.slice(0,2)}-${d.slice(2,5)}-${d.slice(5)}`;
+  return d;
+}
+
 // 문자나라 엑셀(.xls; 실제 HTML 테이블)에서 전화번호 + 등록일시 추출
 function parseMunjanaraXls(text) {
   // HTML 테이블 파싱 — DOMParser 사용
@@ -49,14 +61,18 @@ export default function SmsUnsubscribeSyncPage() {
           toast('파싱된 전화번호가 없습니다. 파일 형식 확인 필요', 'err');
           return;
         }
-        // DB 매칭 — 전화번호 기준
-        const phones = entries.map(e => e.phone);
-        const { data: customers } = await supabase.from('customers')
-          .select('id, name, phone, sms_consent')
-          .in('phone', phones);
+        // DB 매칭 — 전화번호 기준.
+        // customers.phone은 하이픈 포함 저장이라, 숫자·하이픈 두 포맷으로 조회 후
+        // 숫자만 정규화해서 매칭한다. (300개씩 배치로 URL 길이 제한 회피)
+        const uniqDigits = [...new Set(entries.map(e => e.phone))];
+        const variants = [...new Set(uniqDigits.flatMap(d => [d, hyphenatePhone(d)]))];
         const custMap = new Map();
-        for (const c of (customers || [])) {
-          custMap.set(String(c.phone || '').replace(/\D/g, ''), c);
+        for (let i = 0; i < variants.length; i += 300) {
+          const chunk = variants.slice(i, i + 300);
+          const { data } = await supabase.from('customers')
+            .select('id, name, phone, sms_consent')
+            .in('phone', chunk);
+          for (const c of (data || [])) custMap.set(String(c.phone || '').replace(/\D/g, ''), c);
         }
         const matched = [];
         const unmatched = [];
