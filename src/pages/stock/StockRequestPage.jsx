@@ -115,17 +115,24 @@ export default function StockRequestPage({ profile }) {
   const allChecked = rows.length > 0 && rows.every(r => r.checked);
   const toggleAll = () => { const v = !allChecked; setRows(prev => prev.map(r => ({ ...r, checked: v }))); };
 
-  const addSuggestions = addSearch.trim()
-    ? allProducts
-        .filter(p => !p.is_sales_stopped)
-        .filter(p => !rows.some(r => r.productId === p.id))
-        .filter(p => {
-          const q = addSearch.toLowerCase();
-          return (p.name || '').toLowerCase().includes(q)
-              || (p.code || '').toLowerCase().includes(q)
-              || (p.erp_code || '').toLowerCase().includes(q);
-        }).slice(0, 8)
-    : [];
+  const SUGGEST_LIMIT = 50;
+  const addMatches = (() => {
+    const q = addSearch.trim().toLowerCase();
+    if (!q) return [];
+    return allProducts
+      .filter(p => !p.is_sales_stopped)                       // 판매중지 제외 (판매중은 모두 노출)
+      .filter(p => !rows.some(r => r.productId === p.id))     // 이미 발주시트에 있는 상품 제외
+      .filter(p =>
+        (p.name || '').toLowerCase().includes(q)
+        || (p.code || '').toLowerCase().includes(q)
+        || (p.erp_code || '').toLowerCase().includes(q))
+      .sort((a, b) => {
+        const an = (a.name || '').toLowerCase(), bn = (b.name || '').toLowerCase();
+        const as = an.startsWith(q) ? 0 : 1, bs = bn.startsWith(q) ? 0 : 1; // 이름 시작 일치 우선
+        return as - bs || an.localeCompare(bn);
+      });
+  })();
+  const addSuggestions = addMatches.slice(0, SUGGEST_LIMIT);
 
   const addProduct = (p) => {
     const code = String(p.code || '').trim();
@@ -327,6 +334,11 @@ export default function StockRequestPage({ profile }) {
                       {p.code && <span style={{ fontSize:10, color:'var(--text3)', marginLeft:6, fontFamily:'var(--mono)' }}>{p.code}</span>}
                     </div>
                   ))}
+                  {addMatches.length > SUGGEST_LIMIT && (
+                    <div style={{ padding:'8px 12px', fontSize:11, color:'var(--text3)', background:'#fafafa' }}>
+                      상위 {SUGGEST_LIMIT}개만 표시 · 검색어를 더 구체적으로 입력하세요 (총 {addMatches.length}개)
+                    </div>
+                  )}
                 </div>
               )}
             </div>
