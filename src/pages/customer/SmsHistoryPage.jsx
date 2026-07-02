@@ -22,6 +22,9 @@ const SCH_STATUS_STYLE = {
 };
 
 const PAGE_SIZE = 200;
+const pad2 = n => String(n).padStart(2, '0');
+const dstr = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const daysAgoStr = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return dstr(d); };
 
 export default function SmsHistoryPage() {
   const [tab,      setTab]      = useState('history'); // 'history' | 'schedule' | 'renewal'
@@ -41,6 +44,13 @@ export default function SmsHistoryPage() {
   const [loadingSch,   setLoadingSch]   = useState(false);
   const [previewSch,   setPreviewSch]   = useState(null);
 
+  // 재동의 안내 (날짜별 조회)
+  const [rnFrom,    setRnFrom]    = useState(daysAgoStr(7));
+  const [rnTo,      setRnTo]      = useState(dstr(new Date()));
+  const [rnRows,    setRnRows]    = useState([]);
+  const [rnLoading, setRnLoading] = useState(false);
+  const [rnSearched,setRnSearched]= useState(false);
+
   const fetchLogs = useCallback(async (pg = 0) => {
     setLoading(true);
     setPage(pg);
@@ -57,25 +67,50 @@ export default function SmsHistoryPage() {
     setLoading(false);
   }, [fFrom, fTo, fStatus]);
 
+  const RENEWAL_KIND = 'marketing_renewal_notice';
+
   const fetchSchedules = useCallback(async () => {
     setLoadingSch(true);
+    // 예약 내역 탭은 일반 예약만 (재동의 안내 제외)
     const { data, error } = await supabase.from('sms_schedules')
       .select('*')
+      .or(`kind.is.null,kind.neq.${RENEWAL_KIND}`)
       .order('scheduled_at', { ascending: false });
     if (error) { toast(error.message, 'err'); }
     else setSchedules(data || []);
     setLoadingSch(false);
   }, []);
 
-  useEffect(() => {
-    if (tab === 'schedule' || tab === 'renewal') fetchSchedules();
-  }, [tab, fetchSchedules]);
+  // 재동의 안내 — 날짜(예약일시) 범위로 서버 조회 (누적량 많아 페이징)
+  const fetchRenewal = useCallback(async () => {
+    setRnLoading(true); setRnSearched(true);
+    const all = []; let start = 0; const PAGE = 1000;
+    while (true) {
+      let q = supabase.from('sms_schedules').select('*')
+        .eq('kind', RENEWAL_KIND)
+        .order('scheduled_at', { ascending: false })
+        .range(start, start + PAGE - 1);
+      if (rnFrom) q = q.gte('scheduled_at', rnFrom);
+      if (rnTo)   q = q.lte('scheduled_at', rnTo + 'T23:59:59');
+      const { data, error } = await q;
+      if (error) { toast(error.message, 'err'); break; }
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    setRnRows(all);
+    setRnLoading(false);
+  }, [rnFrom, rnTo]);
 
-  // 재동의 안내(marketing_renewal_notice)와 일반 예약 분리
-  const RENEWAL_KIND = 'marketing_renewal_notice';
-  const manualSchedules  = schedules.filter(s => s.kind !== RENEWAL_KIND);
-  const renewalSchedules = schedules.filter(s => s.kind === RENEWAL_KIND);
-  const renewalSummary = renewalSchedules.reduce((a, s) => { a[s.status] = (a[s.status] || 0) + 1; return a; }, {});
+  useEffect(() => {
+    if (tab === 'schedule') fetchSchedules();
+    if (tab === 'renewal')  fetchRenewal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  const manualSchedules = schedules.filter(s => s.kind !== RENEWAL_KIND);
+  const rnSummary = rnRows.reduce((a, s) => { a[s.status] = (a[s.status] || 0) + 1; return a; }, {});
 
   const cancelSchedule = async (id) => {
     if (!window.confirm('예약을 취소하시겠습니까?')) return;
@@ -260,21 +295,31 @@ export default function SmsHistoryPage() {
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
             <span className="card-label" style={{margin:0}}>🔁 마케팅 재동의 안내 내역</span>
-            <button className="btn btn-s" onClick={fetchSchedules} disabled={loadingSch}>
-              {loadingSch ? <span className="spinner"/> : '🔄 새로고침'}
-            </button>
           </div>
-          {renewalSchedules.length > 0 && (
+          <div className="fbar" style={{flexWrap:'wrap', gap:8, marginBottom:12}}>
+            <input type="date" className="fsel" value={rnFrom} onChange={e => setRnFrom(e.target.value)} title="예약일시 시작"/>
+            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+            <input type="date" className="fsel" value={rnTo} onChange={e => setRnTo(e.target.value)} title="예약일시 종료"/>
+            <button className="btn btn-s" onClick={() => { setRnFrom(dstr(new Date())); setRnTo(dstr(new Date())); }}>오늘</button>
+            <button className="btn btn-s" onClick={() => { setRnFrom(daysAgoStr(7)); setRnTo(dstr(new Date())); }}>최근 7일</button>
+            <button className="btn btn-s" onClick={() => { setRnFrom(daysAgoStr(30)); setRnTo(dstr(new Date())); }}>최근 30일</button>
+            <div className="fbar-right">
+              <button className="btn btn-p" onClick={fetchRenewal} disabled={rnLoading}>
+                {rnLoading ? <span className="spinner"/> : '🔍 조회'}
+              </button>
+            </div>
+          </div>
+          {rnRows.length > 0 && (
             <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12}}>
-              <span className="fresult">총 <b>{renewalSchedules.length.toLocaleString()}</b>건</span>
-              {['sent','sending','pending','failed','cancelled'].filter(s => renewalSummary[s]).map(s => {
+              <span className="fresult">총 <b>{rnRows.length.toLocaleString()}</b>건</span>
+              {['sent','sending','pending','failed','cancelled'].filter(s => rnSummary[s]).map(s => {
                 const { style, label } = schBadge(s);
-                return <span key={s} style={style}>{label} {renewalSummary[s]}</span>;
+                return <span key={s} style={style}>{label} {rnSummary[s]}</span>;
               })}
             </div>
           )}
-          {loadingSch ? <div className="empty"><span className="spinner"/></div> : renewalSchedules.length === 0 ? (
-            <div className="empty">재동의 안내 발송 내역이 없습니다 (매일 자정 자동 등록)</div>
+          {rnLoading ? <div className="empty"><span className="spinner"/></div> : rnRows.length === 0 ? (
+            <div className="empty">{rnSearched ? '해당 기간 재동의 안내 내역이 없습니다' : '기간을 선택하고 조회하세요'}</div>
           ) : (
             <div className="twrap">
               <table>
@@ -290,7 +335,7 @@ export default function SmsHistoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {renewalSchedules.map(sch => {
+                  {rnRows.map(sch => {
                     const { style, label } = schBadge(sch.status);
                     const rcv = sch.receivers?.[0] || {};
                     return (
