@@ -80,6 +80,14 @@ const storeRank = (s) => {
   return i === -1 ? 999 : i;
 };
 
+// 휴일근무수당 일당(고정) — 기본 123,840원, 매장별 예외 적용
+const HOLIDAY_PAY_DEFAULT = 123840;
+const HOLIDAY_PAY_OVERRIDE = {
+  '농협_SHOP|남창원점': 131580,
+};
+const holidayUnitPayFor = (dept, branch) =>
+  HOLIDAY_PAY_OVERRIDE[`${dept}|${branch}`] ?? HOLIDAY_PAY_DEFAULT;
+
 export async function downloadPayrollExcel({ year, month }) {
   const monthStr = `${year}-${String(month).padStart(2,'0')}`;
   const lastDay = new Date(year, month, 0).getDate();
@@ -303,7 +311,9 @@ export async function downloadPayrollExcel({ year, month }) {
         ? (m.salary || 0)
         : (m.salary || 0) * (workDays - holidayDays);
       const extraPayAmt = isManager ? '' : ((m.extra_pay || 0) * extendDays);
-      const holidayPayAmt = isManager ? '' : Math.round((m.salary || 0) * 1.5 * holidayDays);
+      // 휴일근무수당 = 고정 일당 × 휴일근무일수 (일급×1.5 아님)
+      const holidayUnitPay = holidayUnitPayFor(grp.dept, grp.branch);
+      const holidayPayAmt = isManager ? '' : (holidayUnitPay * holidayDays);
       const incentive = incentiveMap[m.name] || 0;
       const total = baseSalary
         + (typeof extraPayAmt === 'number' ? extraPayAmt : 0)
@@ -321,7 +331,7 @@ export async function downloadPayrollExcel({ year, month }) {
         7: '',                                                // G 근무시간
         8: m.salary || 0,                                     // H 월급/일급
         9: isManager ? '' : (m.extra_pay || 0),               // I 추가수당1
-        10: isManager ? '' : Math.round((m.salary || 0) * 1.5), // J 휴일근무수당 단가
+        10: isManager ? '' : holidayUnitPay,                  // J 휴일근무수당 단가(고정)
         11: m.affiliation || '',                              // K 소속
         12: workDays,                                         // L 근무일수
         13: offDays,                                          // M 휴무일수
