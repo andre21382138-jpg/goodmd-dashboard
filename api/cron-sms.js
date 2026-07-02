@@ -37,11 +37,6 @@ async function sendAll(receivers, message, sender) {
   const encodedMsg = encodeEucKr(message);
   const { MUNJANARA_USERID, MUNJANARA_PASSWD } = process.env;
 
-  // 90바이트 초과 → LMS(장문). subject 있어야 장문 발송, 없으면 단문으로 잘림.
-  const isLong = iconv.encode(message, 'EUC-KR').length > 90;
-  const subjectText = (message.split('\n').find(l => l.trim())?.trim() || '안내').slice(0, 20);
-  const encodedSubject = isLong ? encodeEucKr(subjectText) : '';
-
   const sendOne = async (r) => {
     const phone = String(r.phone || '').replace(/\D/g, '');
     if (phone.length < 10) return { ok: false, name: r.name || '', phone, status: '번호오류' };
@@ -50,8 +45,7 @@ async function sendAll(receivers, message, sender) {
       `?userid=${encodeURIComponent(MUNJANARA_USERID)}` +
       `&passwd=${encodeURIComponent(MUNJANARA_PASSWD)}` +
       `&sender=${sender.replace(/\D/g,'')}` +
-      `&receiver=${phone}&encode=1&end_alert=0` +
-      (isLong ? `&subject=${encodedSubject}` : '') +
+      `&receiver=${phone}&encode=1&end_alert=0&allow_mms=1` + // 장문허용(미설정 시 90byte 자동짤림)
       `&message=${encodedMsg}`;
     try {
       const resp = await fetch(url);
