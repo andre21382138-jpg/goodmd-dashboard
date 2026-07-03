@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "PowerShell(if \\(-not \\(Test-Path \"c:/Users/Jangkwon/Desktop/goodmd/docs/superpowers/specs\"\\)\\) { New-Item -ItemType Directory -Path \"c:/Users/Jangkwon/Desktop/goodmd/docs/superpowers/specs\" -Force | Out-Null }; Get-ChildItem \"c:/Users/Jangkwon/Desktop/goodmd/docs/superpowers/specs\")",
+      "PowerShell(if \\(-not \\(Test-Path \"c:/Users/Jangkwon/Desktop/goodmd/docs/superpowers/plans\"\\)\\) { New-Item -ItemType Directory -Path \"c:/Users/Jangkwon/Desktop/goodmd/docs/superpowers/plans\" -Force | Out-Null })",
+      "PowerShell($env:CI=$null; npm run build 2>&1 | Select-Object -Last 60)",
+      "PowerShell($env:CI=$null; npm run build)"
     ]
   }
 }

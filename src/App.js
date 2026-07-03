@@ -44,6 +44,8 @@ import StoreClosurePage from './pages/attendance/StoreClosurePage';
 import AttendanceMgmtPage from './pages/attendance/AttendanceMgmtPage';
 import IncentivePage from './pages/salary/IncentivePage';
 import JoinPage from './pages/join/JoinPage';
+import ConsentRenewPage from './pages/customer/ConsentRenewPage';
+import ConsentRenewMgrPage from './pages/customer/ConsentRenewMgrPage';
 import HelpPage from './pages/help/HelpPage';
 
 // ════════════════════════════════════════════════════════
@@ -582,6 +584,12 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('m');
   }, []);
+  // 공개 수신 재동의 페이지 감지 (?rc=1)
+  const consentRenew = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('rc');
+  }, []);
+  const publicPage = joinManagerId || consentRenew;
 
   // 모든 hooks는 조건부 return 전에 선언해야 함 (Rules of Hooks)
   const [session, setSession]   = useState(null);
@@ -602,7 +610,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (joinManagerId) return; // QR 가입 페이지면 인증 불필요
+    if (publicPage) return; // 공개 페이지(QR 가입·수신 재동의)면 인증 불필요
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) setAL(false);
@@ -612,13 +620,13 @@ export default function App() {
       if (!session) { setProfile(null); setAL(false); }
     });
     return () => subscription.unsubscribe();
-  }, [joinManagerId]);
+  }, [publicPage]);
 
   useEffect(() => {
-    if (!session || joinManagerId) return;
+    if (!session || publicPage) return;
     supabase.from('profiles').select('*').eq('id', session.user.id).single()
       .then(({ data }) => { setProfile(data); setAL(false); });
-  }, [session, joinManagerId]);
+  }, [session, publicPage]);
 
   // SCM 담당자는 본사 택배요청 + 재고관리 메뉴만 접근 가능 — 그 외 페이지로 가지 못하도록 자동 리다이렉트
   const SCM_ALLOWED_PAGES = useMemo(() => new Set([
@@ -709,6 +717,8 @@ export default function App() {
 
   // QR 가입 페이지면 여기서 렌더
   if (joinManagerId) return <><Toasts/><JoinPage managerId={joinManagerId}/></>;
+  // 공개 수신 재동의 페이지 (?rc=1)
+  if (consentRenew) return <><Toasts/><ConsentRenewPage/></>;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -753,6 +763,7 @@ export default function App() {
     purchase_check: '발주 확인',
     customer_input: '회원 등록',
     customer_qr:    'QR 가입',
+    consent_renewal:'수신 재동의',
     customer_doc:   '서류 가입',
     my_members:     '회원 목록',
     stock_request:   '발주 요청',
@@ -849,6 +860,7 @@ export default function App() {
             {page === 'purchase_check' && (isManager || isAdmin || isHQ) && <PurchaseOrderMgrPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'customer_qr'    && (isManager || isAdmin || isHQ) && <CustomerQRPage profile={profile}/>}
+            {page === 'consent_renewal'&& (isManager || isAdmin || isHQ) && <ConsentRenewMgrPage/>}
             {page === 'customer_doc'   && (isManager || isAdmin || isHQ) && <CustomerDocPage profile={profile}/>}
             {page === 'my_members'     && (isManager || isAdmin || isHQ) && <MyMembersPage profile={profile}/>}
             {page === 'stock_request'  && (isManager || isAdmin || isHQ) && <StockRequestPage profile={profile}/>}

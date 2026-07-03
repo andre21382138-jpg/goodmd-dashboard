@@ -75,9 +75,10 @@ export const MANAGER_MENUS = [
   { key: 'stock_request', icon: '📦', label: '발주 요청' },
   { key: 'store_delivery_status', icon: '🚚', label: '고객 택배' },
   { key: 'customer_reg',   icon: '👤', label: '회원 관리', sub: [
-    { key: 'customer_qr',  icon: '📱', label: 'QR 가입' },
-    { key: 'customer_doc', icon: '📝', label: '서류 가입' },
-    { key: 'my_members',   icon: '📋', label: '회원 목록' },
+    { key: 'customer_qr',    icon: '📱', label: 'QR 가입' },
+    { key: 'customer_doc',   icon: '📝', label: '서류 가입' },
+    { key: 'my_members',     icon: '📋', label: '회원 목록' },
+    { key: 'consent_renewal',icon: '🔁', label: '수신 재동의' },
   ]},
   { key: 'mgr_sales_view', icon: '📊', label: '매출 조회' },
   { key: 'attendance',     icon: '🗓️', label: '근태 관리', sub: [
