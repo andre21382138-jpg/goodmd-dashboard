@@ -55,12 +55,10 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
   // 조회 필터
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
-  const curMonStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}`;
-  const months = Array.from({length:6},(_,i)=>{
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
-  });
-  const [fMonth,  setFMonth]  = useState(curMonStr);
+  const monthStart = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`;
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const [fFrom,   setFFrom]   = useState(monthStart);
+  const [fTo,     setFTo]     = useState(todayStr);
   const [fCompany,setFCompany]= useState('');
   const [specialNames, setSpecialNames] = useState([]); // 특판(매장 판매입력) 지점명 목록
 
@@ -72,16 +70,15 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
 
   const fetchSales = useCallback(async () => {
     setLoading(true);
-    const from = `${fMonth}-01`;
-    const lastDay = new Date(fMonth.split('-')[0], fMonth.split('-')[1], 0).getDate();
-    const to = `${fMonth}-${pad(lastDay)}`;
+    const from = fFrom;
+    const to = fTo;
     const isSp = String(fCompany).startsWith('sp:');
 
     // 1) biz_sales (B2B 거래처)
     let bizData = [];
     if (!isSp) {
       let q = supabase.from('biz_sales')
-        .select('*, company:biz_companies(name), brand:brands(name), product:products(name)')
+        .select('*, company:biz_companies(name), brand:brands(name), product:products(name, code, cost)')
         .gte('sold_at', from).lte('sold_at', to)
         .order('sold_at', {ascending:false});
       if (fCompany) q = q.eq('company_id', fCompany);
@@ -96,7 +93,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
     let start = 0; const PAGE = 1000;
     while (true) {
       const { data, error } = await supabase.from('sales')
-        .select('id, sold_at, store_name, branch_name, price, quantity, payment, brand:brands(name), product:products(name)')
+        .select('id, sold_at, store_name, branch_name, price, quantity, payment, brand:brands(name), product:products(name, code, cost)')
         .not('store_name', 'in', notInList)
         .not('store_name', 'is', null)
         .gte('sold_at', from).lte('sold_at', to)
@@ -118,6 +115,8 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
       company_name: r.branch_name || r.store_name,
       brand_name: r.brand?.name || null,
       product_name: r.product?.name || null,
+      product_code: r.product?.code || '',
+      unit_cost: Number(r.product?.cost) || 0,
       quantity: r.quantity,
       supply_price: r.price, // 단가 (반품은 음수)
       delivery_method: null,
@@ -129,7 +128,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
     const merged = [...bizData, ...spRows].sort((a, b) => String(b.sold_at).localeCompare(String(a.sold_at)));
     setSales(merged);
     setLoading(false);
-  }, [fMonth, fCompany]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fFrom, fTo, fCompany]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (tab==='list') fetchSales(); }, [fetchSales, tab]);
 
@@ -276,8 +275,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
     if (!companyId) { toast('업체를 선택해주세요', 'err'); return; }
     if (!deliveryMethod) { toast('배송방법을 선택해주세요', 'err'); return; }
     const validLines = lines.filter(l =>
-      l.productId && Number(l.quantity) > 0 &&
-      (l.isGift || Number(l.supplyPrice) > 0)
+      l.productId && Number(l.quantity) > 0   // 공급가 0 허용 (상품+수량만 있으면 등록)
     );
     if (validLines.length === 0) { toast('상품을 1개 이상 입력해주세요', 'err'); return; }
     const company = companies.find(c => String(c.id) === String(companyId));
@@ -358,6 +356,47 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
   // 조회 합계
   const listTotalAmt = sales.reduce((s,r) => s + Math.round((r.supply_price||0) * (r.quantity||0)), 0);
   const listTotalQty = sales.reduce((s,r) => s + (r.quantity||0), 0);
+
+  // 특판매출 엑셀 (매출raw 양식). 그룹=특판, 전표유형=정상 통일.
+  const exportExcel = async () => {
+    if (sales.length === 0) { toast('조회된 데이터가 없습니다', 'err'); return; }
+    const ExcelJS = (await import('exceljs')).default;
+    const { dlBlob } = await import('../../lib/utils');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('매출raw');
+    [4, 10.8, 11.3, 14.8, 20.1, 12.4, 17, 52.9, 7.8, 12.8, 16.4, 16, 14.4]
+      .forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    ws.addRow(['선택','순번','매출일자','그룹','매장','전표\n유형','상품코드','상품명','매출\n수량','최종금액','원가','최종원가','']);
+    sales.forEach((r, idx) => {
+      const code = r.product?.code || r.product_code || '';
+      const cost = Number(r.product?.cost ?? r.unit_cost ?? 0);
+      const name = r.product?.name || r.product_name || '';
+      const company = r.company?.name || r.company_name || '';
+      const qty = Number(r.quantity) || 0;
+      const unit = Number(r.supply_price) || 0;
+      const amount = Math.round(unit * qty);
+      const costTotal = Math.round(cost * qty);
+      const ratio = amount > 0 ? costTotal / amount : '';
+      ws.addRow(['0', idx + 1, new Date((r.sold_at || '') + 'T12:00:00'), '특판', company, '정상',
+        (code !== '' && !isNaN(Number(code))) ? Number(code) : code, name, qty, amount, Math.round(cost), costTotal, ratio]);
+    });
+    const font = { name: '굴림', size: 9 };
+    const lastRow = ws.rowCount;
+    ws.getRow(1).eachCell(c => { c.font = { ...font, bold: true }; c.alignment = { horizontal:'center', vertical:'center', wrapText:true }; });
+    ws.getRow(1).height = 28;
+    for (let rn = 2; rn <= lastRow; rn++) {
+      const row = ws.getRow(rn);
+      row.eachCell(c => { c.font = font; });
+      row.getCell(3).numFmt = '[$-412]yyyy-mm-dd';
+      [10, 11, 12].forEach(c => row.getCell(c).numFmt = '#,##0');
+    }
+    const buf = await wb.xlsx.writeBuffer();
+    const scope = fCompany
+      ? (String(fCompany).startsWith('sp:') ? fCompany.slice(3) : (companies.find(c=>String(c.id)===String(fCompany))?.name || '업체'))
+      : '전체';
+    dlBlob(buf, `특판매출_${scope}_${fFrom}~${fTo}.xlsx`);
+    toast(`${sales.length}건 다운로드`, 'ok');
+  };
 
   const inputStyle = {height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none', width:'100%'};
   const labelStyle = {display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4};
@@ -611,12 +650,14 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
       {tab==='list' && (
         <div className="card" style={{padding:0, overflow:'hidden'}}>
           <div style={{display:'flex', alignItems:'center', gap:8, padding:'14px 20px', borderBottom:'1px solid var(--border)', flexWrap:'wrap'}}>
-            <select value={fMonth} onChange={e=>setFMonth(e.target.value)}
-              style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
-              {months.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
-            <select value={fCompany} onChange={e=>setFCompany(e.target.value)}
-              style={{height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}}>
+            {(() => { const selStyle = {height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--sans)', outline:'none'}; return (
+            <>
+            <input type="date" value={fFrom} onChange={e=>setFFrom(e.target.value)} style={selStyle} title="매출일 시작"/>
+            <span style={{fontSize:12, color:'var(--text3)'}}>~</span>
+            <input type="date" value={fTo} onChange={e=>setFTo(e.target.value)} style={selStyle} title="매출일 종료"/>
+            <button className="btn btn-s" onClick={()=>{ setFFrom(todayStr); setFTo(todayStr); }}>오늘</button>
+            <button className="btn btn-s" onClick={()=>{ setFFrom(monthStart); setFTo(todayStr); }}>이번달</button>
+            <select value={fCompany} onChange={e=>setFCompany(e.target.value)} style={selStyle}>
               <option value="">전체 업체</option>
               {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               {(() => {
@@ -630,6 +671,12 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
               })()}
             </select>
             {fCompany && <button className="btn-ghost" onClick={()=>setFCompany('')}>✕</button>}
+            <button type="button" onClick={exportExcel}
+              style={{height:36, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+              📥 엑셀
+            </button>
+            </>
+            ); })()}
             <div style={{marginLeft:'auto', textAlign:'right'}}>
               <div style={{fontSize:11, color:'var(--text3)'}}>총 매출</div>
               <div style={{fontSize:18, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{listTotalAmt.toLocaleString()}원</div>
