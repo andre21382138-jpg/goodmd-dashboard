@@ -26,6 +26,14 @@ function maskPhone(p) {
   if (d.length === 10) return `${d.slice(0,3)}-***-${d.slice(6)}`;
   return p;
 }
+// KST 기준 날짜(YYYY-MM-DD). Vercel은 UTC라 +9h 보정 후 날짜 슬라이스.
+function kstDate(ts) {
+  return new Date(new Date(ts).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function addYears(dateStr, n) {
+  const [y, m, d] = dateStr.split('-');
+  return `${Number(y) + n}-${m}-${d}`;
+}
 async function sb(path, options = {}) {
   return fetch(`${SUPABASE_URL}/rest/v1${path}`, {
     ...options,
@@ -60,13 +68,12 @@ export default async function handler(req, res) {
   if (!Array.isArray(rows) || rows.length === 0) return res.json({ found: false });
 
   const first = rows[0];
-  const now = new Date();
+  const todayKst = kstDate(new Date());
   let status = '미동의', expireDate = null;
   if (first.sms_consent) {
     if (first.sms_consent_at) {
-      const exp = new Date(first.sms_consent_at); exp.setFullYear(exp.getFullYear() + 1);
-      expireDate = exp.toISOString().slice(0, 10);
-      status = exp >= now ? '유효' : '만료';
+      expireDate = addYears(kstDate(first.sms_consent_at), 1); // KST 동의일 + 1년
+      status = expireDate >= todayKst ? '유효' : '만료';
     } else { status = '유효'; }
   }
 
@@ -78,8 +85,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({ sms_consent: true, sms_consent_at: nowIso, sms_unsubscribed_at: null }),
     });
     if (!patch.ok) return res.status(500).json({ error: '재동의 처리 실패' });
-    const newExp = new Date(); newExp.setFullYear(newExp.getFullYear() + 1);
-    return res.json({ ok: true, maskedName: maskName(first.name), expireDate: newExp.toISOString().slice(0, 10), count: ids.length });
+    return res.json({ ok: true, maskedName: maskName(first.name), expireDate: addYears(todayKst, 1), count: ids.length });
   }
 
   // lookup
