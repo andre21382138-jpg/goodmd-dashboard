@@ -422,15 +422,7 @@ export default function SalesInputPage({ profile }) {
         });
         if (error) throw error;
 
-        // 적립금 사용 회원 계정 업데이트
-        if (pointsUsedLine > 0 && l.pointCustomer?.id) {
-          const newTotalPoints = Math.max(0, (l.pointCustomer.total_points||0) - pointsUsedLine);
-          const newUsedPoints  = (l.pointCustomer.used_points||0) + pointsUsedLine;
-          await supabase.from('customers').update({
-            total_points: newTotalPoints,
-            used_points: newUsedPoints,
-          }).eq('id', l.pointCustomer.id);
-        }
+        // (적립금 사용분 차감은 아래에서 회원별로 집계해 한 번에 처리 — 구매 적립과 충돌 방지)
 
         // 매장재고 자동 차감 — 본사 택배요청(hq)·강좌매출(결제=강좌매출)은 매장 재고 차감 제외
         const prod = allProducts.find(p => String(p.id) === String(l.productId));
@@ -450,17 +442,40 @@ export default function SalesInputPage({ profile }) {
         }
       }
 
-      // 회원 누적 구매액/등급/적립금 업데이트
+      // 적립금 사용분을 회원별로 집계 (구매회원과 다른 회원 적립금 사용도 지원)
+      const ptsUsedByCust = {};
+      for (const l of validLines) {
+        const pu = Number(l.pointsUsed) || 0;
+        if (pu > 0 && l.pointCustomer?.id) {
+          const key = String(l.pointCustomer.id);
+          if (!ptsUsedByCust[key]) ptsUsedByCust[key] = { used: 0, cust: l.pointCustomer };
+          ptsUsedByCust[key].used += pu;
+        }
+      }
+      // 구매회원이 아닌 회원의 적립금 사용분은 즉시 차감
+      for (const key of Object.keys(ptsUsedByCust)) {
+        if (String(key) === String(customerId)) continue; // 구매회원분은 아래에서 합산
+        const { used, cust } = ptsUsedByCust[key];
+        await supabase.from('customers').update({
+          total_points: Math.max(0, (cust.total_points || 0) - used),
+          used_points:  (cust.used_points || 0) + used,
+        }).eq('id', key);
+      }
+
+      // 회원 누적 구매액/등급 + 적립(가산) + 본인 적립금 사용(차감)을 한 번에 처리
       if (customerId) {
         const prevTotal = customer?.total_purchase || 0;
         const newTotal = prevTotal + saleTotal;
         const newGrade = getGrade(newTotal);
         const earnedPoints = Math.floor(saleTotal * newGrade.rate);
-        const newPoints = (customer?.total_points || 0) + earnedPoints;
+        const buyerUsed = ptsUsedByCust[String(customerId)]?.used || 0;
+        const newPoints = Math.max(0, (customer?.total_points || 0) - buyerUsed + earnedPoints);
+        const newUsedPoints = (customer?.used_points || 0) + buyerUsed;
         await supabase.from('customers').update({
           total_purchase: newTotal,
           grade: newGrade.grade,
           total_points: newPoints,
+          used_points: newUsedPoints,
         }).eq('id', customerId);
       }
 
