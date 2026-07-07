@@ -6,6 +6,11 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// 재동의 시 회원에게 보여준 동의 문구 (증빙 로그용)
+const RENEW_CONSENT_TEXT =
+  '마케팅 정보 수신에 재동의하며, 동의일로부터 1년간 유지됩니다. ' +
+  '· 매장 프로모션·신제품 안내 · 매장 이용 시 적립금 지급 및 사용 · 회원 전용 할인·이벤트 우선 안내';
+
 function hyphenate(digits) {
   const d = String(digits || '').replace(/\D/g, '');
   if (d.length === 11) return `${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`;
@@ -85,6 +90,21 @@ export default async function handler(req, res) {
       body: JSON.stringify({ sms_consent: true, sms_consent_at: nowIso, sms_unsubscribed_at: null }),
     });
     if (!patch.ok) return res.status(500).json({ error: '재동의 처리 실패' });
+
+    // 동의 증빙 로그 (실패해도 재동의 자체는 성공 처리)
+    try {
+      const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || null;
+      const ua = req.headers['user-agent'] || null;
+      await sb('/consent_logs', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(ids.map(id => ({
+          customer_id: id, phone: digits, consent_type: 'marketing',
+          action: 'renew', channel: 'qr', consent_text: RENEW_CONSENT_TEXT, ip, user_agent: ua,
+        }))),
+      });
+    } catch (_) { /* 로그 실패는 무시 */ }
+
     return res.json({ ok: true, maskedName: maskName(first.name), expireDate: addYears(todayKst, 1), count: ids.length });
   }
 

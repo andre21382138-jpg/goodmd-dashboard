@@ -57,6 +57,14 @@ export default function ConsentRenewMgrPage() {
       .eq('id', c.id).select('id');
     setSavingId(null);
     if (error) { toast(error.message, 'err'); return; }
+    // 동의 증빙 로그 (대면 처리)
+    try {
+      await supabase.from('consent_logs').insert({
+        customer_id: c.id, phone: c.phone, consent_type: 'marketing',
+        action: 'manual', channel: 'store',
+        consent_text: '매장 대면 확인 후 마케팅 정보 수신 재동의',
+      });
+    } catch (_) { /* 로그 실패 무시 */ }
     toast(`${c.name}님 재동의 완료`, 'ok');
     setRows(prev => prev.map(r => r.id === c.id ? { ...r, sms_consent: true, sms_consent_at: nowIso } : r));
   };
