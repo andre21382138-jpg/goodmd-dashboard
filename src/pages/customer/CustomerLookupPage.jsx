@@ -801,7 +801,7 @@ export default function CustomerLookupPage({ profile }) {
                     <td className="mono" style={{fontSize:11}}>{c.joined_at}</td>
                     <td style={{wordBreak:'keep-all'}}><strong style={{fontSize:13}}>{c.name}</strong></td>
                     <td><GradeBadge grade={c.grade || '패밀리'}/></td>
-                    <td style={{fontSize:13}}>{c.gender || '-'}</td>
+                    <td style={{fontSize:13}}>{c.gender ? c.gender.charAt(0) : '-'}</td>
                     <td className="mono" style={{fontSize:12}}>{c.phone}</td>
                     <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{c.birthday || '-'}</td>
                     <td><span className="badge badge-dept">{c.store_name}</span></td>
