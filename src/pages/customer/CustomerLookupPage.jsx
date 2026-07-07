@@ -1291,23 +1291,34 @@ export default function CustomerLookupPage({ profile }) {
             </div>
             {loadingLogs ? <div className="empty"><span className="spinner"/></div>
             : consentLogs.length === 0 ? (
-              selected?.sms_consent ? (
-                // 로그 없음 + 동의상태 → 서류 가입자 (로그 도입 이전)
-                <div style={{border:'1px solid var(--border)', borderRadius:8, padding:'12px 14px', background:'#fafafa'}}>
-                  <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:8}}>
-                    {selected.sms_consent_at && (
-                      <span style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:13}}>{String(selected.sms_consent_at).slice(0,10)}</span>
+              selected?.sms_consent ? (() => {
+                // 로그 없음 + 동의상태 → IP/기기 있으면 QR(온라인) 가입, 없으면 서류 가입
+                const isQr = !!(selected.consent_ip || selected.consent_ua);
+                return (
+                  <div style={{border:'1px solid var(--border)', borderRadius:8, padding:'12px 14px', background:'#fafafa'}}>
+                    <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:8}}>
+                      {selected.sms_consent_at && (
+                        <span style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:13}}>{String(selected.sms_consent_at).slice(0,10)}</span>
+                      )}
+                      <span style={{ ...(isQr
+                        ? {background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7'}
+                        : {background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80'}),
+                        borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700}}>
+                        {isQr ? 'QR/온라인 가입' : '서류가입'}
+                      </span>
+                    </div>
+                    <div style={{fontSize:13, color:'var(--text2)', lineHeight:1.6, background:'#fff', border:'1px solid var(--border)', borderRadius:6, padding:'8px 10px'}}>
+                      {isQr ? 'QR코드를 통한 회원가입 & 마케팅 수신동의' : '서류를 통한 회원가입 & 마케팅 수신동의'}
+                    </div>
+                    {(selected.consent_ip || selected.consent_ua) && (
+                      <div style={{fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:8, wordBreak:'break-all'}}>
+                        {selected.consent_ip && <div>IP: {selected.consent_ip}</div>}
+                        {selected.consent_ua && <div style={{marginTop:3}}>기기: {selected.consent_ua}</div>}
+                      </div>
                     )}
-                    <span style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700}}>서류가입</span>
                   </div>
-                  <div style={{fontSize:13, color:'var(--text2)', lineHeight:1.6, background:'#fff', border:'1px solid var(--border)', borderRadius:6, padding:'8px 10px'}}>
-                    서류를 통한 회원가입 &amp; 마케팅 수신동의
-                  </div>
-                  {selected.consent_ip && (
-                    <div style={{fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:8}}>IP: {selected.consent_ip}</div>
-                  )}
-                </div>
-              ) : (
+                );
+              })() : (
                 <div className="empty">동의 이력이 없습니다 <span style={{fontSize:11, color:'var(--text3)'}}>(현재 미동의 상태)</span></div>
               )
             ) : (
