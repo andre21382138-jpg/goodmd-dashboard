@@ -195,8 +195,10 @@ export default function AttendanceMgmtPage({ profile }) {
   const [showAddW, setShowAddW] = useState(false);
   const [aStore, setAStore] = useState(''); const [aBranch, setABranch] = useState('');
   const [aName, setAName] = useState(''); const [aPhone, setAPhone] = useState('');
-  const [aJob, setAJob] = useState('판매사원'); const [aHire, setAHire] = useState('');
-  const JOB_TITLES = ['매니저', '부매니저', '판매사원'];
+  const [aJob, setAJob] = useState('매니저'); const [aHire, setAHire] = useState('');
+  const [aAffil, setAAffil] = useState('한국생활건강');
+  const JOB_TITLES = ['매니저', '부매니저'];
+  const AFFILIATIONS = ['한국생활건강', '신우'];
 
   const fetchWorkers = useCallback(async () => {
     setLoadingW(true);
@@ -221,12 +223,13 @@ export default function AttendanceMgmtPage({ profile }) {
       store_account_id: acct.id,
       name: aName.trim(), display_name: aName.trim(),
       phone: aPhone.trim() || null, job_title: aJob, hire_date: aHire || null,
+      affiliation: aAffil,
     }).select('id').single();
     setSavingW(null);
     if (error) { toast(error.message, 'err'); return; }
     toast(`${aName.trim()} 근무자 추가 완료`, 'ok');
     setShowAddW(false);
-    setAStore(''); setABranch(''); setAName(''); setAPhone(''); setAJob('판매사원'); setAHire('');
+    setAStore(''); setABranch(''); setAName(''); setAPhone(''); setAJob('매니저'); setAHire(''); setAAffil('한국생활건강');
     fetchWorkers();
   };
 
@@ -1053,6 +1056,10 @@ export default function AttendanceMgmtPage({ profile }) {
               <input value={aName} onChange={e => setAName(e.target.value)} placeholder="홍길동" style={inp}/>
               <label style={lbl}>연락처</label>
               <input value={aPhone} onChange={e => setAPhone(formatPhone(e.target.value))} placeholder="010-0000-0000" inputMode="numeric" style={inp}/>
+              <label style={lbl}>소속 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={aAffil} onChange={e => setAAffil(e.target.value)} style={inp}>
+                {AFFILIATIONS.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
               <label style={lbl}>직책 <span style={{color:'var(--danger)'}}>*</span></label>
               <select value={aJob} onChange={e => setAJob(e.target.value)} style={inp}>
                 {JOB_TITLES.map(j => <option key={j} value={j}>{j}</option>)}
