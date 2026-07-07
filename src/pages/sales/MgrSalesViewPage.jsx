@@ -116,14 +116,16 @@ export default function MgrSalesViewPage({ profile }) {
   };
 
   const deleteLine = async (it) => {
-    if (!window.confirm(`이 라인을 삭제하시겠습니까?\n\n상품: ${it.product?.name || '-'}\n수량: ${it.quantity}\n단가: ${Number(it.price).toLocaleString()}원\n\n해당 sales row가 영구 삭제됩니다.`)) return;
+    if (!isHQ && !isCurrentMonth(it.sold_at)) { toast('당월 매출만 삭제할 수 있습니다', 'err'); return; }
+    if (!window.confirm(`이 라인을 삭제하시겠습니까?\n\n상품: ${it.product?.name || '-'}\n수량: ${it.quantity}\n단가: ${Number(it.price).toLocaleString()}원\n\n삭제 시 적립금·재고·구매액(등급)이 원복됩니다. 되돌릴 수 없습니다.`)) return;
     setSavingLine(true);
     try {
       const { data: sale } = await supabase.from('sales')
         .select('id, customer_id, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
         .eq('id', it.id).single();
-      const { error } = await supabase.from('sales').delete().eq('id', it.id).select('id');
+      const { data: delData, error } = await supabase.from('sales').delete().eq('id', it.id).select('id');
       if (error) throw error;
+      if (!delData || delData.length === 0) { toast('삭제 권한이 없습니다 (RLS)', 'err'); setSavingLine(false); return; }
       await reverseSaleEffects(sale);
       toast('라인 삭제 완료 (적립금·재고 원복)', 'inf');
       cancelEditLine();
@@ -531,7 +533,7 @@ export default function MgrSalesViewPage({ profile }) {
                                                   <td style={{textAlign:'center'}}>
                                                     {canEditLine(it) ? (
                                                       <button type="button" onClick={() => startEditLine(it)}
-                                                        title={isHQ ? '라인 수정' : '당월 매출 수정 (수량·금액)'}
+                                                        title={isHQ ? '라인 수정' : '당월 매출 수정·삭제 (수량·금액)'}
                                                         style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--accent)', borderRadius:4, background:'#fff3e0', color:'var(--accent)', fontWeight:700, cursor:'pointer'}}>
                                                         ✏️ 수정
                                                       </button>
@@ -634,7 +636,7 @@ export default function MgrSalesViewPage({ profile }) {
                   : '⚠️ 당월 매출의 수량·판매금액만 수정됩니다. 합계 = 수량 × 판매금액.'}
               </div>
               <div style={{display:'flex', gap:8}}>
-                {isHQ && (
+                {(isHQ || isCurrentMonth(it.sold_at)) && (
                   <button type="button" onClick={() => deleteLine(it)} disabled={savingLine}
                     style={{height:38, padding:'0 14px', border:'1px solid var(--danger)', borderRadius:6, background:'#fff', color:'var(--danger)', fontWeight:700, fontSize:12, cursor:'pointer'}}>
                     🗑️ 삭제

@@ -501,8 +501,9 @@ export default function SalesInputPage({ profile }) {
       if (selErr || !sale) { toast('내역을 찾을 수 없습니다', 'err'); return; }
 
       // 2) 삭제
-      const { error: delErr } = await supabase.from('sales').delete().eq('id', id).select('id');
+      const { data: delData, error: delErr } = await supabase.from('sales').delete().eq('id', id).select('id');
       if (delErr) { toast(delErr.message, 'err'); return; }
+      if (!delData || delData.length === 0) { toast('삭제 권한이 없습니다 (RLS)', 'err'); return; }
 
       // 3) 적립금·구매액·등급·재고 원복
       await reverseSaleEffects(sale);
