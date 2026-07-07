@@ -104,7 +104,7 @@ export async function downloadPayrollExcel({ year, month }) {
   ] = await Promise.all([
     supabase.from('store_members')
       .select('id, name, display_name, job_title, salary_type, salary, extra_pay, affiliation, phone, hire_date, store_account_id, store:profiles!store_account_id(department, branch)')
-      .is('resigned_at', null)
+      .or(`resigned_at.is.null,resigned_at.gte.${monthStr}-01`)
       .order('id', { ascending: true }),
     supabase.from('attendance')
       .select('manager_id, manager_name, work_date')

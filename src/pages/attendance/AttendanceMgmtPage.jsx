@@ -189,6 +189,8 @@ export default function AttendanceMgmtPage({ profile }) {
   const [savingW, setSavingW] = useState(null); // store_members id
   const [wStore, setWStore] = useState('');
   const [showResigned, setShowResigned] = useState(false);
+  const [resignTarget, setResignTarget] = useState(null); // 퇴사일 모달 대상
+  const [resignDate, setResignDate] = useState('');
   const JOB_TITLES = ['매니저', '부매니저', '판매사원'];
 
   const fetchWorkers = useCallback(async () => {
@@ -211,17 +213,30 @@ export default function AttendanceMgmtPage({ profile }) {
   };
 
   const toggleResign = async (m) => {
-    const resigning = !m.resigned_at;
-    if (!window.confirm(resigning
-      ? `${m.display_name || m.name} 님을 퇴사 처리하시겠습니까?\n출퇴근현황·급여·연차 등 활성 목록에서 제외됩니다.`
-      : `${m.display_name || m.name} 님을 복귀(재직) 처리하시겠습니까?`)) return;
-    setSavingW(m.id);
-    const val = resigning ? new Date().toISOString() : null;
-    const { error } = await supabase.from('store_members').update({ resigned_at: val }).eq('id', m.id);
+    if (m.resigned_at) {
+      // 복귀
+      if (!window.confirm(`${m.display_name || m.name} 님을 복귀(재직) 처리하시겠습니까?`)) return;
+      setSavingW(m.id);
+      const { error } = await supabase.from('store_members').update({ resigned_at: null }).eq('id', m.id);
+      setSavingW(null);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('복귀 처리 완료', 'ok');
+      setWorkers(prev => prev.map(x => x.id === m.id ? { ...x, resigned_at: null } : x));
+    } else {
+      // 퇴사 → 날짜 선택 모달
+      setResignTarget(m); setResignDate(todayStr());
+    }
+  };
+  const submitResign = async () => {
+    if (!resignTarget) return;
+    if (!resignDate) { toast('퇴사일을 선택해주세요', 'err'); return; }
+    setSavingW(resignTarget.id);
+    const { error } = await supabase.from('store_members').update({ resigned_at: resignDate }).eq('id', resignTarget.id);
     setSavingW(null);
     if (error) { toast(error.message, 'err'); return; }
-    toast(resigning ? '퇴사 처리 완료' : '복귀 처리 완료', 'ok');
-    setWorkers(prev => prev.map(x => x.id === m.id ? { ...x, resigned_at: val } : x));
+    toast(`${resignTarget.display_name || resignTarget.name} 퇴사 처리 (${resignDate})`, 'ok');
+    setWorkers(prev => prev.map(x => x.id === resignTarget.id ? { ...x, resigned_at: resignDate } : x));
+    setResignTarget(null);
   };
 
   const fetchAll = useCallback(async () => {
@@ -978,6 +993,34 @@ export default function AttendanceMgmtPage({ profile }) {
 
       {leaveCalTarget && (
         <LeaveCalendarModal plan={leaveCalTarget} onClose={() => setLeaveCalTarget(null)}/>
+      )}
+
+      {/* 퇴사일 선택 모달 */}
+      {resignTarget && (
+        <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setResignTarget(null)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:400, maxWidth:'92vw', boxShadow:'0 8px 40px rgba(0,0,0,0.22)'}}>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>퇴사 처리</div>
+            <div style={{fontSize:12, color:'var(--text3)', marginBottom:16}}>
+              <b>{resignTarget.display_name || resignTarget.name}</b> · {resignTarget.store?.department} {resignTarget.store?.branch}
+            </div>
+            <label style={{display:'block', fontSize:12, fontWeight:600, color:'var(--text2)', marginBottom:6}}>퇴사일 (마지막 근무일) <span style={{color:'var(--danger)'}}>*</span></label>
+            <input type="date" value={resignDate} onChange={e => setResignDate(e.target.value)}
+              style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:8, fontSize:14, outline:'none', boxSizing:'border-box'}}/>
+            <div style={{fontSize:11, color:'var(--text3)', marginTop:8, lineHeight:1.6}}>
+              · 퇴사일이 속한 <b>달까지는 급여계산에 포함</b>됩니다 (마지막 근무일까지).<br/>
+              · 그 이후 출퇴근현황·연차·담당자 선택 등 활성 목록에서 제외됩니다.
+            </div>
+            <div style={{display:'flex', gap:8, marginTop:16}}>
+              <button type="button" onClick={() => setResignTarget(null)}
+                style={{flex:1, height:40, border:'1px solid var(--border)', background:'#fff', color:'var(--text2)', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer'}}>취소</button>
+              <button type="button" onClick={submitResign} disabled={savingW === resignTarget.id}
+                style={{flex:1, height:40, border:'none', background:'var(--danger)', color:'#fff', borderRadius:8, fontSize:14, fontWeight:700, cursor:'pointer'}}>
+                {savingW === resignTarget.id ? '처리중' : '퇴사 확정'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 연차 반려 사유 입력 모달 */}

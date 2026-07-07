@@ -690,7 +690,8 @@ function SalaryCalcTab() {
 
     const { data: members } = await supabase.from('store_members')
       .select('*, store:profiles!store_account_id(department, branch)')
-      .is('resigned_at', null);
+      .or(`resigned_at.is.null,resigned_at.gte.${from}`); // 재직자 + 해당 월(또는 이후) 퇴사자
+
     const { data: att } = await supabase.from('attendance')
       .select('manager_name, work_date').gte('work_date', from).lte('work_date', to);
 
