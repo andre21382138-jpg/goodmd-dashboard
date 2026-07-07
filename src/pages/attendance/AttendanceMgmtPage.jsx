@@ -204,7 +204,7 @@ export default function AttendanceMgmtPage({ profile }) {
     setLoadingW(true);
     const [{ data: w }, { data: accts }] = await Promise.all([
       supabase.from('store_members')
-        .select('id, name, display_name, job_title, phone, hire_date, resigned_at, store_account_id, store:profiles!store_account_id(department, branch)')
+        .select('id, name, display_name, job_title, affiliation, phone, hire_date, resigned_at, store_account_id, store:profiles!store_account_id(department, branch)')
         .order('store_account_id'),
       supabase.from('profiles').select('id, department, branch').eq('approved', true),
     ]);
@@ -237,11 +237,12 @@ export default function AttendanceMgmtPage({ profile }) {
   const [eWorker, setEWorker] = useState(null);
   const [eName, setEName] = useState(''); const [eStore, setEStore] = useState(''); const [eBranch, setEBranch] = useState('');
   const [ePhone, setEPhone] = useState(''); const [eJob, setEJob] = useState('매니저');
+  const [eAffil, setEAffil] = useState('');
   const openEditWorker = (m) => {
     setEWorker(m);
     setEName(m.display_name || m.name || '');
     setEStore(m.store?.department || ''); setEBranch(m.store?.branch || '');
-    setEPhone(m.phone || ''); setEJob(m.job_title || '매니저');
+    setEPhone(m.phone || ''); setEJob(m.job_title || '매니저'); setEAffil(m.affiliation || '');
   };
   const submitEditWorker = async () => {
     if (!eWorker) return;
@@ -253,6 +254,7 @@ export default function AttendanceMgmtPage({ profile }) {
     const { error } = await supabase.from('store_members').update({
       name: eName.trim(), display_name: eName.trim(),
       phone: ePhone.trim() || null, job_title: eJob, store_account_id: acct.id,
+      affiliation: eAffil || null,
     }).eq('id', eWorker.id);
     setSavingW(null);
     if (error) { toast(error.message, 'err'); return; }
@@ -1001,7 +1003,7 @@ export default function AttendanceMgmtPage({ profile }) {
               <div className="twrap">
                 <table>
                   <thead>
-                    <tr><th>점포</th><th>지점</th><th>이름</th><th>직책</th><th>연락처</th><th>입사일</th><th style={{textAlign:'center'}}>상태</th>{canEdit && <th style={{textAlign:'center'}}>관리</th>}</tr>
+                    <tr><th>점포</th><th>지점</th><th>이름</th><th>직책</th><th>소속</th><th>연락처</th><th>입사일</th><th style={{textAlign:'center'}}>상태</th>{canEdit && <th style={{textAlign:'center'}}>관리</th>}</tr>
                   </thead>
                   <tbody>
                     {rows.map(m => (
@@ -1012,6 +1014,7 @@ export default function AttendanceMgmtPage({ profile }) {
                         <td>
                           <span style={{fontSize:12, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title || '-'}</span>
                         </td>
+                        <td style={{fontSize:12, color:'var(--text2)'}}>{m.affiliation || '-'}</td>
                         <td className="mono" style={{fontSize:12}}>{m.phone || '-'}</td>
                         <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{m.hire_date || '-'}</td>
                         <td style={{textAlign:'center'}}>
@@ -1076,6 +1079,11 @@ export default function AttendanceMgmtPage({ profile }) {
               <label style={lbl}>직책 <span style={{color:'var(--danger)'}}>*</span></label>
               <select value={eJob} onChange={e => setEJob(e.target.value)} style={inp}>
                 {jobOpts.map(j => <option key={j} value={j}>{j}</option>)}
+              </select>
+              <label style={lbl}>소속</label>
+              <select value={eAffil} onChange={e => setEAffil(e.target.value)} style={inp}>
+                <option value="">(선택 안 함)</option>
+                {AFFILIATIONS.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
               <div style={{display:'flex', gap:8, marginTop:20}}>
                 <button type="button" onClick={() => setEWorker(null)}
