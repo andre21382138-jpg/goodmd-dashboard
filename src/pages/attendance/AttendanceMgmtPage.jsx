@@ -181,6 +181,8 @@ export default function AttendanceMgmtPage({ profile }) {
 
   const [closures, setClosures] = useState([]); // 휴점일 데이터
   const [leaveCalTarget, setLeaveCalTarget] = useState(null); // 연차 달력 모달 대상 plan
+  const [rejectPlan, setRejectPlan] = useState(null); // 반려 사유 모달 대상 plan
+  const [rejectReason, setRejectReason] = useState('');
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -528,10 +530,19 @@ export default function AttendanceMgmtPage({ profile }) {
     }
   };
 
-  const updatePlanStatus = async (id, status) => {
-    const { error } = await supabase.from('leave_plans').update({ status }).eq('id', id);
+  const updatePlanStatus = async (id, status, reason = null) => {
+    const patch = { status };
+    if (status === 'rejected') patch.reject_reason = (reason || '').trim() || null;
+    if (status === 'approved') patch.reject_reason = null; // 승인 시 기존 사유 제거
+    const { error } = await supabase.from('leave_plans').update(patch).eq('id', id);
     if (error) toast(error.message, 'err');
     else { toast(status === 'approved' ? '확인 완료' : '반려 처리', 'ok'); fetchAll(); }
+  };
+  const submitReject = async () => {
+    if (!rejectPlan) return;
+    if (!rejectReason.trim()) { toast('반려 사유를 입력해주세요', 'err'); return; }
+    await updatePlanStatus(rejectPlan.id, 'rejected', rejectReason);
+    setRejectPlan(null); setRejectReason('');
   };
 
   return (
@@ -813,16 +824,23 @@ export default function AttendanceMgmtPage({ profile }) {
                               <button className="btn btn-p" style={{padding:'3px 8px', fontSize:11}}
                                 onClick={() => updatePlanStatus(p.id, 'approved')}>확인</button>
                               <button className="btn-danger" style={{padding:'3px 8px', fontSize:11}}
-                                onClick={() => updatePlanStatus(p.id, 'rejected')}>반려</button>
+                                onClick={() => { setRejectPlan(p); setRejectReason(''); }}>반려</button>
                             </div>
                           ) : (
-                            <span style={{
-                              padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600,
-                              background: p.status==='approved'?'#e8f5e9':'#ffebee',
-                              color: p.status==='approved'?'var(--success)':'var(--danger)',
-                            }}>
-                              {p.status==='approved'?'✅ 확인':'❌ 반려'}
-                            </span>
+                            <div>
+                              <span style={{
+                                display:'inline-block', padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600,
+                                background: p.status==='approved'?'#e8f5e9':'#ffebee',
+                                color: p.status==='approved'?'var(--success)':'var(--danger)',
+                              }}>
+                                {p.status==='approved'?'✅ 확인':'❌ 반려'}
+                              </span>
+                              {p.status==='rejected' && p.reject_reason && (
+                                <div style={{marginTop:4, fontSize:11, color:'var(--danger)', maxWidth:200, whiteSpace:'pre-wrap'}}>
+                                  사유: {p.reject_reason}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -837,6 +855,31 @@ export default function AttendanceMgmtPage({ profile }) {
 
       {leaveCalTarget && (
         <LeaveCalendarModal plan={leaveCalTarget} onClose={() => setLeaveCalTarget(null)}/>
+      )}
+
+      {/* 연차 반려 사유 입력 모달 */}
+      {rejectPlan && (
+        <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setRejectPlan(null)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:420, maxWidth:'92vw', boxShadow:'0 8px 40px rgba(0,0,0,0.22)'}}>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:6}}>연차 반려</div>
+            <div style={{fontSize:12, color:'var(--text3)', marginBottom:14}}>
+              <b>{rejectPlan.manager_name}</b> · {rejectPlan.target_month} · {(rejectPlan.dates||[]).length}일
+            </div>
+            <label style={{display:'block', fontSize:12, fontWeight:600, color:'var(--text2)', marginBottom:6}}>반려 사유 <span style={{color:'var(--danger)'}}>*</span></label>
+            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+              placeholder="예: 해당 기간 인원 부족으로 조정 필요 / 성수기 연차 제한 등"
+              style={{width:'100%', minHeight:90, padding:'10px 12px', border:'1px solid var(--border)', borderRadius:8, fontSize:13, fontFamily:'inherit', outline:'none', resize:'vertical', boxSizing:'border-box'}}
+              autoFocus/>
+            <div style={{fontSize:11, color:'var(--text3)', marginTop:6}}>* 반려 사유는 신청한 매장 근무자에게 표시됩니다.</div>
+            <div style={{display:'flex', gap:8, marginTop:16}}>
+              <button type="button" onClick={() => setRejectPlan(null)}
+                style={{flex:1, height:40, border:'1px solid var(--border)', background:'#fff', color:'var(--text2)', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer'}}>취소</button>
+              <button type="button" onClick={submitReject}
+                style={{flex:1, height:40, border:'none', background:'var(--danger)', color:'#fff', borderRadius:8, fontSize:14, fontWeight:700, cursor:'pointer'}}>반려 확정</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

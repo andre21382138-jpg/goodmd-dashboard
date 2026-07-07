@@ -269,11 +269,16 @@ export default function LeavePlanPage({ profile }) {
                     <td style={{fontSize:11, color:'var(--text3)'}}>{p.memo||'-'}</td>
                     <td className="mono" style={{fontSize:11}}>{new Date(p.created_at).toLocaleDateString('ko-KR')}</td>
                     <td>
-                      <span style={{padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600,
+                      <span style={{display:'inline-block', padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600,
                         background: p.status==='approved'?'#e8f5e9':p.status==='rejected'?'#ffebee':'#fff3e0',
                         color: p.status==='approved'?'var(--success)':p.status==='rejected'?'var(--danger)':'#E65100'}}>
                         {p.status==='approved'?'확인':p.status==='rejected'?'반려':'대기'}
                       </span>
+                      {p.status==='rejected' && p.reject_reason && (
+                        <div style={{marginTop:5, fontSize:11, color:'var(--danger)', background:'#fff5f5', border:'1px solid #ffd0d0', borderRadius:4, padding:'5px 8px', maxWidth:220, whiteSpace:'pre-wrap', lineHeight:1.5}}>
+                          <b>반려 사유:</b> {p.reject_reason}
+                        </div>
+                      )}
                     </td>
                     <td>
                       {p.status === 'pending' && (
