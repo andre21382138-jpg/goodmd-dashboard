@@ -233,14 +233,32 @@ export default function AttendanceMgmtPage({ profile }) {
     fetchWorkers();
   };
 
-  const changeJob = async (m, job) => {
-    if (job === m.job_title) return;
-    setSavingW(m.id);
-    const { error } = await supabase.from('store_members').update({ job_title: job }).eq('id', m.id);
+  // 근무자 정보 수정
+  const [eWorker, setEWorker] = useState(null);
+  const [eName, setEName] = useState(''); const [eStore, setEStore] = useState(''); const [eBranch, setEBranch] = useState('');
+  const [ePhone, setEPhone] = useState(''); const [eJob, setEJob] = useState('매니저');
+  const openEditWorker = (m) => {
+    setEWorker(m);
+    setEName(m.display_name || m.name || '');
+    setEStore(m.store?.department || ''); setEBranch(m.store?.branch || '');
+    setEPhone(m.phone || ''); setEJob(m.job_title || '매니저');
+  };
+  const submitEditWorker = async () => {
+    if (!eWorker) return;
+    if (!eName.trim()) { toast('이름을 입력해주세요', 'err'); return; }
+    if (!eStore || !eBranch) { toast('점포/지점을 선택해주세요', 'err'); return; }
+    const acct = storeAccounts.find(a => a.department === eStore && a.branch === eBranch);
+    if (!acct) { toast('선택한 점포/지점의 매장 계정을 찾을 수 없습니다', 'err'); return; }
+    setSavingW(eWorker.id);
+    const { error } = await supabase.from('store_members').update({
+      name: eName.trim(), display_name: eName.trim(),
+      phone: ePhone.trim() || null, job_title: eJob, store_account_id: acct.id,
+    }).eq('id', eWorker.id);
     setSavingW(null);
     if (error) { toast(error.message, 'err'); return; }
-    toast(`${m.display_name || m.name} 직책 → ${job}`, 'ok');
-    setWorkers(prev => prev.map(x => x.id === m.id ? { ...x, job_title: job } : x));
+    toast('정보 수정 완료', 'ok');
+    setEWorker(null);
+    fetchWorkers();
   };
 
   const toggleResign = async (m) => {
@@ -992,16 +1010,7 @@ export default function AttendanceMgmtPage({ profile }) {
                         <td><span className="badge badge-store">{m.store?.branch || '-'}</span></td>
                         <td style={{fontWeight:600}}>{m.display_name || m.name}</td>
                         <td>
-                          {canEdit && !m.resigned_at ? (
-                            <select value={m.job_title || ''} disabled={savingW === m.id}
-                              onChange={e => changeJob(m, e.target.value)}
-                              style={{height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, fontWeight:600, background:'#fff'}}>
-                              {!JOB_TITLES.includes(m.job_title) && m.job_title && <option value={m.job_title}>{m.job_title}</option>}
-                              {JOB_TITLES.map(j => <option key={j} value={j}>{j}</option>)}
-                            </select>
-                          ) : (
-                            <span style={{fontSize:12, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title || '-'}</span>
-                          )}
+                          <span style={{fontSize:12, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title || '-'}</span>
                         </td>
                         <td className="mono" style={{fontSize:12}}>{m.phone || '-'}</td>
                         <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{m.hire_date || '-'}</td>
@@ -1012,10 +1021,18 @@ export default function AttendanceMgmtPage({ profile }) {
                         </td>
                         {canEdit && (
                           <td style={{textAlign:'center'}}>
-                            <button type="button" onClick={() => toggleResign(m)} disabled={savingW === m.id}
-                              style={{height:28, padding:'0 10px', border:`1px solid ${m.resigned_at ? '#2e7d32' : 'var(--danger)'}`, borderRadius:4, background:'#fff', color: m.resigned_at ? '#2e7d32' : 'var(--danger)', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
-                              {savingW === m.id ? '처리중' : m.resigned_at ? '복귀' : '퇴사처리'}
-                            </button>
+                            <div style={{display:'flex', gap:4, justifyContent:'center'}}>
+                              {!m.resigned_at && (
+                                <button type="button" onClick={() => openEditWorker(m)} disabled={savingW === m.id}
+                                  style={{height:28, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4, background:'#fff3e0', color:'var(--accent)', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                                  정보수정
+                                </button>
+                              )}
+                              <button type="button" onClick={() => toggleResign(m)} disabled={savingW === m.id}
+                                style={{height:28, padding:'0 10px', border:`1px solid ${m.resigned_at ? '#2e7d32' : 'var(--danger)'}`, borderRadius:4, background:'#fff', color: m.resigned_at ? '#2e7d32' : 'var(--danger)', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                                {savingW === m.id ? '처리중' : m.resigned_at ? '복귀' : '퇴사처리'}
+                              </button>
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -1031,6 +1048,47 @@ export default function AttendanceMgmtPage({ profile }) {
       {leaveCalTarget && (
         <LeaveCalendarModal plan={leaveCalTarget} onClose={() => setLeaveCalTarget(null)}/>
       )}
+
+      {/* 근무자 정보 수정 모달 */}
+      {eWorker && (() => {
+        const eStores = [...new Set(storeAccounts.map(a => a.department))].sort();
+        const eBranches = [...new Set(storeAccounts.filter(a => a.department === eStore).map(a => a.branch))].sort();
+        const inp = {width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:8, fontSize:14, outline:'none', boxSizing:'border-box'};
+        const lbl = {display:'block', fontSize:12, fontWeight:600, color:'var(--text2)', marginBottom:5, marginTop:12};
+        const jobOpts = JOB_TITLES.includes(eJob) ? JOB_TITLES : [eJob, ...JOB_TITLES];
+        return (
+          <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setEWorker(null)}/>
+            <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:440, maxWidth:'92vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.22)'}}>
+              <div style={{fontSize:16, fontWeight:700, marginBottom:14}}>근무자 정보 수정</div>
+              <label style={lbl}>이름 <span style={{color:'var(--danger)'}}>*</span></label>
+              <input value={eName} onChange={e => setEName(e.target.value)} placeholder="홍길동" style={inp}/>
+              <label style={lbl}>점포 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={eStore} onChange={e => { setEStore(e.target.value); setEBranch(''); }} style={inp}>
+                <option value="">점포 선택</option>{eStores.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <label style={lbl}>지점 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={eBranch} onChange={e => setEBranch(e.target.value)} disabled={!eStore} style={{...inp, background: eStore?'#fff':'#f0f0f0'}}>
+                <option value="">{eStore ? '지점 선택' : '점포 먼저 선택'}</option>{eBranches.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+              <label style={lbl}>연락처</label>
+              <input value={ePhone} onChange={e => setEPhone(formatPhone(e.target.value))} placeholder="010-0000-0000" inputMode="numeric" style={inp}/>
+              <label style={lbl}>직책 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={eJob} onChange={e => setEJob(e.target.value)} style={inp}>
+                {jobOpts.map(j => <option key={j} value={j}>{j}</option>)}
+              </select>
+              <div style={{display:'flex', gap:8, marginTop:20}}>
+                <button type="button" onClick={() => setEWorker(null)}
+                  style={{flex:1, height:42, border:'1px solid var(--border)', background:'#fff', color:'var(--text2)', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer'}}>취소</button>
+                <button type="button" onClick={submitEditWorker} disabled={savingW === eWorker.id}
+                  style={{flex:2, height:42, border:'none', background:'var(--accent)', color:'#fff', borderRadius:8, fontSize:14, fontWeight:700, cursor:'pointer'}}>
+                  {savingW === eWorker.id ? '저장중...' : '💾 저장'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 근무자 추가 모달 */}
       {showAddW && (() => {
