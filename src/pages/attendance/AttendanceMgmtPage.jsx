@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, dlBlob } from '../../lib/utils';
+import { toast, dlBlob, formatPhone } from '../../lib/utils';
 
 const todayStr = () => {
   const d = new Date();
@@ -191,16 +191,44 @@ export default function AttendanceMgmtPage({ profile }) {
   const [showResigned, setShowResigned] = useState(false);
   const [resignTarget, setResignTarget] = useState(null); // 퇴사일 모달 대상
   const [resignDate, setResignDate] = useState('');
+  const [storeAccounts, setStoreAccounts] = useState([]); // 매장 계정(점포/지점)
+  const [showAddW, setShowAddW] = useState(false);
+  const [aStore, setAStore] = useState(''); const [aBranch, setABranch] = useState('');
+  const [aName, setAName] = useState(''); const [aPhone, setAPhone] = useState('');
+  const [aJob, setAJob] = useState('판매사원'); const [aHire, setAHire] = useState('');
   const JOB_TITLES = ['매니저', '부매니저', '판매사원'];
 
   const fetchWorkers = useCallback(async () => {
     setLoadingW(true);
-    const { data } = await supabase.from('store_members')
-      .select('id, name, display_name, job_title, phone, hire_date, resigned_at, store_account_id, store:profiles!store_account_id(department, branch)')
-      .order('store_account_id');
-    setWorkers(data || []);
+    const [{ data: w }, { data: accts }] = await Promise.all([
+      supabase.from('store_members')
+        .select('id, name, display_name, job_title, phone, hire_date, resigned_at, store_account_id, store:profiles!store_account_id(department, branch)')
+        .order('store_account_id'),
+      supabase.from('profiles').select('id, department, branch').eq('approved', true),
+    ]);
+    setWorkers(w || []);
+    setStoreAccounts((accts || []).filter(a => a.department && a.branch));
     setLoadingW(false);
   }, []);
+
+  const submitAddWorker = async () => {
+    if (!aStore || !aBranch) { toast('점포/지점을 선택해주세요', 'err'); return; }
+    if (!aName.trim()) { toast('이름을 입력해주세요', 'err'); return; }
+    const acct = storeAccounts.find(a => a.department === aStore && a.branch === aBranch);
+    if (!acct) { toast('선택한 점포/지점의 매장 계정을 찾을 수 없습니다', 'err'); return; }
+    setSavingW('new');
+    const { data, error } = await supabase.from('store_members').insert({
+      store_account_id: acct.id,
+      name: aName.trim(), display_name: aName.trim(),
+      phone: aPhone.trim() || null, job_title: aJob, hire_date: aHire || null,
+    }).select('id').single();
+    setSavingW(null);
+    if (error) { toast(error.message, 'err'); return; }
+    toast(`${aName.trim()} 근무자 추가 완료`, 'ok');
+    setShowAddW(false);
+    setAStore(''); setABranch(''); setAName(''); setAPhone(''); setAJob('판매사원'); setAHire('');
+    fetchWorkers();
+  };
 
   const changeJob = async (m, job) => {
     if (job === m.job_title) return;
@@ -936,6 +964,12 @@ export default function AttendanceMgmtPage({ profile }) {
                 <input type="checkbox" checked={showResigned} onChange={e => setShowResigned(e.target.checked)}/>
                 퇴사자 포함
               </label>
+              {canEdit && (
+                <button type="button" onClick={() => setShowAddW(true)}
+                  style={{height:32, padding:'0 14px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                  ＋ 근무자 추가
+                </button>
+              )}
               <div className="fbar-right" style={{display:'flex', alignItems:'center', gap:14}}>
                 <span className="fresult">재직 <b>{activeCount}</b>명 · 표시 <b>{rows.length}</b>명</span>
               </div>
@@ -994,6 +1028,49 @@ export default function AttendanceMgmtPage({ profile }) {
       {leaveCalTarget && (
         <LeaveCalendarModal plan={leaveCalTarget} onClose={() => setLeaveCalTarget(null)}/>
       )}
+
+      {/* 근무자 추가 모달 */}
+      {showAddW && (() => {
+        const aStores = [...new Set(storeAccounts.map(a => a.department))].sort();
+        const aBranches = [...new Set(storeAccounts.filter(a => a.department === aStore).map(a => a.branch))].sort();
+        const inp = {width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:8, fontSize:14, outline:'none', boxSizing:'border-box'};
+        const lbl = {display:'block', fontSize:12, fontWeight:600, color:'var(--text2)', marginBottom:5, marginTop:12};
+        return (
+          <div style={{position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setShowAddW(false)}/>
+            <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:440, maxWidth:'92vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.22)'}}>
+              <div style={{fontSize:16, fontWeight:700, marginBottom:4}}>＋ 근무자 추가</div>
+              <div style={{fontSize:12, color:'var(--text3)', marginBottom:6}}>점포·지점을 선택하고 근무자 정보를 입력하세요.</div>
+              <label style={lbl}>점포 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={aStore} onChange={e => { setAStore(e.target.value); setABranch(''); }} style={inp}>
+                <option value="">점포 선택</option>{aStores.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <label style={lbl}>지점 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={aBranch} onChange={e => setABranch(e.target.value)} disabled={!aStore} style={{...inp, background: aStore?'#fff':'#f0f0f0'}}>
+                <option value="">{aStore ? '지점 선택' : '점포 먼저 선택'}</option>{aBranches.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+              <label style={lbl}>이름 <span style={{color:'var(--danger)'}}>*</span></label>
+              <input value={aName} onChange={e => setAName(e.target.value)} placeholder="홍길동" style={inp}/>
+              <label style={lbl}>연락처</label>
+              <input value={aPhone} onChange={e => setAPhone(formatPhone(e.target.value))} placeholder="010-0000-0000" inputMode="numeric" style={inp}/>
+              <label style={lbl}>직책 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={aJob} onChange={e => setAJob(e.target.value)} style={inp}>
+                {JOB_TITLES.map(j => <option key={j} value={j}>{j}</option>)}
+              </select>
+              <label style={lbl}>입사일 <span style={{fontWeight:400, color:'var(--text3)'}}>(생략 가능)</span></label>
+              <input type="date" value={aHire} onChange={e => setAHire(e.target.value)} style={inp}/>
+              <div style={{display:'flex', gap:8, marginTop:20}}>
+                <button type="button" onClick={() => setShowAddW(false)}
+                  style={{flex:1, height:42, border:'1px solid var(--border)', background:'#fff', color:'var(--text2)', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer'}}>취소</button>
+                <button type="button" onClick={submitAddWorker} disabled={savingW === 'new'}
+                  style={{flex:2, height:42, border:'none', background:'var(--accent)', color:'#fff', borderRadius:8, fontSize:14, fontWeight:700, cursor:'pointer'}}>
+                  {savingW === 'new' ? '추가중...' : '✅ 근무자 추가'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 퇴사일 선택 모달 */}
       {resignTarget && (
