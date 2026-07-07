@@ -492,10 +492,55 @@ export default function SalesInputPage({ profile }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('이 판매 내역을 삭제하시겠습니까?')) return;
-    const { error } = await supabase.from('sales').delete().eq('id', id);
-    if (error) toast(error.message, 'err');
-    else { toast('삭제 완료', 'inf'); fetchRecent(); }
+    if (!window.confirm('이 판매 내역을 삭제하시겠습니까?\n(적립금·구매액·재고가 원복됩니다)')) return;
+    try {
+      // 1) 원복에 필요한 정보 조회
+      const { data: sale, error: selErr } = await supabase.from('sales')
+        .select('id, customer_id, points_earned, points_used, price, quantity, product_id, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .eq('id', id).single();
+      if (selErr || !sale) { toast('내역을 찾을 수 없습니다', 'err'); return; }
+
+      // 2) 삭제
+      const { error: delErr } = await supabase.from('sales').delete().eq('id', id).select('id');
+      if (delErr) { toast(delErr.message, 'err'); return; }
+
+      // 3) 회원 적립금/사용/구매액·등급 원복
+      if (sale.customer_id) {
+        const { data: cust } = await supabase.from('customers')
+          .select('total_points, used_points, total_purchase').eq('id', sale.customer_id).single();
+        if (cust) {
+          const lineAmt   = (Number(sale.price) || 0) * (Number(sale.quantity) || 0);
+          const newPoints = Math.max(0, (cust.total_points || 0) - (sale.points_earned || 0) + (sale.points_used || 0));
+          const newUsed   = Math.max(0, (cust.used_points || 0) - (sale.points_used || 0));
+          const newPurch  = Math.max(0, (cust.total_purchase || 0) - lineAmt);
+          await supabase.from('customers').update({
+            total_points: newPoints,
+            used_points: newUsed,
+            total_purchase: newPurch,
+            grade: getGrade(newPurch).grade,
+          }).eq('id', sale.customer_id);
+        }
+      }
+
+      // 4) 매장재고 원복 (저장 시 차감했던 조건과 동일: hq·강좌매출 제외)
+      const code = sale.product?.code;
+      if (code && sale.delivery_type !== 'hq' && sale.payment !== '강좌매출') {
+        const { data: stockRow } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name', sale.store_name).eq('branch_name', sale.branch_name).eq('product_code', code)
+          .maybeSingle();
+        if (stockRow) {
+          await supabase.from('store_stock')
+            .update({ stock_qty: (stockRow.stock_qty || 0) + (Number(sale.quantity) || 0), updated_at: new Date().toISOString() })
+            .eq('id', stockRow.id);
+        }
+      }
+
+      toast('삭제 완료 (적립금·재고 원복)', 'ok');
+      fetchRecent();
+    } catch (err) {
+      toast('삭제 실패: ' + (err.message || err), 'err');
+    }
   };
 
   const inputStyle = { width:'100%', height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontFamily:'var(--sans)', outline:'none' };
