@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, dlBlob } from '../../lib/utils';
+import { toast, dlBlob, reverseSaleEffects } from '../../lib/utils';
 import { ORDER_CONSTANTS, STORE_MAP, STORE_NAMES } from '../../lib/constants';
 import HQDeliveryBizView from './HQDeliveryBizView';
 import BizSalesPage from '../sales/BizSalesPage';
@@ -299,9 +299,17 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     if (!window.confirm(`선택한 ${target.length}건(${ids.length}개 상품)을 삭제하시겠습니까?\n\n해당 매장 본사요청 매출이 영구 삭제됩니다 (중복·재고없음 등 처리용). 되돌릴 수 없습니다.`)) return;
     setProcessing('delete');
     try {
-      const { error } = await supabase.from('sales').delete().in('id', ids);
+      // 원복용 상세 조회 (삭제 전)
+      const { data: details } = await supabase.from('sales')
+        .select('id, customer_id, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .in('id', ids);
+      const { data: del, error } = await supabase.from('sales').delete().in('id', ids).select('id');
       if (error) throw error;
-      toast(`${target.length}건 삭제 완료`, 'inf');
+      const deletedIds = new Set((del || []).map(d => d.id));
+      for (const s of (details || [])) {
+        if (deletedIds.has(s.id)) await reverseSaleEffects(s); // 적립금 원복(hq는 재고 원복 대상 아님)
+      }
+      toast(`${target.length}건 삭제 완료 (적립금 원복)`, 'inf');
       setSelectedKeys(new Set());
       fetchData();
     } catch (err) {

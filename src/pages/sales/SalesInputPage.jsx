@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, GradeBadge, getGrade, formatPhone, formatNumInput, parseNumInput } from '../../lib/utils';
+import { toast, GradeBadge, getGrade, formatPhone, formatNumInput, parseNumInput, reverseSaleEffects } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function SalesInputPage({ profile }) {
@@ -504,37 +504,8 @@ export default function SalesInputPage({ profile }) {
       const { error: delErr } = await supabase.from('sales').delete().eq('id', id).select('id');
       if (delErr) { toast(delErr.message, 'err'); return; }
 
-      // 3) 회원 적립금/사용/구매액·등급 원복
-      if (sale.customer_id) {
-        const { data: cust } = await supabase.from('customers')
-          .select('total_points, used_points, total_purchase').eq('id', sale.customer_id).single();
-        if (cust) {
-          const lineAmt   = (Number(sale.price) || 0) * (Number(sale.quantity) || 0);
-          const newPoints = Math.max(0, (cust.total_points || 0) - (sale.points_earned || 0) + (sale.points_used || 0));
-          const newUsed   = Math.max(0, (cust.used_points || 0) - (sale.points_used || 0));
-          const newPurch  = Math.max(0, (cust.total_purchase || 0) - lineAmt);
-          await supabase.from('customers').update({
-            total_points: newPoints,
-            used_points: newUsed,
-            total_purchase: newPurch,
-            grade: getGrade(newPurch).grade,
-          }).eq('id', sale.customer_id);
-        }
-      }
-
-      // 4) 매장재고 원복 (저장 시 차감했던 조건과 동일: hq·강좌매출 제외)
-      const code = sale.product?.code;
-      if (code && sale.delivery_type !== 'hq' && sale.payment !== '강좌매출') {
-        const { data: stockRow } = await supabase.from('store_stock')
-          .select('id, stock_qty')
-          .eq('store_name', sale.store_name).eq('branch_name', sale.branch_name).eq('product_code', code)
-          .maybeSingle();
-        if (stockRow) {
-          await supabase.from('store_stock')
-            .update({ stock_qty: (stockRow.stock_qty || 0) + (Number(sale.quantity) || 0), updated_at: new Date().toISOString() })
-            .eq('id', stockRow.id);
-        }
-      }
+      // 3) 적립금·구매액·등급·재고 원복
+      await reverseSaleEffects(sale);
 
       toast('삭제 완료 (적립금·재고 원복)', 'ok');
       fetchRecent();

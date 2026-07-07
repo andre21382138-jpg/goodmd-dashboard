@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
+import { toast, formatNumInput, parseNumInput, reverseSaleEffects } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function MgrSalesViewPage({ profile }) {
@@ -90,13 +90,22 @@ export default function MgrSalesViewPage({ profile }) {
     if (!window.confirm(`선택한 ${ids.length}개 라인을 영구 삭제하시겠습니까?\n\n주문(결제 묶음) 단위로 선택된 매출이 모두 삭제되며, 되돌릴 수 없습니다.`)) return;
     setDeletingSel(true);
     try {
+      // 원복용 상세 조회 (삭제 전)
+      const { data: details } = await supabase.from('sales')
+        .select('id, customer_id, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .in('id', ids);
       const { data, error } = await supabase.from('sales').delete().in('id', ids).select('id');
       if (error) throw error;
-      const deleted = (data || []).length;
+      const deletedIds = new Set((data || []).map(d => d.id));
+      const deleted = deletedIds.size;
       if (deleted === 0) {
         toast('삭제 권한이 없습니다 (RLS). 본사 담당자 삭제 정책이 필요합니다.', 'err');
       } else {
-        toast(`${deleted}건 삭제 완료${deleted < ids.length ? ` (권한 없어 ${ids.length - deleted}건 제외)` : ''}`, deleted < ids.length ? 'err' : 'ok');
+        // 삭제 성공한 건만 원복 (순차 — 같은 회원 여러 건 정확 누적)
+        for (const s of (details || [])) {
+          if (deletedIds.has(s.id)) await reverseSaleEffects(s);
+        }
+        toast(`${deleted}건 삭제 완료 (적립금·재고 원복)${deleted < ids.length ? ` · 권한 없어 ${ids.length - deleted}건 제외` : ''}`, deleted < ids.length ? 'err' : 'ok');
         setSelDel(new Set());
         fetchSales();
       }
@@ -110,9 +119,13 @@ export default function MgrSalesViewPage({ profile }) {
     if (!window.confirm(`이 라인을 삭제하시겠습니까?\n\n상품: ${it.product?.name || '-'}\n수량: ${it.quantity}\n단가: ${Number(it.price).toLocaleString()}원\n\n해당 sales row가 영구 삭제됩니다.`)) return;
     setSavingLine(true);
     try {
-      const { error } = await supabase.from('sales').delete().eq('id', it.id);
+      const { data: sale } = await supabase.from('sales')
+        .select('id, customer_id, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .eq('id', it.id).single();
+      const { error } = await supabase.from('sales').delete().eq('id', it.id).select('id');
       if (error) throw error;
-      toast('라인 삭제 완료', 'inf');
+      await reverseSaleEffects(sale);
+      toast('라인 삭제 완료 (적립금·재고 원복)', 'inf');
       cancelEditLine();
       fetchSales();
     } catch (err) {

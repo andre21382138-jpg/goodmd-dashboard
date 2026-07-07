@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { SC, S_DATA_START, S_PERIOD_ROW, GRADE_TABLE } from './constants';
+import { supabase } from './supabase';
 
 // ════════════════════════════════════════════════════════
 // GLOBAL STYLE INJECTOR
@@ -103,6 +104,40 @@ export function formatPhone(val) {
 // ════════════════════════════════════════════════════════
 export const getGrade = (total) =>
   GRADE_TABLE.find(g => total >= g.min) || GRADE_TABLE[GRADE_TABLE.length - 1];
+
+// 판매 1건 삭제 시 원복: 회원 적립금(적립 회수+사용 복원)·구매액·등급, 매장재고.
+// sale에는 customer_id, points_earned, points_used, price, quantity, store_name,
+// branch_name, delivery_type, payment, product:{code}(또는 product_code)가 필요.
+// 같은 회원 여러 건은 순차(await)로 호출해야 정확히 누적된다.
+export async function reverseSaleEffects(sale) {
+  if (!sale) return;
+  if (sale.customer_id) {
+    const { data: cust } = await supabase.from('customers')
+      .select('total_points, used_points, total_purchase').eq('id', sale.customer_id).single();
+    if (cust) {
+      const lineAmt  = (Number(sale.price) || 0) * (Number(sale.quantity) || 0);
+      const newPurch = Math.max(0, (cust.total_purchase || 0) - lineAmt);
+      await supabase.from('customers').update({
+        total_points:   Math.max(0, (cust.total_points || 0) - (sale.points_earned || 0) + (sale.points_used || 0)),
+        used_points:    Math.max(0, (cust.used_points || 0) - (sale.points_used || 0)),
+        total_purchase: newPurch,
+        grade:          getGrade(newPurch).grade,
+      }).eq('id', sale.customer_id);
+    }
+  }
+  const code = sale.product?.code || sale.product_code;
+  if (code && sale.delivery_type !== 'hq' && sale.payment !== '강좌매출') {
+    const { data: stockRow } = await supabase.from('store_stock')
+      .select('id, stock_qty')
+      .eq('store_name', sale.store_name).eq('branch_name', sale.branch_name).eq('product_code', code)
+      .maybeSingle();
+    if (stockRow) {
+      await supabase.from('store_stock')
+        .update({ stock_qty: (stockRow.stock_qty || 0) + (Number(sale.quantity) || 0), updated_at: new Date().toISOString() })
+        .eq('id', stockRow.id);
+    }
+  }
+}
 
 export const GradeBadge = ({ grade }) => {
   const g = GRADE_TABLE.find(x => x.grade === grade) || GRADE_TABLE[GRADE_TABLE.length - 1];
