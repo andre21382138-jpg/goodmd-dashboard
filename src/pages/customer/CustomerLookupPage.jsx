@@ -1277,9 +1277,9 @@ export default function CustomerLookupPage({ profile }) {
         </div>
       )}
 
-      {/* 동의 이력 모달 (증빙) */}
+      {/* 동의 이력 모달 (증빙) — 회원상세(9999) 위에 뜨도록 */}
       {logModal && (
-        <div style={{position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center'}}>
+        <div style={{position:'fixed', inset:0, zIndex:12000, display:'flex', alignItems:'center', justifyContent:'center'}}>
           <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setLogModal(false)}/>
           <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:720, maxWidth:'94vw', maxHeight:'85vh', overflow:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
             <div style={{display:'flex', alignItems:'center', marginBottom:6}}>
