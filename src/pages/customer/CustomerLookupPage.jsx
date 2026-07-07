@@ -830,7 +830,7 @@ export default function CustomerLookupPage({ profile }) {
                     <td>
                       <button
                         className="btn btn-s"
-                        style={{fontSize:11, padding:'3px 10px', opacity: c.sms_consent ? 1 : 0.35}}
+                        style={{fontSize:11, padding:'3px 10px', opacity: c.sms_consent ? 1 : 0.35, whiteSpace:'nowrap'}}
                         title={c.sms_consent ? '문자 발송' : 'SMS 미동의 회원'}
                         onClick={e => handleSingleSms(e, c)}>
                         📱 문자
@@ -838,7 +838,7 @@ export default function CustomerLookupPage({ profile }) {
                     </td>
                     {!isManager && (
                       <td>
-                        <button className="btn-danger" style={{padding:'3px 8px', fontSize:11}}
+                        <button className="btn-danger" style={{padding:'3px 8px', fontSize:11, whiteSpace:'nowrap'}}
                           onClick={e => withdrawCustomer(c, e)}>
                           탈퇴
                         </button>
