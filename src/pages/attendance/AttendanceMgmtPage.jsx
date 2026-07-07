@@ -17,6 +17,67 @@ const minus = (n) => {
 };
 const DOW = ['일','월','화','수','목','금','토'];
 
+// ── 연차 신청 달력 모달 (급여관리 출근표 달력과 동일 스타일) ──
+function LeaveCalendarModal({ plan, onClose }) {
+  const [y, m] = String(plan.target_month || '').split('-').map(Number);
+  const year = y, month = m;
+  const pad = n => String(n).padStart(2, '0');
+  const dateSet = new Set(plan.dates || []);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month - 1, 1).getDay();
+
+  return (
+    <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}} onClick={onClose}>
+      <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}}/>
+      <div style={{position:'relative', background:'#fff', borderRadius:16, padding:'28px', width:'min(880px, 96vw)', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}} onClick={e => e.stopPropagation()}>
+        <div style={{display:'flex', alignItems:'center', marginBottom:20}}>
+          <div>
+            <div style={{fontSize:20, fontWeight:700}}>{plan.manager_name} 연차 신청</div>
+            <div style={{fontSize:13, color:'var(--text2)', marginTop:3}}>
+              {year}년 {month}월 · {plan.store_name} {plan.branch_name} · 총 <b style={{color:'#1565C0'}}>{(plan.dates||[]).length}</b>일 신청
+            </div>
+          </div>
+          <button onClick={onClose} style={{marginLeft:'auto', background:'none', border:'none', fontSize:24, cursor:'pointer', color:'#999', lineHeight:1}}>✕</button>
+        </div>
+
+        <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:6, marginBottom:6}}>
+          {DOW.map((d,i) => (
+            <div key={d} style={{textAlign:'center', fontSize:13, fontWeight:700, padding:'8px 0', background:'#f5f5f5', borderRadius:6,
+              color: i===0?'#c62828':i===6?'#1565C0':'var(--text3)'}}>{d}</div>
+          ))}
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:6}}>
+          {Array.from({length: firstDow}).map((_,i) => <div key={`e${i}`}/>)}
+          {Array.from({length: daysInMonth}).map((_,i) => {
+            const day = i + 1;
+            const dateStr = `${year}-${pad(month)}-${pad(day)}`;
+            const dow = (firstDow + i) % 7;
+            const isSun = dow === 0, isSat = dow === 6;
+            const isLeave = dateSet.has(dateStr);
+            return (
+              <div key={day} style={{borderRadius:8, padding:'8px', minHeight:74,
+                background: isLeave ? '#e3f2fd' : '#fafafa',
+                border: `1px solid ${isLeave ? '#64b5f6' : '#e0e0e0'}`}}>
+                <div style={{fontSize:14, fontWeight:700, marginBottom:4,
+                  color: isSun?'#c62828': isSat?'#1565C0':'var(--text)'}}>{day}</div>
+                {isLeave && (
+                  <div style={{fontSize:11, fontWeight:700, color:'#1565C0', background:'#fff', border:'1px solid #90caf9', borderRadius:4, padding:'2px 4px', textAlign:'center'}}>📅 연차</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {plan.memo && (
+          <div style={{marginTop:16, padding:'10px 14px', background:'#f8f8f8', borderRadius:8, fontSize:12, color:'var(--text2)'}}>
+            📝 메모: {plan.memo}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AttendanceMgmtPage({ profile }) {
   const canEdit = !!profile && (profile.role === 'admin' || profile.job_title === '담당자');
   const [editCell, setEditCell] = useState(null); // { row, ds, attId, clock_in, clock_out }
@@ -119,6 +180,7 @@ export default function AttendanceMgmtPage({ profile }) {
   const [hLoading,    setHLoading]    = useState(false);
 
   const [closures, setClosures] = useState([]); // 휴점일 데이터
+  const [leaveCalTarget, setLeaveCalTarget] = useState(null); // 연차 달력 모달 대상 plan
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -735,7 +797,13 @@ export default function AttendanceMgmtPage({ profile }) {
                         <td><strong>{p.manager_name}</strong></td>
                         <td><span className="badge badge-dept">{p.store_name}</span></td>
                         <td><span className="badge badge-store">{p.branch_name}</span></td>
-                        <td style={{fontSize:11, color:'var(--text2)', maxWidth:200}}><div style={{display:'flex',flexWrap:'wrap',gap:3}}>{(p.dates||[]).map(d=><span key={d} style={{background:'#fff3e0',color:'var(--accent)',border:'1px solid #ffcc80',borderRadius:3,padding:'1px 6px',fontSize:10,fontWeight:600,whiteSpace:'nowrap'}}>{d}</span>)}</div></td>
+                        <td style={{fontSize:11, color:'var(--text2)', maxWidth:220}}>
+                          <button type="button" onClick={() => setLeaveCalTarget(p)}
+                            style={{marginBottom:6, height:26, padding:'0 10px', border:'1px solid #1565C0', borderRadius:4, background:'#e3f2fd', color:'#1565C0', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                            📅 달력보기
+                          </button>
+                          <div style={{display:'flex',flexWrap:'wrap',gap:3}}>{(p.dates||[]).map(d=><span key={d} style={{background:'#fff3e0',color:'var(--accent)',border:'1px solid #ffcc80',borderRadius:3,padding:'1px 6px',fontSize:10,fontWeight:600,whiteSpace:'nowrap'}}>{d}</span>)}</div>
+                        </td>
                         <td style={{textAlign:'center', fontWeight:700, color:'var(--accent)'}}>{(p.dates||[]).length}일</td>
                         <td style={{fontSize:11, color:'var(--text3)'}}>{p.memo||'-'}</td>
                         <td className="mono" style={{fontSize:11}}>{new Date(p.created_at).toLocaleDateString('ko-KR')}</td>
@@ -765,6 +833,10 @@ export default function AttendanceMgmtPage({ profile }) {
             </div>
           )}
         </div>
+      )}
+
+      {leaveCalTarget && (
+        <LeaveCalendarModal plan={leaveCalTarget} onClose={() => setLeaveCalTarget(null)}/>
       )}
     </div>
   );
