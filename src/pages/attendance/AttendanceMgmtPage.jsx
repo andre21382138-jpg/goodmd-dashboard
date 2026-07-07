@@ -183,6 +183,46 @@ export default function AttendanceMgmtPage({ profile }) {
   const [leaveCalTarget, setLeaveCalTarget] = useState(null); // 연차 달력 모달 대상 plan
   const [rejectPlan, setRejectPlan] = useState(null); // 반려 사유 모달 대상 plan
   const [rejectReason, setRejectReason] = useState('');
+  // 근무자 현황 (본사)
+  const [workers, setWorkers] = useState([]);
+  const [loadingW, setLoadingW] = useState(false);
+  const [savingW, setSavingW] = useState(null); // store_members id
+  const [wStore, setWStore] = useState('');
+  const [showResigned, setShowResigned] = useState(false);
+  const JOB_TITLES = ['매니저', '부매니저', '판매사원'];
+
+  const fetchWorkers = useCallback(async () => {
+    setLoadingW(true);
+    const { data } = await supabase.from('store_members')
+      .select('id, name, display_name, job_title, phone, hire_date, resigned_at, store_account_id, store:profiles!store_account_id(department, branch)')
+      .order('store_account_id');
+    setWorkers(data || []);
+    setLoadingW(false);
+  }, []);
+
+  const changeJob = async (m, job) => {
+    if (job === m.job_title) return;
+    setSavingW(m.id);
+    const { error } = await supabase.from('store_members').update({ job_title: job }).eq('id', m.id);
+    setSavingW(null);
+    if (error) { toast(error.message, 'err'); return; }
+    toast(`${m.display_name || m.name} 직책 → ${job}`, 'ok');
+    setWorkers(prev => prev.map(x => x.id === m.id ? { ...x, job_title: job } : x));
+  };
+
+  const toggleResign = async (m) => {
+    const resigning = !m.resigned_at;
+    if (!window.confirm(resigning
+      ? `${m.display_name || m.name} 님을 퇴사 처리하시겠습니까?\n출퇴근현황·급여·연차 등 활성 목록에서 제외됩니다.`
+      : `${m.display_name || m.name} 님을 복귀(재직) 처리하시겠습니까?`)) return;
+    setSavingW(m.id);
+    const val = resigning ? new Date().toISOString() : null;
+    const { error } = await supabase.from('store_members').update({ resigned_at: val }).eq('id', m.id);
+    setSavingW(null);
+    if (error) { toast(error.message, 'err'); return; }
+    toast(resigning ? '퇴사 처리 완료' : '복귀 처리 완료', 'ok');
+    setWorkers(prev => prev.map(x => x.id === m.id ? { ...x, resigned_at: val } : x));
+  };
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -194,6 +234,7 @@ export default function AttendanceMgmtPage({ profile }) {
         .order('created_at', { ascending: false }),
       supabase.from('store_members')
         .select('id, name, display_name, job_title, store_account_id, store:profiles!store_account_id(department, branch)')
+        .is('resigned_at', null)
         .order('id', { ascending: true }),
       supabase.from('store_closures').select('store_name, branch_name, dates'),
     ]);
@@ -395,6 +436,8 @@ export default function AttendanceMgmtPage({ profile }) {
     fetchHistory();
   }, [tab, fetchHistory]);
 
+  useEffect(() => { if (tab === 'workers') fetchWorkers(); }, [tab, fetchWorkers]);
+
   // 기간 내 모든 날짜 × attendance 매핑 (미체크 표시 포함)
   const hDisplayRows = useMemo(() => {
     if (!hMember || !hFrom || !hTo) return [];
@@ -594,6 +637,7 @@ export default function AttendanceMgmtPage({ profile }) {
       <div className="tabs">
         <button className={`tab ${tab==='attendance'?'on':''}`} onClick={() => setTab('attendance')}>출퇴근 현황</button>
         <button className={`tab ${tab==='history'?'on':''}`} onClick={() => setTab('history')}>근무자별 이력</button>
+        <button className={`tab ${tab==='workers'?'on':''}`} onClick={() => setTab('workers')}>근무자현황</button>
         <button className={`tab ${tab==='leave'?'on':''}`} onClick={() => setTab('leave')}>
           연차계획
           {newPlanCount > 0 && (
@@ -852,6 +896,85 @@ export default function AttendanceMgmtPage({ profile }) {
           )}
         </div>
       )}
+
+      {tab === 'workers' && (() => {
+        const wStores = [...new Set(workers.map(m => m.store?.department).filter(Boolean))].sort();
+        const rank = t => t === '매니저' ? 0 : t === '부매니저' ? 1 : 2;
+        const rows = workers
+          .filter(m => showResigned || !m.resigned_at)
+          .filter(m => !wStore || m.store?.department === wStore)
+          .sort((a, b) => {
+            const sa = a.store?.department || '', sb = b.store?.department || '';
+            if (sa !== sb) return sa.localeCompare(sb);
+            const ba = a.store?.branch || '', bb = b.store?.branch || '';
+            if (ba !== bb) return ba.localeCompare(bb);
+            return rank(a.job_title) - rank(b.job_title);
+          });
+        const activeCount = workers.filter(m => !m.resigned_at).length;
+        return (
+          <div className="card" style={{padding:'16px 20px'}}>
+            <div className="fbar" style={{flexWrap:'wrap'}}>
+              <select className="fsel" value={wStore} onChange={e => setWStore(e.target.value)}>
+                <option value="">전체 점포</option>{wStores.map(s => <option key={s}>{s}</option>)}
+              </select>
+              <label style={{display:'flex', alignItems:'center', gap:6, fontSize:12, color:'var(--text2)', cursor:'pointer'}}>
+                <input type="checkbox" checked={showResigned} onChange={e => setShowResigned(e.target.checked)}/>
+                퇴사자 포함
+              </label>
+              <div className="fbar-right" style={{display:'flex', alignItems:'center', gap:14}}>
+                <span className="fresult">재직 <b>{activeCount}</b>명 · 표시 <b>{rows.length}</b>명</span>
+              </div>
+            </div>
+            {loadingW ? <div className="empty"><span className="spinner"/></div>
+            : rows.length === 0 ? <div className="empty">근무자가 없습니다</div>
+            : (
+              <div className="twrap">
+                <table>
+                  <thead>
+                    <tr><th>점포</th><th>지점</th><th>이름</th><th>직책</th><th>연락처</th><th>입사일</th><th style={{textAlign:'center'}}>상태</th>{canEdit && <th style={{textAlign:'center'}}>관리</th>}</tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(m => (
+                      <tr key={m.id} style={m.resigned_at ? {background:'#fafafa', opacity:0.7} : {}}>
+                        <td><span className="badge badge-dept">{m.store?.department || '-'}</span></td>
+                        <td><span className="badge badge-store">{m.store?.branch || '-'}</span></td>
+                        <td style={{fontWeight:600}}>{m.display_name || m.name}</td>
+                        <td>
+                          {canEdit && !m.resigned_at ? (
+                            <select value={m.job_title || ''} disabled={savingW === m.id}
+                              onChange={e => changeJob(m, e.target.value)}
+                              style={{height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:12, fontWeight:600, background:'#fff'}}>
+                              {!JOB_TITLES.includes(m.job_title) && m.job_title && <option value={m.job_title}>{m.job_title}</option>}
+                              {JOB_TITLES.map(j => <option key={j} value={j}>{j}</option>)}
+                            </select>
+                          ) : (
+                            <span style={{fontSize:12, fontWeight:600, color: m.job_title==='매니저'?'var(--accent)':'var(--text2)'}}>{m.job_title || '-'}</span>
+                          )}
+                        </td>
+                        <td className="mono" style={{fontSize:12}}>{m.phone || '-'}</td>
+                        <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{m.hire_date || '-'}</td>
+                        <td style={{textAlign:'center'}}>
+                          {m.resigned_at
+                            ? <span style={{fontSize:11, fontWeight:700, color:'var(--danger)', background:'#ffebee', border:'1px solid #f48fb1', borderRadius:4, padding:'2px 8px'}}>퇴사 {String(m.resigned_at).slice(0,10)}</span>
+                            : <span style={{fontSize:11, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', borderRadius:4, padding:'2px 8px'}}>재직</span>}
+                        </td>
+                        {canEdit && (
+                          <td style={{textAlign:'center'}}>
+                            <button type="button" onClick={() => toggleResign(m)} disabled={savingW === m.id}
+                              style={{height:28, padding:'0 10px', border:`1px solid ${m.resigned_at ? '#2e7d32' : 'var(--danger)'}`, borderRadius:4, background:'#fff', color: m.resigned_at ? '#2e7d32' : 'var(--danger)', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                              {savingW === m.id ? '처리중' : m.resigned_at ? '복귀' : '퇴사처리'}
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {leaveCalTarget && (
         <LeaveCalendarModal plan={leaveCalTarget} onClose={() => setLeaveCalTarget(null)}/>

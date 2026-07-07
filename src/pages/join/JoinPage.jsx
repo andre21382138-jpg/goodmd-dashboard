@@ -25,7 +25,7 @@ export default function JoinPage({ managerId }) {
         setStoreProfile(data);
         if (data) {
           supabase.from('store_members').select('name,display_name,job_title')
-            .eq('store_account_id', data.id).order('is_primary', { ascending: false })
+            .eq('store_account_id', data.id).is('resigned_at', null).order('is_primary', { ascending: false })
             .then(({ data: mems }) => {
               setMembers(mems || []);
               if (presetMemberName) {

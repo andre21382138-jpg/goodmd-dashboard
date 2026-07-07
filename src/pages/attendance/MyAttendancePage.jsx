@@ -13,7 +13,7 @@ export default function MyAttendancePage({ profile }) {
 
   useEffect(() => {
     supabase.from('store_members').select('name, display_name, job_title')
-      .eq('store_account_id', profile.id).order('is_primary', { ascending: false })
+      .eq('store_account_id', profile.id).is('resigned_at', null).order('is_primary', { ascending: false })
       .then(({ data }) => { setMembers(data || []); if (data?.length === 1) setSelMember(data[0]); });
   }, [profile.id]);
 

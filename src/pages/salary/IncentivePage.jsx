@@ -447,6 +447,7 @@ function SalaryConditionTab({ profile }) {
     setLoading(true);
     const { data } = await supabase.from('store_members')
       .select('*, store:profiles!store_account_id(department, branch)')
+      .is('resigned_at', null)
       .order('store_account_id');
     setMembers(data || []);
     setLoading(false);
@@ -688,7 +689,8 @@ function SalaryCalcTab() {
     const to = `${selYear}-${String(selMonth).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
 
     const { data: members } = await supabase.from('store_members')
-      .select('*, store:profiles!store_account_id(department, branch)');
+      .select('*, store:profiles!store_account_id(department, branch)')
+      .is('resigned_at', null);
     const { data: att } = await supabase.from('attendance')
       .select('manager_name, work_date').gte('work_date', from).lte('work_date', to);
 
