@@ -79,6 +79,21 @@ export default function CustomerLookupPage({ profile }) {
   const [bulkTargets,   setBulkTargets]   = useState(null); // 전체 발송 시 override
   const [loadingBulk,   setLoadingBulk]   = useState(false);
   const [testPhone,     setTestPhone]     = useState('');
+  // 동의 이력 모달
+  const [logModal,      setLogModal]      = useState(false);
+  const [consentLogs,   setConsentLogs]   = useState([]);
+  const [loadingLogs,   setLoadingLogs]   = useState(false);
+
+  const fetchConsentLogs = async (c) => {
+    setLogModal(true); setConsentLogs([]); setLoadingLogs(true);
+    const digits = String(c.phone || '').replace(/\D/g, '');
+    const { data } = await supabase.from('consent_logs')
+      .select('*')
+      .or(`customer_id.eq.${c.id},phone.eq.${digits},phone.eq.${c.phone}`)
+      .order('created_at', { ascending: false });
+    setConsentLogs(data || []);
+    setLoadingLogs(false);
+  };
   const [sendingTest,   setSendingTest]   = useState(false);
   const [preview,       setPreview]       = useState(false);
   const [sendResult,    setSendResult]    = useState(null);
@@ -1191,6 +1206,11 @@ export default function CustomerLookupPage({ profile }) {
                           color: selected.sms_consent ? '#c62828' : '#2e7d32'}}>
                         {selected.sms_consent ? '거부 처리' : '동의 처리'}
                       </button>
+                      <button type="button" onClick={() => fetchConsentLogs(selected)}
+                        style={{marginLeft:8, height:30, padding:'0 14px', borderRadius:4, fontSize:12, fontWeight:700, cursor:'pointer',
+                          border:'1px solid var(--border)', background:'#fff', color:'var(--text2)'}}>
+                        📋 동의 이력
+                      </button>
                     </>
                   );
                 })()}
@@ -1254,6 +1274,55 @@ export default function CustomerLookupPage({ profile }) {
         <div className="empty">
           조건을 설정하고 <strong>조회</strong> 버튼을 눌러주세요<br/>
           <span style={{fontSize:11,color:'var(--text3)'}}>이름·연락처 검색, 점포·지점·날짜 필터 사용 가능 · 조건 없이 조회하면 전체 회원 표시</span>
+        </div>
+      )}
+
+      {/* 동의 이력 모달 (증빙) */}
+      {logModal && (
+        <div style={{position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setLogModal(false)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:720, maxWidth:'94vw', maxHeight:'85vh', overflow:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+            <div style={{display:'flex', alignItems:'center', marginBottom:6}}>
+              <div style={{fontSize:16, fontWeight:700}}>📋 마케팅 수신동의 이력 (증빙)</div>
+              <button onClick={() => setLogModal(false)} style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+            </div>
+            <div style={{fontSize:12, color:'var(--text3)', marginBottom:14}}>
+              {selected?.name} · {selected?.phone} — 동의 시각·경로·문구·기기가 기록됩니다.
+            </div>
+            {loadingLogs ? <div className="empty"><span className="spinner"/></div>
+            : consentLogs.length === 0 ? (
+              <div className="empty">기록된 동의 이력이 없습니다<br/>
+                <span style={{fontSize:11, color:'var(--text3)'}}>(로그 도입 이전 동의 건은 customers의 동의일·IP로 확인)</span>
+              </div>
+            ) : (
+              <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                {consentLogs.map(l => {
+                  const kind = l.action === 'signup' ? '신규가입' : l.action === 'renew' ? '재동의' : l.action === 'manual' ? '대면처리' : (l.action||'-');
+                  const ch = l.channel === 'qr' ? 'QR(본인폰)' : l.channel === 'store' ? '매장' : (l.channel||'-');
+                  return (
+                    <div key={l.id} style={{border:'1px solid var(--border)', borderRadius:8, padding:'12px 14px', background:'#fafafa'}}>
+                      <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:8}}>
+                        <span style={{fontFamily:'var(--mono)', fontWeight:700, fontSize:13}}>
+                          {new Date(l.created_at).toLocaleString('ko-KR')}
+                        </span>
+                        <span style={{background:'#e8f5e9', color:'#2e7d32', border:'1px solid #a5d6a7', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700}}>{kind}</span>
+                        <span style={{background:'#e3f2fd', color:'#1565C0', border:'1px solid #90caf9', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700}}>{ch}</span>
+                      </div>
+                      {l.consent_text && (
+                        <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6, background:'#fff', border:'1px solid var(--border)', borderRadius:6, padding:'8px 10px', marginBottom:8}}>
+                          {l.consent_text}
+                        </div>
+                      )}
+                      <div style={{fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', wordBreak:'break-all'}}>
+                        전화: {l.phone || '-'} · IP: {l.ip || '-'}
+                        {l.user_agent && <div style={{marginTop:3}}>기기: {l.user_agent}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
