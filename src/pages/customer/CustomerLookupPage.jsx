@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge, formatPhone } from '../../lib/utils';
+import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 function byteLen(str) {
   let len = 0;
@@ -57,6 +58,8 @@ export default function CustomerLookupPage({ profile }) {
   const [editInfo,   setEditInfo]  = useState(false);
   const [eName,      setEName]     = useState('');
   const [ePhone,     setEPhone]    = useState('');
+  const [eStore,     setEStore]    = useState('');
+  const [eBranch,    setEBranch]   = useState('');
   const [savingInfo, setSavingInfo]= useState(false);
   const [purchases,  setPurchases] = useState([]);
   const [loading,    setLoading]   = useState(false);
@@ -231,18 +234,23 @@ export default function CustomerLookupPage({ profile }) {
   const handleSelect = (c) => { setSelected(c); setEditInfo(false); fetchPurchases(c.id); };
 
   // 회원 이름·휴대폰 수정
-  const openEditInfo = () => { setEName(selected?.name || ''); setEPhone(selected?.phone || ''); setEditInfo(true); };
+  const openEditInfo = () => {
+    setEName(selected?.name || ''); setEPhone(selected?.phone || '');
+    setEStore(selected?.store_name || ''); setEBranch(selected?.branch_name || '');
+    setEditInfo(true);
+  };
   const saveInfo = async () => {
     const name = eName.trim();
     const phone = formatPhone(ePhone);
     if (!name) { toast('이름을 입력해주세요', 'err'); return; }
     if (phone.replace(/\D/g, '').length < 10) { toast('휴대폰 번호를 정확히 입력해주세요', 'err'); return; }
     setSavingInfo(true);
-    const { error } = await supabase.from('customers').update({ name, phone }).eq('id', selected.id);
+    const upd = { name, phone, store_name: eStore || null, branch_name: eBranch || null };
+    const { error } = await supabase.from('customers').update(upd).eq('id', selected.id);
     if (error) { toast(error.message, 'err'); setSavingInfo(false); return; }
     toast('회원 정보 수정 완료', 'ok');
-    setSelected({ ...selected, name, phone });
-    setCustomers(prev => prev.map(c => c.id === selected.id ? { ...c, name, phone } : c));
+    setSelected({ ...selected, ...upd });
+    setCustomers(prev => prev.map(c => c.id === selected.id ? { ...c, ...upd } : c));
     setEditInfo(false);
     setSavingInfo(false);
   };
@@ -428,6 +436,10 @@ export default function CustomerLookupPage({ profile }) {
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + effQty(r), 0), [purchases]); // eslint-disable-line no-unused-vars
   // 구매건수 = 같은 날짜는 1건(방문 기준). 한 방문에 여러 상품을 사도 1건.
   const visitCount = useMemo(() => new Set(purchases.map(p => p.sold_at)).size, [purchases]);
+  // 정보수정 점포·지점 옵션 (현재값이 목록에 없어도 유지되도록 포함)
+  const eStoreOpts  = (!eStore || STORE_NAMES.includes(eStore)) ? STORE_NAMES : [eStore, ...STORE_NAMES];
+  const eBranchBase = STORE_MAP[eStore] || [];
+  const eBranchOpts = (!eBranch || eBranchBase.includes(eBranch)) ? eBranchBase : [eBranch, ...eBranchBase];
 
   const msgBytes = byteLen(smsMsg);
 
@@ -1122,6 +1134,16 @@ export default function CustomerLookupPage({ profile }) {
                     style={{height:34, width:130, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, outline:'none'}}/>
                   <input value={ePhone} onChange={e => setEPhone(formatPhone(e.target.value))} placeholder="휴대폰번호" inputMode="numeric"
                     style={{height:34, width:150, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:13, fontFamily:'var(--mono)', outline:'none'}}/>
+                  <select value={eStore} onChange={e => { setEStore(e.target.value); setEBranch(''); }}
+                    style={{height:34, padding:'0 8px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:13, background:'#fff', outline:'none'}}>
+                    <option value="">점포</option>
+                    {eStoreOpts.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <select value={eBranch} onChange={e => setEBranch(e.target.value)} disabled={!eStore}
+                    style={{height:34, padding:'0 8px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:13, background:eStore?'#fff':'#f5f5f5', outline:'none'}}>
+                    <option value="">{eStore ? '지점' : '점포먼저'}</option>
+                    {eBranchOpts.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
                   <button onClick={saveInfo} disabled={savingInfo} className="btn btn-p" style={{height:34, padding:'0 14px', fontSize:13}}>
                     {savingInfo ? <span className="spinner"/> : '저장'}
                   </button>
