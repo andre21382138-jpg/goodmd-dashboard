@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
@@ -24,6 +24,8 @@ export default function SalesSettlementPage() {
   const [prevTo,   setPrevTo]   = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [sortKey, setSortKey] = useState('net');   // 정렬 기준 컬럼 (기본: 실제매출)
+  const [sortDir, setSortDir] = useState('desc');  // 'desc' 높은순 / 'asc' 낮은순
 
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
@@ -115,6 +117,21 @@ export default function SalesSettlementPage() {
   }), { qty:0, gross:0, discount:0, net:0, cost:0, profit:0, pQty:0, pGross:0, pDiscount:0, pNet:0 });
   const totalCostPct = totals.net !== 0 ? (totals.cost / totals.net) * 100 : 0;
   const totalDiff = totals.net - totals.pNet;
+
+  // 컬럼 클릭 정렬: 같은 컬럼 재클릭 시 방향 토글, 다른 컬럼 클릭 시 높은순부터
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+  const sortedRows = useMemo(() => {
+    const arr = [...rows];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      const av = Number(a[sortKey]) || 0, bv = Number(b[sortKey]) || 0;
+      return (av - bv) * dir;
+    });
+    return arr;
+  }, [rows, sortKey, sortDir]);
 
   const won = (n) => Math.round(n || 0).toLocaleString();
   const diffCell = (v) => {
@@ -208,6 +225,17 @@ export default function SalesSettlementPage() {
 
   const grp = { borderLeft: '2px solid var(--border2)' }; // 그룹 구분 세로선
   const th = (label, extra) => <th className="r" style={{ whiteSpace:'nowrap', ...extra }}>{label}</th>;
+  // 클릭 정렬 헤더: 활성 컬럼은 ▼(높은순)/▲(낮은순), 비활성은 ⇅
+  const sortTh = (label, key, extra) => {
+    const active = sortKey === key;
+    return (
+      <th className="r" onClick={() => handleSort(key)} title="클릭하여 정렬"
+        style={{ whiteSpace:'nowrap', cursor:'pointer', userSelect:'none',
+                 color: active ? 'var(--accent)' : undefined, ...extra }}>
+        {label}<span style={{ marginLeft:2, fontSize:10, opacity: active ? 1 : 0.4 }}>{active ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}</span>
+      </th>
+    );
+  };
 
   return (
     <div>
@@ -269,13 +297,13 @@ export default function SalesSettlementPage() {
                 </tr>
                 <tr>
                   <th>상품코드</th><th>상품명</th>
-                  {th('원가', grp)}{th('판매가')}{th('판매수량')}{th('매출액')}{th('할인금액')}{th('실제매출')}{th('이익')}{th('원가비중')}
+                  {th('원가', grp)}{th('판매가')}{sortTh('판매수량','qty')}{sortTh('매출액','gross')}{th('할인금액')}{sortTh('실제매출','net')}{sortTh('이익','profit')}{sortTh('원가비중','costPct')}
                   {th('판매수량', grp)}{th('판매금액')}{th('할인금액')}{th('실제매출')}
                   {th('실제매출', grp)}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {sortedRows.map((r, i) => (
                   <tr key={i}>
                     <td className="mono" style={{ fontSize:11, color:'var(--text3)' }}>{r.code || '-'}</td>
                     <td style={{ fontSize:12, fontWeight:600 }}>{r.name}</td>
