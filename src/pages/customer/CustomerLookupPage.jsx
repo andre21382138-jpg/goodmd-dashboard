@@ -426,6 +426,8 @@ export default function CustomerLookupPage({ profile }) {
   const effQty = (r) => Math.max(0, (r.quantity||0) - (r.returned_qty||0));
   const totalAmt = useMemo(() => purchases.reduce((s,r) => s + r.price * effQty(r), 0), [purchases]);
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + effQty(r), 0), [purchases]); // eslint-disable-line no-unused-vars
+  // 구매건수 = 같은 날짜는 1건(방문 기준). 한 방문에 여러 상품을 사도 1건.
+  const visitCount = useMemo(() => new Set(purchases.map(p => p.sold_at)).size, [purchases]);
 
   const msgBytes = byteLen(smsMsg);
 
@@ -1167,7 +1169,7 @@ export default function CustomerLookupPage({ profile }) {
                   {label:'누적구매',   value: (selected.total_purchase||0).toLocaleString()+'원'},
                   {label:'남은적립금', value: (selected.total_points||0).toLocaleString()+'원', color:'var(--success)'},
                   {label:'사용적립금', value: (selected.used_points||0).toLocaleString()+'원'},
-                  {label:'구매건수',   value: (selected.purchase_count||purchases.length)+'건'},
+                  {label:'구매건수',   value: (selected.purchase_count||visitCount)+'건'},
                   {label:'구매수량',   value: (selected.purchase_qty||purchases.reduce((s,p)=>s+p.quantity,0))+'개'},
                 ].map(s => (
                   <div key={s.label} style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'7px 14px', textAlign:'center', minWidth:90}}>
@@ -1263,7 +1265,7 @@ export default function CustomerLookupPage({ profile }) {
                 </div>
               )}
               <div style={{marginTop:12, fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)'}}>
-                총 {purchases.length}건 · {totalAmt.toLocaleString()}원
+                총 {visitCount}건 · 상품 {purchases.length}개 · {totalAmt.toLocaleString()}원
               </div>
             </div>
           </div>
