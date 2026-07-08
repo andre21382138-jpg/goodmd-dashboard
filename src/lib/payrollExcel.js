@@ -6,7 +6,7 @@
 import { supabase } from './supabase';
 import { dlBlob } from './utils';
 
-// 1일을 컬럼 T(20)로 잡고 30일까지 → 컬럼 매핑 헬퍼
+// 1일을 컬럼 U(21)로 잡고 30일까지 → 컬럼 매핑 헬퍼
 const colLetter = (idx) => {
   // 1=A, 26=Z, 27=AA, ...
   let s = '';
@@ -21,8 +21,8 @@ const colLetter = (idx) => {
 
 const DOW_KR = ['일','월','화','수','목','금','토'];
 
-// 그날의 일자 컬럼 인덱스 (1일 → T=20, 2일 → 21, ...)
-const dayCol = (day) => 19 + day;
+// 그날의 일자 컬럼 인덱스 (휴일근무수당금액 열 추가로 1칸 우측 이동: 1일 → U=21, ...)
+const dayCol = (day) => 20 + day;
 
 // 표시 정책: 휴점 × 휴무신청 × 출근 × 휴무일/공휴일
 function calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun, isManager }) {
@@ -178,12 +178,12 @@ export async function downloadPayrollExcel({ year, month }) {
   const widths = {
     A: 6.62, B: 8, C: 8, D: 10.12, E: 6.38, F: 11.12, G: 14.75, H: 9.88,
     I: 7.5, J: 9.38, K: 4.75, L: 6.38, M: 8.43, N: 7.25, O: 8.43,
-    P: 10.5, Q: 8.88, R: 8.43, S: 13.25, AX: 6.12, AY: 21.25,
+    P: 10.5, Q: 8.88, R: 9.5, S: 8.43, T: 13.25, AY: 6.12, AZ: 21.25,
   };
-  const totalCols = 51; // A~AY
+  const totalCols = 52; // A~AZ (Q 우측 '휴일근무수당금액' 열 추가로 +1)
   for (let i = 1; i <= totalCols; i++) {
     const L = colLetter(i);
-    const w = widths[L] || (i >= 20 && i <= 49 ? 6.12 : 8.43);
+    const w = widths[L] || (i >= 21 && i <= 50 ? 6.12 : 8.43);
     ws.getColumn(i).width = w;
   }
 
@@ -238,9 +238,10 @@ export async function downloadPayrollExcel({ year, month }) {
     'O4:O5': '휴일근무일수',
     'P4:P5': '월 급여\n금액',
     'Q4:Q5': '추가수당\n금액',
-    'R4:R5': '인센티브\n금액',
-    'S4:S5': '금액',
-    'AY4:AY5': '비고\n(특이사항)',
+    'R4:R5': '휴일근무\n수당금액',
+    'S4:S5': '인센티브\n금액',
+    'T4:T5': '금액',
+    'AZ4:AZ5': '비고\n(특이사항)',
   };
   for (const [range, val] of Object.entries(headers)) {
     ws.mergeCells(range);
@@ -274,7 +275,8 @@ export async function downloadPayrollExcel({ year, month }) {
   for (const grp of groups) {
     const rowStart = curRow;
     for (const m of grp.members) {
-      const isManager = m.job_title === '매니저';
+      const isManager = m.job_title === '매니저';   // 운영형태 '본매장' 표시용 (직책 기준)
+      const isMonthly = m.salary_type === '월급';   // 급여 계산 구분 (월급 vs 일급) — 추가수당·휴일수당 지급 여부
 
       // 일자별 셀 값 + 통계
       const storeClosureSet = closureMap.get(`${m.store_name}|${m.branch_name}`) || new Set();
@@ -288,7 +290,7 @@ export async function downloadPayrollExcel({ year, month }) {
         const isFriSatSun = dow === 0 || dow === 5 || dow === 6;
         const isHoliday = holidaySet.has(d);
         const isClosed = storeClosureSet.has(dateStr);
-        const val = calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun, isManager });
+        const val = calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun, isManager: isMonthly });
         if (val.startsWith('O')) workDays++;
         if (val === 'O(연장)') extendDays++;
         if (val === 'O(휴근)') holidayDays++;
@@ -307,14 +309,15 @@ export async function downloadPayrollExcel({ year, month }) {
       const offDays = lastDay - workDays - closedDays;
 
       // 급여 계산
-      const isMonthly = m.salary_type === '월급';
+      // 월급여금액(P) = 일급(H) × 근무일수(L, 휴일근무일 포함) / 월급자는 고정 월급
       const baseSalary = isMonthly
         ? (m.salary || 0)
-        : (m.salary || 0) * (workDays - holidayDays);
-      const extraPayAmt = isManager ? '' : ((m.extra_pay || 0) * extendDays);
-      // 휴일근무수당 = 고정 일당 × 휴일근무일수 (일급×1.5 아님)
+        : (m.salary || 0) * workDays;
+      // 추가수당금액(Q) = 추가수당1(I) × 연장근무일수(N)
+      const extraPayAmt = isMonthly ? '' : ((m.extra_pay || 0) * extendDays);
+      // 휴일근무수당금액(R) = 휴일근무수당 단가(J, 고정) × 휴일근무일수(O)  (일급×1.5 아님)
       const holidayUnitPay = holidayUnitPayFor(grp.dept, grp.branch);
-      const holidayPayAmt = isManager ? '' : (holidayUnitPay * holidayDays);
+      const holidayPayAmt = isMonthly ? '' : (holidayUnitPay * holidayDays);
       const incentive = incentiveMap[m.name] || 0;
       const total = baseSalary
         + (typeof extraPayAmt === 'number' ? extraPayAmt : 0)
@@ -331,29 +334,30 @@ export async function downloadPayrollExcel({ year, month }) {
         6: m.hire_date || '',                                 // F 입사일
         7: '',                                                // G 근무시간
         8: m.salary || 0,                                     // H 월급/일급
-        9: isManager ? '' : (m.extra_pay || 0),               // I 추가수당1
-        10: isManager ? '' : holidayUnitPay,                  // J 휴일근무수당 단가(고정)
+        9: isMonthly ? '' : (m.extra_pay || 0),               // I 추가수당1
+        10: isMonthly ? '' : holidayUnitPay,                  // J 휴일근무수당 단가(고정)
         11: m.affiliation || '',                              // K 소속
-        12: workDays,                                         // L 근무일수
+        12: workDays,                                         // L 근무일수(휴일근무일 포함)
         13: offDays,                                          // M 휴무일수
         14: extendDays,                                       // N 연장근무일수
-        15: isManager ? '' : holidayDays,                     // O 휴일근무일수
-        16: baseSalary,                                       // P 월급여금액
-        17: extraPayAmt,                                      // Q 추가수당 금액
-        18: incentive,                                        // R 인센티브 금액
-        19: total,                                            // S 합계 금액
-        51: '',                                               // AY 비고
+        15: isMonthly ? '' : holidayDays,                     // O 휴일근무일수
+        16: baseSalary,                                       // P 월급여금액 = H×L
+        17: extraPayAmt,                                      // Q 추가수당금액 = I×N
+        18: holidayPayAmt,                                    // R 휴일근무수당금액 = O×J (신규)
+        19: incentive,                                        // S 인센티브 금액
+        20: total,                                            // T 금액 = P+Q+R+인센티브
+        52: '',                                               // AZ 비고
       };
       for (let c = 1; c <= totalCols; c++) {
-        if (c >= 20 && c <= 49) continue; // 일자 영역은 위에서 처리됨
-        if (c === 50) continue; // 빈 컬럼
+        if (c >= 21 && c <= 50) continue; // 일자 영역은 위에서 처리됨
+        if (c === 51) continue; // 빈 컬럼
         const cell = ws.getCell(curRow, c);
         if (colValues[c] !== undefined && colValues[c] !== null) cell.value = colValues[c];
         cell.font = font10;
         cell.alignment = centerWrap;
         cell.border = allBorder;
         // 금액 컬럼 천단위 구분
-        if ([8, 9, 10, 16, 17, 18, 19].includes(c) && typeof cell.value === 'number') {
+        if ([8, 9, 10, 16, 17, 18, 19, 20].includes(c) && typeof cell.value === 'number') {
           cell.numFmt = '#,##0';
         }
       }
