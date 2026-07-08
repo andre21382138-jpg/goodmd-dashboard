@@ -54,7 +54,9 @@ export default function JoinPage({ managerId }) {
       } catch (_) {}
     }
 
-    const { data: cust, error } = await supabase.from('customers').insert({
+    // 공개 페이지(anon)는 customers SELECT 권한이 없어 RETURNING(.select)이 RLS에 막힌다.
+    // 되읽기 없이 insert만 수행하고, 증빙로그는 phone으로 연결한다.
+    const { error } = await supabase.from('customers').insert({
       joined_at: new Date().toISOString().slice(0,10),
       name: name.trim(), phone, birthday: birthday || null, gender: gender || null,
       store_name: storeProfile.department, branch_name: storeProfile.branch,
@@ -62,14 +64,14 @@ export default function JoinPage({ managerId }) {
       sms_consent: smsConsent,
       sms_consent_at: smsConsent ? new Date().toISOString() : null,
       consent_ip: consentIp, consent_ua: consentUa,
-    }).select('id').single();
+    });
     if (error) { alert('오류가 발생했습니다. 다시 시도해주세요.'); setSaving(false); return; }
 
-    // 마케팅 동의 시 증빙 로그 기록 (실패해도 가입은 성공 처리)
-    if (smsConsent && cust?.id) {
+    // 마케팅 동의 시 증빙 로그 기록 (customer_id 없이 phone으로 연결, 실패해도 가입은 성공 처리)
+    if (smsConsent) {
       try {
         await supabase.from('consent_logs').insert({
-          customer_id: cust.id, phone, consent_type: 'marketing',
+          customer_id: null, phone, consent_type: 'marketing',
           action: 'signup', channel: 'qr',
           consent_text: '(주)한국생활건강으로부터 회원 전용 혜택, 할인·이벤트·프로모션·신상품 안내 등 유용한 정보를 문자메시지(SMS/MMS), 카카오톡 등을 통해 수신하는 것에 동의합니다.',
           ip: consentIp, user_agent: consentUa,
