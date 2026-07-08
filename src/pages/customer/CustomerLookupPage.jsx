@@ -1110,9 +1110,8 @@ export default function CustomerLookupPage({ profile }) {
 
       {/* 회원 상세 팝업 모달 */}
       {selected && (
-        <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}
-          onClick={() => setSelected(null)}>
-          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}}/>
+        <div style={{position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.45)'}}
+          onMouseDown={e => { if (e.target === e.currentTarget) setSelected(null); }}>
           <div style={{position:'relative', background:'#fff', borderRadius:16, width:'min(900px,95vw)', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.2)'}}
             onClick={e => e.stopPropagation()}>
             {/* 모달 헤더 */}
