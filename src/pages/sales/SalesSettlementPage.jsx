@@ -15,8 +15,9 @@ export default function SalesSettlementPage() {
 
   const [fFrom, setFFrom] = useState(monthStart);
   const [fTo,   setFTo]   = useState(todayStr);
-  const [fStore, setFStore] = useState(''); // '' = 전체 점포
-  const [fBranch, setFBranch] = useState(''); // '' = 전체 지점
+  const [fStores, setFStores] = useState([]); // 빈 배열 = 전체 점포 (다중 선택)
+  const [fBranch, setFBranch] = useState(''); // '' = 전체 지점 (단일 점포 선택 시에만)
+  const [storeMenu, setStoreMenu] = useState(false); // 점포 다중선택 드롭다운
   const [cmpFrom, setCmpFrom] = useState(''); // 비교기간 시작 (비우면 자동 전월동기)
   const [cmpTo,   setCmpTo]   = useState(''); // 비교기간 종료 (비우면 자동 전월동기)
   const [rows, setRows] = useState([]);
@@ -46,8 +47,9 @@ export default function SalesSettlementPage() {
         .select('product_id, quantity, price, payment, product:products(code, name, price, cost)')
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
-      if (fStore) q = q.eq('store_name', fStore);
-      if (fBranch) q = q.eq('branch_name', fBranch);
+      if (fStores.length === 1) q = q.eq('store_name', fStores[0]);
+      else if (fStores.length > 1) q = q.in('store_name', fStores);
+      if (fStores.length === 1 && fBranch) q = q.eq('branch_name', fBranch);
       const { data, error } = await q;
       if (error) throw error;
       if (!data || data.length === 0) break;
@@ -108,7 +110,7 @@ export default function SalesSettlementPage() {
       toast('조회 실패: ' + (err.message || err), 'err');
     }
     setLoading(false);
-  }, [fFrom, fTo, fStore, fBranch, cmpFrom, cmpTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fFrom, fTo, fStores, fBranch, cmpFrom, cmpTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totals = rows.reduce((t, r) => ({
     qty: t.qty + r.qty, gross: t.gross + r.gross, discount: t.discount + r.discount,
@@ -154,7 +156,7 @@ export default function SalesSettlementPage() {
     ws.addRow([]);                                          // 2
     ws.addRow([`조회기간-시작  = ${ymd(fFrom)}`]);           // 3
     ws.addRow([`조회기간-종료  = ${ymd(fTo)}`]);             // 4
-    ws.addRow([`그룹 =  ${fStore || '전체'}`]);              // 5 점포
+    ws.addRow([`그룹 =  ${fStores.length ? fStores.join(', ') : '전체'}`]);              // 5 점포
     ws.addRow([`매장 =  ${fBranch || '전체'}`]);             // 6 지점
     ws.addRow([]);                                          // 7
     ws.addRow([]);                                          // 8
@@ -218,10 +220,17 @@ export default function SalesSettlementPage() {
     }
 
     const buf = await wb.xlsx.writeBuffer();
-    const scope = fBranch || fStore || '전체';
+    const scope = fBranch || (fStores.length === 1 ? fStores[0] : fStores.length ? `${fStores.length}개점포` : '전체');
     dlBlob(buf, `기간별상품매출현황_${scope}_${fFrom}~${fTo}.xlsx`);
     toast(`${rows.length}개 상품 다운로드`, 'ok');
   };
+
+  const toggleStore = (s) => {
+    setFStores(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+    setFBranch(''); // 점포 구성이 바뀌면 지점 초기화 (지점은 단일 점포 선택 시에만 유효)
+  };
+  const storeBtnLabel   = fStores.length === 0 ? '전체 점포' : fStores.length === 1 ? fStores[0] : `${fStores.length}개 점포`;
+  const storeScopeLabel = fStores.length === 0 ? '전체 점포' : fStores.join(', ');
 
   const grp = { borderLeft: '2px solid var(--border2)' }; // 그룹 구분 세로선
   const th = (label, extra) => <th className="r" style={{ whiteSpace:'nowrap', ...extra }}>{label}</th>;
@@ -245,13 +254,38 @@ export default function SalesSettlementPage() {
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
           <span style={{ fontSize:12, color:'var(--text3)' }}>~</span>
           <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} />
-          <select className="fsel" value={fStore} onChange={e => { setFStore(e.target.value); setFBranch(''); }}>
-            <option value="">전체 점포</option>
-            {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={!fStore}>
-            <option value="">{fStore ? '전체 지점' : '점포 먼저 선택'}</option>
-            {fStore && (STORE_MAP[fStore] || []).map(b => <option key={b} value={b}>{b}</option>)}
+          <div style={{ position:'relative' }}>
+            <button type="button" onClick={() => setStoreMenu(o => !o)} className="fsel"
+              style={{ cursor:'pointer', textAlign:'left', minWidth:130, display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}
+              title="점포 중복 선택 가능">
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{storeBtnLabel}</span>
+              <span style={{ fontSize:9, color:'var(--text3)' }}>▼</span>
+            </button>
+            {storeMenu && (
+              <>
+                <div onClick={() => setStoreMenu(false)} style={{ position:'fixed', inset:0, zIndex:40 }}/>
+                <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:41, background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'0 4px 16px rgba(0,0,0,0.14)', padding:6, minWidth:180, maxHeight:300, overflowY:'auto' }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 8px', cursor:'pointer', borderRadius:4, fontSize:13, fontWeight:700 }}
+                    onMouseEnter={e => e.currentTarget.style.background='#f5f5f5'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                    <input type="checkbox" checked={fStores.length === 0} onChange={() => { setFStores([]); setFBranch(''); }} />
+                    전체 점포
+                  </label>
+                  <div style={{ height:1, background:'var(--border)', margin:'4px 0' }}/>
+                  {STORE_NAMES.map(s => (
+                    <label key={s} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 8px', cursor:'pointer', borderRadius:4, fontSize:13 }}
+                      onMouseEnter={e => e.currentTarget.style.background='#f5f5f5'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                      <input type="checkbox" checked={fStores.includes(s)} onChange={() => toggleStore(s)} />
+                      {s}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)} disabled={fStores.length !== 1}
+            title={fStores.length === 1 ? '' : '지점은 점포 1개만 선택했을 때 사용'}>
+            <option value="">{fStores.length === 1 ? '전체 지점' : '지점(단일 점포시)'}</option>
+            {fStores.length === 1 && (STORE_MAP[fStores[0]] || []).map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <span style={{ fontSize:12, color:'var(--text3)', marginLeft:6 }}>비교</span>
           <input type="date" className="fsel" value={cmpFrom} onChange={e => setCmpFrom(e.target.value)} title="비교기간 시작 (비우면 전월 동기간 자동)" />
@@ -283,7 +317,7 @@ export default function SalesSettlementPage() {
         : (
           <>
           <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)' }}>
-            <b>{rows.length}</b>개 상품 · {fStore || '전체 점포'} · 조회 <b>{fFrom} ~ {fTo}</b>
+            <b>{rows.length}</b>개 상품 · {storeScopeLabel} · 조회 <b>{fFrom} ~ {fTo}</b>
             <span style={{ marginLeft:10, color:'#6a1b9a' }}>· 비교 <b>{prevFrom} ~ {prevTo}</b> {(cmpFrom && cmpTo) ? '(수동)' : '(전월동기 자동)'}</span>
           </div>
           <div className="twrap">
