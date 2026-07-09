@@ -26,6 +26,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
   const [savingQty,  setSavingQty]    = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [exporting,  setExporting]    = useState(false); // 삭제 처리 중 표시용
+  const [stockMap,   setStockMap]     = useState({}); // 'store|branch|code' → 요청 매장 매장재고
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -47,14 +48,36 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
       else q = q.in('status', completedSet);
     }
     const { data, error } = await q;
-    if (error) toast(error.message, 'err');
-    else setRows(data || []);
+    if (error) { toast(error.message, 'err'); setLoading(false); return; }
+    setRows(data || []);
+    // 요청 상품들의 '요청 매장' 매장재고 조회
+    const codes = uniq((data || []).map(r => r.product?.code).filter(Boolean));
+    if (codes.length) {
+      const { data: stk } = await supabase.from('store_stock')
+        .select('store_name, branch_name, product_code, stock_qty').in('product_code', codes);
+      const m = {};
+      (stk || []).forEach(s => { m[`${s.store_name}|${s.branch_name}|${s.product_code}`] = s.stock_qty; });
+      setStockMap(m);
+    } else setStockMap({});
     setLoading(false);
   }, [fFrom, fTo, fStore, fStatus]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const stores = useMemo(() => uniq(rows.map(r => r.store_name)), [rows]);
+
+  // 요청 매장의 해당 상품 매장재고
+  const stockOf = (r) => {
+    const c = r.product?.code;
+    if (!c) return null;
+    const v = stockMap[`${r.store_name}|${r.branch_name}|${c}`];
+    return v === undefined ? null : Number(v);
+  };
+  const stockCell = (r) => {
+    const v = stockOf(r);
+    if (v === null) return <span style={{ color:'var(--text3)', fontSize:11 }}>-</span>;
+    return <span style={{ fontWeight:700, fontFamily:'var(--mono)', color: v <= 0 ? 'var(--danger)' : 'var(--text2)' }}>{v}</span>;
+  };
 
   // 매장+지점 단위로 그룹화 — 같은 매장 내에서는 요청일시 desc
   const groups = useMemo(() => {
@@ -346,7 +369,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                   <div className="twrap">
                     <table>
                       <thead>
-                        <tr><th>매장</th><th>지점</th><th className="r" style={{width:90}}>수량</th><th style={{width:90, textAlign:'center'}}>상태</th><th style={{width:60, textAlign:'center'}}>삭제</th></tr>
+                        <tr><th>매장</th><th>지점</th><th className="r" style={{width:90}}>수량</th><th className="r" style={{width:80}}>매장재고</th><th style={{width:90, textAlign:'center'}}>상태</th><th style={{width:60, textAlign:'center'}}>삭제</th></tr>
                       </thead>
                       <tbody>
                         {g.items.map(r => (
@@ -354,6 +377,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                             <td><span className="badge badge-dept">{r.store_name}</span></td>
                             <td><span className="badge badge-store">{r.branch_name}</span></td>
                             <td className="r" style={{fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</td>
+                            <td className="r">{stockCell(r)}</td>
                             <td style={{textAlign:'center'}}>
                               {r.status === 'pending'
                                 ? <span className="badge" style={{background:'#fff3e0', color:'#e65100', border:'1px solid #ffcc80', fontSize:11}}>대기</span>
@@ -466,6 +490,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                                   <th>브랜드</th>
                                   <th>상품명</th>
                                   <th className="r" style={{width:70}}>수량</th>
+                                  <th className="r" style={{width:80}}>매장재고</th>
                                   <th>메모</th>
                                   <th style={{width:90, textAlign:'center'}}>상태</th>
                                   <th style={{width:90, textAlign:'center'}}>작업</th>
@@ -513,6 +538,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                                         <span style={{fontWeight:700, color: Number(r.quantity)===0?'var(--danger)':'var(--accent)', fontFamily:'var(--mono)'}}>{r.quantity}</span>
                                       )}
                                     </td>
+                                    <td className="r">{stockCell(r)}</td>
                                     <td style={{fontSize:11, color:'var(--text2)'}}>{r.memo || '-'}</td>
                                     <td style={{textAlign:'center'}}>
                                       {isPending
