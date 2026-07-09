@@ -204,7 +204,7 @@ export default function AttendanceMgmtPage({ profile }) {
     setLoadingW(true);
     const [{ data: w }, { data: accts }] = await Promise.all([
       supabase.from('store_members')
-        .select('id, name, display_name, job_title, affiliation, phone, hire_date, resigned_at, store_account_id, store:profiles!store_account_id(department, branch)')
+        .select('id, name, display_name, job_title, affiliation, phone, hire_date, resigned_at, is_primary, store_account_id, store:profiles!store_account_id(department, branch)')
         .order('store_account_id'),
       supabase.from('profiles').select('id, department, branch').eq('approved', true),
     ]);
@@ -256,9 +256,17 @@ export default function AttendanceMgmtPage({ profile }) {
       phone: ePhone.trim() || null, job_title: eJob, store_account_id: acct.id,
       affiliation: eAffil || null,
     }).eq('id', eWorker.id);
+    if (error) { setSavingW(null); toast(error.message, 'err'); return; }
+    // 대표 매니저(is_primary) 정보수정 시 배송정보(발주/SCM 엑셀용 store_addresses) 수취인 전화번호도 동기화
+    let syncedAddr = false;
+    if (eWorker.is_primary && ePhone.trim()) {
+      const { error: aErr, count } = await supabase.from('store_addresses')
+        .update({ recipient_phone: ePhone.trim(), updated_at: new Date().toISOString() }, { count: 'exact' })
+        .eq('store_name', eStore).eq('branch_name', eBranch);
+      if (!aErr && count) syncedAddr = true;
+    }
     setSavingW(null);
-    if (error) { toast(error.message, 'err'); return; }
-    toast('정보 수정 완료', 'ok');
+    toast(syncedAddr ? '정보 수정 완료 · 발주 배송 전화번호도 반영됨' : '정보 수정 완료', 'ok');
     setEWorker(null);
     fetchWorkers();
   };
