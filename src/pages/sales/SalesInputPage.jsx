@@ -284,16 +284,17 @@ export default function SalesInputPage({ profile }) {
     setPmSearch(''); setPmResults([]); setPmAmount('');
   };
   const searchPointsMember = async () => {
-    const q = pmSearch.trim();
-    if (!/^\d{4}$/.test(q)) {
-      toast('휴대폰 뒷 4자리(숫자)를 입력해주세요', 'err');
+    const digits = pmSearch.replace(/\D/g, '');
+    if (digits.length < 10) {
+      toast('휴대폰 번호를 정확히 입력해주세요 (10~11자리)', 'err');
       return;
     }
     setPmSearching(true);
-    // 휴대폰 뒷 4자리 매칭
+    // 휴대폰 전체번호 매칭 (하이픈 포함 저장분 + 숫자만 저장분 모두 대응)
+    const formatted = formatPhone(digits);
     const { data } = await supabase.from('customers')
       .select('*')
-      .ilike('phone', `%${q}`)
+      .or(`phone.eq.${formatted},phone.eq.${digits}`)
       .limit(50);
     setPmResults(data || []);
     setPmSearching(false);
@@ -969,13 +970,13 @@ export default function SalesInputPage({ profile }) {
 
               {!pmCustomer ? (
                 <>
-                  <div style={{fontSize:12, color:'var(--text2)', marginBottom:10}}>회원 휴대폰 뒷 4자리를 입력하세요</div>
+                  <div style={{fontSize:12, color:'var(--text2)', marginBottom:10}}>회원 휴대폰 번호를 입력하세요 (전체번호)</div>
                   <div style={{display:'flex', gap:8, marginBottom:10}}>
                     <input value={pmSearch}
-                      onChange={e => setPmSearch(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      onChange={e => setPmSearch(formatPhone(e.target.value))}
                       onKeyDown={e => e.key==='Enter' && (e.preventDefault(), searchPointsMember())}
-                      inputMode="numeric" maxLength={4}
-                      style={{...inputStyle, flex:1}} placeholder="휴대폰 뒷 4자리 (예: 5678)" autoFocus/>
+                      inputMode="numeric" maxLength={13}
+                      style={{...inputStyle, flex:1}} placeholder="휴대폰 번호 (예: 010-1234-5678)" autoFocus/>
                     <button type="button" className="btn btn-s" onClick={searchPointsMember} disabled={pmSearching}>
                       {pmSearching ? <span className="spinner"/> : '검색'}
                     </button>
