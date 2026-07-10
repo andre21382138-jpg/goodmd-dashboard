@@ -94,6 +94,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
     while (true) {
       const { data, error } = await supabase.from('sales')
         .select('id, sold_at, store_name, branch_name, price, quantity, payment, brand:brands(name), product:products(name, code, cost)')
+        .neq('payment', '구매이력')
         .not('store_name', 'in', notInList)
         .not('store_name', 'is', null)
         .gte('sold_at', from).lte('sold_at', to)

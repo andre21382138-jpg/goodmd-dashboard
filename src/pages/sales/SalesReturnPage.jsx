@@ -128,6 +128,7 @@ export default function SalesReturnPage({ profile }) {
     setLoading(true);
     let q = supabase.from('sales')
       .select('*, product:products(name,code), brand:brands(name), customer:customers(id,name,phone,total_points,used_points,total_purchase,grade)')
+      .neq('payment', '구매이력')
       .eq('store_name', storeName)
       .eq('branch_name', branchName)
       .order('sold_at', { ascending: false })

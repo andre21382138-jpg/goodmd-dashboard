@@ -72,6 +72,7 @@ export default function HomePage({ profile, setPage }) {
         : 'store_name, branch_name, quantity, price, returned_qty';
       let storeQ = supabase.from('sales')
         .select(selectCols)
+        .neq('payment', '구매이력')
         .gte('sold_at', monthStart).lte('sold_at', rangeEndStr)
         .order('sold_at', { ascending: false });
       if (isManager && profile?.department)
@@ -128,6 +129,7 @@ export default function HomePage({ profile, setPage }) {
           }
           const { data: prev3Data } = await supabase.from('sales')
             .select('sold_at, quantity, price, returned_qty')
+            .neq('payment', '구매이력')
             .eq('store_name', profile.department).eq('branch_name', profile.branch)
             .gte('sold_at', months[0].start).lte('sold_at', months[months.length-1].end);
           const monthAmt = new Map(months.map(m => [m.key, 0]));
@@ -181,6 +183,7 @@ export default function HomePage({ profile, setPage }) {
         // 4. 전월 동일기간 통합 매출
         const [{ data: prevSales }, { data: prevLecture }, { data: prevBiz }] = await Promise.all([
           supabase.from('sales').select('quantity, price, returned_qty')
+            .neq('payment', '구매이력')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
           supabase.from('lecture_sales').select('quantity, price')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),

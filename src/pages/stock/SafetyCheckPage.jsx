@@ -19,6 +19,7 @@ export default function SafetyCheckPage({ profile }) {
 
     const { data: salesData } = await supabase.from('sales')
       .select('store_name, branch_name, brand_id, product_id, quantity, brand:brands(name), product:products(name, is_sales_stopped)')
+      .neq('payment', '구매이력')
       .gte('sold_at', fromDate);
 
     const { data: stockData } = await supabase.from('stock_status')

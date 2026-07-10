@@ -53,6 +53,7 @@ async function fetchMemberIncentive(from, to) {
   if (ids.length > 0) {
     const { data: cs } = await supabase.from('sales')
       .select('customer_id, price, quantity')
+      .neq('payment', '구매이력')
       .in('customer_id', ids).gte('sold_at', from).lte('sold_at', to);
     (cs || []).forEach(s => {
       if (!salesMap[s.customer_id]) salesMap[s.customer_id] = 0;

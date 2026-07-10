@@ -39,6 +39,7 @@ export default function SalesViewHub({ setPage }) {
       while (true) {
         const { data, error } = await supabase.from('sales')
           .select('sold_at, store_name, branch_name, price, quantity, payment')
+          .neq('payment', '구매이력')
           .gte('sold_at', appliedFrom).lte('sold_at', appliedTo)
           .range(start, start + PAGE - 1);
         if (error) throw error;

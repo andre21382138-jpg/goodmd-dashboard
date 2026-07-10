@@ -45,6 +45,7 @@ export default function SalesSettlementPage() {
     while (true) {
       let q = supabase.from('sales')
         .select('product_id, quantity, price, payment, product:products(code, name, price, cost)')
+        .neq('payment', '구매이력')
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
       if (fStores.length === 1) q = q.eq('store_name', fStores[0]);

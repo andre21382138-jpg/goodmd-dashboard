@@ -197,6 +197,7 @@ export default function MgrSalesViewPage({ profile }) {
     setExpandedDate(null);
     const { data, error } = await supabase.from('sales')
       .select('*, brand:brands(name), product:products(name,code), customer:customers(name,phone)')
+      .neq('payment', '구매이력')
       .eq('store_name', storeName)
       .eq('branch_name', branchName)
       .gte('sold_at', fFrom).lte('sold_at', fTo)

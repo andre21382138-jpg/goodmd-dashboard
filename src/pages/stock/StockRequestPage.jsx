@@ -75,6 +75,7 @@ export default function StockRequestPage({ profile }) {
       // 4) 기간 판매량 (product_id 합)
       const { data: salesRows } = await supabase.from('sales')
         .select('product_id, quantity, sold_at')
+        .neq('payment', '구매이력')
         .eq('store_name', store).eq('branch_name', branch)
         .gte('sold_at', from);
       const saMap = new Map();
