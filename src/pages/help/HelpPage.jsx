@@ -23,10 +23,10 @@ export default function HelpPage({ profile }) {
   const isHQ      = profile?.job_title === '담당자';
   const isManager = profile?.job_title === '매니저';
 
-  const [role,       setRole]       = useState(isManager ? 'manager' : 'hq');
-  const [selMenu,    setSelMenu]    = useState(null);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [tourOn,     setTourOn]     = useState(false);
+  const canHQ = isAdmin || isHQ;  // 본사 사용안내 열람 가능 (매장 로그인은 불가)
+  const [cat,     setCat]     = useState(null);  // null | 'hq' | 'store'
+  const [selMenu, setSelMenu] = useState(null);  // 따라하기 실행 중인 메뉴 key
+  const [tourOn,  setTourOn]  = useState(false);
   const contentRef = useRef(null);
 
   const MENUS = {
@@ -56,11 +56,8 @@ export default function HelpPage({ profile }) {
     ],
   };
 
-  const previewProfile = {
-    ...profile,
-    job_title: role==='manager' ? '매니저' : '담당자',
-    role: role==='admin' ? 'admin' : 'user',
-  };
+  // 따라하기 대상은 모두 매장 운영 화면 → 매니저 컨텍스트로 미리보기 렌더
+  const previewProfile = { ...profile, job_title: '매니저', role: 'user' };
 
   const DETAILS = {
     user_mgmt: {
@@ -177,145 +174,101 @@ export default function HelpPage({ profile }) {
     },
   };
 
-  const roles = [];
-  if (isAdmin || isHQ) roles.push({key:'admin', label:'🔐 관리자'});
-  if (isAdmin || isHQ) roles.push({key:'hq',    label:'🏢 본사담당자'});
-  roles.push({key:'manager', label:'👔 매니저'});
-
-  const menuList = MENUS[role] || [];
-  const detail   = selMenu ? DETAILS[selMenu] : null;
+  const GUIDE_MENUS = {
+    hq:    ['sales_input','member_reg','stock_req'],
+    store: ['sales_input','member_reg','stock_req'],
+  };
+  const CATS = [
+    { key:'hq',    icon:'🏢', label:'본사', desc:'본사 담당자용 사용안내' },
+    { key:'store', icon:'🏬', label:'매장', desc:'매장 근무자용 사용안내' },
+  ];
+  const detail = selMenu ? DETAILS[selMenu] : null;
 
   return (
-    <div style={{display:'flex', gap:16, minHeight:500}}>
-      {/* 역할 선택 */}
-      <div style={{width:140, flexShrink:0}}>
-        <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>역할</div>
-        {roles.map(r => (
-          <button key={r.key} onClick={()=>{setRole(r.key);setSelMenu(null);setFullscreen(false);setTourOn(false);}}
-            style={{display:'block', width:'100%', textAlign:'left', padding:'10px 12px', marginBottom:4,
-              border:'none', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: role===r.key?700:500,
-              background: role===r.key?'var(--sidebar)':'#f5f5f5',
-              color: role===r.key?'#1a1a1a':'var(--text2)'}}>
-            {r.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 메뉴 목록 */}
-      <div style={{width:160, flexShrink:0}}>
-        <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>메뉴</div>
-        {menuList.map(m => (
-          <button key={m.key} onClick={()=>{setSelMenu(m.key);setFullscreen(false);setTourOn(false);}}
-            style={{display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left',
-              padding:'10px 12px', marginBottom:4, border:'1px solid',
-              borderColor: selMenu===m.key?'var(--accent)':'transparent',
-              borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: selMenu===m.key?700:400,
-              background: selMenu===m.key?'#fff3e0':'#fff',
-              color: selMenu===m.key?'var(--accent)':'var(--text)'}}>
-            <span>{m.icon}</span>{m.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 상세 설명 */}
-      <div style={{flex:1}}>
-        {!detail ? (
-          <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-            height:'100%', color:'var(--text3)', gap:12}}>
-            <span style={{fontSize:48}}>📖</span>
-            <div style={{fontSize:14, fontWeight:600}}>왼쪽에서 메뉴를 선택하세요</div>
-            <div style={{fontSize:12}}>각 메뉴의 설명과 사용방법을 확인할 수 있습니다</div>
+    <div style={{minHeight:520}}>
+      {/* 1) 본사 / 매장 선택 */}
+      {!cat && (
+        <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:480, gap:28}}>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:22, fontWeight:800, color:'var(--text)'}}>📖 사용안내</div>
+            <div style={{fontSize:13, color:'var(--text2)', marginTop:6}}>실제 화면을 보며 단계별로 따라하기</div>
           </div>
-        ) : (
-          <div style={{display:'flex', flexDirection:'column', gap:16}}>
-            <div style={{display:'flex', alignItems:'center', gap:10}}>
-              <span style={{fontSize:24}}>{detail.icon}</span>
-              <div style={{flex:1}}>
-                <div style={{fontSize:17, fontWeight:700, color:'var(--text)'}}>{detail.label}</div>
-                <div style={{fontSize:12, color:'var(--text2)', marginTop:2}}>{detail.desc}</div>
-              </div>
-              {detail.guide && (
-                <button onClick={()=>{setFullscreen(true); setTourOn(true);}}
-                  style={{height:34, padding:'0 14px', background:'#6a1b9a', color:'#fff',
-                    border:'none', borderRadius:'var(--radius)', fontSize:12, fontWeight:700,
-                    cursor:'pointer', display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
-                  ▶ 따라하기 가이드
+          <div style={{display:'flex', gap:20, flexWrap:'wrap', justifyContent:'center'}}>
+            {CATS.map(c => {
+              const disabled = c.key === 'hq' && !canHQ;
+              return (
+                <button key={c.key} disabled={disabled}
+                  onClick={()=>{ setCat(c.key); setSelMenu(null); setTourOn(false); }}
+                  style={{width:210, height:190, borderRadius:18, cursor: disabled?'not-allowed':'pointer',
+                    border:'2px solid', borderColor: disabled?'var(--border)':'var(--accent)',
+                    background: disabled?'#f5f5f5':'#fff', opacity: disabled?0.55:1,
+                    display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12,
+                    boxShadow: disabled?'none':'0 4px 18px rgba(0,0,0,0.08)'}}>
+                  <span style={{fontSize:54}}>{c.icon}</span>
+                  <span style={{fontSize:20, fontWeight:800, color: disabled?'var(--text3)':'var(--accent)'}}>{c.label}</span>
+                  <span style={{fontSize:12, color:'var(--text3)'}}>{disabled ? '매장 로그인은 이용 불가' : c.desc}</span>
                 </button>
-              )}
-              <button onClick={()=>setFullscreen(true)}
-                style={{height:34, padding:'0 14px', background:'var(--accent)', color:'#fff',
-                  border:'none', borderRadius:'var(--radius)', fontSize:12, fontWeight:700,
-                  cursor:'pointer', display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
-                ⛶ 전체화면
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 2) 선택 카테고리의 따라하기 메뉴 */}
+      {cat && (
+        <div>
+          <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:18, flexWrap:'wrap'}}>
+            <button onClick={()=>{ setCat(null); setSelMenu(null); setTourOn(false); }}
+              style={{height:32, padding:'0 12px', border:'1px solid var(--border)', borderRadius:8, background:'#fff', cursor:'pointer', fontSize:13, fontWeight:600}}>← 뒤로</button>
+            <span style={{fontSize:16, fontWeight:800}}>{cat==='hq'?'🏢 본사':'🏬 매장'} 사용안내</span>
+            <span style={{fontSize:12, color:'var(--text3)'}}>메뉴를 선택하면 따라하기가 시작됩니다</span>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(230px, 1fr))', gap:14}}>
+            {GUIDE_MENUS[cat].map(key => {
+              const d = DETAILS[key];
+              if (!d || !d.guide) return null;
+              return (
+                <button key={key} onClick={()=>{ setSelMenu(key); setTourOn(true); }}
+                  style={{textAlign:'left', padding:'18px', borderRadius:14, border:'1px solid var(--border)',
+                    background:'#fff', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:8}}>
+                    <span style={{fontSize:26}}>{d.icon}</span>
+                    <span style={{fontSize:16, fontWeight:800, color:'var(--text)'}}>{d.label}</span>
+                  </div>
+                  <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6, marginBottom:14}}>{d.desc}</div>
+                  <span style={{display:'inline-flex', alignItems:'center', gap:6, height:32, padding:'0 14px', background:'#6a1b9a', color:'#fff', borderRadius:8, fontSize:13, fontWeight:700}}>▶ 따라하기 시작</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 3) 전체화면 따라하기 */}
+      {selMenu && detail && detail.guide && (
+        <div style={{position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.6)', display:'flex', flexDirection:'column'}}>
+          <div style={{display:'flex', alignItems:'center', gap:10, padding:'12px 20px', background:'#fff', borderBottom:'1px solid var(--border)', flexShrink:0}}>
+            <span style={{fontSize:18}}>{detail.icon}</span>
+            <span style={{fontSize:15, fontWeight:700}}>{detail.label} 따라하기</span>
+            {!tourOn && (
+              <button onClick={()=>setTourOn(true)}
+                style={{marginLeft:12, height:32, padding:'0 14px', background:'#6a1b9a', color:'#fff',
+                  border:'none', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                ▶ 다시 시작
               </button>
-            </div>
-
-            <div>
-              <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8}}>🖥️ 화면 미리보기</div>
-              <div style={{
-                border:'2px solid var(--border)', borderRadius:10, overflow:'hidden',
-                background:'var(--bg)', position:'relative',
-                height: Math.round((detail.previewHeight||400) * (detail.previewScale||0.65)),
-              }}>
-                <div style={{position:'absolute',inset:0,zIndex:10,cursor:'default'}}/>
-                <div style={{
-                  transform:`scale(${detail.previewScale||0.65})`,
-                  transformOrigin:'top left',
-                  width:`${Math.round(100/(detail.previewScale||0.65))}%`,
-                  pointerEvents:'none',
-                }}>
-                  <div style={{padding:20}}>
-                    {detail.component}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>📋 사용 방법</div>
-              <div style={{display:'flex', flexDirection:'column', gap:6}}>
-                {detail.steps.map((step, i) => (
-                  <div key={i} style={{display:'flex', gap:10, alignItems:'flex-start',
-                    background: i%2===0?'#fafafa':'#fff', borderRadius:8, padding:'9px 12px'}}>
-                    <span style={{width:20, height:20, background:'var(--accent)', color:'#fff',
-                      borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-                      fontSize:10, fontWeight:700, flexShrink:0}}>{i+1}</span>
-                    <span style={{fontSize:12, color:'var(--text)', lineHeight:1.7}}>{step}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {fullscreen && detail && (
-          <div style={{position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.6)',
-            display:'flex', flexDirection:'column'}}>
-            <div style={{display:'flex', alignItems:'center', gap:10, padding:'12px 20px',
-              background:'#fff', borderBottom:'1px solid var(--border)', flexShrink:0}}>
-              <span style={{fontSize:18}}>{detail.icon}</span>
-              <span style={{fontSize:15, fontWeight:700}}>{detail.label}</span>
-              {detail.guide && !tourOn && (
-                <button onClick={()=>setTourOn(true)}
-                  style={{marginLeft:12, height:32, padding:'0 14px', background:'#6a1b9a', color:'#fff',
-                    border:'none', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
-                  ▶ 따라하기 가이드
-                </button>
-              )}
-              <button onClick={()=>{setFullscreen(false); setTourOn(false);}}
-                style={{marginLeft:'auto', height:32, padding:'0 16px', background:'#f5f5f5',
-                  border:'1px solid var(--border)', borderRadius:'var(--radius)',
-                  fontSize:13, fontWeight:600, cursor:'pointer'}}>✕ 닫기</button>
-            </div>
-            <div ref={contentRef} style={{flex:1, overflow:'auto', background:'var(--bg)', padding:24, position:'relative'}}>
-              {detail.component}
-            </div>
-            {tourOn && detail.guide && (
-              <GuideTour steps={detail.guide} containerRef={contentRef} onClose={()=>setTourOn(false)} />
             )}
+            <button onClick={()=>{ setSelMenu(null); setTourOn(false); }}
+              style={{marginLeft:'auto', height:32, padding:'0 16px', background:'#f5f5f5',
+                border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, fontWeight:600, cursor:'pointer'}}>✕ 닫기</button>
           </div>
-        )}
-      </div>
+          <div ref={contentRef} style={{flex:1, overflow:'auto', background:'var(--bg)', padding:24, position:'relative'}}>
+            {detail.component}
+          </div>
+          {tourOn && (
+            <GuideTour steps={detail.guide} containerRef={contentRef} onClose={()=>setTourOn(false)} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
