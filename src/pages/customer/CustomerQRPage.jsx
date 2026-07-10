@@ -27,9 +27,9 @@ export default function CustomerQRPage({ profile }) {
             카운터에 출력해두세요.<br/>
             고객이 스캔하면 <strong>담당자를 직접 선택</strong>하고 가입합니다.
           </div>
-          <img src={qrImg} alt="QR코드" style={{width:240, height:240, borderRadius:8, border:'1px solid var(--border)', marginBottom:16}}/>
+          <img src={qrImg} alt="QR코드" data-tour="qr-code" style={{width:240, height:240, borderRadius:8, border:'1px solid var(--border)', marginBottom:16}}/>
           <div style={{fontSize:11, color:'var(--text3)', wordBreak:'break-all', marginBottom:20}}>{joinUrl}</div>
-          <div style={{display:'flex', gap:10, justifyContent:'center'}}>
+          <div data-tour="qr-actions" style={{display:'flex', gap:10, justifyContent:'center'}}>
             <button className="btn btn-s" onClick={() => { navigator.clipboard?.writeText(joinUrl); toast('URL 복사됨', 'ok'); }}>🔗 URL 복사</button>
             <button className="btn btn-p" onClick={handlePrint}>🖨️ QR 인쇄</button>
           </div>

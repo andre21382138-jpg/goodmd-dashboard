@@ -79,7 +79,7 @@ export default function ConsentRenewMgrPage() {
           이 QR을 <b>인쇄해 카운터에 비치</b>하세요. (회원 본인 동의 + 시각이 기록되어 증빙이 됩니다)
         </div>
         <div style={{ display:'flex', gap:24, flexWrap:'wrap', alignItems:'center' }}>
-          <div style={{ textAlign:'center' }}>
+          <div data-tour="renew-qr" style={{ textAlign:'center' }}>
             <img src={qrSrc} alt="재동의 QR" width={220} height={220}
               style={{ border:'1px solid var(--border)', borderRadius:12, background:'#fff' }}/>
             <div style={{ marginTop:8 }}>
@@ -106,7 +106,7 @@ export default function ConsentRenewMgrPage() {
         <div style={{ fontSize:12, color:'var(--text3)', marginBottom:12 }}>
           스마트폰이 없는 회원은, 구두 동의 확인 후 직접 검색해 처리하세요.
         </div>
-        <div className="fbar" style={{ gap:8, marginBottom:12 }}>
+        <div className="fbar" data-tour="renew-search" style={{ gap:8, marginBottom:12 }}>
           <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && search()}
             placeholder="이름 또는 휴대폰 번호" style={{ height:38, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', width:260 }} />
           <button className="btn btn-p" onClick={search} disabled={loading}>

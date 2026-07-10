@@ -12,6 +12,7 @@ import MyAttendancePage from '../attendance/MyAttendancePage';
 import CustomerLookupPage from '../customer/CustomerLookupPage';
 import CustomerDocPage from '../customer/CustomerDocPage';
 import CustomerQRPage from '../customer/CustomerQRPage';
+import ConsentRenewMgrPage from '../customer/ConsentRenewMgrPage';
 import SalesListPage from '../sales/SalesListPage';
 import BizSalesPage from '../sales/BizSalesPage';
 import LectureSalesPage from '../sales/LectureSalesPage';
@@ -149,11 +150,11 @@ export default function HelpPage({ profile }) {
         { selector:'req-table', title:'발주수량 확인', body:'발주수량 = 기간 판매량 − 현재고 로 자동 계산됩니다.\n필요하면 수량을 직접 수정하세요.' },
         { selector:'req-submit', title:'발주요청', body:'발주할 상품을 체크하고 [발주요청]을 누르면 본사로 전송됩니다.\n(수량 0인 상품은 제외됩니다.)' },
       ],
-      component: <StockRequestPage profile={previewProfile}/>, previewScale:0.52, previewHeight:400,
+      component: <StockRequestPage profile={previewProfile} demo/>, previewScale:0.52, previewHeight:400,
     },
     member_reg: {
-      icon:'👤', label:'회원 관리', desc:'담당 회원 등록·조회·QR 가입을 처리합니다.',
-      steps:['QR 가입: QR코드 출력 → 카운터 비치 → 고객이 직접 스캔하여 가입','서류 가입: 이름·연락처·생일·SMS동의 직접 입력','⚠️ 서류 가입 시 반드시 고객에게 마케팅 수신 동의 서면 별도 보관'],
+      icon:'📄', label:'서류 가입', desc:'서면 동의서를 받은 회원을 직접 등록합니다.',
+      steps:['서류 가입: 이름·연락처·생일·SMS동의 직접 입력','⚠️ 서류 가입 시 반드시 고객에게 마케팅 수신 동의 서면 별도 보관'],
       guide:[
         { selector:'member-form', title:'회원 정보 입력', body:'가입일·이름·연락처는 필수, 생일·성별은 선택입니다.\n생일은 생일 혜택 제공에 활용됩니다.' },
         { selector:'member-consent', title:'마케팅 수신 동의', body:'고객이 서면 동의서에 직접 서명한 경우에만 체크합니다.\n(동의 서류는 매장에서 별도 보관하세요.)' },
@@ -164,8 +165,21 @@ export default function HelpPage({ profile }) {
     },
     qr: {
       icon:'📱', label:'QR 회원가입', desc:'고객이 QR을 스캔하면 자동으로 내 담당 회원으로 등록됩니다.',
-      steps:['사이드바 → 👤 회원 관리 → QR 가입 클릭','QR 이미지 출력 후 카운터에 비치','고객이 스마트폰으로 QR 스캔 → 직접 정보 입력 → 자동 등록'],
+      steps:['QR 이미지 출력 후 카운터에 비치','고객이 스마트폰으로 QR 스캔 → 직접 정보 입력 → 자동 등록'],
+      guide:[
+        { selector:'qr-code', title:'① QR코드 비치', body:'이 QR코드를 인쇄해 카운터에 비치합니다.\n고객이 스마트폰으로 스캔하면 담당자를 직접 선택하고 가입합니다.' },
+        { selector:'qr-actions', title:'② 인쇄 / 공유', body:'[🖨️ QR 인쇄]로 출력하거나 [🔗 URL 복사]로 공유할 수 있습니다.\nQR로 가입한 고객은 마케팅 수신동의를 직접 체크하므로 서면 동의서가 필요 없습니다.' },
+      ],
       component: <CustomerQRPage profile={previewProfile}/>, previewScale:0.52, previewHeight:400,
+    },
+    member_renew: {
+      icon:'🔄', label:'수신 재동의', desc:'마케팅 수신동의가 만료·미동의된 회원의 재동의를 받습니다.',
+      steps:['재동의 QR 인쇄 → 카운터 비치 → 회원 본인 스캔·재동의','스마트폰 없는 회원은 대면 검색 후 [재동의] 처리'],
+      guide:[
+        { selector:'renew-qr', title:'① 재동의 QR 비치', body:'만료·미동의 회원이 매장에 방문하면 이 QR을 인쇄해 카운터에 비치합니다.\n회원이 본인 휴대폰으로 스캔 → 번호 입력 → [재동의]하면, 본인 동의와 시각이 기록되어 증빙이 됩니다.' },
+        { selector:'renew-search', title:'② 대면 처리', body:'스마트폰이 없는 회원은 구두 동의를 확인한 뒤,\n이름·휴대폰으로 검색해 수신 상태를 확인하고 [✅ 재동의]를 눌러 처리합니다.' },
+      ],
+      component: <ConsentRenewMgrPage/>, previewScale:0.52, previewHeight:460,
     },
     attendance_mgr: {
       icon:'🗓️', label:'근태 관리', desc:'출퇴근 체크와 다음달 휴무계획을 제출합니다.',
@@ -175,8 +189,8 @@ export default function HelpPage({ profile }) {
   };
 
   const GUIDE_MENUS = {
-    hq:    ['sales_input','member_reg','stock_req'],
-    store: ['sales_input','member_reg','stock_req'],
+    hq:    ['sales_input','qr','member_reg','member_renew','stock_req'],
+    store: ['sales_input','qr','member_reg','member_renew','stock_req'],
   };
   const CATS = [
     { key:'hq',    icon:'🏢', label:'본사', desc:'본사 담당자용 사용안내' },

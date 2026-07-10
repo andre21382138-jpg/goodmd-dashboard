@@ -8,7 +8,7 @@ import StoreStockPage from './StoreStockPage';
 //    · 발주수량 = max(0, 직전 발주~오늘 판매량 − 현재고)  (수정/삭제/상품추가 가능)
 //    · 0 수량은 전체선택해도 본사로 전송되지 않음
 //  탭2 발송현황: 요청 이력 + 도착분 입고확인(재고 +반영)
-export default function StockRequestPage({ profile }) {
+export default function StockRequestPage({ profile, demo = false }) {
   const store  = profile.department;
   const branch = profile.branch;
   const today  = new Date().toISOString().slice(0, 10);
@@ -32,6 +32,20 @@ export default function StockRequestPage({ profile }) {
   const [hideZero, setHideZero] = useState(false);
 
   const loadSheet = useCallback(async () => {
+    if (demo) {
+      // 사용안내 따라하기용 예시 데이터
+      setFromDate('2026-07-01');
+      setAllProducts([]);
+      setRows([
+        { productId:'d1', brandId:null, brandName:'팔레오', name:'팔레오_닥터스노트 초임계rTG 알티지 오메가3', code:'8809722528425', stock:2, soldQty:9, qty:7, checked:true },
+        { productId:'d2', brandId:null, brandName:'팔레오', name:'팔레오_유기농레몬즙100%',                 code:'8809956531697', stock:1, soldQty:6, qty:5, checked:true },
+        { productId:'d3', brandId:null, brandName:'로엘',   name:'로엘_모유유래프롤린유산균 2g*30P',          code:'8809956530430', stock:0, soldQty:4, qty:4, checked:true },
+        { productId:'d4', brandId:null, brandName:'팔레오', name:'팔레오_대마종자유캡슐',                     code:'8809722525837', stock:5, soldQty:5, qty:0, checked:false },
+        { productId:'d5', brandId:null, brandName:'팔레오', name:'팔레오_닥터스노트 백옥 글루타치온정 1000mg*60T', code:'8809956531703', stock:8, soldQty:3, qty:0, checked:false },
+      ]);
+      setSheetLoading(false);
+      return;
+    }
     setSheetLoading(true);
     try {
       // 1) 매장재고
@@ -106,7 +120,7 @@ export default function StockRequestPage({ profile }) {
       toast('발주 시트 로드 실패: ' + (err.message || err), 'err');
     }
     setSheetLoading(false);
-  }, [store, branch]);
+  }, [store, branch, demo]);
 
   useEffect(() => { if (tab === 'request') loadSheet(); }, [tab, loadSheet]);
 
