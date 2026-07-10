@@ -99,7 +99,7 @@ export default function GuideTour({ steps, containerRef, onClose }) {
           <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>{step.title}</span>
           <button onClick={onClose} title="닫기" style={{ marginLeft: 'auto', background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#999', lineHeight: 1 }}>✕</button>
         </div>
-        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.75, whiteSpace: 'pre-line' }}>{step.body}</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.75, whiteSpace: 'pre-line', wordBreak: 'keep-all', overflowWrap: 'break-word' }}>{step.body}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
           <button onClick={onClose}
             style={{ fontSize: 12, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 4px' }}>
