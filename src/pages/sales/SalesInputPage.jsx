@@ -552,7 +552,7 @@ export default function SalesInputPage({ profile }) {
           </div>
 
           {/* 상품 목록 섹션 */}
-          <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
+          <div data-tour="sales-search" style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
             <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
               🛍️ 상품 목록
             </div>
@@ -804,7 +804,7 @@ export default function SalesInputPage({ profile }) {
           )}
 
           {/* 회원적립 섹션 */}
-          <div style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
+          <div data-tour="sales-member" style={{ background:'#f8f9fa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:14 }}>
             <div style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10 }}>🙋 회원 적립</div>
             <div style={{ display:'flex', gap:8, marginBottom:12 }}>
               {[
@@ -942,7 +942,7 @@ export default function SalesInputPage({ profile }) {
             )}
           </div>
 
-          <button className="btn btn-p" type="submit" disabled={saving}
+          <button className="btn btn-p" type="submit" disabled={saving} data-tour="sales-save"
             style={{ width:'100%', justifyContent:'center', height:40 }}>
             {saving ? <span className="spinner"/> :
               memberMode === 'search' ? '✓ 판매 + 회원 적립' :

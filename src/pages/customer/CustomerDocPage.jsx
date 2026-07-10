@@ -89,7 +89,7 @@ export default function CustomerDocPage({ profile }) {
           📍 {profile.department} · {profile.branch}{selMember ? ` · ${selMember.display_name || selMember.name}` : ''}
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:14, marginBottom:16 }}>
+          <div data-tour="member-form" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:14, marginBottom:16 }}>
             <div>
               <label style={labelStyle}>회원가입일</label>
               <input type="date" value={joinedAt} onChange={e => setJoinedAt(e.target.value)} style={inputStyle} required />
@@ -117,7 +117,7 @@ export default function CustomerDocPage({ profile }) {
           </div>
 
           {/* 마케팅 수신동의 */}
-          <div style={{ background: smsConsent ? '#e8f5e9' : '#f8f8f8', border:`1px solid ${smsConsent ? '#a5d6a7' : 'var(--border)'}`, borderRadius:'var(--radius)', padding:'12px 16px', marginBottom:16 }}>
+          <div data-tour="member-consent" style={{ background: smsConsent ? '#e8f5e9' : '#f8f8f8', border:`1px solid ${smsConsent ? '#a5d6a7' : 'var(--border)'}`, borderRadius:'var(--radius)', padding:'12px 16px', marginBottom:16 }}>
             <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
               <input type="checkbox" checked={smsConsent} onChange={e => setSmsConsent(e.target.checked)}
                 style={{ width:18, height:18, accentColor:'var(--success)', flexShrink:0 }} />
@@ -134,13 +134,13 @@ export default function CustomerDocPage({ profile }) {
             </label>
           </div>
 
-          <button className="btn btn-p" type="submit" disabled={saving} style={{ width:'100%', justifyContent:'center', height:40 }}>
+          <button className="btn btn-p" type="submit" disabled={saving} data-tour="member-submit" style={{ width:'100%', justifyContent:'center', height:40 }}>
             {saving ? <span className="spinner"/> : '✓ 서류 가입 등록'}
           </button>
         </form>
       </div>
 
-      <div className="card">
+      <div className="card" data-tour="member-recent">
         <div className="card-label">최근 등록 (20건)</div>
         <div className="twrap">
           <table>

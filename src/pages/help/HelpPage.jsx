@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import GuideTour from './GuideTour';
 import AdminTab from '../admin/AdminTab';
 import ManagerMgmtPage from '../admin/ManagerMgmtPage';
 import HomePage from '../home/HomePage';
@@ -25,6 +26,8 @@ export default function HelpPage({ profile }) {
   const [role,       setRole]       = useState(isManager ? 'manager' : 'hq');
   const [selMenu,    setSelMenu]    = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [tourOn,     setTourOn]     = useState(false);
+  const contentRef = useRef(null);
 
   const MENUS = {
     admin: [
@@ -123,6 +126,11 @@ export default function HelpPage({ profile }) {
     sales_input: {
       icon:'🛒', label:'판매 입력', desc:'매일 판매한 상품을 기록합니다. 회원 적립도 함께 처리합니다.',
       steps:['브랜드 없이 상품명 바로 검색 (검색결과에 브랜드명 표시)','판매가 입력 시 할인금액 자동 계산','회원 없음 / 기존회원 검색 / 신규회원 등록 선택','저장 시 해당 상품 매장재고 자동 차감'],
+      guide:[
+        { selector:'sales-search', title:'상품 검색·입력', body:'바코드로 상품을 스캔하면 상품명 칸에 자동으로 입력됩니다.\n동일 상품을 2번·3번 스캔하면 수량이 2개·3개로 늘어납니다.\n판매가를 입력하면 할인금액·합계가 자동 계산되고, 각 줄의 "결제"에서 카드/현금/증정/시식을 선택합니다.' },
+        { selector:'sales-member', title:'회원 적립', body:'회원 없음 / 기존 회원 검색 / 신규 회원등록 중 선택합니다.\n기존 회원은 휴대폰 뒷 4자리로 검색해 연결하면 구매액·적립금·등급이 자동 반영됩니다.' },
+        { selector:'sales-save', title:'저장', body:'모든 줄의 결제수단을 선택한 뒤 [판매 입력 저장]을 누르면,\n매장재고가 자동 차감되고 회원 적립금이 반영됩니다.' },
+      ],
       component: <SalesInputPage profile={previewProfile}/>, previewScale:0.52, previewHeight:460,
     },
     stock_mgr_view: {
@@ -131,13 +139,25 @@ export default function HelpPage({ profile }) {
       component: <StoreStockPage profile={previewProfile}/>, previewScale:0.55, previewHeight:420,
     },
     stock_req: {
-      icon:'📦', label:'재고 요청', desc:'본사에 상품 입고를 요청합니다.',
-      steps:['사이드바 → 📦 재고 요청 클릭','브랜드·상품 선택 → 요청 수량 입력','[요청 등록] 클릭 → 본사 담당자에게 전달'],
+      icon:'📦', label:'발주 요청', desc:'본사에 상품 입고(발주)를 요청합니다.',
+      steps:['사이드바 → 📦 발주 요청 클릭','기간 판매량 − 현재고로 발주수량 자동 계산','발주할 상품 체크 → [발주요청] 클릭 → 본사 전달'],
+      guide:[
+        { selector:'req-add', title:'상품 추가 검색', body:'매장재고에 없는 상품은 여기서 검색해\n발주 목록에 추가할 수 있습니다.' },
+        { selector:'req-find', title:'목록에서 찾기', body:'상품명·코드로 목록을 빠르게 찾거나,\n"발주수량 0 숨기기"로 발주할 상품만 볼 수 있습니다.' },
+        { selector:'req-table', title:'발주수량 확인', body:'발주수량 = 기간 판매량 − 현재고 로 자동 계산됩니다.\n필요하면 수량을 직접 수정하세요.' },
+        { selector:'req-submit', title:'발주요청', body:'발주할 상품을 체크하고 [발주요청]을 누르면 본사로 전송됩니다.\n(수량 0인 상품은 제외됩니다.)' },
+      ],
       component: <StockRequestPage profile={previewProfile}/>, previewScale:0.52, previewHeight:400,
     },
     member_reg: {
       icon:'👤', label:'회원 관리', desc:'담당 회원 등록·조회·QR 가입을 처리합니다.',
       steps:['QR 가입: QR코드 출력 → 카운터 비치 → 고객이 직접 스캔하여 가입','서류 가입: 이름·연락처·생일·SMS동의 직접 입력','⚠️ 서류 가입 시 반드시 고객에게 마케팅 수신 동의 서면 별도 보관'],
+      guide:[
+        { selector:'member-form', title:'회원 정보 입력', body:'가입일·이름·연락처는 필수, 생일·성별은 선택입니다.\n생일은 생일 혜택 제공에 활용됩니다.' },
+        { selector:'member-consent', title:'마케팅 수신 동의', body:'고객이 서면 동의서에 직접 서명한 경우에만 체크합니다.\n(동의 서류는 매장에서 별도 보관하세요.)' },
+        { selector:'member-submit', title:'서류 가입 등록', body:'[서류 가입 등록]을 누르면 회원이 등록되고,\n아래 최근 등록 목록에 바로 표시됩니다.' },
+        { selector:'member-recent', title:'최근 등록 확인', body:'최근 등록한 회원 20건을 확인하고,\n잘못 등록한 경우 [삭제]할 수 있습니다.' },
+      ],
       component: <CustomerDocPage profile={previewProfile}/>, previewScale:0.52, previewHeight:440,
     },
     qr: {
@@ -166,7 +186,7 @@ export default function HelpPage({ profile }) {
       <div style={{width:140, flexShrink:0}}>
         <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>역할</div>
         {roles.map(r => (
-          <button key={r.key} onClick={()=>{setRole(r.key);setSelMenu(null);setFullscreen(false);}}
+          <button key={r.key} onClick={()=>{setRole(r.key);setSelMenu(null);setFullscreen(false);setTourOn(false);}}
             style={{display:'block', width:'100%', textAlign:'left', padding:'10px 12px', marginBottom:4,
               border:'none', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: role===r.key?700:500,
               background: role===r.key?'var(--sidebar)':'#f5f5f5',
@@ -180,7 +200,7 @@ export default function HelpPage({ profile }) {
       <div style={{width:160, flexShrink:0}}>
         <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:8, letterSpacing:1}}>메뉴</div>
         {menuList.map(m => (
-          <button key={m.key} onClick={()=>{setSelMenu(m.key);setFullscreen(false);}}
+          <button key={m.key} onClick={()=>{setSelMenu(m.key);setFullscreen(false);setTourOn(false);}}
             style={{display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left',
               padding:'10px 12px', marginBottom:4, border:'1px solid',
               borderColor: selMenu===m.key?'var(--accent)':'transparent',
@@ -209,6 +229,14 @@ export default function HelpPage({ profile }) {
                 <div style={{fontSize:17, fontWeight:700, color:'var(--text)'}}>{detail.label}</div>
                 <div style={{fontSize:12, color:'var(--text2)', marginTop:2}}>{detail.desc}</div>
               </div>
+              {detail.guide && (
+                <button onClick={()=>{setFullscreen(true); setTourOn(true);}}
+                  style={{height:34, padding:'0 14px', background:'#6a1b9a', color:'#fff',
+                    border:'none', borderRadius:'var(--radius)', fontSize:12, fontWeight:700,
+                    cursor:'pointer', display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
+                  ▶ 따라하기 가이드
+                </button>
+              )}
               <button onClick={()=>setFullscreen(true)}
                 style={{height:34, padding:'0 14px', background:'var(--accent)', color:'#fff',
                   border:'none', borderRadius:'var(--radius)', fontSize:12, fontWeight:700,
@@ -262,14 +290,24 @@ export default function HelpPage({ profile }) {
               background:'#fff', borderBottom:'1px solid var(--border)', flexShrink:0}}>
               <span style={{fontSize:18}}>{detail.icon}</span>
               <span style={{fontSize:15, fontWeight:700}}>{detail.label}</span>
-              <button onClick={()=>setFullscreen(false)}
+              {detail.guide && !tourOn && (
+                <button onClick={()=>setTourOn(true)}
+                  style={{marginLeft:12, height:32, padding:'0 14px', background:'#6a1b9a', color:'#fff',
+                    border:'none', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                  ▶ 따라하기 가이드
+                </button>
+              )}
+              <button onClick={()=>{setFullscreen(false); setTourOn(false);}}
                 style={{marginLeft:'auto', height:32, padding:'0 16px', background:'#f5f5f5',
                   border:'1px solid var(--border)', borderRadius:'var(--radius)',
                   fontSize:13, fontWeight:600, cursor:'pointer'}}>✕ 닫기</button>
             </div>
-            <div style={{flex:1, overflow:'auto', background:'var(--bg)', padding:24}}>
+            <div ref={contentRef} style={{flex:1, overflow:'auto', background:'var(--bg)', padding:24, position:'relative'}}>
               {detail.component}
             </div>
+            {tourOn && detail.guide && (
+              <GuideTour steps={detail.guide} containerRef={contentRef} onClose={()=>setTourOn(false)} />
+            )}
           </div>
         )}
       </div>

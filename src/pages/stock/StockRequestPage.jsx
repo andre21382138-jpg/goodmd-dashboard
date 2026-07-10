@@ -342,7 +342,7 @@ export default function StockRequestPage({ profile }) {
               </div>
             </div>
             <div style={{ position:'relative' }}>
-              <input value={addSearch} onChange={e => { setAddSearch(e.target.value); setShowAdd(true); }}
+              <input data-tour="req-add" value={addSearch} onChange={e => { setAddSearch(e.target.value); setShowAdd(true); }}
                 onFocus={() => setShowAdd(true)} onBlur={() => setTimeout(() => setShowAdd(false), 200)}
                 placeholder="➕ 상품 추가 검색" style={{ ...inputStyle, width:240 }} autoComplete="off" />
               {showAdd && addSuggestions.length > 0 && (
@@ -373,7 +373,7 @@ export default function StockRequestPage({ profile }) {
           : (
             <>
             {/* 목록 내 찾기 */}
-            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10, flexWrap:'wrap' }}>
+            <div data-tour="req-find" style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10, flexWrap:'wrap' }}>
               <div style={{ position:'relative', width:260 }}>
                 <input value={listQuery} onChange={e => setListQuery(e.target.value)}
                   placeholder="🔍 목록에서 상품 찾기 (상품명/코드)" style={{ ...inputStyle }} />
@@ -392,7 +392,7 @@ export default function StockRequestPage({ profile }) {
             {visibleRows.length === 0 ? (
               <div className="empty">조건에 맞는 상품이 없습니다 {listQuery && `("${listQuery}")`}</div>
             ) : (
-            <div className="twrap">
+            <div className="twrap" data-tour="req-table">
               <table>
                 <thead>
                   <tr>
@@ -438,7 +438,7 @@ export default function StockRequestPage({ profile }) {
               <span style={{ fontSize:13, color:'var(--text2)' }}>
                 선택 <b>{rows.filter(r => r.checked && (Number(r.qty)||0) > 0).length}</b>개 상품 · 총 <b style={{ color:'var(--accent)' }}>{totalReqQty.toLocaleString()}</b>개
               </span>
-              <button className="btn btn-p" onClick={submit} disabled={submitting}
+              <button className="btn btn-p" onClick={submit} disabled={submitting} data-tour="req-submit"
                 style={{ height:42, padding:'0 28px', fontSize:14, fontWeight:700 }}>
                 {submitting ? <span className="spinner"/> : '📦 발주요청'}
               </button>
