@@ -198,20 +198,32 @@ export default function HelpPage({ profile }) {
     { key:'store', icon:'🏬', label:'매장', desc:'매장 근무자용 사용안내' },
   ];
   const detail = selMenu ? DETAILS[selMenu] : null;
-  const menuCard = (k) => {
+  const bigCard = (k) => {
     const d = DETAILS[k];
     if (!d || !d.guide) return null;
     return (
       <button key={k} onClick={()=>{ setSelMenu(k); setTourOn(true); }}
-        style={{textAlign:'left', width:'100%', padding:'14px 16px', borderRadius:12, border:'1px solid var(--border)',
-          background:'#fff', cursor:'pointer', boxShadow:'0 1px 4px rgba(0,0,0,0.04)',
-          display:'flex', alignItems:'center', gap:12}}>
-        <span style={{fontSize:24}}>{d.icon}</span>
-        <div style={{flex:1, minWidth:0}}>
-          <div style={{fontSize:15, fontWeight:800, color:'var(--text)'}}>{d.label}</div>
-          <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.5, marginTop:2}}>{d.desc}</div>
+        style={{textAlign:'left', padding:'18px', borderRadius:14, border:'1px solid var(--border)',
+          background:'#fff', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}>
+        <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:8}}>
+          <span style={{fontSize:26}}>{d.icon}</span>
+          <span style={{fontSize:16, fontWeight:800, color:'var(--text)'}}>{d.label}</span>
         </div>
-        <span style={{flexShrink:0, display:'inline-flex', alignItems:'center', gap:6, height:30, padding:'0 12px', background:'#6a1b9a', color:'#fff', borderRadius:8, fontSize:12, fontWeight:700, whiteSpace:'nowrap'}}>▶ 시작</span>
+        <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6, marginBottom:14}}>{d.desc}</div>
+        <span style={{display:'inline-flex', alignItems:'center', gap:6, height:32, padding:'0 14px', background:'#6a1b9a', color:'#fff', borderRadius:8, fontSize:13, fontWeight:700}}>▶ 따라하기 시작</span>
+      </button>
+    );
+  };
+  const miniCard = (k) => {
+    const d = DETAILS[k];
+    if (!d || !d.guide) return null;
+    return (
+      <button key={k} onClick={()=>{ setSelMenu(k); setTourOn(true); }}
+        style={{textAlign:'left', width:'100%', padding:'10px 12px', borderRadius:10, border:'1px solid var(--border)',
+          background:'#fff', cursor:'pointer', display:'flex', alignItems:'center', gap:10}}>
+        <span style={{fontSize:20}}>{d.icon}</span>
+        <span style={{flex:1, fontSize:14, fontWeight:700, color:'var(--text)'}}>{d.label}</span>
+        <span style={{flexShrink:0, fontSize:12, fontWeight:700, color:'#6a1b9a', whiteSpace:'nowrap'}}>▶ 시작</span>
       </button>
     );
   };
@@ -255,17 +267,17 @@ export default function HelpPage({ profile }) {
             <span style={{fontSize:16, fontWeight:800}}>{cat==='hq'?'🏢 본사':'🏬 매장'} 사용안내</span>
             <span style={{fontSize:12, color:'var(--text3)'}}>메뉴를 선택하면 따라하기가 시작됩니다</span>
           </div>
-          <div style={{display:'flex', flexDirection:'column', gap:12, maxWidth:560}}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(230px, 1fr))', gap:14, alignItems:'start'}}>
             {GUIDE_MENUS[cat].map((entry, idx) => {
-              if (typeof entry === 'string') return menuCard(entry);
+              if (typeof entry === 'string') return bigCard(entry);
               return (
-                <div key={'g'+idx} style={{border:'1px solid var(--border)', borderRadius:14, padding:'14px', background:'#fafafa'}}>
-                  <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:10, padding:'0 2px'}}>
-                    <span style={{fontSize:20}}>{entry.icon}</span>
-                    <span style={{fontSize:15, fontWeight:800, color:'var(--text)'}}>{entry.group}</span>
+                <div key={'g'+idx} style={{border:'1px solid var(--border)', borderRadius:14, padding:'16px', background:'#fafafa'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12}}>
+                    <span style={{fontSize:24}}>{entry.icon}</span>
+                    <span style={{fontSize:16, fontWeight:800, color:'var(--text)'}}>{entry.group}</span>
                   </div>
                   <div style={{display:'flex', flexDirection:'column', gap:8}}>
-                    {entry.items.map(k => menuCard(k))}
+                    {entry.items.map(k => miniCard(k))}
                   </div>
                 </div>
               );
