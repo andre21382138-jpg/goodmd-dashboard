@@ -17,7 +17,7 @@ export default function GuideTour({ steps, containerRef, onClose }) {
     if (!root || !step) { setRect(null); return; }
     const el = step.selector ? root.querySelector(`[data-tour="${step.selector}"]`) : null;
     if (el) {
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
       const r = el.getBoundingClientRect();
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
     } else {

@@ -602,7 +602,7 @@ export default function SalesInputPage({ profile }) {
               <div key={l.id} style={{ background: idx%2===0?'#fafafa':'#f0f7ff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 8px', marginBottom:6 }}>
                 <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 220px 110px 80px 72px 34px', gap:6, alignItems:'center' }}>
                   {/* 상품검색 */}
-                  <div style={{ position:'relative' }}>
+                  <div data-tour={idx===0 ? 'sales-scan' : undefined} style={{ position:'relative' }}>
                     <input
                       value={l.productSearch !== undefined ? l.productSearch : (selectedProd?.name || '')}
                       onChange={e => {
@@ -650,9 +650,9 @@ export default function SalesInputPage({ profile }) {
                   {/* 할인금액 (수량 × 단가) */}
                   <input type="text" inputMode="numeric" value={formatNumInput(totalDiscount === '' ? '' : String(Math.round(totalDiscount)))} onChange={e => updateLine(l.id,'discount',parseNumInput(e.target.value))} style={{...inputStyle, textAlign:'right', color:'var(--danger)'}} placeholder="0" />
                   {/* 판매가 (수량 × 단가) — 0 허용 (증정·시식) */}
-                  <input type="text" inputMode="numeric" value={formatNumInput(totalPrice === '' ? '' : String(Math.round(totalPrice)))} onChange={e => updateLine(l.id,'price',parseNumInput(e.target.value))} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" />
+                  <input type="text" inputMode="numeric" data-tour={idx===0 ? 'sales-price' : undefined} value={formatNumInput(totalPrice === '' ? '' : String(Math.round(totalPrice)))} onChange={e => updateLine(l.id,'price',parseNumInput(e.target.value))} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" />
                   {/* 결제 */}
-                  <div style={{ display:'flex', gap:2 }}>
+                  <div data-tour={idx===0 ? 'sales-pay' : undefined} style={{ display:'flex', gap:2 }}>
                     {PAYMENTS.map(p => {
                       const active = l.payment === p;
                       const isLec = p === '강좌매출';
@@ -670,7 +670,7 @@ export default function SalesInputPage({ profile }) {
                     )})}
                   </div>
                   {/* 적립금사용 (결제와 분리된 공제 항목) */}
-                  <button type="button"
+                  <button type="button" data-tour={idx===0 ? 'sales-point' : undefined}
                     onClick={() => openPointsModal(l)}
                     style={{ height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', padding:'0 6px',
                       borderColor: l.pointsUsed > 0 ? '#7b1fa2' : 'var(--border)',
@@ -683,7 +683,7 @@ export default function SalesInputPage({ profile }) {
                       : <>💳 적립금<br/>사용</>}
                   </button>
                   {/* 택배 종류 드롭다운 */}
-                  <select value={l.delivery || 'none'}
+                  <select data-tour={idx===0 ? 'sales-delivery' : undefined} value={l.delivery || 'none'}
                     onChange={e => updateLine(l.id, 'delivery', e.target.value)}
                     title="택배 발송 종류"
                     style={{
@@ -702,7 +702,7 @@ export default function SalesInputPage({ profile }) {
                   </select>
                   {/* 추가 (마지막 라인에만) */}
                   {isLast ? (
-                    <button type="button" onClick={addLine}
+                    <button type="button" onClick={addLine} data-tour="sales-add"
                       title="상품 추가"
                       style={{ height:38, width:'100%', border:'1px solid var(--accent)', background:'#fff3e0', color:'var(--accent)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:12, fontWeight:700, lineHeight:1, padding:0, whiteSpace:'nowrap' }}>상품추가</button>
                   ) : <div/>}
