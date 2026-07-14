@@ -22,6 +22,7 @@ import PurchaseOrderHQPage from './pages/order/PurchaseOrderHQPage';
 import PurchaseOrderMgrPage from './pages/order/PurchaseOrderMgrPage';
 import ScmShippingPage from './pages/order/ScmShippingPage';
 import OrderRequestHQPage from './pages/order/OrderRequestHQPage';
+import StoreReturnsHQPage from './pages/order/StoreReturnsHQPage';
 import SalesListPage from './pages/sales/SalesListPage';
 import LectureSalesPage from './pages/sales/LectureSalesPage';
 import BizSalesPage from './pages/sales/BizSalesPage';
@@ -759,6 +760,7 @@ export default function App() {
     store_delivery_status: '고객 택배',
     purchase_hq:    '발주진행',
     order_request_hq: '매장 발주요청',
+    store_returns_hq: '매장 반품신청',
     scm_shipping:   '매장 발주요청',
     purchase_check: '발주 확인',
     customer_input: '회원 등록',
@@ -857,6 +859,7 @@ export default function App() {
             {page === 'purchase_hq'    && (isAdmin || isHQ || isScm) && <PurchaseOrderHQPage profile={profile}/>}
             {page === 'scm_shipping'   && (isScm || isAdmin || isHQ) && <ScmShippingPage profile={profile}/>}
             {page === 'order_request_hq' && (isAdmin || isHQ) && <OrderRequestHQPage profile={profile}/>}
+            {page === 'store_returns_hq' && (isAdmin || isHQ) && <StoreReturnsHQPage profile={profile}/>}
             {page === 'purchase_check' && (isManager || isAdmin || isHQ) && <PurchaseOrderMgrPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
             {page === 'customer_qr'    && (isManager || isAdmin || isHQ) && <CustomerQRPage profile={profile}/>}

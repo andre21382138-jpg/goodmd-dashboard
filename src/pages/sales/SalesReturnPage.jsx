@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge, getGrade, formatNumInput, parseNumInput } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
+import HqReturnTab from './HqReturnTab';
 
 export default function SalesReturnPage({ profile }) {
   // 본사 계정(매니저가 아닌 admin/hq)이면 점포·지점을 직접 선택해 매장 반품 접수
@@ -55,6 +56,7 @@ export default function SalesReturnPage({ profile }) {
     // search 탭은 allProducts 없이도 동작 (input 꼬리 제거만), manual 탭은 allProducts 필요
     if (tab === 'manual' && allProducts.length === 0) return;
     const handler = (e) => {
+      if (tab === 'hq') return; // 본사 반품 탭은 자체 입력으로 스캔 처리
       const tg = (e.target?.tagName || '').toLowerCase();
       const isInputFocused = tg === 'input' || tg === 'textarea' || tg === 'select';
       // manual 탭은 input 포커스 중엔 무시(직접 타이핑과 충돌 방지)
@@ -409,7 +411,10 @@ export default function SalesReturnPage({ profile }) {
       <div className="tabs">
         <button className={`tab ${tab==='search'?'on':''}`} onClick={() => setTab('search')}>회원반품</button>
         <button className={`tab ${tab==='manual'?'on':''}`} onClick={() => setTab('manual')}>비회원반품</button>
+        <button className={`tab ${tab==='hq'?'on':''}`} onClick={() => setTab('hq')}>본사 반품</button>
       </div>
+
+      {tab === 'hq' && <HqReturnTab profile={profile}/>}
 
       {tab === 'search' && (<>
       {/* 필터 */}

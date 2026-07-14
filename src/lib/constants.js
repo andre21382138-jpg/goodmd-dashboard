@@ -64,6 +64,7 @@ export const HQ_MENUS = [
     { key: 'qr_print_all',         icon: '🖨️', label: '매장 QR 인쇄' },
   ]},
   { key: 'order_request_hq', icon: '📦', label: '매장 발주요청' },
+  { key: 'store_returns_hq', icon: '↩️', label: '매장 반품신청' },
   { key: 'hq_delivery_request', icon: '📦', label: '고객 택배요청' },
   { key: 'biz_delivery_request', icon: '🏭', label: '특판 발주요청' },
   { key: 'scm_shipping',   icon: '🚚', label: '매장 발주요청' },
