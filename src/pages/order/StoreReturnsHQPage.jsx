@@ -52,7 +52,7 @@ export default function StoreReturnsHQPage({ profile }) {
   }, [rows, fProd]);
 
   const totalQty = visible.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
-  const pendingCnt = visible.filter(r => r.status !== 'confirmed').length;
+  const pendingCnt = visible.filter(r => r.status === 'pending').length;
 
   const confirmOne = async (r) => {
     if (!window.confirm(`${r.store_name} ${r.branch_name}\n${r.product_name} ${r.quantity}개 (${REASON_LABEL[r.reason] || r.reason})\n\n확인 처리하시겠습니까?`)) return;
@@ -84,6 +84,7 @@ export default function StoreReturnsHQPage({ profile }) {
             <option value="all">전체 상태</option>
             <option value="pending">확인 대기</option>
             <option value="confirmed">확인 완료</option>
+            <option value="completed">반품완료</option>
           </select>
           <div className="fbar-right">
             <span className="fresult">
@@ -116,9 +117,9 @@ export default function StoreReturnsHQPage({ profile }) {
               </thead>
               <tbody>
                 {visible.map(r => {
-                  const done = r.status === 'confirmed';
+                  const st = r.status;
                   return (
-                    <tr key={r.id} style={done ? { background: '#fafafa' } : {}}>
+                    <tr key={r.id} style={st !== 'pending' ? { background: '#fafafa' } : {}}>
                       <td className="mono" style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap' }}>{dt(r.created_at)}</td>
                       <td><span className="badge badge-dept">{r.store_name}</span></td>
                       <td><span className="badge badge-store">{r.branch_name}</span></td>
@@ -128,12 +129,14 @@ export default function StoreReturnsHQPage({ profile }) {
                       <td><span style={{ fontSize: 11, fontWeight: 700, color: REASON_COLOR[r.reason] || 'var(--text2)' }}>{REASON_LABEL[r.reason] || r.reason}</span></td>
                       <td style={{ fontSize: 11, color: 'var(--text2)' }}>{r.memo || '-'}</td>
                       <td style={{ textAlign: 'center' }}>
-                        {done
-                          ? <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', fontSize: 11 }}>✓ 확인완료</span>
+                        {st === 'completed'
+                          ? <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', fontSize: 11 }}>↩️ 반품완료</span>
+                          : st === 'confirmed'
+                          ? <span className="badge" style={{ background: '#e3f2fd', color: '#1565C0', border: '1px solid #90caf9', fontSize: 11 }}>✓ 확인완료</span>
                           : <span className="badge" style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80', fontSize: 11 }}>대기</span>}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        {!done && (
+                        {st === 'pending' && (
                           <button type="button" onClick={() => confirmOne(r)} disabled={processing === r.id}
                             style={{ padding: '4px 12px', fontSize: 12, fontWeight: 700, border: '1px solid #2e7d32', borderRadius: 4, background: '#e8f5e9', color: '#2e7d32', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                             {processing === r.id ? '…' : '확인'}

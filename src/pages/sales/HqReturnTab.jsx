@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
@@ -29,11 +29,52 @@ export default function HqReturnTab({ profile }) {
   const [memo, setMemo]     = useState('');
   const [saving, setSaving] = useState(false);
   const inputRef = useRef(null);
+  const [myReturns, setMyReturns] = useState([]);
+  const [completingId, setCompletingId] = useState(null);
 
   useEffect(() => {
     supabase.from('products').select('id, name, code, is_sales_stopped').order('name')
       .then(({ data }) => setProducts(data || []));
   }, []);
+
+  // 내 매장 반품 신청 내역
+  const fetchMyReturns = useCallback(async () => {
+    if (!storeName || !branchName) { setMyReturns([]); return; }
+    const { data } = await supabase.from('store_returns')
+      .select('*').eq('store_name', storeName).eq('branch_name', branchName)
+      .order('created_at', { ascending: false }).limit(50);
+    setMyReturns(data || []);
+  }, [storeName, branchName]);
+  useEffect(() => { fetchMyReturns(); }, [fetchMyReturns]);
+
+  // 택배 출고 완료 → 반품완료 + 매장재고 차감
+  const completeReturn = async (r) => {
+    if (r.status === 'completed') return;
+    if (!window.confirm(`${r.product_name} ${r.quantity}개\n택배 출고 완료로 처리하고 매장재고에서 차감하시겠습니까?`)) return;
+    setCompletingId(r.id);
+    try {
+      if (r.product_code) {
+        const { data: st } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name', r.store_name).eq('branch_name', r.branch_name).eq('product_code', r.product_code)
+          .maybeSingle();
+        if (st) {
+          await supabase.from('store_stock')
+            .update({ stock_qty: Math.max(0, (st.stock_qty || 0) - (r.quantity || 0)), updated_at: new Date().toISOString() })
+            .eq('id', st.id);
+        }
+      }
+      const { error } = await supabase.from('store_returns')
+        .update({ status: 'completed', completed_at: new Date().toISOString(), completed_by: profile?.id || null })
+        .eq('id', r.id);
+      if (error) throw error;
+      toast('반품완료 — 매장재고에서 차감됐습니다', 'ok');
+      fetchMyReturns();
+    } catch (err) {
+      toast('반품완료 처리 실패: ' + (err.message || err), 'err');
+    }
+    setCompletingId(null);
+  };
 
   const addProduct = (p) => {
     setItems(prev => {
@@ -95,6 +136,7 @@ export default function HqReturnTab({ profile }) {
     toast(`반품신청 완료 — ${items.length}품목 / ${totalQty}개`, 'ok');
     setItems([]); setReason(''); setMemo(''); setSearch('');
     inputRef.current?.focus();
+    fetchMyReturns();
   };
 
   const inputStyle = { width: '100%', height: 42, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 14, outline: 'none', boxSizing: 'border-box' };
@@ -195,6 +237,42 @@ export default function HqReturnTab({ profile }) {
           style={{ width: '100%', height: 46, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
           {saving ? '처리 중…' : `↩️ 반품신청 (${items.length}품목 / ${totalQty}개)`}
         </button>
+      </div>
+
+      {/* 내 반품 신청 내역 */}
+      <div className="card" style={{ padding: '16px 18px', marginTop: 14 }}>
+        <div className="card-label">📋 반품 신청 내역</div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>택배로 본사에 발송한 뒤 <b>[반품완료]</b>를 누르면 매장재고에서 차감됩니다.</div>
+        {myReturns.length === 0 ? <div className="empty">신청 내역이 없습니다</div> : (
+          <div className="twrap">
+            <table>
+              <thead><tr><th style={{ width: 70 }}>신청일</th><th>상품</th><th className="r" style={{ width: 50 }}>수량</th><th style={{ width: 110 }}>사유</th><th style={{ width: 90, textAlign: 'center' }}>상태</th><th style={{ width: 90, textAlign: 'center' }}></th></tr></thead>
+              <tbody>
+                {myReturns.map(r => (
+                  <tr key={r.id} style={r.status === 'completed' ? { background: '#fafafa' } : {}}>
+                    <td className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>{r.created_at ? new Date(r.created_at).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) : '-'}</td>
+                    <td style={{ fontSize: 12 }}>{r.product_name}</td>
+                    <td className="r" style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>{r.quantity}</td>
+                    <td style={{ fontSize: 11 }}>{REASONS.find(x => x.key === r.reason)?.label || r.reason}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {r.status === 'completed' ? <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', fontSize: 11 }}>반품완료</span>
+                        : r.status === 'confirmed' ? <span className="badge" style={{ background: '#e3f2fd', color: '#1565C0', border: '1px solid #90caf9', fontSize: 11 }}>본사확인</span>
+                          : <span className="badge" style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80', fontSize: 11 }}>신청</span>}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {r.status !== 'completed' && (
+                        <button type="button" onClick={() => completeReturn(r)} disabled={completingId === r.id}
+                          style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700, border: '1px solid #2e7d32', borderRadius: 4, background: '#e8f5e9', color: '#2e7d32', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          {completingId === r.id ? '…' : '반품완료'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
