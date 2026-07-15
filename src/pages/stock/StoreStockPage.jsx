@@ -351,8 +351,11 @@ export default function StoreStockPage({ profile }) {
       if (!productId) {
         const code = String(transferModal.product_code || '').trim();
         if (!code) { toast('상품 코드가 없어 이동할 수 없습니다', 'err'); setTransferProcessing(false); return; }
-        const { data: prod } = await supabase.from('products')
-          .select('id').or(`code.eq.${code},erp_code.eq.${code}`).maybeSingle();
+        // 같은 코드가 여러 개(중복 등록)일 수 있으므로 maybeSingle 대신 정상 상품 우선 1건 선택
+        const { data: prods } = await supabase.from('products')
+          .select('id, is_sales_stopped').or(`code.eq.${code},erp_code.eq.${code}`)
+          .order('is_sales_stopped', { ascending: true }).limit(1);
+        const prod = prods?.[0];
         if (!prod?.id) { toast('상품관리에 등록되지 않은 상품입니다 (먼저 상품 등록 필요)', 'err'); setTransferProcessing(false); return; }
         productId = prod.id;
       }
