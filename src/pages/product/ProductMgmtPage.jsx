@@ -46,15 +46,24 @@ export default function ProductMgmtPage({ subPage }) {
     if (String(newPrice).trim() === '') { toast('판매가를 입력해주세요', 'err'); return; }
     const codeTrim    = newCode.trim();
     const erpCodeTrim = newErpCode.trim();
-    // 중복 검증 — 상품코드 / ERP코드 둘 다
-    const dupCode    = products.find(p => (p.code     || '').trim() === codeTrim);
-    const dupErpCode = products.find(p => (p.erp_code || '').trim() === erpCodeTrim);
-    if (dupCode) {
-      toast(`이미 [${dupCode.name}] 동일한 상품이 등록되어있습니다 (상품코드: ${codeTrim})`, 'err');
-      return;
-    }
-    if (dupErpCode) {
-      toast(`이미 [${dupErpCode.name}] 동일한 상품이 등록되어있습니다 (ERP코드: ${erpCodeTrim})`, 'err');
+    // 중복 검증 — 최신 상태를 DB에서 직접 확인(판매중지 포함, 목록 staleness 방지)
+    const { data: dupRows } = await supabase.from('products')
+      .select('id, name, code, erp_code, is_sales_stopped')
+      .or(`code.eq.${codeTrim},erp_code.eq.${erpCodeTrim},code.eq.${erpCodeTrim},erp_code.eq.${codeTrim}`)
+      .limit(5);
+    const dup = (dupRows || [])[0];
+    if (dup) {
+      if (dup.is_sales_stopped) {
+        // 되살리기: 새로 등록하지 말고 기존 상품을 판매중으로 전환
+        if (window.confirm(`이미 등록된 상품입니다 (판매중지 상태)\n\n[${dup.name}] (코드: ${dup.code})\n\n새로 등록하지 말고 이 상품을 '판매중'으로 되살릴까요?`)) {
+          const { error: rErr } = await supabase.from('products').update({ is_sales_stopped: false }).eq('id', dup.id);
+          if (rErr) { toast(rErr.message, 'err'); return; }
+          toast(`[${dup.name}] 판매중으로 되살렸습니다`, 'ok');
+          setNewProd(''); setNewOption(''); setNewPrice(''); setNewCode(''); setNewCost(''); setNewErpCode(''); fetchAll();
+        }
+        return;
+      }
+      toast(`이미 [${dup.name}] 상품이 등록되어 있습니다 (코드: ${dup.code}). 새로 등록하지 말고 기존 상품을 [수정]하세요.`, 'err');
       return;
     }
     const { error } = await supabase.from('products').insert({
@@ -64,7 +73,7 @@ export default function ProductMgmtPage({ subPage }) {
       cost: Number(newCost) || 0,
       price: Number(newPrice) || 0,
     });
-    if (error) toast(error.message, 'err');
+    if (error) toast(/duplicate|unique/i.test(error.message) ? `이미 같은 코드의 상품이 있습니다 (코드: ${codeTrim})` : error.message, 'err');
     else { toast('상품 추가 완료', 'ok'); setNewProd(''); setNewOption(''); setNewPrice(''); setNewCode(''); setNewCost(''); setNewErpCode(''); fetchAll(); }
   };
 
