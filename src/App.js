@@ -9,6 +9,7 @@ import CustomerQRPage from './pages/customer/CustomerQRPage';
 import CustomerDocPage from './pages/customer/CustomerDocPage';
 import CustomerLookupPage from './pages/customer/CustomerLookupPage';
 import QrBatchPrintPage from './pages/customer/QrBatchPrintPage';
+import ConsentQrBatchPrintPage from './pages/customer/ConsentQrBatchPrintPage';
 import CustomerInputPage from './pages/customer/CustomerInputPage';
 import MyMembersPage from './pages/customer/MyMembersPage';
 import SmsHistoryPage from './pages/customer/SmsHistoryPage';
@@ -744,6 +745,7 @@ export default function App() {
     incentive:      '급여관리',
     member_mgmt:    '회원 조회',
     qr_print_all:   '매장 QR 인쇄',
+    consent_qr_print: '재동의 QR 인쇄',
     sms_history:    '문자 내역',
     sms_unsubscribe_sync: '수신거부 동기화',
     hq_delivery_request: '고객 택배요청',
@@ -842,6 +844,7 @@ export default function App() {
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'qr_print_all'   && canSeeMain && <QrBatchPrintPage/>}
+            {page === 'consent_qr_print' && canSeeMain && <ConsentQrBatchPrintPage/>}
             {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
             {page === 'sms_unsubscribe_sync' && canSeeMain && <SmsUnsubscribeSyncPage/>}
             {page === 'hq_delivery_request' && (canSeeMain || isScm) && <HQDeliveryRequestPage profile={profile} view="customer"/>}
