@@ -472,11 +472,17 @@ export default function SalesInputPage({ profile }) {
         const buyerUsed = ptsUsedByCust[String(customerId)]?.used || 0;
         const newPoints = Math.max(0, (customer?.total_points || 0) - buyerUsed + earnedPoints);
         const newUsedPoints = (customer?.used_points || 0) + buyerUsed;
+        // 구매건수(+1 방문/거래)·구매수량(+이번 판매 수량) 누적 — 최신값 조회 후 가산
+        const saleQty = validLines.reduce((s,l) => s + (Number(l.quantity)||0), 0);
+        const { data: agg } = await supabase.from('customers')
+          .select('purchase_count, purchase_qty').eq('id', customerId).single();
         await supabase.from('customers').update({
           total_purchase: newTotal,
           grade: newGrade.grade,
           total_points: newPoints,
           used_points: newUsedPoints,
+          purchase_count: (agg?.purchase_count || 0) + 1,
+          purchase_qty:   (agg?.purchase_qty   || 0) + saleQty,
         }).eq('id', customerId);
       }
 
