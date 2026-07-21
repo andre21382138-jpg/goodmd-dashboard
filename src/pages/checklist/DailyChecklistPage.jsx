@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
-import { DAILY_CHECKLIST, CHECKLIST_ITEMS } from '../../lib/dailyChecklist';
+import { DAILY_CHECKLIST, CHECKLIST_ITEMS, ATTENTION_ANSWERS } from '../../lib/dailyChecklist';
 
 // 매장 → 일일 체크리스트 (매니저 매일 작성)
 export default function DailyChecklistPage({ profile }) {
@@ -14,6 +14,7 @@ export default function DailyChecklistPage({ profile }) {
   const branchOpts = useMemo(() => (hqStore ? (STORE_MAP[hqStore] || []) : []), [hqStore]);
   const kstToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const [checkDate, setCheckDate] = useState(kstToday); // 기본 오늘, 미제출 보완용 과거 날짜 선택 가능
+  const [tab, setTab] = useState('write'); // write | history
 
   const [author, setAuthor]     = useState('');
   const [answers, setAnswers]   = useState({});
@@ -87,8 +88,21 @@ export default function DailyChecklistPage({ profile }) {
 
   const inputStyle = { height: 38, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 14, outline: 'none' };
 
+  const tabBtn = (on) => ({ height: 40, padding: '0 22px', borderRadius: 'var(--radius)', border: '2px solid', cursor: 'pointer', fontSize: 14, fontWeight: 700,
+    borderColor: on ? 'var(--accent)' : 'var(--border)', background: on ? 'var(--accent)' : '#fff', color: on ? '#fff' : 'var(--text2)' });
+
   return (
     <div style={{ maxWidth: 1100 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <button type="button" onClick={() => setTab('write')} style={tabBtn(tab === 'write')}>📝 작성</button>
+        <button type="button" onClick={() => setTab('history')} style={tabBtn(tab === 'history')}>📜 이전 제출내역</button>
+      </div>
+
+      {tab === 'history' ? (
+        <ChecklistHistory storeName={storeName} branchName={branchName} isStoreMgr={isStoreMgr}
+          hqStore={hqStore} setHqStore={setHqStore} hqBranch={hqBranch} setHqBranch={setHqBranch}
+          branchOpts={branchOpts} inputStyle={inputStyle} />
+      ) : (<>
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div className="card-label" style={{ margin: 0 }}>📋 일일 체크리스트</div>
@@ -165,6 +179,120 @@ export default function DailyChecklistPage({ profile }) {
         style={{ width: '100%', height: 48, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
         {saving ? '저장 중…' : (existing ? '✓ 수정 저장' : '✓ 저장')}
       </button>
+      </>)}
     </div>
+  );
+}
+
+// 이전 제출내역 — 해당 매장이 저장한 체크리스트 날짜별 조회
+function ChecklistHistory({ storeName, branchName, isStoreMgr, hqStore, setHqStore, hqBranch, setHqBranch, branchOpts, inputStyle }) {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [openId, setOpenId]   = useState(null);
+
+  const load = useCallback(async () => {
+    if (!storeName || !branchName) { setRows([]); return; }
+    setLoading(true);
+    const { data, error } = await supabase.from('daily_checklists').select('*')
+      .eq('store_name', storeName).eq('branch_name', branchName)
+      .order('check_date', { ascending: false });
+    if (error) toast(error.message, 'err');
+    setRows(data || []);
+    setLoading(false);
+    setOpenId(null);
+  }, [storeName, branchName]);
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <>
+      {!isStoreMgr && (
+        <div className="card">
+          <div className="card-label">🏬 매장 선택</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <select value={hqStore} onChange={e => { setHqStore(e.target.value); setHqBranch(''); }} style={{ ...inputStyle, width: 160 }}>
+              <option value="">점포 선택</option>
+              {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={hqBranch} onChange={e => setHqBranch(e.target.value)} disabled={!hqStore} style={{ ...inputStyle, width: 160 }}>
+              <option value="">{hqStore ? '지점 선택' : '점포 먼저'}</option>
+              {branchOpts.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
+      <div className="card" style={{ padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div className="card-label" style={{ margin: 0 }}>📜 이전 제출내역{storeName ? ` — ${storeName} ${branchName}` : ''}</div>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text3)' }}>총 {rows.length}건</span>
+          <button className="btn btn-s" onClick={load} disabled={loading}>{loading ? <span className="spinner" /> : '🔄 새로고침'}</button>
+        </div>
+        {(!storeName || !branchName) ? <div className="empty">점포·지점을 선택해주세요</div>
+        : loading ? <div className="empty"><span className="spinner" /></div>
+        : rows.length === 0 ? <div className="empty">저장된 체크리스트가 없습니다</div>
+        : (
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr><th style={{ width: 130 }}>작성일</th><th>작성자</th><th style={{ width: 140 }}>저장시각</th><th style={{ width: 90, textAlign: 'center' }}>주의</th><th style={{ width: 80, textAlign: 'center' }}></th></tr>
+              </thead>
+              <tbody>
+                {rows.map(r => {
+                  const open = openId === r.id;
+                  const attn = Object.values(r.answers || {}).filter(v => ATTENTION_ANSWERS.has(v)).length;
+                  return (
+                    <React.Fragment key={r.id}>
+                      <tr style={{ cursor: 'pointer', background: open ? '#fff8e1' : 'transparent' }} onClick={() => setOpenId(open ? null : r.id)}>
+                        <td style={{ fontWeight: 700 }}>{r.check_date}</td>
+                        <td style={{ fontWeight: 600 }}>{r.author || '-'}</td>
+                        <td className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>{r.created_at ? new Date(r.created_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          {attn > 0 ? <span className="badge" style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80', fontSize: 11 }}>주의 {attn}</span> : <span style={{ color: 'var(--text3)', fontSize: 12 }}>-</span>}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button className="btn btn-s" style={{ padding: '3px 10px', fontSize: 11 }} onClick={e => { e.stopPropagation(); setOpenId(open ? null : r.id); }}>{open ? '▲ 닫기' : '▼ 보기'}</button>
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr>
+                          <td colSpan={5} style={{ background: '#fafafa', padding: '12px 16px', borderTop: '2px solid var(--accent)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+                              {DAILY_CHECKLIST.map(sec => (
+                                <div key={sec.cat}>
+                                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text2)', marginBottom: 6 }}>{sec.icon} {sec.cat}</div>
+                                  {sec.items.map(it => {
+                                    const val = (r.answers || {})[it.label];
+                                    const warn = ATTENTION_ANSWERS.has(val);
+                                    const im = (r.item_memos || {})[it.label];
+                                    return (
+                                      <div key={it.label} style={{ padding: '3px 0', borderBottom: '1px dashed #eee' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12 }}>
+                                          <span style={{ color: 'var(--text2)' }}>{it.label}</span>
+                                          <span style={{ fontWeight: 700, color: warn ? 'var(--danger)' : 'var(--text)', whiteSpace: 'nowrap' }}>{val || '-'}</span>
+                                        </div>
+                                        {im && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>┗ {im}</div>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+                            {r.memo && (
+                              <div style={{ marginTop: 12, fontSize: 12, background: '#fff', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
+                                <b style={{ color: 'var(--text2)' }}>비고:</b> {r.memo}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
