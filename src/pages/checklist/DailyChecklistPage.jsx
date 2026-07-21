@@ -189,6 +189,7 @@ function ChecklistHistory({ storeName, branchName, isStoreMgr, hqStore, setHqSto
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [openId, setOpenId]   = useState(null);
+  const [filterDate, setFilterDate] = useState(''); // '' = 전체
 
   const load = useCallback(async () => {
     if (!storeName || !branchName) { setRows([]); return; }
@@ -202,6 +203,8 @@ function ChecklistHistory({ storeName, branchName, isStoreMgr, hqStore, setHqSto
     setOpenId(null);
   }, [storeName, branchName]);
   useEffect(() => { load(); }, [load]);
+
+  const shown = filterDate ? rows.filter(r => r.check_date === filterDate) : rows;
 
   return (
     <>
@@ -222,14 +225,17 @@ function ChecklistHistory({ storeName, branchName, isStoreMgr, hqStore, setHqSto
       )}
 
       <div className="card" style={{ padding: '16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <div className="card-label" style={{ margin: 0 }}>📜 이전 제출내역{storeName ? ` — ${storeName} ${branchName}` : ''}</div>
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text3)' }}>총 {rows.length}건</span>
+          <input type="date" value={filterDate} onChange={e => { setFilterDate(e.target.value); setOpenId(null); }}
+            style={{ ...inputStyle, height: 34, width: 150 }} title="특정 날짜만 조회" />
+          {filterDate && <button className="btn btn-s" onClick={() => setFilterDate('')}>전체</button>}
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text3)' }}>{filterDate ? `${shown.length}건 (${filterDate})` : `총 ${rows.length}건`}</span>
           <button className="btn btn-s" onClick={load} disabled={loading}>{loading ? <span className="spinner" /> : '🔄 새로고침'}</button>
         </div>
         {(!storeName || !branchName) ? <div className="empty">점포·지점을 선택해주세요</div>
         : loading ? <div className="empty"><span className="spinner" /></div>
-        : rows.length === 0 ? <div className="empty">저장된 체크리스트가 없습니다</div>
+        : shown.length === 0 ? <div className="empty">{filterDate ? '해당 날짜에 저장된 체크리스트가 없습니다' : '저장된 체크리스트가 없습니다'}</div>
         : (
           <div className="twrap">
             <table>
@@ -237,7 +243,7 @@ function ChecklistHistory({ storeName, branchName, isStoreMgr, hqStore, setHqSto
                 <tr><th style={{ width: 130 }}>작성일</th><th>작성자</th><th style={{ width: 140 }}>저장시각</th><th style={{ width: 90, textAlign: 'center' }}>주의</th><th style={{ width: 80, textAlign: 'center' }}></th></tr>
               </thead>
               <tbody>
-                {rows.map(r => {
+                {shown.map(r => {
                   const open = openId === r.id;
                   const attn = Object.values(r.answers || {}).filter(v => ATTENTION_ANSWERS.has(v)).length;
                   return (
