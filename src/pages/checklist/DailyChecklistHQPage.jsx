@@ -47,6 +47,7 @@ export default function DailyChecklistHQPage() {
 
   const submitted = stores.filter(s => byKey.has(`${s.store}|${s.branch}`));
   const missing   = stores.filter(s => !byKey.has(`${s.store}|${s.branch}`));
+  const missingByStore = missing.reduce((m, s) => { (m[s.store] = m[s.store] || []).push(s.branch); return m; }, {});
 
   return (
     <>
@@ -69,12 +70,14 @@ export default function DailyChecklistHQPage() {
       {/* 누락 매장 */}
       {missing.length > 0 && (
         <div className="card" style={{ padding: '14px 18px', border: '1px solid #ef9a9a', background: '#fff5f5' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--danger)', marginBottom: 8 }}>⚠️ 미작성 매장 {missing.length}개</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {missing.map(s => (
-              <span key={`${s.store}|${s.branch}`} className="badge" style={{ background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a', fontSize: 12 }}>
-                {s.store} {s.branch}
-              </span>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--danger)', marginBottom: 10 }}>⚠️ 미작성 매장 {missing.length}개</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {Object.entries(missingByStore).map(([store, branches]) => (
+              <div key={store} style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 800, color: 'var(--danger)', minWidth: 120, flexShrink: 0 }}>{store}</span>
+                <span style={{ color: 'var(--text3)' }}>:</span>
+                <span style={{ color: 'var(--text)', fontSize: 13, fontWeight: 600 }}>{branches.join(', ')}</span>
+              </div>
             ))}
           </div>
         </div>
