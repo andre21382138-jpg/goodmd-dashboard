@@ -88,7 +88,7 @@ export default function DailyChecklistPage({ profile }) {
   const inputStyle = { height: 38, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 14, outline: 'none' };
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div style={{ maxWidth: 1100 }}>
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div className="card-label" style={{ margin: 0 }}>📋 일일 체크리스트</div>
@@ -129,7 +129,7 @@ export default function DailyChecklistPage({ profile }) {
           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 12 }}>{sec.icon} {sec.cat}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {sec.items.map(it => (
-              <div key={it.label} style={{ display: 'grid', gridTemplateColumns: '170px 1fr 200px', gap: 10, alignItems: 'center' }}>
+              <div key={it.label} style={{ display: 'grid', gridTemplateColumns: '190px auto 1fr', gap: 12, alignItems: 'center' }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>
                   {it.label} {!answers[it.label] && <span style={{ color: 'var(--danger)', fontSize: 11 }}>*</span>}
                 </div>
