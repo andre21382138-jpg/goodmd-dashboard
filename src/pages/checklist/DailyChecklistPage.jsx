@@ -129,8 +129,8 @@ export default function DailyChecklistPage({ profile }) {
           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 12 }}>{sec.icon} {sec.cat}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {sec.items.map(it => (
-              <div key={it.label} style={{ display: 'grid', gridTemplateColumns: '190px auto 1fr', gap: 12, alignItems: 'center' }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>
+              <div key={it.label} style={{ display: 'grid', gridTemplateColumns: '190px 380px 1fr', gap: 12, alignItems: 'start' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, paddingTop: 8 }}>
                   {it.label} {!answers[it.label] && <span style={{ color: 'var(--danger)', fontSize: 11 }}>*</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -145,9 +145,9 @@ export default function DailyChecklistPage({ profile }) {
                     );
                   })}
                 </div>
-                <input value={itemMemos[it.label] || ''} onChange={e => setItemMemos(p => ({ ...p, [it.label]: e.target.value }))}
-                  placeholder="비고"
-                  style={{ width: '100%', height: 32, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
+                <textarea value={itemMemos[it.label] || ''} onChange={e => setItemMemos(p => ({ ...p, [it.label]: e.target.value }))}
+                  placeholder="비고 (엔터로 줄바꿈)" rows={1}
+                  style={{ width: '100%', minHeight: 34, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical' }} />
               </div>
             ))}
           </div>
