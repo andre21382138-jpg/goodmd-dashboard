@@ -123,10 +123,14 @@ export default function DailyChecklistHQPage() {
                                   {sec.items.map(it => {
                                     const val = (r.answers || {})[it.label];
                                     const warn = ATTENTION_ANSWERS.has(val);
+                                    const im = (r.item_memos || {})[it.label];
                                     return (
-                                      <div key={it.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, padding: '3px 0', borderBottom: '1px dashed #eee' }}>
-                                        <span style={{ color: 'var(--text2)' }}>{it.label}</span>
-                                        <span style={{ fontWeight: 700, color: warn ? 'var(--danger)' : 'var(--text)', whiteSpace: 'nowrap' }}>{val || '-'}</span>
+                                      <div key={it.label} style={{ padding: '3px 0', borderBottom: '1px dashed #eee' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12 }}>
+                                          <span style={{ color: 'var(--text2)' }}>{it.label}</span>
+                                          <span style={{ fontWeight: 700, color: warn ? 'var(--danger)' : 'var(--text)', whiteSpace: 'nowrap' }}>{val || '-'}</span>
+                                        </div>
+                                        {im && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>┗ {im}</div>}
                                       </div>
                                     );
                                   })}

@@ -17,6 +17,7 @@ export default function DailyChecklistPage({ profile }) {
 
   const [author, setAuthor]     = useState('');
   const [answers, setAnswers]   = useState({});
+  const [itemMemos, setItemMemos] = useState({}); // { 항목라벨: 비고 }
   const [memo, setMemo]         = useState('');
   const [saving, setSaving]     = useState(false);
   const [existing, setExisting] = useState(null);
@@ -52,8 +53,8 @@ export default function DailyChecklistPage({ profile }) {
     const { data } = await supabase.from('daily_checklists').select('*')
       .eq('store_name', storeName).eq('branch_name', branchName).eq('check_date', checkDate).maybeSingle();
     setExisting(data || null);
-    if (data) { setAnswers(data.answers || {}); setAuthor(data.author || ''); setMemo(data.memo || ''); }
-    else { setAnswers({}); setMemo(''); setAuthor(''); }
+    if (data) { setAnswers(data.answers || {}); setItemMemos(data.item_memos || {}); setAuthor(data.author || ''); setMemo(data.memo || ''); }
+    else { setAnswers({}); setItemMemos({}); setMemo(''); setAuthor(''); }
   }, [storeName, branchName, checkDate]);
   useEffect(() => { loadToday(); }, [loadToday]);
 
@@ -68,9 +69,11 @@ export default function DailyChecklistPage({ profile }) {
     setSaving(true);
     const clean = {};
     for (const l of CHECKLIST_ITEMS) clean[l] = answers[l];
+    const cleanMemos = {};
+    for (const l of CHECKLIST_ITEMS) { const v = (itemMemos[l] || '').trim(); if (v) cleanMemos[l] = v; }
     const row = {
       store_name: storeName, branch_name: branchName, check_date: checkDate,
-      author: author.trim(), answers: clean, memo: memo.trim() || null,
+      author: author.trim(), answers: clean, item_memos: cleanMemos, memo: memo.trim() || null,
       created_by: profile?.id || null, updated_at: new Date().toISOString(),
     };
     let error;
@@ -142,6 +145,9 @@ export default function DailyChecklistPage({ profile }) {
                     );
                   })}
                 </div>
+                <input value={itemMemos[it.label] || ''} onChange={e => setItemMemos(p => ({ ...p, [it.label]: e.target.value }))}
+                  placeholder="비고 (선택)"
+                  style={{ flex: 1, minWidth: 130, height: 32, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 12, outline: 'none' }} />
               </div>
             ))}
           </div>
