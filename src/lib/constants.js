@@ -69,6 +69,7 @@ export const HQ_MENUS = [
   { key: 'hq_delivery_request', icon: '📦', label: '고객 택배요청' },
   { key: 'biz_delivery_request', icon: '🏭', label: '특판 발주요청' },
   { key: 'scm_shipping',   icon: '🚚', label: '매장 발주요청' },
+  { key: 'daily_checklist_hq', icon: '📋', label: '매장 일일 체크' },
 ];
 export const MANAGER_MENUS = [
   { key: 'home',           icon: '🏠', label: '홈 대시보드' },
@@ -88,6 +89,7 @@ export const MANAGER_MENUS = [
     { key: 'leave_plan',    icon: '📅', label: '휴무 신청' },
     { key: 'store_closure', icon: '🏪', label: '휴점 등록' },
   ]},
+  { key: 'daily_checklist', icon: '📋', label: '일일 체크리스트' },
 ];
 export const ADMIN_MENUS = [
   { key: 'admin',  icon: '🔐', label: '사용자 관리' },
