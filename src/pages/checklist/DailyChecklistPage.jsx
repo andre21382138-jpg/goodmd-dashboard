@@ -13,21 +13,48 @@ export default function DailyChecklistPage({ profile }) {
   const branchName = isStoreMgr ? profile.branch     : hqBranch;
   const branchOpts = useMemo(() => (hqStore ? (STORE_MAP[hqStore] || []) : []), [hqStore]);
   const kstToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const [checkDate, setCheckDate] = useState(kstToday); // 기본 오늘, 미제출 보완용 과거 날짜 선택 가능
 
   const [author, setAuthor]     = useState('');
   const [answers, setAnswers]   = useState({});
   const [memo, setMemo]         = useState('');
   const [saving, setSaving]     = useState(false);
   const [existing, setExisting] = useState(null);
+  const [workers, setWorkers]   = useState([]);
+
+  // 해당 매장 근무자 목록 (작성자 선택용)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!storeName || !branchName) { setWorkers([]); return; }
+      let acctId = isStoreMgr ? profile.id : null;
+      if (!acctId) {
+        const { data: prof } = await supabase.from('profiles').select('id')
+          .eq('department', storeName).eq('branch', branchName).eq('approved', true).limit(1).maybeSingle();
+        acctId = prof?.id;
+      }
+      if (!acctId) { if (!cancelled) setWorkers([]); return; }
+      const { data } = await supabase.from('store_members')
+        .select('name, display_name, job_title').eq('store_account_id', acctId).is('resigned_at', null)
+        .order('is_primary', { ascending: false });
+      if (!cancelled) setWorkers(data || []);
+    })();
+    return () => { cancelled = true; };
+  }, [storeName, branchName, isStoreMgr, profile.id]);
+  const workerNames = useMemo(() => {
+    const names = workers.map(w => ({ nm: w.display_name || w.name, job: w.job_title }));
+    if (author && !names.some(n => n.nm === author)) names.push({ nm: author, job: '' }); // 기존 저장 작성자 유지
+    return names;
+  }, [workers, author]);
 
   const loadToday = useCallback(async () => {
     if (!storeName || !branchName) { setExisting(null); return; }
     const { data } = await supabase.from('daily_checklists').select('*')
-      .eq('store_name', storeName).eq('branch_name', branchName).eq('check_date', kstToday).maybeSingle();
+      .eq('store_name', storeName).eq('branch_name', branchName).eq('check_date', checkDate).maybeSingle();
     setExisting(data || null);
     if (data) { setAnswers(data.answers || {}); setAuthor(data.author || ''); setMemo(data.memo || ''); }
-    else { setAnswers({}); setMemo(''); }
-  }, [storeName, branchName, kstToday]);
+    else { setAnswers({}); setMemo(''); setAuthor(''); }
+  }, [storeName, branchName, checkDate]);
   useEffect(() => { loadToday(); }, [loadToday]);
 
   const pick = (label, opt) => setAnswers(prev => ({ ...prev, [label]: prev[label] === opt ? undefined : opt }));
@@ -36,13 +63,13 @@ export default function DailyChecklistPage({ profile }) {
 
   const save = async () => {
     if (!storeName || !branchName) { toast('점포·지점을 선택해주세요', 'err'); return; }
-    if (!author.trim()) { toast('작성자 이름을 입력해주세요', 'err'); return; }
+    if (!author.trim()) { toast('작성자(근무자)를 선택해주세요', 'err'); return; }
     if (!allAnswered) { toast(`모든 항목을 체크해주세요 (${answeredCount}/${CHECKLIST_ITEMS.length})`, 'err'); return; }
     setSaving(true);
     const clean = {};
     for (const l of CHECKLIST_ITEMS) clean[l] = answers[l];
     const row = {
-      store_name: storeName, branch_name: branchName, check_date: kstToday,
+      store_name: storeName, branch_name: branchName, check_date: checkDate,
       author: author.trim(), answers: clean, memo: memo.trim() || null,
       created_by: profile?.id || null, updated_at: new Date().toISOString(),
     };
@@ -62,13 +89,16 @@ export default function DailyChecklistPage({ profile }) {
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div className="card-label" style={{ margin: 0 }}>📋 일일 체크리스트</div>
-          {existing && <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', fontSize: 11 }}>오늘 저장됨 (수정 가능)</span>}
+          {existing && <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', fontSize: 11 }}>이 날짜 저장됨 (수정 가능)</span>}
           <span style={{ marginLeft: 'auto', fontSize: 12, color: answeredCount === CHECKLIST_ITEMS.length ? '#2e7d32' : 'var(--accent)', fontWeight: 700 }}>
             {answeredCount} / {CHECKLIST_ITEMS.length} 항목
           </span>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ fontSize: 13, fontFamily: 'var(--mono)', color: 'var(--text2)' }}>📅 {kstToday}</div>
+          <span style={{ fontSize: 12, color: 'var(--text3)' }}>📅 작성일</span>
+          <input type="date" value={checkDate} max={kstToday} onChange={e => setCheckDate(e.target.value)}
+            style={{ ...inputStyle, width: 150 }} title="미제출한 지난 날짜도 선택해 작성할 수 있습니다" />
+          {checkDate !== kstToday && <span className="badge" style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80', fontSize: 11 }}>과거 날짜</span>}
           {isStoreMgr ? (
             <div style={{ fontSize: 13, fontWeight: 700 }}>🏬 {storeName} {branchName}</div>
           ) : (
@@ -83,7 +113,11 @@ export default function DailyChecklistPage({ profile }) {
               </select>
             </>
           )}
-          <input value={author} onChange={e => setAuthor(e.target.value)} placeholder="작성자 이름" style={{ ...inputStyle, width: 160, marginLeft: 'auto' }} />
+          <select value={author} onChange={e => setAuthor(e.target.value)}
+            style={{ ...inputStyle, width: 180, marginLeft: 'auto', borderColor: author ? 'var(--border)' : 'var(--accent)' }}>
+            <option value="">작성자 선택 *</option>
+            {workerNames.map(w => <option key={w.nm} value={w.nm}>{w.nm}{w.job ? ` (${w.job})` : ''}</option>)}
+          </select>
         </div>
       </div>
 
