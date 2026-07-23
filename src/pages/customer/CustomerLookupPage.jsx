@@ -521,6 +521,14 @@ export default function CustomerLookupPage({ profile }) {
         const n = Number(String(v ?? '').replace(/[^0-9.-]/g, ''));
         return Number.isFinite(n) ? n : 0;
       };
+      // 빈 칸 구분용: 값이 있으면 숫자, 비어있으면 null(기존값 보존 목적)
+      const numOrNull = (v) => {
+        const s = String(v ?? '').trim();
+        if (s === '') return null;
+        const n = Number(s.replace(/[^0-9.-]/g, ''));
+        return Number.isFinite(n) ? n : null;
+      };
+      const AGG_FIELDS = ['total_points', 'used_points', 'purchase_count', 'purchase_qty', 'total_purchase'];
       const cell = (r, c) => (c === -1 ? '' : r[c]);
 
       // 유효 데이터 추출 + 파일 내 중복(휴대폰+이름) 제거(마지막 행 우선)
@@ -544,11 +552,11 @@ export default function CustomerLookupPage({ profile }) {
           birthday: serialToYmd(cell(r, col.birth)),
           gender: ['여','남'].includes(String(cell(r, col.gender)).trim()) ? String(cell(r, col.gender)).trim() : null,
           grade: String(cell(r, col.grade) ?? '').trim() || null,
-          total_points: numOf(cell(r, col.avail)),
-          used_points: numOf(cell(r, col.used)),
-          purchase_count: numOf(cell(r, col.pcnt)),
-          purchase_qty: numOf(cell(r, col.pqty)),
-          total_purchase: numOf(cell(r, col.pamt)),
+          total_points: numOrNull(cell(r, col.avail)),
+          used_points: numOrNull(cell(r, col.used)),
+          purchase_count: numOrNull(cell(r, col.pcnt)),
+          purchase_qty: numOrNull(cell(r, col.pqty)),
+          total_purchase: numOrNull(cell(r, col.pamt)),
           sms_consent: String(cell(r, col.sms)).trim() === '1',
         };
         byKey.set(rec.key, rec); // 같은 휴대폰+이름이면 마지막 행으로 덮어씀
@@ -583,11 +591,18 @@ export default function CustomerLookupPage({ profile }) {
         const { key, ...fields } = rec;
         const id = existing.get(key);
         if (id) {
-          updates.push({ id, fields }); // manager_name·sms_consent_at은 보존(미포함)
+          // 기존 회원: 엑셀 집계칸이 비어있으면(null) 해당 필드는 갱신에서 제외해 기존값 보존
+          // (건수·수량만 있고 금액칸이 빈 파일이 total_purchase를 0으로 덮던 문제 방지)
+          const upd = { ...fields };
+          for (const k of AGG_FIELDS) { if (upd[k] === null) delete upd[k]; }
+          updates.push({ id, fields: upd }); // manager_name·sms_consent_at은 보존(미포함)
         } else {
-          // 신규: 동의일은 가입일을 기준으로 설정 (엑셀에 동의일 컬럼이 없음)
+          // 신규: 집계 빈칸은 0으로, 동의일은 가입일 기준
+          const aggDefaults = {};
+          for (const k of AGG_FIELDS) aggDefaults[k] = fields[k] ?? 0;
           inserts.push({
             ...fields,
+            ...aggDefaults,
             sms_consent_at: fields.sms_consent ? fields.joined_at : null,
             manager_name: null,
             created_by: profile?.id || null,
