@@ -476,14 +476,26 @@ export default function SalesInputPage({ profile }) {
         const saleQty = validLines.reduce((s,l) => s + (Number(l.quantity)||0), 0);
         const { data: agg } = await supabase.from('customers')
           .select('purchase_count, purchase_qty').eq('id', customerId).single();
-        await supabase.from('customers').update({
+        const custUpdate = {
           total_purchase: newTotal,
           grade: newGrade.grade,
           total_points: newPoints,
           used_points: newUsedPoints,
           purchase_count: (agg?.purchase_count || 0) + 1,
           purchase_qty:   (agg?.purchase_qty   || 0) + saleQty,
-        }).eq('id', customerId);
+        };
+        // 회원 누적/적립 반영은 반드시 성공해야 함 — RLS가 막으면 에러 없이 0행만 반영되므로
+        // .select()로 실제 반영 행수를 확인하고, 실패 시 1회 재시도 후 경고(무음 손실 방지)
+        let { data: updRows, error: custUpdErr } = await supabase.from('customers')
+          .update(custUpdate).eq('id', customerId).select('id');
+        if (custUpdErr || !updRows || updRows.length === 0) {
+          ({ data: updRows, error: custUpdErr } = await supabase.from('customers')
+            .update(custUpdate).eq('id', customerId).select('id'));
+        }
+        if (custUpdErr || !updRows || updRows.length === 0) {
+          toast('⚠️ 판매는 저장됐으나 회원 적립·누적 반영에 실패했습니다. 관리자에게 알려주세요.', 'err');
+          console.error('회원 집계 반영 실패', { customerId, custUpdErr, updRows });
+        }
       }
 
       const modeMsg = memberMode === 'search'
