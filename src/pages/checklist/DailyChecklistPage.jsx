@@ -143,7 +143,7 @@ export default function DailyChecklistPage({ profile }) {
           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 12 }}>{sec.icon} {sec.cat}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {sec.items.map(it => (
-              <div key={it.label} style={{ display: 'grid', gridTemplateColumns: '190px 380px 1fr', gap: 12, alignItems: 'start' }}>
+              <div key={it.label} style={{ display: 'grid', gridTemplateColumns: '190px 440px 1fr', gap: 12, alignItems: 'start' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, paddingTop: 8 }}>
                   {it.label} {!answers[it.label] && <span style={{ color: 'var(--danger)', fontSize: 11 }}>*</span>}
                 </div>
