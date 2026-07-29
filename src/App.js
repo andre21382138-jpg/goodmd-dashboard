@@ -16,6 +16,7 @@ import SmsHistoryPage from './pages/customer/SmsHistoryPage';
 import SmsUnsubscribeSyncPage from './pages/customer/SmsUnsubscribeSyncPage';
 import HQDeliveryRequestPage from './pages/customer/HQDeliveryRequestPage';
 import SalesInputPage from './pages/sales/SalesInputPage';
+import ExpenseInputPage from './pages/sales/ExpenseInputPage';
 import SalesReturnPage from './pages/sales/SalesReturnPage';
 import MgrSalesViewPage from './pages/sales/MgrSalesViewPage';
 import StoreDeliveryStatusPage from './pages/customer/StoreDeliveryStatusPage';
@@ -759,6 +760,7 @@ export default function App() {
     biz_sales_view:      '특판 매출',
     lecture_sales_view:  '강좌 매출',
     sales_input:    '판매 입력',
+    expense_input:  '지출 입력',
     sales_return:   '반품 접수',
     mgr_sales_view: '매출 조회',
     store_delivery_status: '고객 택배',
@@ -860,6 +862,7 @@ export default function App() {
             {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage} mode="view"/>}
             {page === 'lecture_sales_view'  && canSeeMain && <LectureSalesPage profile={profile} setPage={setPage}/>}
             {page === 'sales_input'    && (isManager || isAdmin || isHQ) && <SalesInputPage profile={profile}/>}
+            {page === 'expense_input'  && (isManager || isAdmin || isHQ) && <ExpenseInputPage profile={profile}/>}
             {page === 'sales_return'   && (isManager || isAdmin || isHQ) && <SalesReturnPage profile={profile}/>}
             {page === 'mgr_sales_view' && (isManager || isAdmin || isHQ) && <MgrSalesViewPage profile={profile}/>}
             {page === 'store_delivery_status' && (isManager || isAdmin || isHQ) && <StoreDeliveryStatusPage profile={profile}/>}
