@@ -235,6 +235,17 @@ export default function SalesSettlementPage() {
     const dir = clSortDir === 'asc' ? 1 : -1;
     return [...clRows].sort((a, b) => ((Number(a[clSortKey]) || 0) - (Number(b[clSortKey]) || 0)) * dir);
   }, [clRows, clSortKey, clSortDir]);
+  // 점포별 합산 (지점 → 점포 단위로 묶음, clRows의 점포순 유지)
+  const clStoreRows = useMemo(() => {
+    const m = new Map();
+    for (const r of clRows) {
+      if (!m.has(r.dept)) m.set(r.dept, { dept:r.dept, revenue:0, soldCost:0, giftCost:0, tastingCost:0, totalCost:0, labor:0, headcount:0, branches:0 });
+      const g = m.get(r.dept);
+      g.revenue += r.revenue; g.soldCost += r.soldCost; g.giftCost += r.giftCost; g.tastingCost += r.tastingCost;
+      g.totalCost += r.totalCost; g.labor += r.labor; g.headcount += r.headcount; g.branches += 1;
+    }
+    return [...m.values()];
+  }, [clRows]);
   const clTh = (label, key) => {
     const active = clSortKey === key;
     return (
@@ -522,6 +533,58 @@ export default function SalesSettlementPage() {
                     title="정렬 해제하고 점포순으로">↺ 점포순</button>
                 )}
               </div>
+
+              {/* 점포별 합산 */}
+              <div style={{ fontSize:13, fontWeight:800, color:'var(--text)', margin:'4px 0 8px' }}>■ 점포별 합산</div>
+              <div className="twrap" style={{ marginBottom:22 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>점포</th><th style={{ textAlign:'center' }}>지점수</th>
+                      <th className="r">매출액</th><th className="r">매출비율</th>
+                      <th className="r">전체원가</th><th className="r">판매제품원가</th><th className="r">증정원가</th><th className="r">시식원가</th><th className="r">증정시식율</th>
+                      <th className="r">판매인건비</th><th className="r">인건비비율</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clStoreRows.map((r) => (
+                      <tr key={r.dept}>
+                        <td><span className="badge badge-dept">{r.dept}</span></td>
+                        <td style={{ textAlign:'center', fontFamily:'var(--mono)', color:'var(--text3)' }}>{r.branches}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{won(r.revenue)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.revenue, clTotals.revenue))}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:600 }}>{won(r.totalCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.soldCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'#6a1b9a' }}>{won(r.giftCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'#1565C0' }}>{won(r.tastingCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.totalCost))}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', whiteSpace:'nowrap' }}>
+                          {won(r.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({r.headcount}명)</span>
+                        </td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.labor, clTotals.labor))}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ background:'var(--bg3)', borderTop:'2px solid var(--border2)' }}>
+                      <td style={{ fontWeight:700, padding:'9px 11px' }}>합계</td>
+                      <td style={{ textAlign:'center', fontFamily:'var(--mono)', fontWeight:700 }}>{clRows.length}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14 }}>{won(clTotals.revenue)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>100.0%</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(clTotals.totalCost)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(clTotals.soldCost)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#6a1b9a' }}>{won(clTotals.giftCost)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0' }}>{won(clTotals.tastingCost)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.totalCost))}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', fontSize:14, whiteSpace:'nowrap' }}>
+                        {won(clTotals.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({clTotals.headcount}명)</span>
+                      </td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>100.0%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 지점별 상세 */}
+              <div style={{ fontSize:13, fontWeight:800, color:'var(--text)', margin:'4px 0 8px' }}>■ 지점별 상세</div>
               <div className="twrap">
                 <table>
                   <thead>
