@@ -226,8 +226,9 @@ export default function SalesSettlementPage() {
   const pctOf = (n, d) => (d ? (n / d) * 100 : 0);
   const pctStr = (v) => `${v.toFixed(1)}%`;
   const handleClSort = (key) => {
-    if (clSortKey === key) setClSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
-    else { setClSortKey(key); setClSortDir('desc'); }
+    if (clSortKey !== key) { setClSortKey(key); setClSortDir('desc'); }   // 1클릭: 높은순
+    else if (clSortDir === 'desc') setClSortDir('asc');                    // 2클릭: 낮은순
+    else { setClSortKey(''); setClSortDir('desc'); }                       // 3클릭: 점포순 복귀
   };
   const sortedClRows = useMemo(() => {
     if (!clSortKey) return clRows;
@@ -513,8 +514,13 @@ export default function SalesSettlementPage() {
             : clRows.length === 0 ? <div className="empty">해당 월 매출·인건비 데이터가 없습니다</div>
             : (
               <>
-              <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)' }}>
-                <b>{clYear}년 {clMonth}월</b> · 점포/지점 <b>{clRows.length}</b>개 · 판매인건비는 급여관리 기준 자동집계
+              <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                <span><b>{clYear}년 {clMonth}월</b> · 점포/지점 <b>{clRows.length}</b>개 · 판매인건비는 급여관리 기준 자동집계</span>
+                {clSortKey && (
+                  <button type="button" onClick={() => { setClSortKey(''); setClSortDir('desc'); }}
+                    style={{ height:26, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', color:'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer' }}
+                    title="정렬 해제하고 점포순으로">↺ 점포순</button>
+                )}
               </div>
               <div className="twrap">
                 <table>
