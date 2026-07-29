@@ -1,9 +1,9 @@
 // 월별 매장(지점) 판매인건비 자동집계 — 급여관리(payrollExcel)와 동일한 급여 계산 로직 사용
 //  · 월급자: 고정 월급
 //  · 일급자: 일급 × 근무일수 + 추가수당1 × 연장근무일수 + 휴일근무수당(고정) × 휴일근무일수
-//  (회원가입 인센티브는 인건비에서 제외 — 순수 급여만)
+//  · 회원가입 인센티브 포함 (매니저별 지급분을 해당 매장에 가산)
 import { supabase } from './supabase';
-import { calcDayCell, holidayUnitPayFor } from './payrollExcel';
+import { calcDayCell, holidayUnitPayFor, fetchMemberIncentive } from './payrollExcel';
 
 export async function computeMonthlyLaborByBranch({ year, month }) {
   const pad = n => String(n).padStart(2, '0');
@@ -17,6 +17,7 @@ export async function computeMonthlyLaborByBranch({ year, month }) {
     { data: attendance },
     { data: leavePlans },
     { data: storeClosures },
+    incentiveMap,
   ] = await Promise.all([
     supabase.from('store_members')
       .select('id, name, job_title, salary_type, salary, extra_pay, store_account_id, store:profiles!store_account_id(department, branch)')
@@ -24,6 +25,7 @@ export async function computeMonthlyLaborByBranch({ year, month }) {
     supabase.from('attendance').select('manager_id, manager_name, work_date').gte('work_date', from).lte('work_date', to),
     supabase.from('leave_plans').select('manager_id, manager_name, dates').eq('target_month', monthStr),
     supabase.from('store_closures').select('store_name, branch_name, dates').eq('target_month', monthStr),
+    fetchMemberIncentive(from, to),
   ]);
 
   const Holidays = (await import('date-holidays')).default;
@@ -72,7 +74,8 @@ export async function computeMonthlyLaborByBranch({ year, month }) {
     const baseSalary = isMonthly ? (m.salary || 0) : (m.salary || 0) * workDays;
     const extra   = isMonthly ? 0 : (m.extra_pay || 0) * extendDays;
     const holiday = isMonthly ? 0 : holidayUnitPayFor(dept, branch) * holidayDays;
-    const labor = baseSalary + extra + holiday;
+    const incentive = incentiveMap[m.name] || 0;  // 회원가입 인센티브 (매니저별)
+    const labor = baseSalary + extra + holiday + incentive;
 
     const key = `${dept}|${branch}`;
     byBranch.set(key, (byBranch.get(key) || 0) + labor);

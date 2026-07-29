@@ -38,7 +38,7 @@ export function calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun
 }
 
 // 매니저별 회원 가입 인센티브 계산 (기존 IncentivePage 로직 그대로)
-async function fetchMemberIncentive(from, to) {
+export async function fetchMemberIncentive(from, to) {
   const calc = (amt) => {
     if (amt >= 200000) return 3000;
     if (amt >= 100000) return 2000;
