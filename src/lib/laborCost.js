@@ -44,7 +44,7 @@ export async function computeMonthlyLaborByBranch({ year, month }) {
     (c.dates || []).forEach(d => closureMap.get(key).add(d));
   });
 
-  const byBranch = new Map(); // 'dept|branch' → 인건비(원)
+  const byBranch = new Map(); // 'dept|branch' → { labor: 인건비(원), count: 인원수 }
   let total = 0;
   for (const m of (members || [])) {
     const dept = m.store?.department || '';
@@ -78,7 +78,10 @@ export async function computeMonthlyLaborByBranch({ year, month }) {
     const labor = baseSalary + extra + holiday + incentive;
 
     const key = `${dept}|${branch}`;
-    byBranch.set(key, (byBranch.get(key) || 0) + labor);
+    const cur = byBranch.get(key) || { labor: 0, count: 0 };
+    cur.labor += labor;
+    cur.count += 1;
+    byBranch.set(key, cur);
     total += labor;
   }
 

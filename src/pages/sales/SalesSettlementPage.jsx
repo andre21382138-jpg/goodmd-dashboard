@@ -153,7 +153,7 @@ export default function SalesSettlementPage() {
       const map = new Map();
       const ensure = (dept, branch) => {
         const key = `${dept}|${branch}`;
-        if (!map.has(key)) map.set(key, { key, dept, branch, revenue:0, soldCost:0, giftCost:0, tastingCost:0, labor:0 });
+        if (!map.has(key)) map.set(key, { key, dept, branch, revenue:0, soldCost:0, giftCost:0, tastingCost:0, labor:0, headcount:0 });
         return map.get(key);
       };
       for (const r of sales) {
@@ -168,9 +168,11 @@ export default function SalesSettlementPage() {
         else if (r.payment === '시식') g.tastingCost += cost * q;   // J
         else                           g.soldCost    += cost * netQty; // H (반품은 음수로 차감)
       }
-      for (const [key, won] of labor.byBranch.entries()) {
+      for (const [key, info] of labor.byBranch.entries()) {
         const [dept, branch] = key.split('|');
-        ensure(dept, branch).labor += won;
+        const g = ensure(dept, branch);
+        g.labor += info.labor;
+        g.headcount += info.count;
       }
       const list = [...map.values()].map(g => ({ ...g, totalCost: g.soldCost + g.giftCost + g.tastingCost }));
       const rank = s => { const i = STORE_NAMES.indexOf(s); return i === -1 ? 999 : i; };
@@ -178,7 +180,7 @@ export default function SalesSettlementPage() {
       const sum = (k) => list.reduce((s, r) => s + r[k], 0);
       setClRows(list);
       setClTotals({ revenue: sum('revenue'), soldCost: sum('soldCost'), giftCost: sum('giftCost'),
-        tastingCost: sum('tastingCost'), totalCost: sum('totalCost'), labor: sum('labor') });
+        tastingCost: sum('tastingCost'), totalCost: sum('totalCost'), labor: sum('labor'), headcount: sum('headcount') });
       setClSearched(true);
     } catch (err) {
       toast('결산 조회 실패: ' + (err.message || err), 'err');
@@ -513,7 +515,9 @@ export default function SalesSettlementPage() {
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'#6a1b9a' }}>{won(r.giftCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'#1565C0' }}>{won(r.tastingCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.revenue))}</td>
-                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100' }}>{won(r.labor)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', whiteSpace:'nowrap' }}>
+                          {won(r.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({r.headcount}명)</span>
+                        </td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.labor, clTotals.labor))}</td>
                       </tr>
                     ))}
@@ -526,7 +530,9 @@ export default function SalesSettlementPage() {
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#6a1b9a' }}>{won(clTotals.giftCost)}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0' }}>{won(clTotals.tastingCost)}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.revenue))}</td>
-                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', fontSize:14 }}>{won(clTotals.labor)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', fontSize:14, whiteSpace:'nowrap' }}>
+                        {won(clTotals.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({clTotals.headcount}명)</span>
+                      </td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>100.0%</td>
                     </tr>
                   </tbody>
