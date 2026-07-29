@@ -754,7 +754,7 @@ export default function App() {
     biz_delivery_request: '특판 발주요청',
     store_info:     '매장주소정보',
     sales_view:          '매출조회',
-    sales_settlement:    '매출정산',
+    sales_settlement:    '매출확인',
     sales_list:          '매장 매출',
     biz_sales_view:      '특판 매출',
     lecture_sales_view:  '강좌 매출',

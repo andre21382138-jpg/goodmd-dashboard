@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
+import { computeMonthlyLaborByBranch } from '../../lib/laborCost';
 
 // 본사 매출정산 — 기간·점포별 상품 단위 정산 + 전월 동기간 비교
 //  조회기간: 상품코드/상품명/원가/판매가/판매수량/매출액/할인금액/실제매출/이익/원가비중(%)
@@ -27,6 +28,15 @@ export default function SalesSettlementPage() {
   const [searched, setSearched] = useState(false);
   const [sortKey, setSortKey] = useState('net');   // 정렬 기준 컬럼 (기본: 실제매출)
   const [sortDir, setSortDir] = useState('desc');  // 'desc' 높은순 / 'asc' 낮은순
+
+  // 매출결산 탭 (점포별 손익 결산 — 월 단위)
+  const [tab, setTab] = useState('settlement');    // settlement | closing
+  const [clYear, setClYear]   = useState(now.getFullYear());
+  const [clMonth, setClMonth] = useState(now.getMonth() + 1);
+  const [clRows, setClRows]   = useState([]);
+  const [clTotals, setClTotals] = useState(null);
+  const [clLoading, setClLoading] = useState(false);
+  const [clSearched, setClSearched] = useState(false);
 
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
@@ -113,6 +123,69 @@ export default function SalesSettlementPage() {
     setLoading(false);
   }, [fFrom, fTo, fStores, fBranch, cmpFrom, cmpTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── 매출결산: 월 단위 점포/지점별 손익 집계 ──
+  const fetchClosingSales = async (year, month) => {
+    const from = `${year}-${pad(month)}-01`;
+    const to   = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
+    const all = []; let start = 0; const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase.from('sales')
+        .select('store_name, branch_name, quantity, price, payment, product:products(cost)')
+        .neq('payment', '구매이력')
+        .gte('sold_at', from).lte('sold_at', to)
+        .order('id').range(start, start + PAGE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    return all;
+  };
+
+  const searchClosing = useCallback(async () => {
+    setClLoading(true);
+    try {
+      const [sales, labor] = await Promise.all([
+        fetchClosingSales(clYear, clMonth),
+        computeMonthlyLaborByBranch({ year: clYear, month: clMonth }),
+      ]);
+      const map = new Map();
+      const ensure = (dept, branch) => {
+        const key = `${dept}|${branch}`;
+        if (!map.has(key)) map.set(key, { key, dept, branch, revenue:0, soldCost:0, giftCost:0, tastingCost:0, labor:0 });
+        return map.get(key);
+      };
+      for (const r of sales) {
+        const g = ensure(r.store_name || '(미지정)', r.branch_name || '(미지정)');
+        const q = Number(r.quantity) || 0;
+        const price = Number(r.price) || 0;
+        const cost = Number(r.product?.cost) || 0;
+        const isReturn = r.payment === '반품' || price < 0;
+        const netQty = isReturn ? -q : q;
+        g.revenue += price * q;                       // C 매출액 (반품 음수·증정/시식 0 자동)
+        if (r.payment === '증정')      g.giftCost    += cost * q;   // I
+        else if (r.payment === '시식') g.tastingCost += cost * q;   // J
+        else                           g.soldCost    += cost * netQty; // H (반품은 음수로 차감)
+      }
+      for (const [key, won] of labor.byBranch.entries()) {
+        const [dept, branch] = key.split('|');
+        ensure(dept, branch).labor += won;
+      }
+      const list = [...map.values()].map(g => ({ ...g, totalCost: g.soldCost + g.giftCost + g.tastingCost }));
+      const rank = s => { const i = STORE_NAMES.indexOf(s); return i === -1 ? 999 : i; };
+      list.sort((a, b) => rank(a.dept) - rank(b.dept) || a.dept.localeCompare(b.dept) || a.branch.localeCompare(b.branch, 'ko'));
+      const sum = (k) => list.reduce((s, r) => s + r[k], 0);
+      setClRows(list);
+      setClTotals({ revenue: sum('revenue'), soldCost: sum('soldCost'), giftCost: sum('giftCost'),
+        tastingCost: sum('tastingCost'), totalCost: sum('totalCost'), labor: sum('labor') });
+      setClSearched(true);
+    } catch (err) {
+      toast('결산 조회 실패: ' + (err.message || err), 'err');
+    }
+    setClLoading(false);
+  }, [clYear, clMonth]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const totals = rows.reduce((t, r) => ({
     qty: t.qty + r.qty, gross: t.gross + r.gross, discount: t.discount + r.discount,
     net: t.net + r.net, cost: t.cost + r.costTotal, profit: t.profit + r.profit,
@@ -141,6 +214,10 @@ export default function SalesSettlementPage() {
     const up = v >= 0;
     return <span style={{ color: up ? '#1b5e20' : '#c62828', fontWeight:700 }}>{up ? '▲' : '▼'} {won(Math.abs(v))}</span>;
   };
+  const tabBtn = (on) => ({ height:40, padding:'0 22px', borderRadius:'var(--radius)', border:'2px solid', cursor:'pointer', fontSize:14, fontWeight:700,
+    borderColor: on ? 'var(--accent)' : 'var(--border)', background: on ? 'var(--accent)' : '#fff', color: on ? '#fff' : 'var(--text2)' });
+  const pctOf = (n, d) => (d ? (n / d) * 100 : 0);
+  const pctStr = (v) => `${v.toFixed(1)}%`;
 
   // ERP '기간별상품매출현황' 양식(굴림 9pt·흰 배경·천단위·2줄 헤더·순번·합계 상단)과
   // 동일하게 출력한다. (열너비/행높이/폰트/정렬/테두리/숫자서식 모두 샘플 파일 기준)
@@ -249,8 +326,14 @@ export default function SalesSettlementPage() {
 
   return (
     <div>
+      <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+        <button type="button" onClick={() => setTab('settlement')} style={tabBtn(tab === 'settlement')}>🧮 매출정산</button>
+        <button type="button" onClick={() => setTab('closing')} style={tabBtn(tab === 'closing')}>📊 매출결산</button>
+      </div>
+
+      {tab === 'settlement' && (<>
       <div className="card">
-        <div className="card-label">🧮 매출정산</div>
+        <div className="card-label">🧮 매출정산 <span style={{ fontSize:12, fontWeight:400, color:'var(--text3)' }}>· 기간·점포별 상품단위 정산</span></div>
         <div className="fbar" style={{ flexWrap:'wrap', gap:8 }}>
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
           <span style={{ fontSize:12, color:'var(--text3)' }}>~</span>
@@ -378,6 +461,82 @@ export default function SalesSettlementPage() {
           </>
         )}
       </div>
+      </>)}
+
+      {tab === 'closing' && (
+        <>
+          <div className="card">
+            <div className="card-label">📊 매출결산 <span style={{ fontSize:12, fontWeight:400, color:'var(--text3)' }}>· 월별 점포/지점 손익결산</span></div>
+            <div className="fbar" style={{ flexWrap:'wrap', gap:8 }}>
+              <select className="fsel" value={clYear} onChange={e => setClYear(Number(e.target.value))}>
+                {Array.from({ length: 4 }, (_, i) => now.getFullYear() - i).map(y => <option key={y} value={y}>{y}년</option>)}
+              </select>
+              <select className="fsel" value={clMonth} onChange={e => setClMonth(Number(e.target.value))}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}월</option>)}
+              </select>
+              <div className="fbar-right">
+                <button className="btn btn-p" onClick={searchClosing} disabled={clLoading}>
+                  {clLoading ? <span className="spinner"/> : '🔍 결산 조회'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding:'16px 20px' }}>
+            {clLoading ? <div className="empty"><span className="spinner"/></div>
+            : !clSearched ? <div className="empty">연·월을 선택하고 결산을 조회하세요</div>
+            : clRows.length === 0 ? <div className="empty">해당 월 매출·인건비 데이터가 없습니다</div>
+            : (
+              <>
+              <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)' }}>
+                <b>{clYear}년 {clMonth}월</b> · 점포/지점 <b>{clRows.length}</b>개 · 판매인건비는 급여관리 기준 자동집계
+              </div>
+              <div className="twrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>점포</th><th>지점</th>
+                      <th className="r">매출액</th><th className="r">매출비율</th>
+                      <th className="r">전체원가</th><th className="r">판매제품원가</th><th className="r">증정원가</th><th className="r">시식원가</th><th className="r">증정시식율</th>
+                      <th className="r">판매인건비</th><th className="r">인건비비율</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clRows.map((r) => (
+                      <tr key={r.key}>
+                        <td><span className="badge badge-dept">{r.dept}</span></td>
+                        <td><span className="badge badge-store">{r.branch}</span></td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{won(r.revenue)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.revenue, clTotals.revenue))}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:600 }}>{won(r.totalCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.soldCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'#6a1b9a' }}>{won(r.giftCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'#1565C0' }}>{won(r.tastingCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.revenue))}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100' }}>{won(r.labor)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.labor, clTotals.labor))}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ background:'var(--bg3)', borderTop:'2px solid var(--border2)' }}>
+                      <td colSpan={2} style={{ fontWeight:700, padding:'9px 11px' }}>합계</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14 }}>{won(clTotals.revenue)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>100.0%</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(clTotals.totalCost)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(clTotals.soldCost)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#6a1b9a' }}>{won(clTotals.giftCost)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0' }}>{won(clTotals.tastingCost)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.revenue))}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', fontSize:14 }}>{won(clTotals.labor)}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>100.0%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

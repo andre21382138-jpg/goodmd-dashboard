@@ -25,7 +25,7 @@ const DOW_KR = ['일','월','화','수','목','금','토'];
 const dayCol = (day) => 20 + day;
 
 // 표시 정책: 휴점 × 휴무신청 × 출근 × 휴무일/공휴일
-function calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun, isManager }) {
+export function calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun, isManager }) {
   // 매장 휴점일 — 출근 없으면 '휴점', 출근 있으면 '확인필요'
   if (isClosed) return hasAtt ? '확인필요' : '휴점';
   if (hasLeave && !hasAtt) return 'X';
@@ -86,7 +86,7 @@ const HOLIDAY_PAY_DEFAULT = 123840;
 const HOLIDAY_PAY_OVERRIDE = {
   '농협_SHOP|남창원점': 131580,
 };
-const holidayUnitPayFor = (dept, branch) =>
+export const holidayUnitPayFor = (dept, branch) =>
   HOLIDAY_PAY_OVERRIDE[`${dept}|${branch}`] ?? HOLIDAY_PAY_DEFAULT;
 
 export async function downloadPayrollExcel({ year, month }) {
