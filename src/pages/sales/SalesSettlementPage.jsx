@@ -42,6 +42,15 @@ export default function SalesSettlementPage() {
   const [clStoreSortKey, setClStoreSortKey] = useState(''); // 점포별 합산 정렬: '' = 점포순 기본
   const [clStoreSortDir, setClStoreSortDir] = useState('desc');
 
+  // 매장지출 탭
+  const [exYear, setExYear]   = useState(now.getFullYear());
+  const [exMonth, setExMonth] = useState(now.getMonth() + 1);
+  const [exRows, setExRows]   = useState([]);   // 매장별 합계 [{key,dept,branch,total,count}]
+  const [exRaw, setExRaw]     = useState([]);   // 원본 지출행 (상세 팝업용)
+  const [exLoading, setExLoading] = useState(false);
+  const [exSearched, setExSearched] = useState(false);
+  const [exDetail, setExDetail] = useState(null); // { dept, branch, items:[...] } 팝업
+
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
     const back = (s) => {
@@ -194,6 +203,49 @@ export default function SalesSettlementPage() {
     }
     setClLoading(false);
   }, [clYear, clMonth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 매장지출: 월별 매장(지점)별 총 지출 + 일자별 상세 ──
+  const searchExpense = useCallback(async () => {
+    setExLoading(true);
+    try {
+      const from = `${exYear}-${pad(exMonth)}-01`;
+      const to   = `${exYear}-${pad(exMonth)}-${pad(new Date(exYear, exMonth, 0).getDate())}`;
+      const all = []; let start = 0; const PAGE = 1000;
+      while (true) {
+        const { data, error } = await supabase.from('store_expenses')
+          .select('store_name, branch_name, expense_date, category, amount, memo')
+          .gte('expense_date', from).lte('expense_date', to)
+          .order('expense_date').order('id').range(start, start + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < PAGE) break;
+        start += PAGE;
+      }
+      const map = new Map();
+      for (const e of all) {
+        const key = `${e.store_name}|${e.branch_name}`;
+        if (!map.has(key)) map.set(key, { key, dept: e.store_name, branch: e.branch_name, total: 0, count: 0 });
+        const g = map.get(key); g.total += e.amount || 0; g.count += 1;
+      }
+      const rank = s => { const i = STORE_NAMES.indexOf(s); return i === -1 ? 999 : i; };
+      const list = [...map.values()].sort((a, b) => rank(a.dept) - rank(b.dept) || a.dept.localeCompare(b.dept) || a.branch.localeCompare(b.branch, 'ko'));
+      setExRaw(all);
+      setExRows(list);
+      setExSearched(true);
+    } catch (err) {
+      toast('지출 조회 실패: ' + (err.message || err), 'err');
+    }
+    setExLoading(false);
+  }, [exYear, exMonth]);
+
+  const openExDetail = (row) => {
+    const items = exRaw
+      .filter(e => e.store_name === row.dept && e.branch_name === row.branch)
+      .sort((a, b) => (a.expense_date < b.expense_date ? -1 : a.expense_date > b.expense_date ? 1 : 0));
+    setExDetail({ dept: row.dept, branch: row.branch, total: row.total, items });
+  };
+  const exTotal = exRows.reduce((s, r) => s + r.total, 0);
 
   const totals = rows.reduce((t, r) => ({
     qty: t.qty + r.qty, gross: t.gross + r.gross, discount: t.discount + r.discount,
@@ -386,6 +438,7 @@ export default function SalesSettlementPage() {
     <div>
       <div style={{ display:'flex', gap:8, marginBottom:14 }}>
         <button type="button" onClick={() => setTab('settlement')} style={tabBtn(tab === 'settlement')}>🧮 매출정산</button>
+        <button type="button" onClick={() => setTab('expense')} style={tabBtn(tab === 'expense')}>💸 매장지출</button>
         <button type="button" onClick={() => setTab('closing')} style={tabBtn(tab === 'closing')}>📊 매출결산</button>
       </div>
 
@@ -521,6 +574,67 @@ export default function SalesSettlementPage() {
       </div>
       </>)}
 
+      {tab === 'expense' && (
+        <>
+          <div className="card">
+            <div className="card-label">💸 매장지출 <span style={{ fontSize:12, fontWeight:400, color:'var(--text3)' }}>· 월별 매장 지출 합계</span></div>
+            <div className="fbar" style={{ flexWrap:'wrap', gap:8 }}>
+              <select className="fsel" value={exYear} onChange={e => setExYear(Number(e.target.value))}>
+                {Array.from({ length: 4 }, (_, i) => now.getFullYear() - i).map(y => <option key={y} value={y}>{y}년</option>)}
+              </select>
+              <select className="fsel" value={exMonth} onChange={e => setExMonth(Number(e.target.value))}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}월</option>)}
+              </select>
+              <div className="fbar-right">
+                <button className="btn btn-p" onClick={searchExpense} disabled={exLoading}>
+                  {exLoading ? <span className="spinner"/> : '🔍 조회'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding:'16px 20px' }}>
+            {exLoading ? <div className="empty"><span className="spinner"/></div>
+            : !exSearched ? <div className="empty">연·월을 선택하고 조회하세요</div>
+            : exRows.length === 0 ? <div className="empty">해당 월 지출 내역이 없습니다</div>
+            : (
+              <>
+              <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)' }}>
+                <b>{exYear}년 {exMonth}월</b> · 매장 <b>{exRows.length}</b>개 · 총 지출 <b style={{ color:'var(--accent)' }}>{won(exTotal)}원</b> · 금액 클릭 시 일자별 세부내역
+              </div>
+              <div className="twrap">
+                <table>
+                  <thead>
+                    <tr><th>점포</th><th>지점</th><th className="r" style={{ width:100 }}>건수</th><th className="r" style={{ width:170 }}>총 지출</th></tr>
+                  </thead>
+                  <tbody>
+                    {exRows.map(r => (
+                      <tr key={r.key}>
+                        <td><span className="badge badge-dept">{r.dept}</span></td>
+                        <td><span className="badge badge-store">{r.branch}</span></td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{r.count}건</td>
+                        <td className="r">
+                          <button type="button" onClick={() => openExDetail(r)} title="일자별 세부내역 보기"
+                            style={{ background:'none', border:'none', cursor:'pointer', fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14, textDecoration:'underline' }}>
+                            {won(r.total)}원
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr style={{ background:'var(--bg3)', borderTop:'2px solid var(--border2)' }}>
+                      <td colSpan={2} style={{ fontWeight:700, padding:'9px 11px' }}>합계</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{exRows.reduce((s, r) => s + r.count, 0)}건</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14 }}>{won(exTotal)}원</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
       {tab === 'closing' && (
         <>
           <div className="card">
@@ -655,6 +769,40 @@ export default function SalesSettlementPage() {
             )}
           </div>
         </>
+      )}
+
+      {exDetail && (
+        <div onClick={() => setExDetail(null)}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background:'#fff', borderRadius:12, maxWidth:640, width:'100%', maxHeight:'80vh', overflow:'auto', boxShadow:'0 10px 40px rgba(0,0,0,0.25)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'16px 20px', borderBottom:'1px solid var(--border)', position:'sticky', top:0, background:'#fff' }}>
+              <div style={{ fontSize:15, fontWeight:800 }}>💸 {exDetail.dept} {exDetail.branch} · 일자별 지출</div>
+              <span style={{ marginLeft:'auto', fontSize:14, fontWeight:700, color:'var(--accent)' }}>{won(exDetail.total)}원</span>
+              <button type="button" onClick={() => setExDetail(null)}
+                style={{ marginLeft:8, border:'none', background:'none', fontSize:20, cursor:'pointer', color:'var(--text3)' }}>×</button>
+            </div>
+            <div style={{ padding:'12px 20px 20px' }}>
+              <div className="twrap">
+                <table>
+                  <thead>
+                    <tr><th style={{ width:110 }}>날짜</th><th style={{ width:90 }}>항목</th><th className="r" style={{ width:110 }}>금액</th><th>메모</th></tr>
+                  </thead>
+                  <tbody>
+                    {exDetail.items.map((e, idx) => (
+                      <tr key={idx}>
+                        <td style={{ fontWeight:600 }}>{e.expense_date}</td>
+                        <td><span className="badge" style={{ background:'#f5f5f5', color:'var(--text2)', border:'1px solid var(--border)' }}>{e.category}</span></td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(e.amount)}원</td>
+                        <td style={{ fontSize:13, color:'var(--text2)' }}>{e.memo || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
