@@ -5,9 +5,9 @@ import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 const CATEGORIES = ['택배비', '사무용품', '기타'];
 const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-const newRow = () => ({ date: kstToday(), category: '', amount: '', memo: '' });
+const newRow = () => ({ category: '', amount: '', memo: '' });
 
-// 매장 → 지출 입력 (날짜·항목·금액·메모, 여러 행 일괄 저장)
+// 매장 → 지출 입력 (공용 날짜 + 항목/금액/메모 여러 행 일괄 저장)
 export default function ExpenseInputPage({ profile }) {
   const isStoreMgr = profile?.job_title === '매니저';
   const [hqStore, setHqStore]   = useState('');
@@ -16,6 +16,7 @@ export default function ExpenseInputPage({ profile }) {
   const branchName = isStoreMgr ? profile.branch     : hqBranch;
   const branchOpts = useMemo(() => (hqStore ? (STORE_MAP[hqStore] || []) : []), [hqStore]);
 
+  const [date, setDate] = useState(kstToday());
   const [rows, setRows] = useState([newRow()]);
   const [saving, setSaving] = useState(false);
   const [recent, setRecent] = useState([]);
@@ -30,13 +31,14 @@ export default function ExpenseInputPage({ profile }) {
   useEffect(() => { loadRecent(); }, [loadRecent]);
 
   const update = (i, k, v) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
-  const addRow = () => setRows(rs => [...rs, { ...newRow(), date: rs[rs.length - 1]?.date || kstToday() }]);
+  const addRow = () => setRows(rs => [...rs, newRow()]);
   const removeRow = (i) => setRows(rs => (rs.length === 1 ? rs : rs.filter((_, idx) => idx !== i)));
 
   const total = rows.reduce((s, r) => s + (Number(String(r.amount).replace(/,/g, '')) || 0), 0);
 
   const save = async () => {
     if (!storeName || !branchName) { toast('점포·지점을 선택해주세요', 'err'); return; }
+    if (!date) { toast('날짜를 선택해주세요', 'err'); return; }
     const clean = [];
     for (const r of rows) {
       const amt = Number(String(r.amount).replace(/,/g, '')) || 0;
@@ -44,10 +46,9 @@ export default function ExpenseInputPage({ profile }) {
       if (!hasAny) continue; // 완전 빈 행은 무시
       if (!r.category) { toast('지출항목을 선택해주세요', 'err'); return; }
       if (amt <= 0) { toast('금액을 입력해주세요', 'err'); return; }
-      if (!r.date) { toast('날짜를 선택해주세요', 'err'); return; }
       clean.push({
         store_name: storeName, branch_name: branchName,
-        expense_date: r.date, category: r.category, amount: amt,
+        expense_date: date, category: r.category, amount: amt,
         memo: r.memo.trim() || null, created_by: profile?.id || null,
       });
     }
@@ -68,17 +69,16 @@ export default function ExpenseInputPage({ profile }) {
     loadRecent();
   };
 
-  const inputStyle = { height: 38, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 14, outline: 'none', boxSizing: 'border-box' };
+  const inputStyle = { height: 40, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 14, outline: 'none', boxSizing: 'border-box' };
   const won = (n) => Number(n || 0).toLocaleString();
+  const GRID = '180px 170px 1fr 44px';
 
   return (
-    <div style={{ maxWidth: 920 }}>
+    <div>
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div className="card-label" style={{ margin: 0 }}>💸 지출 입력</div>
-          {isStoreMgr ? (
-            <div style={{ fontSize: 13, fontWeight: 700, marginLeft: 8 }}>🏬 {storeName} {branchName}</div>
-          ) : (
+          {!isStoreMgr && (
             <div style={{ display: 'flex', gap: 8, marginLeft: 8, flexWrap: 'wrap' }}>
               <select value={hqStore} onChange={e => { setHqStore(e.target.value); setHqBranch(''); }} style={{ ...inputStyle, width: 150 }}>
                 <option value="">점포 선택</option>
@@ -90,39 +90,48 @@ export default function ExpenseInputPage({ profile }) {
               </select>
             </div>
           )}
-          <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>합계 {won(total)}원</span>
+          <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>합계 {won(total)}원</span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '150px 150px 160px 1fr 40px', gap: 10, fontSize: 12, color: 'var(--text3)', fontWeight: 700, padding: '0 2px' }}>
-            <div>날짜</div><div>지출항목</div><div>금액</div><div>메모 (선택)</div><div></div>
+        {/* 날짜 (공용) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>📅 날짜</span>
+          <input type="date" value={date} max={kstToday()} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, width: 180 }} />
+        </div>
+
+        {/* 지출 항목 행 */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 10, fontSize: 12, color: 'var(--text3)', fontWeight: 700, padding: '0 2px 6px' }}>
+            <div>지출항목</div><div>금액</div><div>메모 (선택)</div><div></div>
           </div>
-          {rows.map((r, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '150px 150px 160px 1fr 40px', gap: 10, alignItems: 'center' }}>
-              <input type="date" value={r.date} max={kstToday()} onChange={e => update(i, 'date', e.target.value)} style={inputStyle} />
-              <select value={r.category} onChange={e => update(i, 'category', e.target.value)}
-                style={{ ...inputStyle, borderColor: r.category ? 'var(--border)' : 'var(--accent)' }}>
-                <option value="">선택</option>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <input inputMode="numeric" value={r.amount}
-                onChange={e => update(i, 'amount', e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="금액 *" style={{ ...inputStyle, textAlign: 'right', fontFamily: 'var(--mono)' }} />
-              <input value={r.memo} onChange={e => update(i, 'memo', e.target.value)} placeholder="메모" style={inputStyle} />
-              <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1}
-                title="행 삭제"
-                style={{ height: 38, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: '#fff', color: rows.length === 1 ? 'var(--text3)' : 'var(--danger)', cursor: rows.length === 1 ? 'default' : 'pointer', fontSize: 16 }}>×</button>
-            </div>
-          ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rows.map((r, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: GRID, gap: 10, alignItems: 'center' }}>
+                <select value={r.category} onChange={e => update(i, 'category', e.target.value)}
+                  style={{ ...inputStyle, borderColor: r.category ? 'var(--border)' : 'var(--accent)' }}>
+                  <option value="">항목 선택</option>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <input inputMode="numeric" value={r.amount}
+                  onChange={e => update(i, 'amount', e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="금액 *" style={{ ...inputStyle, textAlign: 'right', fontFamily: 'var(--mono)' }} />
+                <input value={r.memo} onChange={e => update(i, 'memo', e.target.value)} placeholder="메모" style={inputStyle} />
+                <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} title="행 삭제"
+                  style={{ height: 40, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: '#fff', color: rows.length === 1 ? 'var(--text3)' : 'var(--danger)', cursor: rows.length === 1 ? 'default' : 'pointer', fontSize: 16 }}>×</button>
+              </div>
+            ))}
+          </div>
+
+          <button type="button" onClick={addRow}
+            style={{ marginTop: 10, height: 42, width: '100%', border: '1px dashed var(--accent)', borderRadius: 'var(--radius)', background: '#fff', color: 'var(--accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+            + 지출항목 추가
+          </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-          <button type="button" onClick={addRow}
-            style={{ height: 44, flex: '0 0 auto', padding: '0 18px', border: '1px dashed var(--accent)', borderRadius: 'var(--radius)', background: '#fff', color: 'var(--accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-            + 행 추가
-          </button>
+        {/* 저장 (우측) */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button type="button" onClick={save} disabled={saving}
-            style={{ height: 44, flex: 1, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ height: 46, padding: '0 40px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
             {saving ? '저장 중…' : '✓ 저장'}
           </button>
         </div>
