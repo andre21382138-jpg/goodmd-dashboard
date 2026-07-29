@@ -19,7 +19,7 @@ export async function computeMonthlyLaborByBranch({ year, month }) {
     { data: storeClosures },
   ] = await Promise.all([
     supabase.from('store_members')
-      .select('id, name, job_title, salary_type, salary, extra_pay, store_account_id, store_name, branch_name, store:profiles!store_account_id(department, branch)')
+      .select('id, name, job_title, salary_type, salary, extra_pay, store_account_id, store:profiles!store_account_id(department, branch)')
       .or(`resigned_at.is.null,resigned_at.gte.${monthStr}-01`),
     supabase.from('attendance').select('manager_id, manager_name, work_date').gte('work_date', from).lte('work_date', to),
     supabase.from('leave_plans').select('manager_id, manager_name, dates').eq('target_month', monthStr),
@@ -49,7 +49,7 @@ export async function computeMonthlyLaborByBranch({ year, month }) {
     const branch = m.store?.branch || '';
     if (!dept || !branch) continue;
     const isMonthly = m.salary_type === '월급';
-    const closureSet = closureMap.get(`${m.store_name}|${m.branch_name}`) || new Set();
+    const closureSet = closureMap.get(`${dept}|${branch}`) || new Set();
 
     let workDays = 0, extendDays = 0, holidayDays = 0;
     for (let d = 1; d <= lastDay; d++) {
