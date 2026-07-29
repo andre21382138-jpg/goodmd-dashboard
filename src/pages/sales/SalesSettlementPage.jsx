@@ -37,6 +37,8 @@ export default function SalesSettlementPage() {
   const [clTotals, setClTotals] = useState(null);
   const [clLoading, setClLoading] = useState(false);
   const [clSearched, setClSearched] = useState(false);
+  const [clSortKey, setClSortKey] = useState('');    // '' = 점포순 기본 / 컬럼키 = 해당값 정렬
+  const [clSortDir, setClSortDir] = useState('desc'); // desc 높은순 / asc 낮은순
 
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
@@ -174,7 +176,10 @@ export default function SalesSettlementPage() {
         g.labor += info.labor;
         g.headcount += info.count;
       }
-      const list = [...map.values()].map(g => ({ ...g, totalCost: g.soldCost + g.giftCost + g.tastingCost }));
+      const list = [...map.values()].map(g => {
+        const totalCost = g.soldCost + g.giftCost + g.tastingCost;
+        return { ...g, totalCost, gtPct: totalCost ? ((g.giftCost + g.tastingCost) / totalCost) * 100 : 0 };
+      });
       const rank = s => { const i = STORE_NAMES.indexOf(s); return i === -1 ? 999 : i; };
       list.sort((a, b) => rank(a.dept) - rank(b.dept) || a.dept.localeCompare(b.dept) || a.branch.localeCompare(b.branch, 'ko'));
       const sum = (k) => list.reduce((s, r) => s + r[k], 0);
@@ -220,6 +225,24 @@ export default function SalesSettlementPage() {
     borderColor: on ? 'var(--accent)' : 'var(--border)', background: on ? 'var(--accent)' : '#fff', color: on ? '#fff' : 'var(--text2)' });
   const pctOf = (n, d) => (d ? (n / d) * 100 : 0);
   const pctStr = (v) => `${v.toFixed(1)}%`;
+  const handleClSort = (key) => {
+    if (clSortKey === key) setClSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
+    else { setClSortKey(key); setClSortDir('desc'); }
+  };
+  const sortedClRows = useMemo(() => {
+    if (!clSortKey) return clRows;
+    const dir = clSortDir === 'asc' ? 1 : -1;
+    return [...clRows].sort((a, b) => ((Number(a[clSortKey]) || 0) - (Number(b[clSortKey]) || 0)) * dir);
+  }, [clRows, clSortKey, clSortDir]);
+  const clTh = (label, key) => {
+    const active = clSortKey === key;
+    return (
+      <th className="r" onClick={() => handleClSort(key)} title="클릭하여 정렬"
+        style={{ cursor:'pointer', userSelect:'none', whiteSpace:'nowrap', color: active ? 'var(--accent)' : undefined }}>
+        {label}<span style={{ marginLeft:2, fontSize:10, opacity: active ? 1 : 0.4 }}>{active ? (clSortDir === 'desc' ? '▼' : '▲') : '⇅'}</span>
+      </th>
+    );
+  };
 
   // ERP '기간별상품매출현황' 양식(굴림 9pt·흰 배경·천단위·2줄 헤더·순번·합계 상단)과
   // 동일하게 출력한다. (열너비/행높이/폰트/정렬/테두리/숫자서식 모두 샘플 파일 기준)
@@ -498,13 +521,13 @@ export default function SalesSettlementPage() {
                   <thead>
                     <tr>
                       <th>점포</th><th>지점</th>
-                      <th className="r">매출액</th><th className="r">매출비율</th>
-                      <th className="r">전체원가</th><th className="r">판매제품원가</th><th className="r">증정원가</th><th className="r">시식원가</th><th className="r">증정시식율</th>
-                      <th className="r">판매인건비</th><th className="r">인건비비율</th>
+                      {clTh('매출액','revenue')}<th className="r">매출비율</th>
+                      {clTh('전체원가','totalCost')}{clTh('판매제품원가','soldCost')}{clTh('증정원가','giftCost')}{clTh('시식원가','tastingCost')}{clTh('증정시식율','gtPct')}
+                      {clTh('판매인건비','labor')}<th className="r">인건비비율</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {clRows.map((r) => (
+                    {sortedClRows.map((r) => (
                       <tr key={r.key}>
                         <td><span className="badge badge-dept">{r.dept}</span></td>
                         <td><span className="badge badge-store">{r.branch}</span></td>
