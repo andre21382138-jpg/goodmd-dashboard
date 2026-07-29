@@ -514,7 +514,7 @@ export default function SalesSettlementPage() {
                         <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.soldCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'#6a1b9a' }}>{won(r.giftCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'#1565C0' }}>{won(r.tastingCost)}</td>
-                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.revenue))}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.totalCost))}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', whiteSpace:'nowrap' }}>
                           {won(r.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({r.headcount}명)</span>
                         </td>
@@ -529,7 +529,7 @@ export default function SalesSettlementPage() {
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(clTotals.soldCost)}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#6a1b9a' }}>{won(clTotals.giftCost)}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0' }}>{won(clTotals.tastingCost)}</td>
-                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.revenue))}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.totalCost))}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', fontSize:14, whiteSpace:'nowrap' }}>
                         {won(clTotals.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({clTotals.headcount}명)</span>
                       </td>
