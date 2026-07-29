@@ -37,8 +37,10 @@ export default function SalesSettlementPage() {
   const [clTotals, setClTotals] = useState(null);
   const [clLoading, setClLoading] = useState(false);
   const [clSearched, setClSearched] = useState(false);
-  const [clSortKey, setClSortKey] = useState('');    // '' = 점포순 기본 / 컬럼키 = 해당값 정렬
+  const [clSortKey, setClSortKey] = useState('');    // 지점별 상세 정렬: '' = 점포순 기본
   const [clSortDir, setClSortDir] = useState('desc'); // desc 높은순 / asc 낮은순
+  const [clStoreSortKey, setClStoreSortKey] = useState(''); // 점포별 합산 정렬: '' = 점포순 기본
+  const [clStoreSortDir, setClStoreSortDir] = useState('desc');
 
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
@@ -244,8 +246,27 @@ export default function SalesSettlementPage() {
       g.revenue += r.revenue; g.soldCost += r.soldCost; g.giftCost += r.giftCost; g.tastingCost += r.tastingCost;
       g.totalCost += r.totalCost; g.labor += r.labor; g.headcount += r.headcount; g.branches += 1;
     }
-    return [...m.values()];
+    return [...m.values()].map(g => ({ ...g, gtPct: g.totalCost ? ((g.giftCost + g.tastingCost) / g.totalCost) * 100 : 0 }));
   }, [clRows]);
+  const sortedClStoreRows = useMemo(() => {
+    if (!clStoreSortKey) return clStoreRows;
+    const dir = clStoreSortDir === 'asc' ? 1 : -1;
+    return [...clStoreRows].sort((a, b) => ((Number(a[clStoreSortKey]) || 0) - (Number(b[clStoreSortKey]) || 0)) * dir);
+  }, [clStoreRows, clStoreSortKey, clStoreSortDir]);
+  const handleClStoreSort = (key) => {
+    if (clStoreSortKey !== key) { setClStoreSortKey(key); setClStoreSortDir('desc'); }
+    else if (clStoreSortDir === 'desc') setClStoreSortDir('asc');
+    else { setClStoreSortKey(''); setClStoreSortDir('desc'); }
+  };
+  const clStoreTh = (label, key) => {
+    const active = clStoreSortKey === key;
+    return (
+      <th className="r" onClick={() => handleClStoreSort(key)} title="클릭하여 정렬 (3번째 클릭 시 점포순)"
+        style={{ cursor:'pointer', userSelect:'none', whiteSpace:'nowrap', color: active ? 'var(--accent)' : undefined }}>
+        {label}<span style={{ marginLeft:2, fontSize:10, opacity: active ? 1 : 0.4 }}>{active ? (clStoreSortDir === 'desc' ? '▼' : '▲') : '⇅'}</span>
+      </th>
+    );
+  };
   const clTh = (label, key) => {
     const active = clSortKey === key;
     return (
@@ -541,13 +562,13 @@ export default function SalesSettlementPage() {
                   <thead>
                     <tr>
                       <th>점포</th><th style={{ textAlign:'center' }}>지점수</th>
-                      <th className="r">매출액</th><th className="r">매출비율</th>
-                      <th className="r">전체원가</th><th className="r">판매제품원가</th><th className="r">증정원가</th><th className="r">시식원가</th><th className="r">증정시식율</th>
-                      <th className="r">판매인건비</th><th className="r">인건비비율</th>
+                      {clStoreTh('매출액','revenue')}<th className="r">매출비율</th>
+                      {clStoreTh('전체원가','totalCost')}{clStoreTh('판매제품원가','soldCost')}{clStoreTh('증정원가','giftCost')}{clStoreTh('시식원가','tastingCost')}{clStoreTh('증정시식율','gtPct')}
+                      {clStoreTh('판매인건비','labor')}<th className="r">인건비비율</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {clStoreRows.map((r) => (
+                    {sortedClStoreRows.map((r) => (
                       <tr key={r.dept}>
                         <td><span className="badge badge-dept">{r.dept}</span></td>
                         <td style={{ textAlign:'center', fontFamily:'var(--mono)', color:'var(--text3)' }}>{r.branches}</td>
