@@ -919,7 +919,7 @@ export default function SalesListPage({ setPage }) {
       {drillStore && (
         <div style={{position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center'}}>
           <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setDrillStore(null)}/>
-          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'20px 24px', width:'90vw', maxWidth:1200, maxHeight:'85vh', overflow:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'20px 24px', width:'95vw', maxWidth:1600, maxHeight:'85vh', overflow:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
             <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
               <span className="badge badge-dept">{drillStore.store_name}</span>
               <span className="badge badge-store">{drillStore.branch_name}</span>
@@ -975,7 +975,7 @@ export default function SalesListPage({ setPage }) {
                           {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
                           {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
                         </td>
-                        <td style={{fontSize:11,color:'var(--text2)', ...strikeStyle}}>{s.memo || '-'}</td>
+                        <td style={{fontSize:11,color:'var(--text2)', whiteSpace:'nowrap', ...strikeStyle}}>{s.memo || '-'}</td>
                       </tr>
                     )})
                   }
