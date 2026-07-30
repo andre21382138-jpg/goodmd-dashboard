@@ -931,7 +931,7 @@ export default function SalesListPage({ setPage }) {
               <table>
                 <thead>
                   <tr>
-                    <th>판매일</th><th>매니저</th><th>브랜드</th><th>상품명</th>
+                    <th style={{whiteSpace:'nowrap'}}>판매일시</th><th style={{whiteSpace:'nowrap'}}>매니저</th><th style={{whiteSpace:'nowrap'}}>브랜드</th><th>상품명</th>
                     <th className="r">수량</th><th className="r">판매가</th><th className="r">합계</th>
                     <th>결제</th><th style={{whiteSpace:'nowrap', minWidth:88}}>출고방식</th><th>메모</th>
                   </tr>
@@ -945,9 +945,12 @@ export default function SalesListPage({ setPage }) {
                       const strikeStyle = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
                       return (
                       <tr key={s.id} style={fully ? { background:'#fafafa' } : {}}>
-                        <td className="mono" style={strikeStyle}>{s.sold_at}</td>
-                        <td style={{fontSize:12, ...strikeStyle}}>{s.seller?.name || '-'}</td>
-                        <td style={strikeStyle}>{s.brand?.name || '-'}</td>
+                        <td className="mono" style={{whiteSpace:'nowrap', ...strikeStyle}}>
+                          {s.sold_at}
+                          {s.created_at && <span style={{marginLeft:6, color:'var(--text3)'}}>{new Date(s.created_at).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', hour12:false})}</span>}
+                        </td>
+                        <td style={{fontSize:12, whiteSpace:'nowrap', ...strikeStyle}}>{s.seller?.name || '-'}</td>
+                        <td style={{whiteSpace:'nowrap', ...strikeStyle}}>{s.brand?.name || '-'}</td>
                         <td style={strikeStyle}>
                           {s.product?.name || '-'}
                           {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
