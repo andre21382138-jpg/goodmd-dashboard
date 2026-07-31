@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, dlBlob, reverseSaleEffects } from '../../lib/utils';
+import { toast, dlBlob, reverseSaleEffects, decrementVisitIfEmpty } from '../../lib/utils';
 import { ORDER_CONSTANTS, STORE_MAP, STORE_NAMES } from '../../lib/constants';
 import HQDeliveryBizView from './HQDeliveryBizView';
 import BizSalesPage from '../sales/BizSalesPage';
@@ -301,7 +301,7 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     try {
       // 원복용 상세 조회 (삭제 전)
       const { data: details } = await supabase.from('sales')
-        .select('id, customer_id, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .select('id, customer_id, sold_at, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
         .in('id', ids);
       const { data: del, error } = await supabase.from('sales').delete().in('id', ids).select('id');
       if (error) throw error;
@@ -309,6 +309,10 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
       for (const s of (details || [])) {
         if (deletedIds.has(s.id)) await reverseSaleEffects(s); // 적립금 원복(hq는 재고 원복 대상 아님)
       }
+      // 방문(구매건수) 원복 — 같은 (회원, 날짜) 방문은 1회만 차감
+      const visits = new Set();
+      for (const s of (details || [])) if (deletedIds.has(s.id) && s.customer_id && s.sold_at) visits.add(`${s.customer_id}|${s.sold_at}`);
+      for (const v of visits) { const [cid, sd] = v.split('|'); await decrementVisitIfEmpty(Number(cid), sd); }
       toast(`${target.length}건 삭제 완료 (적립금 원복)`, 'inf');
       setSelectedKeys(new Set());
       fetchData();

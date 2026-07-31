@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, GradeBadge, getGrade, formatPhone, formatNumInput, parseNumInput, reverseSaleEffects } from '../../lib/utils';
+import { toast, GradeBadge, getGrade, formatPhone, formatNumInput, parseNumInput, reverseSaleEffects, decrementVisitIfEmpty } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function SalesInputPage({ profile }) {
@@ -533,7 +533,7 @@ export default function SalesInputPage({ profile }) {
     try {
       // 1) 원복에 필요한 정보 조회
       const { data: sale, error: selErr } = await supabase.from('sales')
-        .select('id, customer_id, points_earned, points_used, price, quantity, product_id, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .select('id, customer_id, sold_at, points_earned, points_used, price, quantity, product_id, store_name, branch_name, delivery_type, payment, product:products(code)')
         .eq('id', id).single();
       if (selErr || !sale) { toast('내역을 찾을 수 없습니다', 'err'); return; }
 
@@ -542,8 +542,9 @@ export default function SalesInputPage({ profile }) {
       if (delErr) { toast(delErr.message, 'err'); return; }
       if (!delData || delData.length === 0) { toast('삭제 권한이 없습니다 (RLS)', 'err'); return; }
 
-      // 3) 적립금·구매액·등급·재고 원복
+      // 3) 적립금·구매액·수량·등급·재고 원복 + 방문건수(구매건수) 원복
       await reverseSaleEffects(sale);
+      await decrementVisitIfEmpty(sale.customer_id, sale.sold_at);
 
       toast('삭제 완료 (적립금·재고 원복)', 'ok');
       fetchRecent();

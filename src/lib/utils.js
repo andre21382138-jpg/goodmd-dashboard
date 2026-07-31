@@ -113,7 +113,7 @@ export async function reverseSaleEffects(sale) {
   if (!sale) return;
   if (sale.customer_id) {
     const { data: cust } = await supabase.from('customers')
-      .select('total_points, used_points, total_purchase').eq('id', sale.customer_id).single();
+      .select('total_points, used_points, total_purchase, purchase_qty').eq('id', sale.customer_id).single();
     if (cust) {
       const lineAmt  = (Number(sale.price) || 0) * (Number(sale.quantity) || 0);
       const newPurch = Math.max(0, (cust.total_purchase || 0) - lineAmt);
@@ -122,6 +122,7 @@ export async function reverseSaleEffects(sale) {
         used_points:    Math.max(0, (cust.used_points || 0) - (sale.points_used || 0)),
         total_purchase: newPurch,
         grade:          getGrade(newPurch).grade,
+        purchase_qty:   Math.max(0, (cust.purchase_qty || 0) - (Number(sale.quantity) || 0)),  // 구매수량 원복
       }).eq('id', sale.customer_id);
     }
   }
@@ -136,6 +137,18 @@ export async function reverseSaleEffects(sale) {
         .update({ stock_qty: (stockRow.stock_qty || 0) + (Number(sale.quantity) || 0), updated_at: new Date().toISOString() })
         .eq('id', stockRow.id);
     }
+  }
+}
+
+// 해당 (회원, 판매일)에 남은 판매가 없으면 구매건수(방문) 1 감소.
+// 판매 삭제 후 호출하며, 한 방문(같은 날짜)당 1번만 호출해야 함(중복 호출 시 과다 차감).
+export async function decrementVisitIfEmpty(customerId, soldAt) {
+  if (!customerId || !soldAt) return;
+  const { count } = await supabase.from('sales').select('id', { count: 'exact', head: true })
+    .eq('customer_id', customerId).eq('sold_at', soldAt).neq('payment', '구매이력');
+  if ((count || 0) === 0) {
+    const { data: c } = await supabase.from('customers').select('purchase_count').eq('id', customerId).single();
+    if (c) await supabase.from('customers').update({ purchase_count: Math.max(0, (c.purchase_count || 0) - 1) }).eq('id', customerId);
   }
 }
 

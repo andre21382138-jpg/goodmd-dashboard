@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, formatNumInput, parseNumInput, reverseSaleEffects } from '../../lib/utils';
+import { toast, formatNumInput, parseNumInput, reverseSaleEffects, decrementVisitIfEmpty } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function MgrSalesViewPage({ profile }) {
@@ -92,7 +92,7 @@ export default function MgrSalesViewPage({ profile }) {
     try {
       // 원복용 상세 조회 (삭제 전)
       const { data: details } = await supabase.from('sales')
-        .select('id, customer_id, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .select('id, customer_id, sold_at, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
         .in('id', ids);
       const { data, error } = await supabase.from('sales').delete().in('id', ids).select('id');
       if (error) throw error;
@@ -105,6 +105,10 @@ export default function MgrSalesViewPage({ profile }) {
         for (const s of (details || [])) {
           if (deletedIds.has(s.id)) await reverseSaleEffects(s);
         }
+        // 방문(구매건수) 원복 — 같은 (회원, 날짜) 방문은 1회만 차감
+        const visits = new Set();
+        for (const s of (details || [])) if (deletedIds.has(s.id) && s.customer_id && s.sold_at) visits.add(`${s.customer_id}|${s.sold_at}`);
+        for (const v of visits) { const [cid, sd] = v.split('|'); await decrementVisitIfEmpty(Number(cid), sd); }
         toast(`${deleted}건 삭제 완료 (적립금·재고 원복)${deleted < ids.length ? ` · 권한 없어 ${ids.length - deleted}건 제외` : ''}`, deleted < ids.length ? 'err' : 'ok');
         setSelDel(new Set());
         fetchSales();
@@ -121,12 +125,13 @@ export default function MgrSalesViewPage({ profile }) {
     setSavingLine(true);
     try {
       const { data: sale } = await supabase.from('sales')
-        .select('id, customer_id, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .select('id, customer_id, sold_at, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
         .eq('id', it.id).single();
       const { data: delData, error } = await supabase.from('sales').delete().eq('id', it.id).select('id');
       if (error) throw error;
       if (!delData || delData.length === 0) { toast('삭제 권한이 없습니다 (RLS)', 'err'); setSavingLine(false); return; }
       await reverseSaleEffects(sale);
+      await decrementVisitIfEmpty(sale?.customer_id, sale?.sold_at);
       toast('라인 삭제 완료 (적립금·재고 원복)', 'inf');
       cancelEditLine();
       fetchSales();
