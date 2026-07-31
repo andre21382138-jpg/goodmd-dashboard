@@ -368,6 +368,9 @@ export default function SalesInputPage({ profile }) {
         customerId = selectedMember.id;
         customer = selectedMember;
       } else if (memberMode === 'new') {
+        // 이미 가입된 회원(동일 이름+휴대폰) 차단 — 신규가입 대신 회원검색으로 유도
+        const { data: dupExists } = await supabase.rpc('member_exists', { p_name: custName.trim(), p_phone: custPhone });
+        if (dupExists === true) { toast('이미 회원가입된 회원입니다. 회원검색으로 선택해주세요', 'err'); setSaving(false); return; }
         const { data: custData, error: custErr } = await supabase.from('customers').insert({
           joined_at: soldAt, name: custName.trim(), phone: custPhone,
           birthday: custBirthday || null, store_name: storeName,

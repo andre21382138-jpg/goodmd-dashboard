@@ -36,6 +36,9 @@ export default function CustomerDocPage({ profile }) {
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length < 10) { toast('연락처를 올바르게 입력해주세요', 'err'); return; }
     setSaving(true);
+    // 이미 가입된 회원(동일 이름+휴대폰) 차단
+    const { data: dupExists } = await supabase.rpc('member_exists', { p_name: custName.trim(), p_phone: phone });
+    if (dupExists === true) { toast('이미 회원가입되어 있습니다', 'err'); setSaving(false); return; }
     const { error } = await supabase.from('customers').insert({
       joined_at: joinedAt, name: custName.trim(), phone,
       birthday: birthday || null, gender: gender || null,

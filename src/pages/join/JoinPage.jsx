@@ -45,6 +45,10 @@ export default function JoinPage({ managerId }) {
     if (cleaned.length < 10) { alert('연락처를 올바르게 입력해주세요'); return; }
     setSaving(true);
 
+    // 이미 가입된 회원(동일 이름+휴대폰) 차단
+    const { data: exists } = await supabase.rpc('member_exists', { p_name: name.trim(), p_phone: phone });
+    if (exists === true) { alert('이미 회원가입되어 있습니다.'); setSaving(false); return; }
+
     let consentIp = null, consentUa = null;
     if (smsConsent) {
       try {
