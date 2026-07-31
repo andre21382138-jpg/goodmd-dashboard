@@ -37,6 +37,7 @@ export default function SalesSettlementPage() {
   const [clTotals, setClTotals] = useState(null);
   const [clLoading, setClLoading] = useState(false);
   const [clSearched, setClSearched] = useState(false);
+  const [clCappedTo, setClCappedTo] = useState(null); // 당월 어제까지 집계 시 그 날짜
   const [clSortKey, setClSortKey] = useState('');    // 지점별 상세 정렬: '' = 점포순 기본
   const [clSortDir, setClSortDir] = useState('desc'); // desc 높은순 / asc 낮은순
   const [clStoreSortKey, setClStoreSortKey] = useState(''); // 점포별 합산 정렬: '' = 점포순 기본
@@ -137,9 +138,10 @@ export default function SalesSettlementPage() {
   }, [fFrom, fTo, fStores, fBranch, cmpFrom, cmpTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 매출결산: 월 단위 점포/지점별 손익 집계 ──
-  const fetchClosingSales = async (year, month) => {
+  const fetchClosingSales = async (year, month, endDate) => {
     const from = `${year}-${pad(month)}-01`;
-    const to   = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
+    const fullTo = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
+    const to = (endDate && endDate < fullTo) ? endDate : fullTo;
     const all = []; let start = 0; const PAGE = 1000;
     while (true) {
       const { data, error } = await supabase.from('sales')
@@ -159,9 +161,15 @@ export default function SalesSettlementPage() {
   const searchClosing = useCallback(async () => {
     setClLoading(true);
     try {
+      // 당월이면 어제날짜까지만 (오늘 미완료분 제외)
+      const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      const yestKst  = new Date(Date.now() + 9 * 3600 * 1000 - 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const isCurMonth = `${clYear}-${pad(clMonth)}` === todayKst.slice(0, 7);
+      const endDate = isCurMonth ? yestKst : null;
+      setClCappedTo(endDate);
       const [sales, labor] = await Promise.all([
-        fetchClosingSales(clYear, clMonth),
-        computeMonthlyLaborByBranch({ year: clYear, month: clMonth }),
+        fetchClosingSales(clYear, clMonth, endDate),
+        computeMonthlyLaborByBranch({ year: clYear, month: clMonth, endDate }),
       ]);
       const map = new Map();
       const ensure = (dept, branch) => {
@@ -661,7 +669,7 @@ export default function SalesSettlementPage() {
             : (
               <>
               <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                <span><b>{clYear}년 {clMonth}월</b> · 점포/지점 <b>{clRows.length}</b>개 · 판매인건비는 급여관리 기준 자동집계</span>
+                <span><b>{clYear}년 {clMonth}월</b>{clCappedTo ? ` (1일~${clCappedTo.slice(5)} 집계)` : ''} · 점포/지점 <b>{clRows.length}</b>개 · 판매인건비는 급여관리 기준 자동집계</span>
                 {clSortKey && (
                   <button type="button" onClick={() => { setClSortKey(''); setClSortDir('desc'); }}
                     style={{ height:26, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', color:'var(--text2)', fontSize:12, fontWeight:600, cursor:'pointer' }}

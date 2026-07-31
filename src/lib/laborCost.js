@@ -5,12 +5,15 @@
 import { supabase } from './supabase';
 import { calcDayCell, holidayUnitPayFor, fetchMemberIncentive } from './payrollExcel';
 
-export async function computeMonthlyLaborByBranch({ year, month }) {
+export async function computeMonthlyLaborByBranch({ year, month, endDate }) {
   const pad = n => String(n).padStart(2, '0');
   const monthStr = `${year}-${pad(month)}`;
   const lastDay = new Date(year, month, 0).getDate();
   const from = `${monthStr}-01`;
-  const to   = `${monthStr}-${pad(lastDay)}`;
+  const fullTo = `${monthStr}-${pad(lastDay)}`;
+  // endDate(당월 어제까지 등)가 있으면 그 날짜까지만 집계 (일급 근무일 기준)
+  const to = (endDate && endDate < fullTo) ? endDate : fullTo;
+  const endDay = Number(to.slice(8, 10));
 
   const [
     { data: members },
@@ -54,7 +57,7 @@ export async function computeMonthlyLaborByBranch({ year, month }) {
     const closureSet = closureMap.get(`${dept}|${branch}`) || new Set();
 
     let workDays = 0, extendDays = 0, holidayDays = 0;
-    for (let d = 1; d <= lastDay; d++) {
+    for (let d = 1; d <= endDay; d++) {
       const dateStr = `${monthStr}-${pad(d)}`;
       const k = `${m.store_account_id}|${m.name}|${dateStr}`;
       const dow = new Date(year, month - 1, d).getDay();
