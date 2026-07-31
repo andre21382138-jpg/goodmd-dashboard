@@ -63,6 +63,7 @@ export const HQ_MENUS = [
     { key: 'sms_unsubscribe_sync', icon: '🚫', label: '수신거부 동기화' },
     { key: 'qr_print_all',         icon: '🖨️', label: '매장 QR 인쇄' },
     { key: 'consent_qr_print',     icon: '🔁', label: '재동의 QR 인쇄' },
+    { key: 'attend_qr_print',      icon: '🎁', label: '출석체크 QR 인쇄' },
   ]},
   { key: 'order_request_hq', icon: '📦', label: '매장 발주요청' },
   { key: 'store_returns_hq', icon: '↩️', label: '매장 반품신청' },

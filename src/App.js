@@ -10,6 +10,7 @@ import CustomerDocPage from './pages/customer/CustomerDocPage';
 import CustomerLookupPage from './pages/customer/CustomerLookupPage';
 import QrBatchPrintPage from './pages/customer/QrBatchPrintPage';
 import ConsentQrBatchPrintPage from './pages/customer/ConsentQrBatchPrintPage';
+import AttendanceQrBatchPrintPage from './pages/customer/AttendanceQrBatchPrintPage';
 import CustomerInputPage from './pages/customer/CustomerInputPage';
 import MyMembersPage from './pages/customer/MyMembersPage';
 import SmsHistoryPage from './pages/customer/SmsHistoryPage';
@@ -49,6 +50,7 @@ import StoreClosurePage from './pages/attendance/StoreClosurePage';
 import AttendanceMgmtPage from './pages/attendance/AttendanceMgmtPage';
 import IncentivePage from './pages/salary/IncentivePage';
 import JoinPage from './pages/join/JoinPage';
+import AttendancePage from './pages/join/AttendancePage';
 import ConsentRenewPage from './pages/customer/ConsentRenewPage';
 import ConsentRenewMgrPage from './pages/customer/ConsentRenewMgrPage';
 import HelpPage from './pages/help/HelpPage';
@@ -594,7 +596,12 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('rc');
   }, []);
-  const publicPage = joinManagerId || consentRenew;
+  // 공개 출석체크 적립 페이지 감지 (?att=매장ID)
+  const attendStore = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('att');
+  }, []);
+  const publicPage = joinManagerId || consentRenew || attendStore;
 
   // 모든 hooks는 조건부 return 전에 선언해야 함 (Rules of Hooks)
   const [session, setSession]   = useState(null);
@@ -724,6 +731,8 @@ export default function App() {
   if (joinManagerId) return <><Toasts/><JoinPage managerId={joinManagerId}/></>;
   // 공개 수신 재동의 페이지 (?rc=1)
   if (consentRenew) return <><Toasts/><ConsentRenewPage/></>;
+  // 공개 출석체크 적립 페이지 (?att=매장ID)
+  if (attendStore) return <><Toasts/><AttendancePage storeId={attendStore}/></>;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -749,6 +758,7 @@ export default function App() {
     member_mgmt:    '회원 조회',
     qr_print_all:   '매장 QR 인쇄',
     consent_qr_print: '재동의 QR 인쇄',
+    attend_qr_print:  '출석체크 QR 인쇄',
     sms_history:    '문자 내역',
     sms_unsubscribe_sync: '수신거부 동기화',
     hq_delivery_request: '고객 택배요청',
@@ -851,6 +861,7 @@ export default function App() {
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
             {page === 'qr_print_all'   && canSeeMain && <QrBatchPrintPage/>}
             {page === 'consent_qr_print' && canSeeMain && <ConsentQrBatchPrintPage/>}
+            {page === 'attend_qr_print' && canSeeMain && <AttendanceQrBatchPrintPage/>}
             {page === 'sms_history'    && canSeeMain && <SmsHistoryPage/>}
             {page === 'sms_unsubscribe_sync' && canSeeMain && <SmsUnsubscribeSyncPage/>}
             {page === 'hq_delivery_request' && (canSeeMain || isScm) && <HQDeliveryRequestPage profile={profile} view="customer"/>}
