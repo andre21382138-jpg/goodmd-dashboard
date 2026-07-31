@@ -19,16 +19,28 @@ export default function ExpenseInputPage({ profile }) {
   const [date, setDate] = useState(kstToday());
   const [rows, setRows] = useState([newRow()]);
   const [saving, setSaving] = useState(false);
-  const [recent, setRecent] = useState([]);
+  const [monthRows, setMonthRows] = useState([]); // 당월 날짜별 그룹 [{date, items, total}]
+  const [detail, setDetail] = useState(null);     // 상세보기 팝업 { date, items, total }
+  const curMonth = kstToday().slice(0, 7);
 
-  const loadRecent = useCallback(async () => {
-    if (!storeName || !branchName) { setRecent([]); return; }
+  const loadMonth = useCallback(async () => {
+    if (!storeName || !branchName) { setMonthRows([]); return; }
     const { data } = await supabase.from('store_expenses').select('*')
       .eq('store_name', storeName).eq('branch_name', branchName)
-      .order('expense_date', { ascending: false }).order('id', { ascending: false }).limit(20);
-    setRecent(data || []);
-  }, [storeName, branchName]);
-  useEffect(() => { loadRecent(); }, [loadRecent]);
+      .gte('expense_date', `${curMonth}-01`).lte('expense_date', `${curMonth}-31`)
+      .order('expense_date', { ascending: false }).order('id', { ascending: false });
+    const map = new Map(); // date → {date, items, total} (쿼리가 날짜 내림차순이라 삽입순 유지)
+    for (const e of (data || [])) {
+      if (!map.has(e.expense_date)) map.set(e.expense_date, { date: e.expense_date, items: [], total: 0 });
+      const g = map.get(e.expense_date); g.items.push(e); g.total += e.amount || 0;
+    }
+    setMonthRows([...map.values()]);
+  }, [storeName, branchName, curMonth]);
+  useEffect(() => { loadMonth(); }, [loadMonth]);
+  // 팝업 열려있으면 데이터 갱신 시 팝업 내용도 동기화
+  useEffect(() => {
+    if (detail) { const g = monthRows.find(r => r.date === detail.date); setDetail(g || null); }
+  }, [monthRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = (i, k, v) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
   const addRow = () => setRows(rs => [...rs, newRow()]);
@@ -59,14 +71,14 @@ export default function ExpenseInputPage({ profile }) {
     if (error) { toast('저장 실패: ' + error.message, 'err'); return; }
     toast(`지출 ${clean.length}건 저장 완료`, 'ok');
     setRows([newRow()]);
-    loadRecent();
+    loadMonth();
   };
 
   const del = async (id) => {
     const { error } = await supabase.from('store_expenses').delete().eq('id', id);
     if (error) { toast('삭제 실패: ' + error.message, 'err'); return; }
     toast('삭제되었습니다', 'ok');
-    loadRecent();
+    loadMonth();
   };
 
   const inputStyle = { height: 40, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 14, outline: 'none', boxSizing: 'border-box' };
@@ -138,32 +150,72 @@ export default function ExpenseInputPage({ profile }) {
       </div>
 
       <div className="card" style={{ padding: '16px 20px' }}>
-        <div className="card-label" style={{ marginBottom: 12 }}>📋 최근 지출 내역</div>
+        <div className="card-label" style={{ marginBottom: 12 }}>📋 이번 달 지출 내역 <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text3)' }}>({curMonth})</span></div>
         {(!storeName || !branchName) ? <div className="empty">점포·지점을 선택해주세요</div>
-        : recent.length === 0 ? <div className="empty">저장된 지출 내역이 없습니다</div>
+        : monthRows.length === 0 ? <div className="empty">이번 달 지출 내역이 없습니다</div>
         : (
           <div className="twrap">
             <table>
               <thead>
-                <tr><th style={{ width: 120 }}>날짜</th><th style={{ width: 110 }}>항목</th><th className="r" style={{ width: 120 }}>금액</th><th>메모</th><th style={{ width: 60, textAlign: 'center' }}></th></tr>
+                <tr><th style={{ width: 140 }}>날짜</th><th className="r" style={{ width: 100 }}>지출건수</th><th className="r" style={{ width: 140 }}>총 금액</th><th style={{ width: 90, textAlign: 'center' }}></th></tr>
               </thead>
               <tbody>
-                {recent.map(e => (
-                  <tr key={e.id}>
-                    <td style={{ fontWeight: 600 }}>{e.expense_date}</td>
-                    <td><span className="badge" style={{ background: '#f5f5f5', color: 'var(--text2)', border: '1px solid var(--border)' }}>{e.category}</span></td>
-                    <td className="r" style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>{won(e.amount)}원</td>
-                    <td style={{ fontSize: 13, color: 'var(--text2)' }}>{e.memo || '-'}</td>
+                {monthRows.map(g => (
+                  <tr key={g.date}>
+                    <td style={{ fontWeight: 700 }}>{g.date}</td>
+                    <td className="r" style={{ fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{g.items.length}건</td>
+                    <td className="r" style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--accent)' }}>{won(g.total)}원</td>
                     <td style={{ textAlign: 'center' }}>
-                      <button type="button" onClick={() => del(e.id)} className="btn btn-s" style={{ padding: '3px 8px', fontSize: 11, color: 'var(--danger)' }}>삭제</button>
+                      <button type="button" onClick={() => setDetail(g)} className="btn btn-s" style={{ padding: '3px 12px', fontSize: 11 }}>상세보기</button>
                     </td>
                   </tr>
                 ))}
+                <tr style={{ background: 'var(--bg3)', borderTop: '2px solid var(--border2)' }}>
+                  <td style={{ fontWeight: 700, padding: '9px 11px' }}>당월 합계</td>
+                  <td className="r" style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>{monthRows.reduce((s, g) => s + g.items.length, 0)}건</td>
+                  <td className="r" style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--accent)', fontSize: 14 }}>{won(monthRows.reduce((s, g) => s + g.total, 0))}원</td>
+                  <td></td>
+                </tr>
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {detail && (
+        <div onClick={() => setDetail(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 12, maxWidth: 560, width: '100%', maxHeight: '80vh', overflow: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: '#fff' }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>💸 {detail.date} 지출 내역</div>
+              <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>{won(detail.total)}원</span>
+              <button type="button" onClick={() => setDetail(null)} style={{ marginLeft: 8, border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)' }}>×</button>
+            </div>
+            <div style={{ padding: '12px 20px 20px' }}>
+              <div className="twrap">
+                <table>
+                  <thead>
+                    <tr><th style={{ width: 100 }}>항목</th><th className="r" style={{ width: 120 }}>금액</th><th>메모</th><th style={{ width: 56, textAlign: 'center' }}></th></tr>
+                  </thead>
+                  <tbody>
+                    {detail.items.map(e => (
+                      <tr key={e.id}>
+                        <td><span className="badge" style={{ background: '#f5f5f5', color: 'var(--text2)', border: '1px solid var(--border)' }}>{e.category}</span></td>
+                        <td className="r" style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>{won(e.amount)}원</td>
+                        <td style={{ fontSize: 13, color: 'var(--text2)' }}>{e.memo || '-'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button type="button" onClick={() => del(e.id)} className="btn btn-s" style={{ padding: '3px 8px', fontSize: 11, color: 'var(--danger)' }}>삭제</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
