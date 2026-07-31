@@ -14,6 +14,7 @@ export default function JoinPage({ managerId }) {
   const [phone,        setPhone]       = useState('');
   const [birthday,     setBirthday]    = useState('');
   const [gender,       setGender]      = useState('');
+  const [referrerPhone, setReferrerPhone] = useState('');
   const [smsConsent,   setSmsConsent]  = useState(false);
   const [saving,       setSaving]      = useState(false);
   const [done,         setDone]        = useState(false);
@@ -60,14 +61,17 @@ export default function JoinPage({ managerId }) {
 
     // 공개 페이지(anon)는 customers SELECT 권한이 없어 RETURNING(.select)이 RLS에 막힌다.
     // 되읽기 없이 insert만 수행하고, 증빙로그는 phone으로 연결한다.
+    const joinedDate = new Date().toISOString().slice(0,10);
     const { error } = await supabase.from('customers').insert({
-      joined_at: new Date().toISOString().slice(0,10),
+      joined_at: joinedDate,
       name: name.trim(), phone, birthday: birthday || null, gender: gender || null,
       store_name: storeProfile.department, branch_name: storeProfile.branch,
       manager_name: selMember.name,
       sms_consent: smsConsent,
       sms_consent_at: smsConsent ? new Date().toISOString() : null,
       consent_ip: consentIp, consent_ua: consentUa,
+      referrer_phone: referrerPhone.trim() ? formatPhone(referrerPhone) : null,
+      total_points: joinedDate >= '2026-08-01' ? 3000 : 0,  // 신규가입 3,000원 적립(즉시 사용 가능)
     });
     if (error) { alert('오류가 발생했습니다. 다시 시도해주세요.'); setSaving(false); return; }
 
@@ -166,6 +170,14 @@ export default function JoinPage({ managerId }) {
               <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
                 style={{width:'100%',height:50,padding:'0 16px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:16,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
                 placeholder="010-0000-0000" inputMode="numeric" required />
+            </div>
+            <div style={{marginBottom:18}}>
+              <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>
+                추천인 연락처 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택 — 추천인에게 3,000원 적립)</span>
+              </label>
+              <input value={referrerPhone} onChange={e => setReferrerPhone(formatPhone(e.target.value))}
+                style={{width:'100%',height:50,padding:'0 16px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:16,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+                placeholder="추천인 휴대폰번호" inputMode="numeric" />
             </div>
             <div style={{marginBottom:24}}>
               <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>

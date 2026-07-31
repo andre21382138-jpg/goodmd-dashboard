@@ -86,6 +86,7 @@ export default function SalesInputPage({ profile }) {
   const [custName,    setCustName]    = useState('');
   const [custPhone,   setCustPhone]   = useState('');
   const [custBirthday,setCustBirthday]= useState('');
+  const [custReferrer,setCustReferrer]= useState(''); // 추천인 휴대폰
   const [custConsent, setCustConsent] = useState(false); // 마케팅(SMS) 수신동의 — 동의 시 서류 별도 보관
   const [managerName, setManagerName] = useState('');
 
@@ -335,7 +336,7 @@ export default function SalesInputPage({ profile }) {
   const resetForm = () => {
     setLines([newLine()]); setMemo('');
     setRecipName(''); setRecipPhone(''); setRecipAddr(''); setRecipAddrDetail(''); setDeliveryNotes('');
-    setCustName(''); setCustPhone(''); setCustBirthday(''); setManagerName(''); setCustConsent(false);
+    setCustName(''); setCustPhone(''); setCustBirthday(''); setCustReferrer(''); setManagerName(''); setCustConsent(false);
     setMemberMode('none'); setMemberSearch(''); setMemberResults([]); setSelMember(null);
   };
 
@@ -376,7 +377,9 @@ export default function SalesInputPage({ profile }) {
           birthday: custBirthday || null, store_name: storeName,
           branch_name: branchName, manager_name: managerName.trim() || null,
           sms_consent: custConsent, sms_consent_at: custConsent ? new Date().toISOString() : null, created_by: profile.id,
-          grade: '패밀리', total_purchase: 0, total_points: 0,
+          grade: '패밀리', total_purchase: 0,
+          total_points: soldAt >= '2026-08-01' ? 3000 : 0,  // 신규가입 3,000원 적립(즉시 사용 가능)
+          referrer_phone: custReferrer.trim() ? formatPhone(custReferrer) : null,
         }).select().single();
         if (custErr) throw custErr;
         customerId = custData.id;
@@ -498,6 +501,18 @@ export default function SalesInputPage({ profile }) {
         if (custUpdErr || !updRows || updRows.length === 0) {
           toast('⚠️ 판매는 저장됐으나 회원 적립·누적 반영에 실패했습니다. 관리자에게 알려주세요.', 'err');
           console.error('회원 집계 반영 실패', { customerId, custUpdErr, updRows });
+        }
+
+        // 추천인 보상: 신규가입회원 첫 구매 시 추천인에게 3,000원 (1회, 2026-08-01 시행)
+        if (customer?.referrer_phone && !customer?.referral_rewarded_at && (customer?.joined_at || soldAt) >= '2026-08-01') {
+          const refFmt = formatPhone(customer.referrer_phone);
+          const refDigits = String(customer.referrer_phone).replace(/\D/g, '');
+          const { data: refList } = await supabase.from('customers').select('id, total_points')
+            .or(`phone.eq.${refFmt},phone.eq.${refDigits}`).limit(1);
+          if (refList && refList.length && refList[0].id !== customerId) {
+            await supabase.from('customers').update({ total_points: (refList[0].total_points || 0) + 3000 }).eq('id', refList[0].id);
+          }
+          await supabase.from('customers').update({ referral_rewarded_at: new Date().toISOString() }).eq('id', customerId);
         }
       }
 
@@ -911,7 +926,7 @@ export default function SalesInputPage({ profile }) {
             {/* 신규 회원등록 */}
             {memberMode === 'new' && (
               <div style={{ background:'#fff8e1', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:14 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12, marginBottom:12 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:12, marginBottom:12 }}>
                   <div>
                     <label style={labelStyle}>고객 이름</label>
                     <input value={custName} onChange={e => setCustName(e.target.value)}
@@ -921,6 +936,11 @@ export default function SalesInputPage({ profile }) {
                     <label style={labelStyle}>연락처</label>
                     <input value={custPhone} onChange={e => setCustPhone(formatPhone(e.target.value))}
                       style={inputStyle} placeholder="010-0000-0000" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>추천인 <span style={{color:'var(--text3)',fontWeight:400}}>(선택)</span></label>
+                    <input value={custReferrer} onChange={e => setCustReferrer(formatPhone(e.target.value))}
+                      style={inputStyle} placeholder="추천인 휴대폰" />
                   </div>
                   <div>
                     <label style={labelStyle}>생일 <span style={{color:'var(--text3)',fontWeight:400}}>(선택)</span></label>

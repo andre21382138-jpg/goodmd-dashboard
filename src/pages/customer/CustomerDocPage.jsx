@@ -9,6 +9,7 @@ export default function CustomerDocPage({ profile }) {
   const [phone,       setPhone]       = useState('');
   const [birthday,    setBirthday]    = useState('');
   const [gender,      setGender]      = useState('');
+  const [referrerPhone, setReferrerPhone] = useState('');
   const [smsConsent,  setSmsConsent]  = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [recentList,  setRecent]      = useState([]);
@@ -47,9 +48,11 @@ export default function CustomerDocPage({ profile }) {
       sms_consent: smsConsent,
       sms_consent_at: smsConsent ? new Date().toISOString() : null,
       created_by: profile.id,
+      referrer_phone: referrerPhone.trim() ? formatPhone(referrerPhone) : null,
+      total_points: joinedAt >= '2026-08-01' ? 3000 : 0,  // 신규가입 3,000원 적립
     });
     if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); setGender(''); setSmsConsent(false); fetchRecent(); }
+    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); setGender(''); setReferrerPhone(''); setSmsConsent(false); fetchRecent(); }
     setSaving(false);
   };
 
@@ -104,6 +107,10 @@ export default function CustomerDocPage({ profile }) {
             <div>
               <label style={labelStyle}>연락처</label>
               <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))} style={inputStyle} placeholder="010-0000-0000" required />
+            </div>
+            <div>
+              <label style={labelStyle}>추천인 연락처 <span style={{color:'var(--text3)', fontWeight:400}}>(선택 · 추천인 3,000원 적립)</span></label>
+              <input value={referrerPhone} onChange={e => setReferrerPhone(formatPhone(e.target.value))} style={inputStyle} placeholder="추천인 휴대폰번호" />
             </div>
             <div>
               <label style={labelStyle}>생일 <span style={{color:'var(--text3)', fontWeight:400}}>(선택)</span></label>
