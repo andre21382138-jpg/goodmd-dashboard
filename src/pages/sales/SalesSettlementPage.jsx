@@ -255,6 +255,72 @@ export default function SalesSettlementPage() {
   };
   const exTotal = exRows.reduce((s, r) => s + r.total, 0);
 
+  // ── 매출결산 엑셀 다운로드 (점포별 결산 손익보고서 양식 재현) ──
+  const exportClosingExcel = async () => {
+    if (clRows.length === 0) { toast('조회된 데이터가 없습니다', 'err'); return; }
+    const ExcelJS = (await import('exceljs')).default;
+    const { dlBlob } = await import('../../lib/utils');
+    const colL = (c) => { let s = '', n = c; while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s; };
+    const FONT = { name: '맑은 고딕', size: 11 };
+    const thin = { style: 'thin', color: { argb: 'FFBFBFBF' } };
+    const border = { top: thin, left: thin, bottom: thin, right: thin };
+    const YELLOW = new Set(['C', 'D', 'G', 'H', 'I', 'J', 'K', 'S', 'T']);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('매출손익');
+
+    const widths = { A: 11.625, B: 15.125, E: 18.75, H: 13, K: 11, L: 14.375, M: 11, N: 11, O: 15.125, P: 15.125, Q: 15.125, T: 11 };
+    for (let c = 1; c <= 25; c++) ws.getColumn(c).width = widths[colL(c)] ?? 8.43;
+
+    ws.getCell('A3').value = `점포별 결산 손익보고서  (${clYear}년 ${clMonth}월${clCappedTo ? ` 1일~${clCappedTo.slice(5)}` : ''})`;
+    ws.getCell('A3').font = { ...FONT, size: 14, bold: true };
+    ws.getCell('A5').value = '구분';
+    ws.getCell('A5').font = { ...FONT, bold: true };
+
+    const HEADERS = ['지점명', '매장명', '매출액', '매출비율', '공급가\n(수수료제외금액)', '수수료율', '전체원가', '판매제품원가', '증정원가', '시식원가', '증정시식율', '제품원가2\n(SCM 인건비)', '매출이익', '판관비\n소계', '광고비\n(상품권비용 등)', '결제\n수수료', '물류비\n소계', '부서비용', '판매\n인건비', '판매인건비\n비율', '부가세', '영업이익', '본사\n인건비+제품개발', '순이익', '비고'];
+    const hr = ws.getRow(6); hr.height = 49.5;
+    HEADERS.forEach((h, i) => {
+      const cell = hr.getCell(i + 1);
+      cell.value = h; cell.font = { ...FONT }; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; cell.border = border;
+      if (YELLOW.has(colL(i + 1))) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+    });
+
+    const totRev = clTotals.revenue, totLab = clTotals.labor;
+    const pct = (n, d) => (d ? (n / d) * 100 : 0);
+    const dataOf = (g) => ({
+      revenue: g.revenue, totalCost: g.totalCost, soldCost: g.soldCost, giftCost: g.giftCost, tastingCost: g.tastingCost, labor: g.labor,
+      dpct: pct(g.revenue, totRev), kpct: g.totalCost ? pct(g.giftCost + g.tastingCost, g.totalCost) : 0, tpct: pct(g.labor, totLab),
+    });
+    let r = 7;
+    const put = (a, b, d, { merge = false, bold = false, fill = null } = {}) => {
+      const row = ws.getRow(r); row.height = 16.5;
+      const map = { 1: a, 2: b, 3: d?.revenue, 4: d?.dpct, 7: d?.totalCost, 8: d?.soldCost, 9: d?.giftCost, 10: d?.tastingCost, 11: d?.kpct, 19: d?.labor, 20: d?.tpct };
+      for (let c = 1; c <= 25; c++) {
+        const cell = row.getCell(c);
+        if (map[c] !== undefined && map[c] !== null) cell.value = map[c];
+        cell.font = { ...FONT, bold }; cell.border = border;
+        if (fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+        if ([3, 7, 8, 9, 10, 19].includes(c)) { cell.numFmt = '#,##0'; cell.alignment = { horizontal: 'right', vertical: 'middle' }; }
+        else if ([4, 11, 20].includes(c)) { cell.numFmt = '0.0"%"'; cell.alignment = { horizontal: 'right', vertical: 'middle' }; }
+        else cell.alignment = { vertical: 'middle', horizontal: c <= 2 ? 'center' : 'right' };
+      }
+      if (merge) ws.mergeCells(r, 1, r, 2);
+      r++;
+    };
+
+    put('총 합계', '', dataOf({ ...clTotals }), { merge: true, bold: true, fill: 'FFF2F2F2' });
+    const rank = s => { const i = STORE_NAMES.indexOf(s); return i === -1 ? 999 : i; };
+    const stores = [...new Set(clRows.map(x => x.dept))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+    for (const st of stores) {
+      const brs = clRows.filter(x => x.dept === st);
+      const sub = brs.reduce((t, x) => ({ revenue: t.revenue + x.revenue, totalCost: t.totalCost + x.totalCost, soldCost: t.soldCost + x.soldCost, giftCost: t.giftCost + x.giftCost, tastingCost: t.tastingCost + x.tastingCost, labor: t.labor + x.labor }), { revenue: 0, totalCost: 0, soldCost: 0, giftCost: 0, tastingCost: 0, labor: 0 });
+      put(`${st} 소계`, '', dataOf(sub), { merge: true, bold: true, fill: 'FFF7F7F7' });
+      for (const x of brs) put(st, x.branch, dataOf(x));
+    }
+
+    const buf = await wb.xlsx.writeBuffer();
+    dlBlob(buf, `매출결산_${clYear}년${String(clMonth).padStart(2, '0')}월.xlsx`);
+  };
+
   const totals = rows.reduce((t, r) => ({
     qty: t.qty + r.qty, gross: t.gross + r.gross, discount: t.discount + r.discount,
     net: t.net + r.net, cost: t.cost + r.costTotal, profit: t.profit + r.profit,
@@ -654,7 +720,13 @@ export default function SalesSettlementPage() {
               <select className="fsel" value={clMonth} onChange={e => setClMonth(Number(e.target.value))}>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}월</option>)}
               </select>
-              <div className="fbar-right">
+              <div className="fbar-right" style={{ display:'flex', gap:8 }}>
+                {clSearched && clRows.length > 0 && (
+                  <button type="button" onClick={exportClosingExcel}
+                    style={{ height:34, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                    📥 엑셀 다운로드
+                  </button>
+                )}
                 <button className="btn btn-p" onClick={searchClosing} disabled={clLoading}>
                   {clLoading ? <span className="spinner"/> : '🔍 결산 조회'}
                 </button>
