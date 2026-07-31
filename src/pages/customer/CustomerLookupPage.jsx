@@ -62,6 +62,9 @@ export default function CustomerLookupPage({ profile }) {
   const [eBranch,    setEBranch]   = useState('');
   const [savingInfo, setSavingInfo]= useState(false);
   const [purchases,  setPurchases] = useState([]);
+  const [detailTab,  setDetailTab] = useState('purchases'); // purchases | points
+  const [attendRewards, setAttendRewards] = useState([]);   // 출석적립
+  const [referralEarns, setReferralEarns] = useState([]);   // 이 회원이 추천해서 받은 적립
   const [loading,    setLoading]   = useState(false);
   const [loadingP,   setLoadingP]  = useState(false);
   const [allStores,  setAllStores] = useState([]);
@@ -231,7 +234,20 @@ export default function CustomerLookupPage({ profile }) {
     setLoadingP(false);
   };
 
-  const handleSelect = (c) => { setSelected(c); setEditInfo(false); fetchPurchases(c.id); };
+  const fetchPointsData = async (c) => {
+    const digits = String(c.phone || '').replace(/\D/g, '');
+    const orFilter = [c.phone && `referrer_phone.eq.${c.phone}`, digits && `referrer_phone.eq.${digits}`].filter(Boolean).join(',');
+    const [{ data: att }, refRes] = await Promise.all([
+      supabase.from('attendance_rewards').select('reward_date, points, store_name, branch_name').eq('customer_id', c.id).order('reward_date'),
+      orFilter
+        ? supabase.from('customers').select('name, referral_rewarded_at').or(orFilter).not('referral_rewarded_at', 'is', null)
+        : Promise.resolve({ data: [] }),
+    ]);
+    setAttendRewards(att || []);
+    setReferralEarns(refRes.data || []);
+  };
+
+  const handleSelect = (c) => { setSelected(c); setEditInfo(false); setDetailTab('purchases'); fetchPurchases(c.id); fetchPointsData(c); };
 
   // 회원 이름·휴대폰 수정
   const openEditInfo = () => {
@@ -436,6 +452,28 @@ export default function CustomerLookupPage({ profile }) {
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + effQty(r), 0), [purchases]); // eslint-disable-line no-unused-vars
   // 구매건수 = 같은 날짜는 1건(방문 기준). 한 방문에 여러 상품을 사도 1건.
   const visitCount = useMemo(() => new Set(purchases.map(p => p.sold_at)).size, [purchases]);
+
+  // 적립금 내역(원장) 재구성 — 구매적립/구매사용(sales) + 출석적립 + 추천적립 + 가입보너스
+  //  통합 원장 테이블이 없어 각 소스를 조합하고, 현재 잔액과 안 맞는 과거분은 '기존 적립(이월)'로 보정
+  const pointsLedger = useMemo(() => {
+    if (!selected) return [];
+    const ev = [];
+    for (const p of purchases) {
+      if ((p.points_earned || 0) > 0) ev.push({ date: p.sold_at, earn: p.points_earned, reason: '구매적립' });
+      if ((p.points_used   || 0) > 0) ev.push({ date: p.sold_at, use: p.points_used,   reason: '구매사용' });
+    }
+    for (const a of attendRewards) ev.push({ date: a.reward_date, earn: a.points || 0, reason: '출석적립' });
+    for (const r of referralEarns) ev.push({ date: String(r.referral_rewarded_at).slice(0, 10), earn: 3000, reason: `추천적립${r.name ? ` (${r.name})` : ''}` });
+    if (selected.joined_at && selected.joined_at >= '2026-08-01') ev.push({ date: selected.joined_at, earn: 3000, reason: '회원가입' });
+    ev.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    // 기초 이월: 현재 남은적립금과 이벤트 합계 차이를 가장 앞에 보정행으로
+    const net = ev.reduce((s, e) => s + (e.earn || 0) - (e.use || 0), 0);
+    const opening = (selected.total_points || 0) - net;
+    if (opening !== 0) ev.unshift({ date: selected.joined_at || '', earn: opening > 0 ? opening : 0, use: opening < 0 ? -opening : 0, reason: '기존 적립(이월)' });
+    let bal = 0;
+    const withBal = ev.map(e => { bal += (e.earn || 0) - (e.use || 0); return { ...e, balance: bal }; });
+    return withBal.reverse(); // 최신순
+  }, [selected, purchases, attendRewards, referralEarns]);
   // 정보수정 점포·지점 옵션 (현재값이 목록에 없어도 유지되도록 포함)
   const eStoreOpts  = (!eStore || STORE_NAMES.includes(eStore)) ? STORE_NAMES : [eStore, ...STORE_NAMES];
   const eBranchBase = STORE_MAP[eStore] || [];
@@ -1253,8 +1291,46 @@ export default function CustomerLookupPage({ profile }) {
                   );
                 })()}
               </div>
-              {/* 구매 이력 */}
-              <div style={{fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:10}}>구매 이력</div>
+              {/* 탭: 구매 이력 / 적립금 내역 */}
+              <div style={{display:'flex', gap:8, marginBottom:12}}>
+                {[['purchases','구매 이력'],['points','적립금 내역']].map(([k,l]) => (
+                  <button key={k} type="button" onClick={() => setDetailTab(k)}
+                    style={{height:34, padding:'0 18px', borderRadius:'var(--radius)', border:'2px solid', cursor:'pointer', fontSize:13, fontWeight:700,
+                      borderColor: detailTab===k?'var(--accent)':'var(--border)', background: detailTab===k?'var(--accent)':'#fff', color: detailTab===k?'#fff':'var(--text2)'}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {detailTab === 'points' ? (
+                <>
+                  <div className="twrap">
+                    <table>
+                      <thead>
+                        <tr><th>날짜</th><th className="r">지급적립금</th><th className="r">사용적립금</th><th>사유</th><th className="r">남은적립금</th></tr>
+                      </thead>
+                      <tbody>
+                        {pointsLedger.length === 0
+                          ? <tr><td colSpan={5} className="empty">적립금 내역이 없습니다</td></tr>
+                          : pointsLedger.map((e, i) => (
+                            <tr key={i}>
+                              <td className="mono">{e.date || '-'}</td>
+                              <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: e.earn ? '#2e7d32' : 'var(--text3)'}}>{e.earn ? `+${Number(e.earn).toLocaleString()}` : '-'}</td>
+                              <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color: e.use ? '#6a1b9a' : 'var(--text3)'}}>{e.use ? `-${Number(e.use).toLocaleString()}` : '-'}</td>
+                              <td style={{fontSize:12}}>{e.reason}</td>
+                              <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{Number(e.balance).toLocaleString()}</td>
+                            </tr>
+                          ))
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{marginTop:12, fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)'}}>
+                    현재 남은적립금 {(selected.total_points||0).toLocaleString()}원 · 누적 사용 {(selected.used_points||0).toLocaleString()}원
+                  </div>
+                </>
+              ) : (
+              <>
               {loadingP ? <div className="empty"><span className="spinner"/></div> : (
                 <div className="twrap">
                   <table>
@@ -1303,6 +1379,8 @@ export default function CustomerLookupPage({ profile }) {
               <div style={{marginTop:12, fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)'}}>
                 총 {visitCount}건 · 상품 {purchases.length}개 · {totalAmt.toLocaleString()}원
               </div>
+              </>
+              )}
             </div>
           </div>
         </div>
