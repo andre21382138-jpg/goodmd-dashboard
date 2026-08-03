@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { GradeBadge } from '../../lib/utils';
+import { GRADE_TABLE } from '../../lib/constants';
 
 const PAGE_SIZE = 100;
 
@@ -32,6 +33,7 @@ export default function MyMembersPage({ profile }) {
   const [loadingP, setLoadingP] = useState(false);
   const [fSearch,  setFSearch]  = useState('');
   const [fMine,    setFMine]    = useState(false);
+  const [fGrade,   setFGrade]   = useState(''); // '' = 전체 등급
   const [page,     setPage]     = useState(0);
 
   // Supabase 1000행 제한 우회 — 전체 조회
@@ -74,14 +76,15 @@ export default function MyMembersPage({ profile }) {
   const filtered = useMemo(() => {
     let r = members;
     if (fMine) r = r.filter(m => m.manager_name === profile.name);
+    if (fGrade) r = r.filter(m => (m.grade || '패밀리') === fGrade);
     if (fSearch) {
       const q = fSearch.toLowerCase();
       r = r.filter(m => m.name.toLowerCase().includes(q) || m.phone.includes(q));
     }
     return r;
-  }, [members, fSearch, fMine, profile.name]);
+  }, [members, fSearch, fMine, fGrade, profile.name]);
 
-  useEffect(() => { setPage(0); }, [fSearch, fMine]);
+  useEffect(() => { setPage(0); }, [fSearch, fMine, fGrade]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageMembers = useMemo(
@@ -94,6 +97,12 @@ export default function MyMembersPage({ profile }) {
   const totalAmt = useMemo(() => purchases.reduce((s,r) => s + r.price * effQty(r), 0), [purchases]);
   const totalQty = useMemo(() => purchases.reduce((s,r) => s + effQty(r), 0), [purchases]);
   const consentCount = useMemo(() => members.filter(m => m.sms_consent).length, [members]);
+  const gradeCounts = useMemo(() => {
+    const base = members.filter(m => !fMine || m.manager_name === profile.name);
+    const cnt = {};
+    for (const m of base) { const g = m.grade || '패밀리'; cnt[g] = (cnt[g] || 0) + 1; }
+    return cnt;
+  }, [members, fMine, profile.name]);
 
   return (
     <div>
@@ -116,8 +125,14 @@ export default function MyMembersPage({ profile }) {
       <div className="card" style={{ padding:'16px 20px' }}>
         <div style={{ display:'flex', gap:8, marginBottom:10 }}>
           <input className="finput" value={fSearch} onChange={e => setFSearch(e.target.value)}
-            placeholder="이름 또는 연락처 검색" style={{ flex:1, maxWidth:340 }}/>
+            placeholder="이름 또는 연락처 검색" style={{ flex:1, maxWidth:300 }}/>
           {fSearch && <button className="btn-ghost" onClick={() => setFSearch('')}>✕</button>}
+          <select className="fsel" value={fGrade} onChange={e => setFGrade(e.target.value)}
+            style={{ height:34, borderColor: fGrade ? 'var(--accent)' : 'var(--border)', fontWeight: fGrade ? 700 : 400, color: fGrade ? 'var(--accent)' : 'var(--text2)' }}
+            title="등급별 조회">
+            <option value="">전체 등급</option>
+            {GRADE_TABLE.map(g => <option key={g.grade} value={g.grade}>{g.grade} ({gradeCounts[g.grade] || 0})</option>)}
+          </select>
           <div style={{marginLeft:'auto', display:'flex', gap:6}}>
             <button type="button" onClick={() => setFMine(false)}
               style={{ height:34, padding:'0 14px', border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', fontSize:12, fontWeight:700,
