@@ -197,7 +197,7 @@ export default function SalesSettlementPage() {
       }
       const list = [...map.values()].map(g => {
         const totalCost = g.soldCost + g.giftCost + g.tastingCost;
-        return { ...g, totalCost, gtPct: totalCost ? ((g.giftCost + g.tastingCost) / totalCost) * 100 : 0 };
+        return { ...g, totalCost, gtPct: g.revenue ? ((g.giftCost + g.tastingCost) / g.revenue) * 100 : 0 };
       });
       const rank = s => { const i = STORE_NAMES.indexOf(s); return i === -1 ? 999 : i; };
       list.sort((a, b) => rank(a.dept) - rank(b.dept) || a.dept.localeCompare(b.dept) || a.branch.localeCompare(b.branch, 'ko'));
@@ -288,7 +288,7 @@ export default function SalesSettlementPage() {
     const pct = (n, d) => (d ? (n / d) * 100 : 0);
     const dataOf = (g) => ({
       revenue: g.revenue, totalCost: g.totalCost, soldCost: g.soldCost, giftCost: g.giftCost, tastingCost: g.tastingCost, labor: g.labor,
-      dpct: pct(g.revenue, totRev), kpct: g.totalCost ? pct(g.giftCost + g.tastingCost, g.totalCost) : 0, tpct: pct(g.labor, totLab),
+      dpct: pct(g.revenue, totRev), kpct: g.revenue ? pct(g.giftCost + g.tastingCost, g.revenue) : 0, tpct: pct(g.labor, totLab),
     });
     let r = 7;
     const put = (a, b, d, { merge = false, bold = false, fill = null } = {}) => {
@@ -372,7 +372,7 @@ export default function SalesSettlementPage() {
       g.revenue += r.revenue; g.soldCost += r.soldCost; g.giftCost += r.giftCost; g.tastingCost += r.tastingCost;
       g.totalCost += r.totalCost; g.labor += r.labor; g.headcount += r.headcount; g.branches += 1;
     }
-    return [...m.values()].map(g => ({ ...g, gtPct: g.totalCost ? ((g.giftCost + g.tastingCost) / g.totalCost) * 100 : 0 }));
+    return [...m.values()].map(g => ({ ...g, gtPct: g.revenue ? ((g.giftCost + g.tastingCost) / g.revenue) * 100 : 0 }));
   }, [clRows]);
   const sortedClStoreRows = useMemo(() => {
     if (!clStoreSortKey) return clStoreRows;
@@ -772,7 +772,7 @@ export default function SalesSettlementPage() {
                         <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.soldCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'#6a1b9a' }}>{won(r.giftCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'#1565C0' }}>{won(r.tastingCost)}</td>
-                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.totalCost))}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.revenue))}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', whiteSpace:'nowrap' }}>
                           {won(r.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({r.headcount}명)</span>
                         </td>
@@ -788,7 +788,7 @@ export default function SalesSettlementPage() {
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(clTotals.soldCost)}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#6a1b9a' }}>{won(clTotals.giftCost)}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0' }}>{won(clTotals.tastingCost)}</td>
-                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.totalCost))}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.revenue))}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', fontSize:14, whiteSpace:'nowrap' }}>
                         {won(clTotals.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({clTotals.headcount}명)</span>
                       </td>
@@ -821,7 +821,7 @@ export default function SalesSettlementPage() {
                         <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.soldCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'#6a1b9a' }}>{won(r.giftCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'#1565C0' }}>{won(r.tastingCost)}</td>
-                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.totalCost))}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{pctStr(pctOf(r.giftCost + r.tastingCost, r.revenue))}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', whiteSpace:'nowrap' }}>
                           {won(r.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({r.headcount}명)</span>
                         </td>
@@ -836,7 +836,7 @@ export default function SalesSettlementPage() {
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(clTotals.soldCost)}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#6a1b9a' }}>{won(clTotals.giftCost)}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0' }}>{won(clTotals.tastingCost)}</td>
-                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.totalCost))}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{pctStr(pctOf(clTotals.giftCost + clTotals.tastingCost, clTotals.revenue))}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#e65100', fontSize:14, whiteSpace:'nowrap' }}>
                         {won(clTotals.labor)} <span style={{ fontSize:11, fontWeight:600, color:'var(--text3)' }}>({clTotals.headcount}명)</span>
                       </td>
