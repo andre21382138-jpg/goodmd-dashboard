@@ -662,8 +662,10 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
               <option value="">전체 업체</option>
               {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               {(() => {
-                // 설정상 특판 지점(STORE_MAP) + 실제 데이터에서 발견된 특판 store/branch 병합
-                const opts = [...new Set([...(STORE_MAP['특판']||[]), ...specialNames])].sort();
+                // 설정상 특판 지점(STORE_MAP) + 실제 데이터의 특판 store/branch 병합.
+                // 단, 위 B2B 업체(biz_companies)와 이름이 겹치면 중복이므로 제외.
+                const compNames = new Set(companies.map(c => c.name));
+                const opts = [...new Set([...(STORE_MAP['특판']||[]), ...specialNames])].filter(n => !compNames.has(n)).sort();
                 return opts.length > 0 ? (
                   <optgroup label="특판(매장 판매입력)">
                     {opts.map(n=><option key={'sp:'+n} value={'sp:'+n}>{n}</option>)}
