@@ -158,6 +158,26 @@ export default function SalesSettlementPage() {
     return all;
   };
 
+  // 특판 B2B 매출(biz_sales) — 월별, 매출결산에 '특판/업체' 행으로 합산
+  const fetchClosingBiz = async (year, month, endDate) => {
+    const from = `${year}-${pad(month)}-01`;
+    const fullTo = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
+    const to = (endDate && endDate < fullTo) ? endDate : fullTo;
+    const all = []; let start = 0; const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase.from('biz_sales')
+        .select('company_name, quantity, supply_price, product:products(cost)')
+        .gte('sold_at', from).lte('sold_at', to)
+        .order('id').range(start, start + PAGE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    return all;
+  };
+
   const searchClosing = useCallback(async () => {
     setClLoading(true);
     try {
@@ -167,9 +187,10 @@ export default function SalesSettlementPage() {
       const isCurMonth = `${clYear}-${pad(clMonth)}` === todayKst.slice(0, 7);
       const endDate = isCurMonth ? yestKst : null;
       setClCappedTo(endDate);
-      const [sales, labor] = await Promise.all([
+      const [sales, labor, biz] = await Promise.all([
         fetchClosingSales(clYear, clMonth, endDate),
         computeMonthlyLaborByBranch({ year: clYear, month: clMonth, endDate }),
+        fetchClosingBiz(clYear, clMonth, endDate),
       ]);
       const map = new Map();
       const ensure = (dept, branch) => {
@@ -188,6 +209,13 @@ export default function SalesSettlementPage() {
         if (r.payment === '증정')      g.giftCost    += cost * q;   // I
         else if (r.payment === '시식') g.tastingCost += cost * q;   // J
         else                           g.soldCost    += cost * netQty; // H (반품은 음수로 차감)
+      }
+      // 특판 B2B(biz_sales) → '특판 / 업체' 행 (매출액=공급가×수량, 원가=상품원가×수량, 증정/시식·인건비 없음)
+      for (const b of biz) {
+        const g = ensure('특판', b.company_name || '(미지정)');
+        const q = Number(b.quantity) || 0;
+        g.revenue  += (Number(b.supply_price) || 0) * q;
+        g.soldCost += (Number(b.product?.cost) || 0) * q;
       }
       for (const [key, info] of labor.byBranch.entries()) {
         const [dept, branch] = key.split('|');
