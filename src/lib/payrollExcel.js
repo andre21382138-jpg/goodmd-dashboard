@@ -156,6 +156,35 @@ export async function downloadPayrollExcel({ year, month }) {
     if (!groupMap.has(key)) groupMap.set(key, { dept, branch, members: [] });
     groupMap.get(key).members.push(m);
   }
+
+  // 기타근무자 = 출근기록 있으나 store_members 미등록 → 직책 기타근무자·일급 100,000·연장 6,000
+  const regSet = new Set((members || []).map(m => `${m.store_account_id}|${m.name}`));
+  const acctInfo = {};
+  for (const m of (members || [])) {
+    if (m.store_account_id && m.store?.department) acctInfo[m.store_account_id] = { dept: m.store.department, branch: m.store.branch };
+  }
+  const attKeys = new Set();
+  (attendance || []).forEach(r => attKeys.add(`${r.manager_id}|${r.manager_name}`));
+  const extraKeys = [...attKeys].filter(k => !regSet.has(k));
+  const needAccts = [...new Set(extraKeys.map(k => k.slice(0, k.indexOf('|'))))].filter(a => !acctInfo[a]);
+  if (needAccts.length) {
+    const { data: eps } = await supabase.from('profiles').select('id, department, branch').in('id', needAccts);
+    (eps || []).forEach(p => { acctInfo[p.id] = { dept: p.department, branch: p.branch }; });
+  }
+  for (const k of extraKeys) {
+    const i = k.indexOf('|'); const acct = k.slice(0, i), name = k.slice(i + 1);
+    const info = acctInfo[acct];
+    if (!info || !info.dept || !info.branch) continue;
+    const gk = `${info.dept}|${info.branch}`;
+    if (!groupMap.has(gk)) groupMap.set(gk, { dept: info.dept, branch: info.branch, members: [] });
+    groupMap.get(gk).members.push({
+      id: 'extra-' + k, name, display_name: name, job_title: '기타근무자',
+      salary_type: '일급', salary: 100000, extra_pay: 6000, affiliation: '', phone: '', hire_date: '',
+      store_account_id: acct, store_name: info.dept, branch_name: info.branch,
+      store: { department: info.dept, branch: info.branch },
+    });
+  }
+
   const groups = [...groupMap.values()].sort((a, b) => {
     const ra = storeRank(a.dept), rb = storeRank(b.dept);
     if (ra !== rb) return ra - rb;
