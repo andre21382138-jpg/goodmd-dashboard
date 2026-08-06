@@ -694,7 +694,7 @@ function SalaryCalcTab() {
       .or(`resigned_at.is.null,resigned_at.gte.${from}`); // 재직자 + 해당 월(또는 이후) 퇴사자
 
     const { data: att } = await supabase.from('attendance')
-      .select('manager_name, work_date').gte('work_date', from).lte('work_date', to);
+      .select('manager_id, manager_name, work_date').gte('work_date', from).lte('work_date', to);
 
     const calcIncentive = (amt) => {
       if (amt >= 200000) return 3000;
@@ -726,28 +726,48 @@ function SalaryCalcTab() {
       managerIncentiveMap[c.manager_name] += inc;
     });
 
-    const attMap = {};
+    const attMap = {};      // name → dates (기존 등록 회원)
+    const attByAcct = {};   // `${manager_id}|${manager_name}` → dates (기타근무자 정확 집계)
     (att || []).forEach(r => {
-      if (!attMap[r.manager_name]) attMap[r.manager_name] = [];
-      attMap[r.manager_name].push(r.work_date);
+      (attMap[r.manager_name] = attMap[r.manager_name] || []).push(r.work_date);
+      const k = `${r.manager_id}|${r.manager_name}`;
+      (attByAcct[k] = attByAcct[k] || []).push(r.work_date);
     });
 
-    const result = (members || []).map(m => {
-      const dates = attMap[m.name] || [];
+    // 기타근무자 = 출근기록 있으나 store_members 미등록 → 직책 기타근무자·일급 100,000·연장 6,000
+    const regSet = new Set((members || []).map(m => `${m.store_account_id}|${m.name}`));
+    const extraKeys = Object.keys(attByAcct).filter(k => !regSet.has(k));
+    const extraAcctIds = [...new Set(extraKeys.map(k => k.split('|')[0]))];
+    let extraProf = {};
+    if (extraAcctIds.length) {
+      const { data: eps } = await supabase.from('profiles').select('id, department, branch').in('id', extraAcctIds);
+      (eps || []).forEach(p => { extraProf[p.id] = p; });
+    }
+    const extraMembers = extraKeys.map(k => {
+      const idx = k.indexOf('|'); const acct = k.slice(0, idx), name = k.slice(idx + 1);
+      const p = extraProf[acct];
+      if (!p || !p.department) return null;
+      return { id: 'extra-' + k, name, store_account_id: acct, store: { department: p.department, branch: p.branch },
+        job_title: '기타근무자', salary_type: '일급', salary: 100000, extra_pay: 6000, _extra: true };
+    }).filter(Boolean);
+
+    const mkRow = (m, rawDates) => {
+      const dates = [...new Set(rawDates)]; // 중복 날짜 제거 → 근무일수는 고유 날짜 기준
       let salary = 0, weekdays = 0, weekends = 0;
-      if (m.salary_type === '월급') {
-        salary = m.salary || 0;
-      } else {
-        dates.forEach(d => {
-          const dow = new Date(d).getDay();
-          const isFriSatSun = dow === 0 || dow === 5 || dow === 6;
-          if (isFriSatSun) { salary += (m.salary||0) + (m.extra_pay||0); weekends++; }
-          else             { salary += (m.salary||0); weekdays++; }
-        });
-      }
+      if (m.salary_type === '월급') salary = m.salary || 0;
+      else dates.forEach(d => {
+        const dow = new Date(d).getDay();
+        if (dow === 0 || dow === 5 || dow === 6) { salary += (m.salary||0) + (m.extra_pay||0); weekends++; }
+        else { salary += (m.salary||0); weekdays++; }
+      });
       const memberIncentive = managerIncentiveMap[m.name] || 0;
       return { ...m, totalDays: dates.length, weekdays, weekends, salary, memberIncentive, totalPay: salary + memberIncentive };
-    });
+    };
+
+    const result = [
+      ...(members || []).map(m => mkRow(m, attMap[m.name] || [])),
+      ...extraMembers.map(m => mkRow(m, attByAcct[`${m.store_account_id}|${m.name}`] || [])),
+    ];
 
     setRows(result.sort((a,b) => (a.store?.department||'').localeCompare(b.store?.department||'')));
     setLoading(false);
