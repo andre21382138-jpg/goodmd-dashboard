@@ -65,6 +65,34 @@ export default function StoreReturnsHQPage({ profile }) {
     setProcessing(null);
   };
 
+  // 본사 담당자 취소(삭제) — 반품완료(재고 차감됨)였으면 매장재고 복원 후 삭제
+  const cancelOne = async (r) => {
+    const warn = r.status === 'completed' ? '\n\n(반품완료 상태 — 차감됐던 매장재고가 복원됩니다)' : '';
+    if (!window.confirm(`${r.store_name} ${r.branch_name}\n${r.product_name} ${r.quantity}개\n\n이 반품신청을 취소하시겠습니까?${warn}`)) return;
+    setProcessing(r.id);
+    try {
+      if (r.status === 'completed' && r.product_code) {
+        const { data: st } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name', r.store_name).eq('branch_name', r.branch_name).eq('product_code', r.product_code)
+          .maybeSingle();
+        if (st) {
+          await supabase.from('store_stock')
+            .update({ stock_qty: (st.stock_qty || 0) + (r.quantity || 0), updated_at: new Date().toISOString() })
+            .eq('id', st.id);
+        }
+      }
+      const { data: del, error } = await supabase.from('store_returns').delete().eq('id', r.id).select('id');
+      if (error) { toast(error.message, 'err'); return; }
+      if (!del || del.length === 0) { toast('취소 권한이 없습니다 (RLS)', 'err'); return; }
+      toast(r.status === 'completed' ? '반품신청 취소 — 매장재고 복원' : '반품신청 취소됨', 'ok');
+      fetchData();
+    } catch (e) {
+      toast('취소 실패: ' + (e.message || e), 'err');
+    }
+    setProcessing(null);
+  };
+
   const dt = (iso) => iso ? new Date(iso).toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
 
   return (
@@ -112,7 +140,7 @@ export default function StoreReturnsHQPage({ profile }) {
                   <th style={{ width: 120 }}>사유</th>
                   <th>메모</th>
                   <th style={{ width: 110, textAlign: 'center' }}>상태</th>
-                  <th style={{ width: 70, textAlign: 'center' }}></th>
+                  <th style={{ width: 140, textAlign: 'center' }}>처리</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,13 +163,17 @@ export default function StoreReturnsHQPage({ profile }) {
                           ? <span className="badge" style={{ background: '#e3f2fd', color: '#1565C0', border: '1px solid #90caf9', fontSize: 11 }}>✓ 확인완료</span>
                           : <span className="badge" style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80', fontSize: 11 }}>대기</span>}
                       </td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                         {st === 'pending' && (
                           <button type="button" onClick={() => confirmOne(r)} disabled={processing === r.id}
                             style={{ padding: '4px 12px', fontSize: 12, fontWeight: 700, border: '1px solid #2e7d32', borderRadius: 4, background: '#e8f5e9', color: '#2e7d32', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                             {processing === r.id ? '…' : '확인'}
                           </button>
                         )}
+                        <button type="button" onClick={() => cancelOne(r)} disabled={processing === r.id}
+                          style={{ marginLeft: st === 'pending' ? 6 : 0, padding: '4px 12px', fontSize: 12, fontWeight: 700, border: '1px solid var(--danger)', borderRadius: 4, background: '#fff', color: 'var(--danger)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          취소
+                        </button>
                       </td>
                     </tr>
                   );
