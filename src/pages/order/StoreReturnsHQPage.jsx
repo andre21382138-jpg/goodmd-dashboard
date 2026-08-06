@@ -65,8 +65,9 @@ export default function StoreReturnsHQPage({ profile }) {
     setProcessing(null);
   };
 
-  // 본사 담당자 취소(삭제) — 반품완료(재고 차감됨)였으면 매장재고 복원 후 삭제
+  // 본사 담당자 취소 — 상태를 '취소완료'로. 반품완료(재고 차감됨)였으면 매장재고 복원.
   const cancelOne = async (r) => {
+    if (r.status === 'cancelled') return;
     const warn = r.status === 'completed' ? '\n\n(반품완료 상태 — 차감됐던 매장재고가 복원됩니다)' : '';
     if (!window.confirm(`${r.store_name} ${r.branch_name}\n${r.product_name} ${r.quantity}개\n\n이 반품신청을 취소하시겠습니까?${warn}`)) return;
     setProcessing(r.id);
@@ -82,10 +83,11 @@ export default function StoreReturnsHQPage({ profile }) {
             .eq('id', st.id);
         }
       }
-      const { data: del, error } = await supabase.from('store_returns').delete().eq('id', r.id).select('id');
+      const { error } = await supabase.from('store_returns')
+        .update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by: profile?.id || null })
+        .eq('id', r.id);
       if (error) { toast(error.message, 'err'); return; }
-      if (!del || del.length === 0) { toast('취소 권한이 없습니다 (RLS)', 'err'); return; }
-      toast(r.status === 'completed' ? '반품신청 취소 — 매장재고 복원' : '반품신청 취소됨', 'ok');
+      toast(r.status === 'completed' ? '취소완료 — 매장재고 복원' : '취소완료', 'ok');
       fetchData();
     } catch (e) {
       toast('취소 실패: ' + (e.message || e), 'err');
@@ -113,6 +115,7 @@ export default function StoreReturnsHQPage({ profile }) {
             <option value="pending">확인 대기</option>
             <option value="confirmed">확인 완료</option>
             <option value="completed">반품완료</option>
+            <option value="cancelled">취소완료</option>
           </select>
           <div className="fbar-right">
             <span className="fresult">
@@ -157,7 +160,9 @@ export default function StoreReturnsHQPage({ profile }) {
                       <td><span style={{ fontSize: 11, fontWeight: 700, color: REASON_COLOR[r.reason] || 'var(--text2)' }}>{REASON_LABEL[r.reason] || r.reason}</span></td>
                       <td style={{ fontSize: 11, color: 'var(--text2)' }}>{r.memo || '-'}</td>
                       <td style={{ textAlign: 'center' }}>
-                        {st === 'completed'
+                        {st === 'cancelled'
+                          ? <span className="badge" style={{ background: '#f5f5f5', color: '#9e9e9e', border: '1px solid #ccc', fontSize: 11 }}>✕ 취소완료</span>
+                          : st === 'completed'
                           ? <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', fontSize: 11 }}>↩️ 반품완료</span>
                           : st === 'confirmed'
                           ? <span className="badge" style={{ background: '#e3f2fd', color: '#1565C0', border: '1px solid #90caf9', fontSize: 11 }}>✓ 확인완료</span>
@@ -170,10 +175,13 @@ export default function StoreReturnsHQPage({ profile }) {
                             {processing === r.id ? '…' : '확인'}
                           </button>
                         )}
-                        <button type="button" onClick={() => cancelOne(r)} disabled={processing === r.id}
-                          style={{ marginLeft: st === 'pending' ? 6 : 0, padding: '4px 12px', fontSize: 12, fontWeight: 700, border: '1px solid var(--danger)', borderRadius: 4, background: '#fff', color: 'var(--danger)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                          취소
-                        </button>
+                        {st !== 'cancelled' && (
+                          <button type="button" onClick={() => cancelOne(r)} disabled={processing === r.id}
+                            style={{ marginLeft: st === 'pending' ? 6 : 0, padding: '4px 12px', fontSize: 12, fontWeight: 700, border: '1px solid var(--danger)', borderRadius: 4, background: '#fff', color: 'var(--danger)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            취소
+                          </button>
+                        )}
+                        {st === 'cancelled' && <span style={{ fontSize: 11, color: 'var(--text3)' }}>-</span>}
                       </td>
                     </tr>
                   );
