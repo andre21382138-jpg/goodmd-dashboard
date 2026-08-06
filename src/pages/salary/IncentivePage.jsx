@@ -778,6 +778,24 @@ function SalaryCalcTab() {
   const stores = useMemo(() => uniq(rows.map(r => r.store?.department).filter(Boolean)), [rows]);
   const filtered = useMemo(() => fStore ? rows.filter(r => r.store?.department===fStore) : rows, [rows, fStore]);
   const totalSalary = useMemo(() => filtered.reduce((s,r) => s+r.totalPay, 0), [filtered]);
+  // 점포 → 지점 → 직급 순 정렬 + 점포별 소계 삽입
+  const grouped = useMemo(() => {
+    const rank = t => t === '매니저' ? 0 : t === '부매니저' ? 1 : t === '기타근무자' ? 3 : 2;
+    const sorted = [...filtered].sort((a, b) =>
+      (a.store?.department || '').localeCompare(b.store?.department || '') ||
+      (a.store?.branch || '').localeCompare(b.store?.branch || '') ||
+      rank(a.job_title) - rank(b.job_title));
+    const out = []; let cur = null, sub = null;
+    const flush = () => { if (sub) out.push({ type: 'subtotal', ...sub }); };
+    for (const m of sorted) {
+      const dept = m.store?.department || '(미지정)';
+      if (dept !== cur) { flush(); cur = dept; sub = { dept, salary: 0, incentive: 0, total: 0, count: 0 }; }
+      out.push({ type: 'row', m });
+      sub.salary += m.salary; sub.incentive += m.memberIncentive; sub.total += m.totalPay; sub.count += 1;
+    }
+    flush();
+    return out;
+  }, [filtered]);
   const years  = Array.from({length:5}, (_,i) => now.getFullYear() - i);
   const months = Array.from({length:12}, (_,i) => i+1);
 
@@ -818,7 +836,15 @@ function SalaryCalcTab() {
                 <tr><th>점포</th><th>지점</th><th>직급</th><th>이름</th><th>급여방법</th><th className="r">출근 (평일/금토일)</th><th className="r">기본급여</th><th className="r">회원 인센티브</th><th className="r">합계 지급액</th><th style={{width:70, textAlign:'center'}}>상세</th></tr>
               </thead>
               <tbody>
-                {filtered.map(m => (
+                {grouped.map((it, gi) => it.type === 'subtotal' ? (
+                  <tr key={'sub'+gi} style={{background:'#fff8e1', borderBottom:'2px solid #ffe082'}}>
+                    <td colSpan={6} style={{padding:'8px 12px', fontWeight:700, fontSize:12, color:'#8d6e00'}}>▸ {it.dept} 소계 <span style={{color:'var(--text3)', fontWeight:500}}>({it.count}명)</span></td>
+                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:600, padding:'8px 12px', color:'var(--text2)'}}>{it.salary.toLocaleString()}원</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, padding:'8px 12px', color:'var(--success)'}}>{it.incentive>0?`+${it.incentive.toLocaleString()}원`:'-'}</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, padding:'8px 12px', color:'var(--accent)'}}>{it.total.toLocaleString()}원</td>
+                    <td/>
+                  </tr>
+                ) : (() => { const m = it.m; return (
                   <tr key={m.id}>
                     <td style={{padding:'12px 12px'}}><span className="badge badge-dept">{m.store?.department}</span></td>
                     <td style={{padding:'12px 12px'}}><span className="badge badge-store">{m.store?.branch}</span></td>
@@ -839,7 +865,7 @@ function SalaryCalcTab() {
                       <button className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}} onClick={() => setCalTarget(m)}>상세보기</button>
                     </td>
                   </tr>
-                ))}
+                ); })())}
                 <tr style={{background:'var(--bg3)', borderTop:'2px solid var(--border2)'}}>
                   <td colSpan={6} style={{padding:'10px 11px', fontWeight:700}}>합계</td>
                   <td className="r" style={{fontFamily:'var(--mono)', fontWeight:600, padding:'10px 11px', color:'var(--text2)'}}>{filtered.reduce((s,r)=>s+r.salary,0).toLocaleString()}원</td>
