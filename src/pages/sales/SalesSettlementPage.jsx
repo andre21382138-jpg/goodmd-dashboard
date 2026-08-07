@@ -51,7 +51,7 @@ export default function SalesSettlementPage() {
   const [exLoading, setExLoading] = useState(false);
   const [exSearched, setExSearched] = useState(false);
   const [exDetail, setExDetail] = useState(null); // { dept, branch, items:[...] } 팝업
-  const [exDownStores, setExDownStores] = useState([]); // 엑셀 다운로드용 점포 선택
+  const [exSelKeys, setExSelKeys] = useState(new Set()); // 엑셀 다운로드용 지점(행) 선택
 
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
@@ -269,7 +269,7 @@ export default function SalesSettlementPage() {
       const list = [...map.values()].sort((a, b) => rank(a.dept) - rank(b.dept) || a.dept.localeCompare(b.dept) || a.branch.localeCompare(b.branch, 'ko'));
       setExRaw(all);
       setExRows(list);
-      setExDownStores([...new Set(list.map(r => r.dept))]); // 기본 전체 점포 선택
+      setExSelKeys(new Set(list.map(r => r.key))); // 기본 전체 지점 선택
       setExSearched(true);
     } catch (err) {
       toast('지출 조회 실패: ' + (err.message || err), 'err');
@@ -369,9 +369,9 @@ export default function SalesSettlementPage() {
       margins: { left: 0.236, right: 0.236, top: 0.748, bottom: 0.748, header: 0.315, footer: 0.315 }, showGridLines: false };
   };
 
-  const exportExpenseExcel = async (stores) => {
-    const targets = exRows.filter(r => stores.includes(r.dept));
-    if (targets.length === 0) { toast('선택한 점포의 지출 내역이 없습니다', 'err'); return; }
+  const exportExpenseExcel = async () => {
+    const targets = exRows.filter(r => exSelKeys.has(r.key));
+    if (targets.length === 0) { toast('선택한 매장이 없습니다', 'err'); return; }
     const ExcelJS = (await import('exceljs')).default;
     const { dlBlob } = await import('../../lib/utils');
     const { data: profs } = await supabase.from('profiles').select('department, branch, name').eq('approved', true).eq('job_title', '매니저');
@@ -811,31 +811,38 @@ export default function SalesSettlementPage() {
               <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)' }}>
                 <b>{exYear}년 {exMonth}월</b> · 매장 <b>{exRows.length}</b>개 · 총 지출 <b style={{ color:'var(--accent)' }}>{won(exTotal)}원</b> · 금액 클릭 시 일자별 세부내역
               </div>
-              {/* 점포 선택 → 지출결의서 엑셀 (지점별 시트) */}
-              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:12, padding:'10px 12px', background:'#fafafa', border:'1px solid var(--border)', borderRadius:'var(--radius)' }}>
-                <span style={{ fontSize:12, fontWeight:700, color:'var(--text2)' }}>📄 지출결의서 다운로드 · 점포 선택</span>
-                {[...new Set(exRows.map(r => r.dept))].map(dept => {
-                  const on = exDownStores.includes(dept);
-                  return (
-                    <label key={dept} style={{ display:'flex', alignItems:'center', gap:5, fontSize:12, cursor:'pointer', fontWeight: on?700:400, color: on?'var(--accent)':'var(--text2)' }}>
-                      <input type="checkbox" checked={on} onChange={() => setExDownStores(p => on ? p.filter(d => d !== dept) : [...p, dept])} />
-                      {dept}
-                    </label>
-                  );
-                })}
-                <button type="button" onClick={() => exportExpenseExcel(exDownStores)} disabled={exDownStores.length === 0}
-                  style={{ marginLeft:'auto', height:32, padding:'0 14px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor: exDownStores.length? 'pointer':'default' }}>
+              {/* 지출결의서 다운로드 툴바 (선택 지점별 시트) */}
+              <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', marginBottom:12, padding:'10px 12px', background:'#fafafa', border:'1px solid var(--border)', borderRadius:'var(--radius)' }}>
+                <span style={{ fontSize:12, fontWeight:700, color:'var(--text2)' }}>📄 지출결의서 · 선택 <b style={{ color:'var(--accent)' }}>{exSelKeys.size}</b>개 지점</span>
+                <button type="button" onClick={() => exportExpenseExcel()} disabled={exSelKeys.size === 0}
+                  style={{ marginLeft:'auto', height:32, padding:'0 14px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor: exSelKeys.size? 'pointer':'default' }}>
                   📥 엑셀 다운로드
                 </button>
               </div>
               <div className="twrap">
                 <table>
                   <thead>
-                    <tr><th>점포</th><th>지점</th><th className="r" style={{ width:100 }}>건수</th><th className="r" style={{ width:170 }}>총 지출</th></tr>
+                    <tr>
+                      <th style={{ width:40, textAlign:'center' }}>
+                        <input type="checkbox" title="전체선택"
+                          checked={exRows.length > 0 && exSelKeys.size === exRows.length}
+                          ref={el => { if (el) el.indeterminate = exSelKeys.size > 0 && exSelKeys.size < exRows.length; }}
+                          onChange={() => setExSelKeys(exSelKeys.size === exRows.length ? new Set() : new Set(exRows.map(r => r.key)))}
+                          style={{ cursor:'pointer' }} />
+                      </th>
+                      <th>점포</th><th>지점</th><th className="r" style={{ width:100 }}>건수</th><th className="r" style={{ width:170 }}>총 지출</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {exRows.map(r => (
-                      <tr key={r.key}>
+                    {exRows.map(r => {
+                      const on = exSelKeys.has(r.key);
+                      return (
+                      <tr key={r.key} style={on ? {} : { opacity:0.5 }}>
+                        <td style={{ textAlign:'center' }}>
+                          <input type="checkbox" checked={on}
+                            onChange={() => setExSelKeys(prev => { const n = new Set(prev); n.has(r.key) ? n.delete(r.key) : n.add(r.key); return n; })}
+                            style={{ cursor:'pointer' }} />
+                        </td>
                         <td><span className="badge badge-dept">{r.dept}</span></td>
                         <td><span className="badge badge-store">{r.branch}</span></td>
                         <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{r.count}건</td>
@@ -846,9 +853,9 @@ export default function SalesSettlementPage() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    ); })}
                     <tr style={{ background:'var(--bg3)', borderTop:'2px solid var(--border2)' }}>
-                      <td colSpan={2} style={{ fontWeight:700, padding:'9px 11px' }}>합계</td>
+                      <td colSpan={3} style={{ fontWeight:700, padding:'9px 11px' }}>합계</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{exRows.reduce((s, r) => s + r.count, 0)}건</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14 }}>{won(exTotal)}원</td>
                     </tr>
