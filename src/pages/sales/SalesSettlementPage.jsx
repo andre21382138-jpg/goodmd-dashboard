@@ -315,13 +315,13 @@ export default function SalesSettlementPage() {
     if (targets.length === 0) { toast('선택한 매장이 없습니다', 'err'); return; }
     const ExcelJS = (await import('exceljs')).default;
     const { dlBlob } = await import('../../lib/utils');
-    // 원본 지출결의서 양식 로드 (public/expense-form-template.xlsx)
-    let tpl;
+    // 종합 양식 로드 (0:합계금액 시트, 1:개별 지출결의서 시트)
+    let sumTpl, formTpl;
     try {
       const resp = await fetch('/expense-form-template.xlsx');
       const buf = await resp.arrayBuffer();
       const tplWb = new ExcelJS.Workbook(); await tplWb.xlsx.load(buf);
-      tpl = tplWb.worksheets[0];
+      sumTpl = tplWb.worksheets[0]; formTpl = tplWb.worksheets[1];
     } catch (e) { toast('지출결의서 양식을 불러오지 못했습니다', 'err'); return; }
 
     const { data: profs } = await supabase.from('profiles').select('department, branch, name').eq('approved', true).eq('job_title', '매니저');
@@ -329,20 +329,38 @@ export default function SalesSettlementPage() {
     const pad = n => String(n).padStart(2, '0');
     const lastDay = new Date(exYear, exMonth, 0).getDate();
     const endDate = `${exYear}-${pad(exMonth)}-${pad(lastDay)}`;
-    let overflow = 0;
+
+    const list = targets.map(t => ({
+      dept: t.dept, branch: t.branch, total: t.total,
+      manager: mgrMap[`${t.dept}|${t.branch}`] || '',
+      items: exRaw.filter(e => e.store_name === t.dept && e.branch_name === t.branch)
+        .sort((a, b) => (a.expense_date < b.expense_date ? -1 : a.expense_date > b.expense_date ? 1 : 0)),
+    }));
+    const grand = list.reduce((s, x) => s + x.total, 0);
     const out = new ExcelJS.Workbook();
-    const used = new Set();
-    for (const t of targets) {
-      const items = exRaw.filter(e => e.store_name === t.dept && e.branch_name === t.branch)
-        .sort((a, b) => (a.expense_date < b.expense_date ? -1 : a.expense_date > b.expense_date ? 1 : 0));
-      if (items.length > 16) overflow++;
-      const use = items.slice(0, 16);
-      const manager = mgrMap[`${t.dept}|${t.branch}`] || '';
-      let base = sheetTitle(t.dept, t.branch, manager); let nm = base, k = 1;
+
+    // ── 1) 첫 시트: 합계금액 ──
+    const SUM_ROWS = 23; // R7~R29
+    const sumWs = out.addWorksheet('합계금액');
+    cloneSheet(sumTpl, sumWs);
+    sumWs.getCell('B2').value = `${exMonth}월 총 현금 지출 결의서`;
+    sumWs.getCell('H4').value = grand;   // 합계
+    sumWs.getCell('F31').value = grand;  // 계
+    for (let i = 0; i < SUM_ROWS; i++) {
+      const r = 7 + i, x = list[i];
+      sumWs.getCell(`B${r}`).value = x ? `${x.dept}_${x.branch}${x.manager ? '_' + x.manager : ''}` : null;
+      sumWs.getCell(`F${r}`).value = x ? x.total : null;
+      sumWs.getCell(`I${r}`).value = null;
+    }
+
+    // ── 2) 매장별 개별 지출결의서 시트 ──
+    let overflow = 0; const used = new Set();
+    for (const x of list) {
+      const use = x.items.slice(0, 16); if (x.items.length > 16) overflow++;
+      let base = sheetTitle(x.dept, x.branch, x.manager); let nm = base, k = 1;
       while (used.has(nm)) { nm = (base.slice(0, 28) + '_' + (++k)); } used.add(nm);
       const ws = out.addWorksheet(nm);
-      cloneSheet(tpl, ws);
-      // 데이터 채우기 (양식 위치 그대로)
+      cloneSheet(formTpl, ws);
       const total = use.reduce((s, e) => s + (Number(e.amount) || 0), 0);
       ws.getCell('H6').value = total;       // 일금
       ws.getCell('C8').value = endDate;      // 작성일 = 월말일
@@ -355,11 +373,14 @@ export default function SalesSettlementPage() {
       }
       ws.getCell('F28').value = total;       // 계
       ws.getCell('B32').value = `${exYear} 년 ${pad(exMonth)}월 ${pad(lastDay)}일`;
-      ws.getCell('B34').value = `지출자 :   ${manager}  (인)`;
+      ws.getCell('B34').value = `지출자 :   ${x.manager}  (인)`;
     }
     const buf = await out.xlsx.writeBuffer();
     dlBlob(buf, `판매사원 지출결의서_${exYear}년${pad(exMonth)}월.xlsx`);
-    if (overflow > 0) toast(`${overflow}개 지점은 지출 16건 초과분이 제외됐습니다`, 'err');
+    const warns = [];
+    if (overflow > 0) warns.push(`${overflow}개 지점 16건 초과분 제외`);
+    if (list.length > SUM_ROWS) warns.push(`합계표 ${list.length - SUM_ROWS}개 매장 초과`);
+    if (warns.length) toast(warns.join(' · '), 'err');
   };
 
   // ── 매출결산 엑셀 다운로드 (점포별 결산 손익보고서 양식 재현) ──
