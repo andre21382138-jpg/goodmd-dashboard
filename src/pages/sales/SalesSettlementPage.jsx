@@ -292,81 +292,22 @@ export default function SalesSettlementPage() {
   const sheetTitle = (dept, branch, mgr) => `${abbrStore(dept)}_${abbrBranch(branch)}${mgr ? '_' + mgr : ''}`
     .replace(/[\\/?*[\]:]/g, '').slice(0, 31);
 
-  const buildExpenseSheet = (ws, items, manager, year, month) => {
-    const FONT = { name: '굴림체', size: 10 };
-    const thin = { style: 'thin' }, medium = { style: 'medium' };
-    const box = () => ({ top: thin, left: thin, bottom: thin, right: thin });
-    const pad = n => String(n).padStart(2, '0');
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${pad(month)}-${pad(lastDay)}`;
-    const total = items.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const N = Math.max(16, items.length);
-    [5, 8.875, 11.625, 4, 7.875, 9.25, 9.25, 9.25, 9.25, 9.25].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
-    const set = (addr, val, opt = {}) => {
-      const c = ws.getCell(addr);
-      if (val !== undefined) c.value = val;
-      c.font = { ...FONT, ...(opt.font || {}) };
-      c.alignment = { vertical: 'middle', horizontal: opt.h || 'center', wrapText: !!opt.wrap };
-      if (opt.border) c.border = opt.border;
-      if (opt.numFmt) c.numFmt = opt.numFmt;
-      if (opt.fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opt.fill } };
-      return c;
-    };
-    // 결재란
-    ['C1:D1', 'E1:F1', 'G1:H1', 'I1:J1', 'C2:D2', 'E2:F2', 'G2:H2', 'I2:J2'].forEach(m => ws.mergeCells(m));
-    [['C1', '담당'], ['E1', '팀장'], ['G1', '사업팀장'], ['I1', '대표']].forEach(([a, t]) => set(a, t, { border: box() }));
-    ['C2', 'E2', 'G2', 'I2'].forEach(a => set(a, '', { border: box() }));
-    ws.getRow(1).height = 23.25; ws.getRow(2).height = 49.5; ws.getRow(3).height = 16.5;
-    // 제목
-    ws.mergeCells('B4:J5'); set('B4', '현금 지출 결의서', { font: { size: 20, bold: true }, border: { top: medium, left: medium, right: medium } });
-    ws.getRow(4).height = 20.1; ws.getRow(5).height = 20.1;
-    // 일금
-    ws.getRow(6).height = 20.1; ws.getRow(7).height = 20.1;
-    set('G6', '  일금:', { h: 'left', fill: 'FFFFFF00', border: { bottom: thin } });
-    ws.mergeCells('H6:I6'); set('H6', total, { h: 'right', numFmt: '"₩"#,##0', font: { size: 11 }, fill: 'FFFFFF00', border: { bottom: thin } });
-    set('J6', '원 정', { border: { right: medium } });
-    // 작성일 행
-    ws.getRow(8).height = 20.1;
-    ['C8:D8', 'F8:G8', 'I8:J8'].forEach(m => ws.mergeCells(m));
-    set('B8', '작성일', { border: { top: thin, bottom: thin, left: medium, right: thin } });
-    set('C8', endDate, { border: box() });
-    set('E8', '지출일', { border: box() });
-    set('F8', '', { border: box() });
-    set('H8', '계정과목', { border: box() });
-    set('I8', '', { border: { top: thin, bottom: thin, left: thin, right: medium } });
-    // 내역 헤더
-    ws.mergeCells('B9:J10'); set('B9', '내           역', { font: { size: 12 }, border: { left: medium, right: medium, top: thin } });
-    ws.getRow(9).height = 20.1; ws.getRow(10).height = 20.1;
-    // 컬럼 헤더
-    ws.getRow(11).height = 13.5;
-    ['B11:E11', 'F11:H11', 'I11:J11'].forEach(m => ws.mergeCells(m));
-    set('B11', '적  요', { border: { top: thin, bottom: thin, left: medium, right: thin } });
-    set('F11', ' 금 액', { border: box() });
-    set('I11', '비 고', { border: { top: thin, bottom: thin, left: thin, right: medium } });
-    // 데이터 행
-    let r = 12;
-    for (let i = 0; i < N; i++, r++) {
-      ws.getRow(r).height = 20.1;
-      [`C${r}:E${r}`, `F${r}:H${r}`, `I${r}:J${r}`].forEach(m => ws.mergeCells(m));
-      const it = items[i];
-      const dstr = it ? `${Number(it.expense_date.slice(5, 7))}/${Number(it.expense_date.slice(8, 10))}` : '';
-      set(`B${r}`, dstr, { numFmt: '@', border: { top: thin, bottom: thin, left: medium, right: thin } });
-      set(`C${r}`, it ? it.category : '', { h: 'left', border: box() });
-      set(`F${r}`, it ? (Number(it.amount) || 0) : null, { h: 'right', numFmt: '#,##0', border: box() });
-      set(`I${r}`, it ? (it.memo || '') : '', { border: { top: thin, bottom: thin, left: thin, right: medium } });
-    }
-    // 계
-    ws.getRow(r).height = 20.1;
-    [`B${r}:E${r}`, `F${r}:H${r}`, `I${r}:J${r}`].forEach(m => ws.mergeCells(m));
-    set(`B${r}`, '계', { border: { top: thin, bottom: medium, left: medium, right: thin } });
-    set(`F${r}`, total, { h: 'right', numFmt: '"₩"#,##0', border: { top: thin, bottom: medium, left: thin, right: thin } });
-    set(`I${r}`, '', { border: { top: thin, bottom: medium, left: thin, right: medium } });
-    r += 2;
-    ws.mergeCells(`B${r}:J${r}`); set(`B${r}`, '위 금액을 영수(청구) 합니다.'); ws.getRow(r).height = 18; r += 2;
-    ws.mergeCells(`B${r}:J${r}`); set(`B${r}`, `${year} 년 ${pad(month)}월 ${pad(lastDay)}일`); ws.getRow(r).height = 18; r += 2;
-    ws.mergeCells(`B${r}:J${r}`); set(`B${r}`, `지출자 :   ${manager || ''}  (인)`); ws.getRow(r).height = 18;
-    ws.pageSetup = { paperSize: 9, orientation: 'portrait', horizontalCentered: true, verticalCentered: true,
-      margins: { left: 0.236, right: 0.236, top: 0.748, bottom: 0.748, header: 0.315, footer: 0.315 }, showGridLines: false };
+  // 템플릿 시트(원본 서식)를 새 시트로 그대로 복제 — 열너비·행높이·폰트·테두리·병합 전부 유지
+  const cloneSheet = (src, dst) => {
+    for (let c = 1; c <= 12; c++) { const w = src.getColumn(c).width; if (w != null) dst.getColumn(c).width = w; }
+    if (src.properties?.defaultRowHeight) dst.properties.defaultRowHeight = src.properties.defaultRowHeight;
+    dst.pageSetup = { ...src.pageSetup };
+    // 병합을 먼저 적용해야 이후 셀별 테두리 복제가 유지됨 (병합을 나중에 하면 ExcelJS가 테두리를 덮어씀)
+    (src.model.merges || []).forEach(m => { try { dst.mergeCells(m); } catch (e) { /* 이미 병합 */ } });
+    src.eachRow({ includeEmpty: true }, (row, rn) => {
+      const drow = dst.getRow(rn);
+      if (row.height != null) drow.height = row.height;
+      row.eachCell({ includeEmpty: true }, (cell, cn) => {
+        const dc = drow.getCell(cn);
+        dc.value = cell.value;
+        dc.style = cell.style; // 폰트·채움·테두리·정렬·서식 전부 복제
+      });
+    });
   };
 
   const exportExpenseExcel = async () => {
@@ -374,20 +315,51 @@ export default function SalesSettlementPage() {
     if (targets.length === 0) { toast('선택한 매장이 없습니다', 'err'); return; }
     const ExcelJS = (await import('exceljs')).default;
     const { dlBlob } = await import('../../lib/utils');
+    // 원본 지출결의서 양식 로드 (public/expense-form-template.xlsx)
+    let tpl;
+    try {
+      const resp = await fetch('/expense-form-template.xlsx');
+      const buf = await resp.arrayBuffer();
+      const tplWb = new ExcelJS.Workbook(); await tplWb.xlsx.load(buf);
+      tpl = tplWb.worksheets[0];
+    } catch (e) { toast('지출결의서 양식을 불러오지 못했습니다', 'err'); return; }
+
     const { data: profs } = await supabase.from('profiles').select('department, branch, name').eq('approved', true).eq('job_title', '매니저');
     const mgrMap = {}; (profs || []).forEach(p => { mgrMap[`${p.department}|${p.branch}`] = p.name; });
-    const wb = new ExcelJS.Workbook();
+    const pad = n => String(n).padStart(2, '0');
+    const lastDay = new Date(exYear, exMonth, 0).getDate();
+    const endDate = `${exYear}-${pad(exMonth)}-${pad(lastDay)}`;
+    let overflow = 0;
+    const out = new ExcelJS.Workbook();
     const used = new Set();
     for (const t of targets) {
       const items = exRaw.filter(e => e.store_name === t.dept && e.branch_name === t.branch)
         .sort((a, b) => (a.expense_date < b.expense_date ? -1 : a.expense_date > b.expense_date ? 1 : 0));
+      if (items.length > 16) overflow++;
+      const use = items.slice(0, 16);
       const manager = mgrMap[`${t.dept}|${t.branch}`] || '';
-      let name = sheetTitle(t.dept, t.branch, manager); let nm = name, k = 1;
-      while (used.has(nm)) { nm = (name.slice(0, 28) + '_' + (++k)); } used.add(nm);
-      buildExpenseSheet(wb.addWorksheet(nm), items, manager, exYear, exMonth);
+      let base = sheetTitle(t.dept, t.branch, manager); let nm = base, k = 1;
+      while (used.has(nm)) { nm = (base.slice(0, 28) + '_' + (++k)); } used.add(nm);
+      const ws = out.addWorksheet(nm);
+      cloneSheet(tpl, ws);
+      // 데이터 채우기 (양식 위치 그대로)
+      const total = use.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      ws.getCell('H6').value = total;       // 일금
+      ws.getCell('C8').value = endDate;      // 작성일 = 월말일
+      for (let i = 0; i < 16; i++) {
+        const r = 12 + i, it = use[i];
+        ws.getCell(`B${r}`).value = it ? `${Number(it.expense_date.slice(5, 7))}/${Number(it.expense_date.slice(8, 10))}` : null;
+        ws.getCell(`C${r}`).value = it ? it.category : null;   // 적요 = 항목
+        ws.getCell(`F${r}`).value = it ? (Number(it.amount) || 0) : null; // 금액
+        ws.getCell(`I${r}`).value = it ? (it.memo || '') : null;  // 비고 = 메모
+      }
+      ws.getCell('F28').value = total;       // 계
+      ws.getCell('B32').value = `${exYear} 년 ${pad(exMonth)}월 ${pad(lastDay)}일`;
+      ws.getCell('B34').value = `지출자 :   ${manager}  (인)`;
     }
-    const buf = await wb.xlsx.writeBuffer();
-    dlBlob(buf, `판매사원 지출결의서_${exYear}년${String(exMonth).padStart(2, '0')}월.xlsx`);
+    const buf = await out.xlsx.writeBuffer();
+    dlBlob(buf, `판매사원 지출결의서_${exYear}년${pad(exMonth)}월.xlsx`);
+    if (overflow > 0) toast(`${overflow}개 지점은 지출 16건 초과분이 제외됐습니다`, 'err');
   };
 
   // ── 매출결산 엑셀 다운로드 (점포별 결산 손익보고서 양식 재현) ──
