@@ -512,6 +512,34 @@ export default function AttendanceMgmtPage({ profile }) {
 
   useEffect(() => { if (tab === 'workers') fetchWorkers(); }, [tab, fetchWorkers]);
 
+  // 근무자현황 엑셀 다운로드 (정보수정·퇴사처리 열 제외)
+  const exportWorkers = async (list) => {
+    if (!list || list.length === 0) { toast('내보낼 근무자가 없습니다', 'err'); return; }
+    const ExcelJS = (await import('exceljs')).default;
+    const { dlBlob } = await import('../../lib/utils');
+    const FONT = { name: '맑은 고딕', size: 10 };
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('근무자현황');
+    ws.columns = [
+      { header: '점포', width: 14 }, { header: '지점', width: 14 }, { header: '이름', width: 12 },
+      { header: '직책', width: 10 }, { header: '소속', width: 12 }, { header: '연락처', width: 16 },
+      { header: '입사일', width: 12 }, { header: '상태', width: 16 },
+    ];
+    const hr = ws.getRow(1); hr.font = { ...FONT, bold: true }; hr.alignment = { horizontal: 'center', vertical: 'middle' };
+    hr.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } }; c.border = { bottom: { style: 'thin' } }; });
+    for (const m of list) {
+      const status = m.resigned_at ? `퇴사 ${String(m.resigned_at).slice(0, 10)}` : '재직';
+      const row = ws.addRow([
+        m.store?.department || '', m.store?.branch || '', m.display_name || m.name || '',
+        m.job_title || '', m.affiliation || '', m.phone || '', m.hire_date || '', status,
+      ]);
+      row.font = m.resigned_at ? { ...FONT, color: { argb: 'FF999999' } } : FONT;
+    }
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    const buf = await wb.xlsx.writeBuffer();
+    dlBlob(buf, `근무자현황_${todayStr()}.xlsx`);
+  };
+
   // 기간 내 모든 날짜 × attendance 매핑 (미체크 표시 포함)
   const hDisplayRows = useMemo(() => {
     if (!hMember || !hFrom || !hTo) return [];
@@ -995,6 +1023,11 @@ export default function AttendanceMgmtPage({ profile }) {
                 <input type="checkbox" checked={showResigned} onChange={e => setShowResigned(e.target.checked)}/>
                 퇴사자 포함
               </label>
+              <button type="button" onClick={() => exportWorkers(rows)}
+                title="근무자현황 엑셀 다운로드 (관리 열 제외)"
+                style={{height:32, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                📥 엑셀
+              </button>
               {canEdit && (
                 <button type="button" onClick={() => setShowAddW(true)}
                   style={{height:32, padding:'0 14px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer'}}>
