@@ -318,10 +318,11 @@ export default function SalesSettlementPage() {
     // 종합 양식 로드 (0:합계금액 시트, 1:개별 지출결의서 시트)
     let sumTpl, formTpl;
     try {
-      const resp = await fetch('/expense-form-template.xlsx');
+      const resp = await fetch('/expense-form-template.xlsx?v=2', { cache: 'no-store' });
       const buf = await resp.arrayBuffer();
       const tplWb = new ExcelJS.Workbook(); await tplWb.xlsx.load(buf);
       sumTpl = tplWb.worksheets[0]; formTpl = tplWb.worksheets[1];
+      if (!sumTpl || !formTpl) { toast('양식 파일이 최신이 아닙니다. 새로고침 후 다시 시도해주세요', 'err'); return; }
     } catch (e) { toast('지출결의서 양식을 불러오지 못했습니다', 'err'); return; }
 
     const { data: profs } = await supabase.from('profiles').select('department, branch, name').eq('approved', true).eq('job_title', '매니저');
