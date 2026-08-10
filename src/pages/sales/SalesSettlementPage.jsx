@@ -643,6 +643,7 @@ export default function SalesSettlementPage() {
         <button type="button" onClick={() => setTab('settlement')} style={tabBtn(tab === 'settlement')}>🧮 매출정산</button>
         <button type="button" onClick={() => setTab('expense')} style={tabBtn(tab === 'expense')}>💸 매장지출</button>
         <button type="button" onClick={() => setTab('closing')} style={tabBtn(tab === 'closing')}>📊 매출결산</button>
+        <button type="button" onClick={() => setTab('stock')} style={tabBtn(tab === 'stock')}>📦 재고결산</button>
       </div>
 
       {tab === 'settlement' && (<>
@@ -1002,6 +1003,16 @@ export default function SalesSettlementPage() {
             )}
           </div>
         </>
+      )}
+
+      {tab === 'stock' && (
+        <div className="card">
+          <div className="card-label">📦 재고결산</div>
+          <div className="empty" style={{ padding:'40px 20px', lineHeight:1.8 }}>
+            재고결산 기능은 <b>준비 중</b>입니다.<br/>
+            <span style={{ fontSize:12, color:'var(--text3)' }}>표시할 내용 전달 후 구현 예정</span>
+          </div>
+        </div>
       )}
 
       {exDetail && (
