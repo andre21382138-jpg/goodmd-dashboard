@@ -60,7 +60,6 @@ export default function SalesSettlementPage() {
   const [rkRows, setRkRows]   = useState([]);
   const [rkLoading, setRkLoading] = useState(false);
   const [rkSearched, setRkSearched] = useState(false);
-  const [rkSaving, setRkSaving] = useState(false);
 
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
@@ -354,24 +353,6 @@ export default function SalesSettlementPage() {
     } catch (e) { toast('재고결산 조회 실패: ' + (e.message || e), 'err'); }
     setRkLoading(false);
   }, [rkYear, rkMonth]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 월말 재고 스냅샷 저장 — 현재 조회된 당월재고를 해당 월 마감재고로 upsert
-  const saveStockSnapshot = async () => {
-    if (!rkSearched || rkRows.length === 0) { toast('먼저 조회해주세요', 'err'); return; }
-    const monthStr = `${rkYear}-${pad(rkMonth)}`;
-    if (!window.confirm(`${rkYear}년 ${rkMonth}월 말 재고를 스냅샷으로 저장할까요?\n\n상품 ${rkRows.length}개 · 이후 ${rkMonth}월 당월재고는 이 값으로 고정됩니다.`)) return;
-    setRkSaving(true);
-    const payload = rkRows.filter(r => r.productId).map(r => ({ snapshot_month: monthStr, product_id: r.productId, quantity: Math.round(r.curStock) }));
-    let err = null;
-    for (let i = 0; i < payload.length; i += 500) {
-      const { error } = await supabase.from('stock_snapshots').upsert(payload.slice(i, i + 500), { onConflict: 'snapshot_month,product_id' });
-      if (error) { err = error; break; }
-    }
-    setRkSaving(false);
-    if (err) { toast('스냅샷 저장 실패: ' + err.message, 'err'); return; }
-    toast(`${rkYear}년 ${rkMonth}월 재고 스냅샷 저장 완료 (${payload.length}개)`, 'ok');
-    searchStock();
-  };
 
   const openExDetail = (row) => {
     const items = exRaw
@@ -1112,14 +1093,7 @@ export default function SalesSettlementPage() {
               <select className="fsel" value={rkMonth} onChange={e => setRkMonth(Number(e.target.value))}>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(mm => <option key={mm} value={mm}>{mm}월</option>)}
               </select>
-              <div className="fbar-right" style={{ display:'flex', gap:8 }}>
-                {rkSearched && rkRows.length > 0 && (
-                  <button type="button" onClick={saveStockSnapshot} disabled={rkSaving}
-                    title="현재 조회된 당월재고를 이 월의 마감재고로 저장"
-                    style={{ height:34, padding:'0 12px', border:'1px solid #6a1b9a', borderRadius:'var(--radius)', background:'#f3e5f5', color:'#6a1b9a', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-                    {rkSaving ? '저장 중…' : '📌 월말 재고 저장'}
-                  </button>
-                )}
+              <div className="fbar-right">
                 <button className="btn btn-p" onClick={searchStock} disabled={rkLoading}>
                   {rkLoading ? <span className="spinner"/> : '🔍 조회'}
                 </button>
