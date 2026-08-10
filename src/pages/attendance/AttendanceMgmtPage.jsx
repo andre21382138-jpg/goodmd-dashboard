@@ -196,6 +196,7 @@ export default function AttendanceMgmtPage({ profile }) {
   const [aStore, setAStore] = useState(''); const [aBranch, setABranch] = useState('');
   const [aName, setAName] = useState(''); const [aPhone, setAPhone] = useState('');
   const [aJob, setAJob] = useState('매니저'); const [aHire, setAHire] = useState('');
+  const [aSalaryType, setASalaryType] = useState('월급'); const [aSalary, setASalary] = useState(''); const [aExtra, setAExtra] = useState('');
   const [aAffil, setAAffil] = useState('한국생활건강');
   const JOB_TITLES = ['매니저', '부매니저'];
   const AFFILIATIONS = ['한국생활건강', '신우'];
@@ -218,18 +219,24 @@ export default function AttendanceMgmtPage({ profile }) {
     if (!aName.trim()) { toast('이름을 입력해주세요', 'err'); return; }
     const acct = storeAccounts.find(a => a.department === aStore && a.branch === aBranch);
     if (!acct) { toast('선택한 점포/지점의 매장 계정을 찾을 수 없습니다', 'err'); return; }
+    const salaryNum = Number(String(aSalary).replace(/,/g, '')) || 0;
+    if (salaryNum <= 0) { toast('급여 금액을 입력해주세요', 'err'); return; }
     setSavingW('new');
     const { data, error } = await supabase.from('store_members').insert({
       store_account_id: acct.id,
       name: aName.trim(), display_name: aName.trim(),
       phone: aPhone.trim() || null, job_title: aJob, hire_date: aHire || null,
       affiliation: aAffil,
+      salary_type: aSalaryType,
+      salary: salaryNum,
+      extra_pay: aSalaryType === '일급' ? (Number(String(aExtra).replace(/,/g, '')) || 0) : 0,
     }).select('id').single();
     setSavingW(null);
     if (error) { toast(error.message, 'err'); return; }
     toast(`${aName.trim()} 근무자 추가 완료`, 'ok');
     setShowAddW(false);
     setAStore(''); setABranch(''); setAName(''); setAPhone(''); setAJob('매니저'); setAHire(''); setAAffil('한국생활건강');
+    setASalaryType('월급'); setASalary(''); setAExtra('');
     fetchWorkers();
   };
 
@@ -1171,6 +1178,21 @@ export default function AttendanceMgmtPage({ profile }) {
               <select value={aJob} onChange={e => setAJob(e.target.value)} style={inp}>
                 {JOB_TITLES.map(j => <option key={j} value={j}>{j}</option>)}
               </select>
+              <label style={lbl}>급여형태 <span style={{color:'var(--danger)'}}>*</span></label>
+              <select value={aSalaryType} onChange={e => setASalaryType(e.target.value)} style={inp}>
+                <option value="월급">월급</option>
+                <option value="일급">일급</option>
+              </select>
+              <label style={lbl}>{aSalaryType === '월급' ? '월 급여' : '일급'} (원) <span style={{color:'var(--danger)'}}>*</span></label>
+              <input value={aSalary ? Number(aSalary).toLocaleString() : ''} onChange={e => setASalary(e.target.value.replace(/[^0-9]/g, ''))}
+                inputMode="numeric" placeholder={aSalaryType === '월급' ? '예: 2,350,000' : '예: 100,000'} style={inp}/>
+              {aSalaryType === '일급' && (
+                <>
+                  <label style={lbl}>추가수당 <span style={{fontWeight:400, color:'var(--text3)'}}>(금·토·일 연장, 원)</span></label>
+                  <input value={aExtra ? Number(aExtra).toLocaleString() : ''} onChange={e => setAExtra(e.target.value.replace(/[^0-9]/g, ''))}
+                    inputMode="numeric" placeholder="예: 6,000" style={inp}/>
+                </>
+              )}
               <label style={lbl}>입사일 <span style={{fontWeight:400, color:'var(--text3)'}}>(생략 가능)</span></label>
               <input type="date" value={aHire} onChange={e => setAHire(e.target.value)} style={inp}/>
               <div style={{display:'flex', gap:8, marginTop:20}}>
