@@ -60,6 +60,8 @@ export default function SalesSettlementPage() {
   const [rkRows, setRkRows]   = useState([]);
   const [rkLoading, setRkLoading] = useState(false);
   const [rkSearched, setRkSearched] = useState(false);
+  const [rkSortKey, setRkSortKey] = useState('');   // '' = 브랜드/상품명순
+  const [rkSortDir, setRkSortDir] = useState('desc');
 
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
@@ -559,6 +561,26 @@ export default function SalesSettlementPage() {
     borderColor: on ? 'var(--accent)' : 'var(--border)', background: on ? 'var(--accent)' : '#fff', color: on ? '#fff' : 'var(--text2)' });
   const pctOf = (n, d) => (d ? (n / d) * 100 : 0);
   const pctStr = (v) => `${v.toFixed(1)}%`;
+  // 재고결산 정렬 (원가·재고·판매수량 등 많은순)
+  const sortedRkRows = useMemo(() => {
+    if (!rkSortKey) return rkRows;
+    const dir = rkSortDir === 'asc' ? 1 : -1;
+    return [...rkRows].sort((a, b) => ((Number(a[rkSortKey]) || 0) - (Number(b[rkSortKey]) || 0)) * dir);
+  }, [rkRows, rkSortKey, rkSortDir]);
+  const handleRkSort = (key) => {
+    if (rkSortKey !== key) { setRkSortKey(key); setRkSortDir('desc'); }
+    else if (rkSortDir === 'desc') setRkSortDir('asc');
+    else { setRkSortKey(''); setRkSortDir('desc'); }
+  };
+  const rkTh = (label, key, extra = {}) => {
+    const active = rkSortKey === key;
+    return (
+      <th className="r" onClick={() => handleRkSort(key)} title="클릭하여 정렬 (많은순→적은순→기본)"
+        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: active ? 'var(--accent)' : undefined, ...extra }}>
+        {label}<span style={{ marginLeft: 2, fontSize: 10, opacity: active ? 1 : 0.4 }}>{active ? (rkSortDir === 'desc' ? '▼' : '▲') : '⇅'}</span>
+      </th>
+    );
+  };
   const handleClSort = (key) => {
     if (clSortKey !== key) { setClSortKey(key); setClSortDir('desc'); }   // 1클릭: 높은순
     else if (clSortDir === 'desc') setClSortDir('asc');                    // 2클릭: 낮은순
@@ -1116,14 +1138,14 @@ export default function SalesSettlementPage() {
                   <thead>
                     <tr>
                       <th>브랜드</th><th>상품명</th><th>상품코드</th><th>ERP코드</th>
-                      <th className="r">원가(VAT+)</th>
-                      <th className="r">전월재고({rkMonth === 1 ? 12 : rkMonth - 1}월)</th><th className="r">총 원가</th>
-                      <th className="r">판매수량({rkMonth}월)</th><th className="r">원가금액({rkMonth}월)</th>
-                      <th className="r">당월재고({rkMonth}월)</th>
+                      {rkTh('원가(VAT+)', 'cost')}
+                      {rkTh(`전월재고(${rkMonth === 1 ? 12 : rkMonth - 1}월)`, 'prevStock')}{rkTh('총 원가', 'totalCost')}
+                      {rkTh(`판매수량(${rkMonth}월)`, 'soldQty', { borderLeft: '2px solid var(--border2)' })}{rkTh(`원가금액(${rkMonth}월)`, 'soldCost')}
+                      {rkTh(`당월재고(${rkMonth}월)`, 'curStock')}
                     </tr>
                   </thead>
                   <tbody>
-                    {rkRows.map((r, i) => (
+                    {sortedRkRows.map((r, i) => (
                       <tr key={i}>
                         <td>{r.brand}</td>
                         <td style={{ fontSize:12, fontWeight:600 }}>{r.name}</td>
@@ -1132,7 +1154,7 @@ export default function SalesSettlementPage() {
                         <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.cost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:600 }}>{r.prevStock.toLocaleString()}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.totalCost)}</td>
-                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{r.soldQty.toLocaleString()}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, borderLeft:'2px solid var(--border2)' }}>{r.soldQty.toLocaleString()}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.soldCost)}</td>
                         <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:600 }}>{r.curStock.toLocaleString()}</td>
                       </tr>
@@ -1141,7 +1163,7 @@ export default function SalesSettlementPage() {
                       <td colSpan={5} style={{ fontWeight:700, padding:'9px 11px' }}>합계</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{rkRows.reduce((s,r)=>s+r.prevStock,0).toLocaleString()}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(rkRows.reduce((s,r)=>s+r.totalCost,0))}</td>
-                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{rkRows.reduce((s,r)=>s+r.soldQty,0).toLocaleString()}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, borderLeft:'2px solid var(--border2)' }}>{rkRows.reduce((s,r)=>s+r.soldQty,0).toLocaleString()}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(rkRows.reduce((s,r)=>s+r.soldCost,0))}</td>
                       <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{rkRows.reduce((s,r)=>s+r.curStock,0).toLocaleString()}</td>
                     </tr>
