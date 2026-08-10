@@ -53,6 +53,14 @@ export default function SalesSettlementPage() {
   const [exDetail, setExDetail] = useState(null); // { dept, branch, items:[...] } 팝업
   const [exSelKeys, setExSelKeys] = useState(new Set()); // 엑셀 다운로드용 지점(행) 선택
 
+  // 재고결산 탭 (월별 상품 재고 이동 — 전월재고→판매→당월재고, 전체매장 합산)
+  const _lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const [rkYear, setRkYear]   = useState(_lastMonth.getFullYear());
+  const [rkMonth, setRkMonth] = useState(_lastMonth.getMonth() + 1);
+  const [rkRows, setRkRows]   = useState([]);
+  const [rkLoading, setRkLoading] = useState(false);
+  const [rkSearched, setRkSearched] = useState(false);
+
   // 전월 동기간 (같은 일자, 월말 초과 시 말일로 보정)
   const prevRange = (from, to) => {
     const back = (s) => {
@@ -276,6 +284,66 @@ export default function SalesSettlementPage() {
     }
     setExLoading(false);
   }, [exYear, exMonth]);
+
+  // ── 재고결산: 월말 재고 역산(현재재고 + 이후판매 − 이후입고) + 월 판매/원가 ──
+  const searchStock = useCallback(async () => {
+    setRkLoading(true);
+    try {
+      const y = rkYear, m = rkMonth;
+      const mStart = `${y}-${pad(m)}-01`;
+      const endM = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
+      const [{ data: prods }, { data: brs }] = await Promise.all([
+        supabase.from('products').select('id, code, name, cost, erp_code, brand_id'),
+        supabase.from('brands').select('id, name'),
+      ]);
+      const brName = {}; (brs || []).forEach(b => { brName[b.id] = b.name; });
+      // 현재 재고 합 (전체 매장, product_code 기준)
+      const curByCode = {};
+      { let start = 0; while (true) {
+        const { data } = await supabase.from('store_stock').select('product_code, stock_qty').range(start, start + 999);
+        if (!data || !data.length) break;
+        data.forEach(s => { const c = String(s.product_code || ''); if (c) curByCode[c] = (curByCode[c] || 0) + (s.stock_qty || 0); });
+        if (data.length < 1000) break; start += 1000;
+      } }
+      // 판매수량 (구매이력 제외) — 당월분 / 당월말 이후분
+      const salesM = {}, salesAfter = {};
+      { let start = 0; while (true) {
+        const { data } = await supabase.from('sales').select('product_id, quantity, sold_at').neq('payment', '구매이력').gte('sold_at', mStart).order('id').range(start, start + 999);
+        if (!data || !data.length) break;
+        data.forEach(s => { if (!s.product_id) return; const q = Number(s.quantity) || 0;
+          if (s.sold_at <= endM) salesM[s.product_id] = (salesM[s.product_id] || 0) + q;
+          else salesAfter[s.product_id] = (salesAfter[s.product_id] || 0) + q; });
+        if (data.length < 1000) break; start += 1000;
+      } }
+      // 입고 (order_requests received) — 당월분 / 이후분
+      const inM = {}, inAfter = {};
+      { let start = 0; while (true) {
+        const { data } = await supabase.from('order_requests').select('product_id, quantity, received_at').not('received_at', 'is', null).gte('received_at', mStart).order('id').range(start, start + 999);
+        if (!data || !data.length) break;
+        data.forEach(r => { if (!r.product_id) return; const q = Number(r.quantity) || 0; const d = String(r.received_at).slice(0, 10);
+          if (d <= endM) inM[r.product_id] = (inM[r.product_id] || 0) + q;
+          else inAfter[r.product_id] = (inAfter[r.product_id] || 0) + q; });
+        if (data.length < 1000) break; start += 1000;
+      } }
+      const rows = [];
+      for (const p of (prods || [])) {
+        const cur = curByCode[String(p.code)] || 0;
+        const sM = salesM[p.id] || 0, sA = salesAfter[p.id] || 0, iM = inM[p.id] || 0, iA = inAfter[p.id] || 0;
+        const curStock = cur + sA - iA;          // 당월재고(당월말)
+        const prevStock = curStock + sM - iM;    // 전월재고(전월말)
+        const cost = Number(p.cost) || 0;
+        if (curStock === 0 && prevStock === 0 && sM === 0) continue;
+        rows.push({
+          brand: brName[p.brand_id] || '-', name: p.name, code: p.code || '', erp: p.erp_code || '',
+          cost, prevStock, totalCost: prevStock * cost, soldQty: sM, soldCost: sM * cost, curStock,
+        });
+      }
+      rows.sort((a, b) => (a.brand || '').localeCompare(b.brand || '') || (a.name || '').localeCompare(b.name || ''));
+      setRkRows(rows);
+      setRkSearched(true);
+    } catch (e) { toast('재고결산 조회 실패: ' + (e.message || e), 'err'); }
+    setRkLoading(false);
+  }, [rkYear, rkMonth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openExDetail = (row) => {
     const items = exRaw
@@ -1006,13 +1074,75 @@ export default function SalesSettlementPage() {
       )}
 
       {tab === 'stock' && (
-        <div className="card">
-          <div className="card-label">📦 재고결산</div>
-          <div className="empty" style={{ padding:'40px 20px', lineHeight:1.8 }}>
-            재고결산 기능은 <b>준비 중</b>입니다.<br/>
-            <span style={{ fontSize:12, color:'var(--text3)' }}>표시할 내용 전달 후 구현 예정</span>
+        <>
+          <div className="card">
+            <div className="card-label">📦 재고결산 <span style={{ fontSize:12, fontWeight:400, color:'var(--text3)' }}>· 월별 상품 재고 이동 (전체 매장 합산)</span></div>
+            <div className="fbar" style={{ flexWrap:'wrap', gap:8 }}>
+              <select className="fsel" value={rkYear} onChange={e => setRkYear(Number(e.target.value))}>
+                {Array.from({ length: 3 }, (_, i) => now.getFullYear() - i).map(yy => <option key={yy} value={yy}>{yy}년</option>)}
+              </select>
+              <select className="fsel" value={rkMonth} onChange={e => setRkMonth(Number(e.target.value))}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(mm => <option key={mm} value={mm}>{mm}월</option>)}
+              </select>
+              <div className="fbar-right">
+                <button className="btn btn-p" onClick={searchStock} disabled={rkLoading}>
+                  {rkLoading ? <span className="spinner"/> : '🔍 조회'}
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+
+          <div className="card" style={{ padding:'16px 20px' }}>
+            {rkLoading ? <div className="empty"><span className="spinner"/></div>
+            : !rkSearched ? <div className="empty">연·월을 선택하고 조회하세요</div>
+            : rkRows.length === 0 ? <div className="empty">해당 월 재고·판매 데이터가 없습니다</div>
+            : (
+              <>
+              <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)' }}>
+                <b>{rkYear}년 {rkMonth}월</b> · 상품 <b>{rkRows.length}</b>개 · 전월재고={rkMonth === 1 ? rkYear - 1 : rkYear}-{pad(rkMonth === 1 ? 12 : rkMonth - 1)}월말, 당월재고={rkYear}-{pad(rkMonth)}월말 기준
+                <span style={{ marginLeft:8, color:'var(--text3)' }}>· 재고는 현재재고에서 이후 판매·입고를 역산한 값(스냅샷 미보관)</span>
+              </div>
+              <div className="twrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>브랜드</th><th>상품명</th><th>상품코드</th><th>ERP코드</th>
+                      <th className="r">원가(VAT+)</th>
+                      <th className="r">전월재고</th><th className="r">총 원가</th>
+                      <th className="r">판매수량</th><th className="r">원가금액</th>
+                      <th className="r">당월재고</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rkRows.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.brand}</td>
+                        <td style={{ fontSize:12, fontWeight:600 }}>{r.name}</td>
+                        <td className="mono" style={{ fontSize:11, color:'var(--text3)' }}>{r.code || '-'}</td>
+                        <td className="mono" style={{ fontSize:11, color:'var(--text3)' }}>{r.erp || '-'}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.cost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:600 }}>{r.prevStock.toLocaleString()}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.totalCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{r.soldQty.toLocaleString()}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.soldCost)}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:600 }}>{r.curStock.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ background:'var(--bg3)', borderTop:'2px solid var(--border2)' }}>
+                      <td colSpan={5} style={{ fontWeight:700, padding:'9px 11px' }}>합계</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{rkRows.reduce((s,r)=>s+r.prevStock,0).toLocaleString()}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(rkRows.reduce((s,r)=>s+r.totalCost,0))}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{rkRows.reduce((s,r)=>s+r.soldQty,0).toLocaleString()}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(rkRows.reduce((s,r)=>s+r.soldCost,0))}</td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{rkRows.reduce((s,r)=>s+r.curStock,0).toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              </>
+            )}
+          </div>
+        </>
       )}
 
       {exDetail && (
