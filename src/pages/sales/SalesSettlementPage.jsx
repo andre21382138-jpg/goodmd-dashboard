@@ -356,6 +356,37 @@ export default function SalesSettlementPage() {
     setRkLoading(false);
   }, [rkYear, rkMonth]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const exportStockExcel = async () => {
+    if (rkRows.length === 0) { toast('조회된 데이터가 없습니다', 'err'); return; }
+    const ExcelJS = (await import('exceljs')).default;
+    const { dlBlob } = await import('../../lib/utils');
+    const prevM = rkMonth === 1 ? 12 : rkMonth - 1;
+    const FONT = { name: '맑은 고딕', size: 10 };
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(`재고결산 ${rkYear}년${pad(rkMonth)}월`);
+    ws.columns = [
+      { header: '브랜드', width: 14 }, { header: '상품명', width: 34 }, { header: '상품코드', width: 16 }, { header: 'ERP코드', width: 16 },
+      { header: '원가(VAT+)', width: 12 }, { header: `전월재고(${prevM}월)`, width: 13 }, { header: '총 원가', width: 14 },
+      { header: `판매수량(${rkMonth}월)`, width: 13 }, { header: `원가금액(${rkMonth}월)`, width: 14 }, { header: `당월재고(${rkMonth}월)`, width: 13 },
+    ];
+    const hr = ws.getRow(1); hr.font = { ...FONT, bold: true }; hr.alignment = { horizontal: 'center', vertical: 'middle' };
+    hr.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } }; c.border = { bottom: { style: 'thin' } }; });
+    for (const r of sortedRkRows) {
+      const row = ws.addRow([r.brand, r.name, r.code, r.erp, Math.round(r.cost), r.prevStock, Math.round(r.totalCost), r.soldQty, Math.round(r.soldCost), r.curStock]);
+      row.font = FONT;
+      [5, 6, 7, 8, 9, 10].forEach(ci => { row.getCell(ci).numFmt = '#,##0'; });
+    }
+    const sum = k => rkRows.reduce((s, r) => s + r[k], 0);
+    const t = ws.addRow(['합계', '', '', '', '', sum('prevStock'), Math.round(sum('totalCost')), sum('soldQty'), Math.round(sum('soldCost')), sum('curStock')]);
+    t.font = { ...FONT, bold: true };
+    t.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }; });
+    [5, 6, 7, 8, 9, 10].forEach(ci => { t.getCell(ci).numFmt = '#,##0'; });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    ws.autoFilter = 'A1:J1';
+    const buf = await wb.xlsx.writeBuffer();
+    dlBlob(buf, `재고결산_${rkYear}년${pad(rkMonth)}월.xlsx`);
+  };
+
   const openExDetail = (row) => {
     const items = exRaw
       .filter(e => e.store_name === row.dept && e.branch_name === row.branch)
@@ -1115,7 +1146,13 @@ export default function SalesSettlementPage() {
               <select className="fsel" value={rkMonth} onChange={e => setRkMonth(Number(e.target.value))}>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(mm => <option key={mm} value={mm}>{mm}월</option>)}
               </select>
-              <div className="fbar-right">
+              <div className="fbar-right" style={{ display:'flex', gap:8 }}>
+                {rkSearched && rkRows.length > 0 && (
+                  <button type="button" onClick={exportStockExcel}
+                    style={{ height:34, padding:'0 12px', border:'1px solid #2e7d32', borderRadius:'var(--radius)', background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                    📥 엑셀 다운로드
+                  </button>
+                )}
                 <button className="btn btn-p" onClick={searchStock} disabled={rkLoading}>
                   {rkLoading ? <span className="spinner"/> : '🔍 조회'}
                 </button>
