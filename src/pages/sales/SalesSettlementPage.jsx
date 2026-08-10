@@ -1143,9 +1143,9 @@ export default function SalesSettlementPage() {
                     <tr>
                       <th>브랜드</th><th>상품명</th><th>상품코드</th><th>ERP코드</th>
                       <th className="r">원가(VAT+)</th>
-                      <th className="r">전월재고</th><th className="r">총 원가</th>
-                      <th className="r">판매수량</th><th className="r">원가금액</th>
-                      <th className="r">당월재고</th>
+                      <th className="r">전월재고({rkMonth === 1 ? 12 : rkMonth - 1}월)</th><th className="r">총 원가</th>
+                      <th className="r">판매수량({rkMonth}월)</th><th className="r">원가금액({rkMonth}월)</th>
+                      <th className="r">당월재고({rkMonth}월)</th>
                     </tr>
                   </thead>
                   <tbody>
