@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, formatNumInput, parseNumInput } from '../../lib/utils';
+import { STORE_MAP } from '../../lib/constants';
 import SalesTabNav from './SalesTabNav';
 
 export default function LectureSalesPage({ profile, setPage }) {
@@ -57,14 +58,25 @@ export default function LectureSalesPage({ profile, setPage }) {
     const from = `${fMonth}-01`;
     const lastDay = new Date(fMonth.split('-')[0], fMonth.split('-')[1], 0).getDate();
     const to = `${fMonth}-${pad(lastDay)}`;
-    let q = supabase.from('lecture_sales')
-      .select('*')
-      .gte('sold_at', from).lte('sold_at', to)
-      .order('sold_at', {ascending:false});
-    if (fStore)  q = q.eq('store_name',  fStore);
-    if (fBranch) q = q.eq('branch_name', fBranch);
-    const {data} = await q;
-    setSales(data||[]);
+    // 신규 강좌매출: 판매입력에서 결제 '강좌매출'로 등록된 sales
+    let sq = supabase.from('sales')
+      .select('id, sold_at, store_name, branch_name, quantity, price, memo')
+      .eq('payment', '강좌매출')
+      .gte('sold_at', from).lte('sold_at', to);
+    if (fStore)  sq = sq.eq('store_name',  fStore);
+    if (fBranch) sq = sq.eq('branch_name', fBranch);
+    // 과거 강좌매출: lecture_sales (레거시)
+    let lq = supabase.from('lecture_sales')
+      .select('id, sold_at, store_name, branch_name, quantity, price, memo')
+      .gte('sold_at', from).lte('sold_at', to);
+    if (fStore)  lq = lq.eq('store_name',  fStore);
+    if (fBranch) lq = lq.eq('branch_name', fBranch);
+    const [{ data: sRows }, { data: lRows }] = await Promise.all([sq, lq]);
+    const merged = [
+      ...(sRows || []).map(r => ({ ...r, amount: (Number(r.price)||0) * (Number(r.quantity)||0) })),
+      ...(lRows || []).map(r => ({ ...r, amount: Number(r.price)||0 })),
+    ].sort((a, b) => String(b.sold_at).localeCompare(String(a.sold_at)));
+    setSales(merged);
     setLoading(false);
   }, [fMonth, fStore, fBranch]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -87,7 +99,7 @@ export default function LectureSalesPage({ profile, setPage }) {
     setStoreName(''); setBranchName(''); setAttendees(''); setPrice(''); setMemo(''); setSoldAt(today);
   };
 
-  const totalAmt = sales.reduce((s,r)=>s+(r.price||0),0);
+  const totalAmt = sales.reduce((s,r)=>s+(r.amount||0),0);
   const totalAttendees = sales.reduce((s,r)=>s+(r.quantity||0),0);
   const inputStyle = {height:36,padding:'0 10px',border:'1px solid var(--border)',borderRadius:'var(--radius)',fontSize:13,fontFamily:'var(--sans)',outline:'none',width:'100%'};
   const labelStyle = {display:'block',fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:4};
@@ -96,7 +108,7 @@ export default function LectureSalesPage({ profile, setPage }) {
     <div>
       {setPage && <SalesTabNav current="lecture_sales_view" setPage={setPage}/>}
       <div style={{background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:16, fontSize:12, color:'#6a1b9a', lineHeight:1.7}}>
-        ℹ️ 강좌매출 입력은 이제 <strong>매장 판매입력</strong>에서 출고방식을 <strong>'강좌매출'</strong>로 선택합니다. 이 화면은 <strong>과거 강좌매출 조회</strong> 전용입니다.
+        ℹ️ 강좌매출 입력은 <strong>매장 판매입력</strong>에서 출고방식을 <strong>'강좌매출'</strong>로 선택합니다. 이 화면은 판매입력으로 등록된 강좌매출을 <strong>조회</strong>합니다. (매출액 = 판매가 × 수량)
       </div>
 
       {false && tab==='input' && (
@@ -162,7 +174,7 @@ export default function LectureSalesPage({ profile, setPage }) {
               <select value={fBranch} onChange={e=>setFBranch(e.target.value)}
                 style={{height:36,padding:'0 10px',border:'1px solid var(--border)',borderRadius:'var(--radius)',fontSize:13,fontFamily:'var(--sans)',outline:'none'}}>
                 <option value="">전체 지점</option>
-                {sales.filter((s,i,a)=>a.findIndex(x=>x.branch_name===s.branch_name)===i && s.store_name===fStore).map(s=><option key={s.branch_name}>{s.branch_name}</option>)}
+                {(STORE_MAP[fStore]||[]).map(b=><option key={b}>{b}</option>)}
               </select>
             )}
             {(fStore||fBranch) && <button className="btn-ghost" onClick={()=>{setFStore('');setFBranch('');}}>✕</button>}
@@ -177,22 +189,22 @@ export default function LectureSalesPage({ profile, setPage }) {
             <div className="twrap">
               <table>
                 <thead>
-                  <tr><th>날짜</th><th>점포</th><th>지점</th><th className="r">인원수</th><th className="r">매출액</th><th>메모</th></tr>
+                  <tr><th>날짜</th><th>점포</th><th>지점</th><th className="r">수량</th><th className="r">매출액</th><th>메모</th></tr>
                 </thead>
                 <tbody>
-                  {sales.map(s=>(
-                    <tr key={s.id}>
+                  {sales.map((s,i)=>(
+                    <tr key={`${s.sold_at}-${s.id}-${i}`}>
                       <td className="mono" style={{fontSize:12}}>{s.sold_at}</td>
                       <td><span className="badge badge-dept">{s.store_name}</span></td>
                       <td><span className="badge badge-store">{s.branch_name}</span></td>
-                      <td className="r" style={{fontFamily:'var(--mono)'}}>{s.quantity||0}명</td>
-                      <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'#1565C0'}}>{(s.price||0).toLocaleString()}원</td>
+                      <td className="r" style={{fontFamily:'var(--mono)'}}>{s.quantity||0}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'#1565C0'}}>{(s.amount||0).toLocaleString()}원</td>
                       <td style={{fontSize:12,color:'var(--text2)',whiteSpace:'pre-wrap',maxWidth:200}}>{s.memo||'-'}</td>
                     </tr>
                   ))}
                   <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
                     <td colSpan={3} style={{padding:'10px 11px',fontWeight:700}}>합계</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,padding:'10px 11px'}}>{totalAttendees}명</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,padding:'10px 11px'}}>{totalAttendees}</td>
                     <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,fontSize:14,color:'#1565C0',padding:'10px 11px'}}>{totalAmt.toLocaleString()}원</td>
                     <td/>
                   </tr>
