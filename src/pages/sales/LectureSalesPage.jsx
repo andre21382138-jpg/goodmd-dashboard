@@ -34,6 +34,7 @@ export default function LectureSalesPage({ profile, setPage }) {
   const [fMonth,  setFMonth]  = useState(curMonStr);
   const [fStore,  setFStore]  = useState('');
   const [fBranch, setFBranch] = useState('');
+  const [detail,  setDetail]  = useState(null); // 행 클릭 시 상품 상세 모달
 
   useEffect(() => {
     supabase.from('profiles').select('department,branch').eq('approved',true)
@@ -60,7 +61,7 @@ export default function LectureSalesPage({ profile, setPage }) {
     const to = `${fMonth}-${pad(lastDay)}`;
     // 신규 강좌매출: 판매입력에서 결제 '강좌매출'로 등록된 sales
     let sq = supabase.from('sales')
-      .select('id, sold_at, store_name, branch_name, quantity, price, memo')
+      .select('id, sold_at, store_name, branch_name, quantity, price, memo, created_at, product:products(name), brand:brands(name), seller:profiles(name)')
       .eq('payment', '강좌매출')
       .gte('sold_at', from).lte('sold_at', to);
     if (fStore)  sq = sq.eq('store_name',  fStore);
@@ -189,21 +190,25 @@ export default function LectureSalesPage({ profile, setPage }) {
             <div className="twrap">
               <table>
                 <thead>
-                  <tr><th>날짜</th><th>점포</th><th>지점</th><th className="r">수량</th><th className="r">매출액</th><th>메모</th></tr>
+                  <tr><th>날짜</th><th>점포</th><th>지점</th><th>상품명</th><th className="r">수량</th><th className="r">매출액</th><th>메모</th></tr>
                 </thead>
                 <tbody>
                   {sales.map((s,i)=>(
-                    <tr key={`${s.sold_at}-${s.id}-${i}`}>
+                    <tr key={`${s.sold_at}-${s.id}-${i}`} onClick={()=>setDetail(s)}
+                      style={{cursor:'pointer'}} title="클릭하여 상품 상세 보기"
+                      onMouseEnter={e=>e.currentTarget.style.background='#faf5ff'}
+                      onMouseLeave={e=>e.currentTarget.style.background=''}>
                       <td className="mono" style={{fontSize:12}}>{s.sold_at}</td>
                       <td><span className="badge badge-dept">{s.store_name}</span></td>
                       <td><span className="badge badge-store">{s.branch_name}</span></td>
+                      <td style={{fontSize:12,fontWeight:600}}>{s.product?.name||'-'}</td>
                       <td className="r" style={{fontFamily:'var(--mono)'}}>{s.quantity||0}</td>
                       <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'#1565C0'}}>{(s.amount||0).toLocaleString()}원</td>
                       <td style={{fontSize:12,color:'var(--text2)',whiteSpace:'pre-wrap',maxWidth:200}}>{s.memo||'-'}</td>
                     </tr>
                   ))}
                   <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
-                    <td colSpan={3} style={{padding:'10px 11px',fontWeight:700}}>합계</td>
+                    <td colSpan={4} style={{padding:'10px 11px',fontWeight:700}}>합계</td>
                     <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,padding:'10px 11px'}}>{totalAttendees}</td>
                     <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,fontSize:14,color:'#1565C0',padding:'10px 11px'}}>{totalAmt.toLocaleString()}원</td>
                     <td/>
@@ -212,6 +217,39 @@ export default function LectureSalesPage({ profile, setPage }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 강좌매출 상세 모달 */}
+      {detail && (
+        <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}
+          onClick={()=>setDetail(null)}>
+          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.45)'}}/>
+          <div style={{position:'relative',background:'#fff',borderRadius:14,width:'min(460px,94vw)',boxShadow:'0 8px 40px rgba(0,0,0,0.2)',overflow:'hidden'}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,background:'#f3e5f5'}}>
+              <div style={{fontSize:15,fontWeight:700,color:'#6a1b9a'}}>🎓 강좌매출 상세</div>
+              <button onClick={()=>setDetail(null)} style={{background:'none',border:'none',fontSize:20,cursor:'pointer',color:'#999'}}>✕</button>
+            </div>
+            <div style={{padding:'18px 20px'}}>
+              <div style={{fontSize:17,fontWeight:700,marginBottom:4}}>{detail.product?.name||'(상품 정보 없음)'}</div>
+              <div style={{fontSize:12,color:'var(--text2)',marginBottom:16}}>{detail.brand?.name||'-'}</div>
+              {[
+                ['판매일', detail.sold_at + (detail.created_at ? ` ${new Date(detail.created_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false})}` : '')],
+                ['점포 / 지점', `${detail.store_name||'-'} ${detail.branch_name||''}`.trim()],
+                ['매니저', detail.seller?.name||'-'],
+                ['수량', `${detail.quantity||0}개`],
+                ['판매가', `${(Number(detail.price)||0).toLocaleString()}원`],
+                ['매출액', `${(detail.amount||0).toLocaleString()}원`],
+                ['메모', detail.memo||'-'],
+              ].map(([k,v])=>(
+                <div key={k} style={{display:'flex',gap:12,padding:'7px 0',borderTop:'1px solid var(--border)',fontSize:13}}>
+                  <div style={{width:80,color:'var(--text3)',fontWeight:600,flexShrink:0}}>{k}</div>
+                  <div style={{fontWeight:600,color:k==='매출액'?'#1565C0':'var(--text)',whiteSpace:'pre-wrap'}}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
