@@ -243,10 +243,17 @@ export default function HomePage({ profile, setPage }) {
   // 전월 동기간 대비 증감 표시 (▲증가 녹색 / ▼감소 빨강)
   const deltaChip = (cur, prev) => {
     const d = (cur || 0) - (prev || 0);
-    if (d === 0) return <span style={{color:'var(--text3)', fontSize:11, fontWeight:600, marginLeft:3}}>(–)</span>;
+    if (d === 0) return <span style={{color:'var(--text3)', fontSize:11, fontWeight:600}}>(–)</span>;
     const up = d > 0;
-    return <span style={{color: up ? '#2e7d32' : '#c62828', fontSize:11, fontWeight:700, marginLeft:3, whiteSpace:'nowrap'}}>({up ? '▲' : '▼'} {Math.abs(d).toLocaleString()})</span>;
+    return <span style={{color: up ? '#2e7d32' : '#c62828', fontSize:11, fontWeight:700, whiteSpace:'nowrap'}}>({up ? '▲' : '▼'} {Math.abs(d).toLocaleString()})</span>;
   };
+  // 값 + 증감을 각각 고정폭 칸으로 정렬 (단위·증감 괄호가 세로로 일정하게 정렬됨)
+  const metricCell = (valueStr, cur, prev, opts = {}) => (
+    <div style={{display:'flex', alignItems:'baseline', justifyContent:'flex-end', gap:8, whiteSpace:'nowrap'}}>
+      <span style={{fontFamily:'var(--mono)', ...(opts.valueStyle || {})}}>{valueStr}</span>
+      <span style={{minWidth: opts.money ? 104 : 66, textAlign:'right'}}>{deltaChip(cur, prev)}</span>
+    </div>
+  );
   const prevStoreTotal = Object.values(prevStoreMap).reduce(
     (a, e) => ({ count:a.count+e.count, qty:a.qty+e.qty, amt:a.amt+e.amt }),
     { count:0, qty:0, amt:0 }
@@ -415,9 +422,9 @@ export default function HomePage({ profile, setPage }) {
                         <td className="mono" style={{color:'var(--text3)',width:40}}>{i+1}</td>
                         <td><span className="badge badge-dept">{r.store}</span></td>
                         <td><span className="badge badge-store">{r.branch}</span></td>
-                        <td className="r" style={{whiteSpace:'nowrap'}}>{r.count.toLocaleString()}건 {deltaChip(r.count, pv.count)}</td>
-                        <td className="r" style={{whiteSpace:'nowrap'}}>{r.qty.toLocaleString()}개 {deltaChip(r.qty, pv.qty)}</td>
-                        <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)',whiteSpace:'nowrap'}}>{r.amt.toLocaleString()}원 {deltaChip(r.amt, pv.amt)}</td>
+                        <td className="r">{metricCell(`${r.count.toLocaleString()}건`, r.count, pv.count)}</td>
+                        <td className="r">{metricCell(`${r.qty.toLocaleString()}개`, r.qty, pv.qty)}</td>
+                        <td className="r">{metricCell(`${r.amt.toLocaleString()}원`, r.amt, pv.amt, {money:true, valueStyle:{fontWeight:700, color:'var(--accent)'}})}</td>
                         <td>
                           <div style={{display:'flex',alignItems:'center',gap:6}}>
                             <div style={{flex:1,height:6,background:'#f0f0f0',borderRadius:3,overflow:'hidden'}}>
@@ -431,9 +438,9 @@ export default function HomePage({ profile, setPage }) {
                   })}
                   <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
                     <td colSpan={3} style={{padding:'9px 11px',fontWeight:700}}>합계</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,whiteSpace:'nowrap'}}>{storeSummary.count.toLocaleString()}건 {deltaChip(storeSummary.count, prevStoreTotal.count)}</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,whiteSpace:'nowrap'}}>{storeSummary.qty.toLocaleString()}개 {deltaChip(storeSummary.qty, prevStoreTotal.qty)}</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)',fontSize:14,whiteSpace:'nowrap'}}>{storeSummary.amt.toLocaleString()}원 {deltaChip(storeSummary.amt, prevStoreTotal.amt)}</td>
+                    <td className="r">{metricCell(`${storeSummary.count.toLocaleString()}건`, storeSummary.count, prevStoreTotal.count, {valueStyle:{fontWeight:700}})}</td>
+                    <td className="r">{metricCell(`${storeSummary.qty.toLocaleString()}개`, storeSummary.qty, prevStoreTotal.qty, {valueStyle:{fontWeight:700}})}</td>
+                    <td className="r">{metricCell(`${storeSummary.amt.toLocaleString()}원`, storeSummary.amt, prevStoreTotal.amt, {money:true, valueStyle:{fontWeight:700, color:'var(--accent)', fontSize:14}})}</td>
                     <td/>
                   </tr>
                 </tbody>
