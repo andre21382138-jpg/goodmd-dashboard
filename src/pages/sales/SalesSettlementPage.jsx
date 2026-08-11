@@ -307,12 +307,14 @@ export default function SalesSettlementPage() {
         data.forEach(s => { const c = String(s.product_code || ''); if (c) curByCode[c] = (curByCode[c] || 0) + (s.stock_qty || 0); });
         if (data.length < 1000) break; start += 1000;
       } }
-      // 판매수량 (구매이력 제외) — 당월분 / 당월말 이후분
+      // 판매수량 (구매이력 제외, 반품은 차감 → 매출정산과 동일한 순판매수량) — 당월분 / 당월말 이후분
       const salesM = {}, salesAfter = {};
       { let start = 0; while (true) {
-        const { data } = await supabase.from('sales').select('product_id, quantity, sold_at').neq('payment', '구매이력').gte('sold_at', mStart).order('id').range(start, start + 999);
+        const { data } = await supabase.from('sales').select('product_id, quantity, price, payment, sold_at').neq('payment', '구매이력').gte('sold_at', mStart).order('id').range(start, start + 999);
         if (!data || !data.length) break;
-        data.forEach(s => { if (!s.product_id) return; const q = Number(s.quantity) || 0;
+        data.forEach(s => { if (!s.product_id) return;
+          const isReturn = s.payment === '반품' || (Number(s.price) < 0);
+          const q = (Number(s.quantity) || 0) * (isReturn ? -1 : 1);
           if (s.sold_at <= endM) salesM[s.product_id] = (salesM[s.product_id] || 0) + q;
           else salesAfter[s.product_id] = (salesAfter[s.product_id] || 0) + q; });
         if (data.length < 1000) break; start += 1000;
