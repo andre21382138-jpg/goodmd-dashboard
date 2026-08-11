@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { formatPhone } from '../../lib/utils';
 
 // 팔레오 출석체크 적립금 이벤트 — 공개 페이지 (?att=매장ID)
-//  회원이 매장 QR 스캔 → 이름/휴대폰 입력 → [확인] → 가입회원이면 1일 1회 100원 적립
+//  회원이 매장 QR 스캔 → 이름/휴대폰 입력 → [확인] → 가입회원이면 1일 1회 300원 적립
 export default function AttendancePage({ storeId }) {
   const [store, setStore]   = useState(null);
   const [name, setName]     = useState('');
@@ -44,7 +44,7 @@ export default function AttendancePage({ storeId }) {
         <div style={{ ...card, textAlign:'center' }}>
           <div style={{ fontSize:56, marginBottom:10 }}>{ok ? '🎉' : '📅'}</div>
           <div style={{ fontSize:24, fontWeight:800, color: ok ? '#2e7d32' : '#E65100', marginBottom:8 }}>
-            {ok ? '100원이 적립되었습니다' : '오늘은 이미 적립되었습니다'}
+            {ok ? '300원이 적립되었습니다' : '오늘은 이미 적립되었습니다'}
           </div>
           <div style={{ fontSize:14, color:'#666', lineHeight:1.7 }}>
             {result.name ? <b>{result.name}</b> : null} 님{ok ? ' 방문 감사합니다!' : ' (출석 적립은 1일 1회)'}
@@ -66,7 +66,7 @@ export default function AttendancePage({ storeId }) {
       <form style={card} onSubmit={submit}>
         <div style={{ textAlign:'center', marginBottom:22 }}>
           <div style={{ fontSize:13, fontWeight:800, color:'#E65100', letterSpacing:0.5 }}>팔레오 출석체크 적립금 이벤트</div>
-          <div style={{ fontSize:26, fontWeight:800, margin:'8px 0 4px' }}>출석하고 <span style={{ color:'#E65100' }}>100원</span> 적립 🎁</div>
+          <div style={{ fontSize:26, fontWeight:800, margin:'8px 0 4px' }}>출석하고 <span style={{ color:'#E65100' }}>300원</span> 적립 🎁</div>
           {store && <div style={{ fontSize:14, color:'#888', fontWeight:600 }}>{store.department} {store.branch}</div>}
         </div>
         <div style={{ marginBottom:14 }}>
@@ -82,7 +82,7 @@ export default function AttendancePage({ storeId }) {
           {saving ? '처리 중…' : '확인'}
         </button>
         <div style={{ marginTop:16, fontSize:12, color:'#aaa', textAlign:'center', lineHeight:1.6 }}>
-          ※ 가입회원만 적립되며, 하루 1회 100원 적립됩니다.
+          ※ 가입회원만 적립되며, 하루 1회 300원 적립됩니다.
         </div>
       </form>
     </div>

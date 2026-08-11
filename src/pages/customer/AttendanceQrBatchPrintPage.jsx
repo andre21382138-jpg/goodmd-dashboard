@@ -42,12 +42,12 @@ export default function AttendanceQrBatchPrintPage() {
         <div class="qr-title">🎁 팔레오 출석체크 적립금 이벤트</div>
         <div class="qr-store">${s.department} ${s.branch}</div>
         <img src="${qrImg(s.id, 700)}" />
-        <div class="qr-guide">📱 방문하고 QR 스캔하면 <b>100원 적립!</b></div>
+        <div class="qr-guide">📱 방문하고 QR 스캔하면 <b>300원 적립!</b></div>
         <ol class="qr-steps">
           <li>QR 스캔 → <b>이름 · 휴대폰번호 입력</b></li>
-          <li><b>[확인]</b> 터치 → 100원 적립 완료</li>
+          <li><b>[확인]</b> 터치 → 300원 적립 완료</li>
         </ol>
-        <div class="qr-note">※ 가입회원만 적립되며, <b>하루 1회</b> 100원 적립됩니다.</div>
+        <div class="qr-note">※ 가입회원만 적립되며, <b>하루 1회</b> 300원 적립됩니다.</div>
         <div class="qr-url">${attUrl(s.id)}</div>
       </div>`).join('');
     const w = window.open('');
