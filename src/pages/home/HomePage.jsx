@@ -69,7 +69,7 @@ export default function HomePage({ profile, setPage }) {
       // 1. 매장 매출
       const selectCols = isManager
         ? '*, brand:brands(name), product:products(name,code), customer:customers(name,phone)'
-        : 'store_name, branch_name, quantity, price, returned_qty';
+        : 'store_name, branch_name, quantity, price, returned_qty, payment';
       let storeQ = supabase.from('sales')
         .select(selectCols)
         .neq('payment', '구매이력')
@@ -79,10 +79,13 @@ export default function HomePage({ profile, setPage }) {
         storeQ = storeQ.eq('store_name', profile.department).eq('branch_name', profile.branch);
       const { data: storeData } = await storeQ;
       const sRows = (storeData || []).map(r => ({...r, _eff: Math.max(0,(r.quantity||0)-(r.returned_qty||0))}));
+      // 본사(3카드) 화면에서는 강좌매출을 매장매출에서 제외하고 강좌 카드로 별도 집계 (중복 방지)
+      // 매니저 화면은 강좌 카드가 없으므로 자기 매장 매출에 강좌매출 포함 유지
+      const storeAggRows = canSeeAll ? sRows.filter(r => r.payment !== '강좌매출') : sRows;
 
       // 본사용: 매장별 합계
       const sMap = new Map();
-      for (const r of sRows) {
+      for (const r of storeAggRows) {
         if (r._eff <= 0) continue;
         const key = `${r.store_name}|||${r.branch_name}`;
         if (!sMap.has(key)) sMap.set(key, {store:r.store_name, branch:r.branch_name, count:0, qty:0, amt:0});
@@ -90,9 +93,9 @@ export default function HomePage({ profile, setPage }) {
         e.count++; e.qty += r._eff; e.amt += Math.round(r.price * r._eff);
       }
       setStoreSummary({
-        amt:   sRows.reduce((s,r)=>s+Math.round(r.price*r._eff), 0),
-        count: sRows.filter(r => r._eff > 0).length,
-        qty:   sRows.reduce((s,r)=>s+r._eff, 0),
+        amt:   storeAggRows.reduce((s,r)=>s+Math.round(r.price*r._eff), 0),
+        count: storeAggRows.filter(r => r._eff > 0).length,
+        qty:   storeAggRows.reduce((s,r)=>s+r._eff, 0),
       });
       setStoreRows([...sMap.values()].sort((a,b)=>b.amt-a.amt));
 
@@ -144,21 +147,26 @@ export default function HomePage({ profile, setPage }) {
       }
 
       if (canSeeAll) {
-        // 2. 강좌 매출
-        const { data: lectureData } = await supabase.from('lecture_sales')
+        // 2. 강좌 매출 = 판매입력 강좌매출(sales) + 레거시(lecture_sales)
+        const { data: legacyLect } = await supabase.from('lecture_sales')
           .select('store_name, branch_name, quantity, price')
           .gte('sold_at', monthStart).lte('sold_at', rangeEndStr);
-        const lRows = lectureData || [];
+        const lRows = [
+          ...sRows.filter(r => r.payment === '강좌매출')
+            .map(r => ({ store_name:r.store_name, branch_name:r.branch_name, qty:r._eff, amt:Math.round((r.price||0)*(r._eff||0)) })),
+          ...(legacyLect || [])
+            .map(r => ({ store_name:r.store_name, branch_name:r.branch_name, qty:(r.quantity||0), amt:Math.round((r.price||0)*(r.quantity||0)) })),
+        ];
         const lMap = new Map();
         for (const r of lRows) {
           const key = `${r.store_name}|||${r.branch_name}`;
           if (!lMap.has(key)) lMap.set(key, {store:r.store_name, branch:r.branch_name, count:0, qty:0, amt:0});
-          const e = lMap.get(key); e.count++; e.qty += r.quantity; e.amt += Math.round(r.price * r.quantity);
+          const e = lMap.get(key); e.count++; e.qty += r.qty; e.amt += r.amt;
         }
         setLectureSummary({
-          amt:   lRows.reduce((s,r)=>s+Math.round(r.price*r.quantity), 0),
+          amt:   lRows.reduce((s,r)=>s+r.amt, 0),
           count: lRows.length,
-          qty:   lRows.reduce((s,r)=>s+r.quantity, 0),
+          qty:   lRows.reduce((s,r)=>s+r.qty, 0),
         });
         setLectureRows([...lMap.values()].sort((a,b)=>b.amt-a.amt));
 
@@ -307,7 +315,7 @@ export default function HomePage({ profile, setPage }) {
         <div style={{display:'flex', gap:12, marginBottom:20}}>
           <SummaryCard title="매장 매출" icon="🏬" summary={storeSummary} color="#E65100"/>
           <SummaryCard title="강좌 매출" icon="🎓" summary={lectureSummary} color="#1565C0"
-              extra={<><span>강좌횟수 : <b>{lectureSummary.count}</b>회</span><span>인원 : <b>{lectureSummary.qty}</b>명</span></>}/>
+              extra={<><span>건수 : <b>{lectureSummary.count}</b>건</span><span>수량 : <b>{lectureSummary.qty}</b>개</span></>}/>
           <SummaryCard title="특판 매출" icon="🤝" summary={bizSummary} color="#2E7D32"/>
         </div>
       )}
@@ -499,7 +507,7 @@ export default function HomePage({ profile, setPage }) {
             <div className="twrap">
               <table>
                 <thead>
-                  <tr><th>순위</th><th>점포</th><th>지점</th><th className="r">건수</th><th className="r">인원수</th><th className="r">매출금액</th></tr>
+                  <tr><th>순위</th><th>점포</th><th>지점</th><th className="r">건수</th><th className="r">수량</th><th className="r">매출금액</th></tr>
                 </thead>
                 <tbody>
                   {lectureRows.map((r,i)=>(
@@ -508,14 +516,14 @@ export default function HomePage({ profile, setPage }) {
                       <td><span className="badge badge-dept">{r.store}</span></td>
                       <td><span className="badge badge-store">{r.branch}</span></td>
                       <td className="r">{r.count}건</td>
-                      <td className="r">{r.qty}명</td>
+                      <td className="r">{r.qty}개</td>
                       <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'#1565C0'}}>{r.amt.toLocaleString()}원</td>
                     </tr>
                   ))}
                   <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
                     <td colSpan={3} style={{padding:'9px 11px',fontWeight:700}}>합계</td>
                     <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{lectureSummary.count}건</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{lectureSummary.qty}명</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{lectureSummary.qty}개</td>
                     <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'#1565C0',fontSize:14}}>{lectureSummary.amt.toLocaleString()}원</td>
                   </tr>
                 </tbody>
