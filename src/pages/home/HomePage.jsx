@@ -31,6 +31,7 @@ export default function HomePage({ profile, setPage }) {
   const [bizSummary,     setBizSummary]     = useState({amt:0,count:0,qty:0});
   const [bizRows,        setBizRows]        = useState([]);
   const [prevTotalAmt,   setPrevTotalAmt]   = useState(0);
+  const [prevStoreMap,   setPrevStoreMap]   = useState({}); // 전월 동기간 매장별 {count,qty,amt}
   const [prevMonthsSales,setPrevMonthsSales]= useState([]); // 매니저용 최근 3개월
   const [loading,        setLoading]        = useState(true);
   const [showBanner,     setShowBanner]     = useState(false);
@@ -66,18 +67,33 @@ export default function HomePage({ profile, setPage }) {
   useEffect(() => {
     const fetch = async () => {
       setLoading(true);
+      // Supabase 기본 1000행 제한 회피 — 페이징으로 전체 조회
+      const pageAll = async (build) => {
+        let all = [], start = 0;
+        while (true) {
+          const { data, error } = await build(start);
+          if (error || !data || !data.length) break;
+          all.push(...data);
+          if (data.length < 1000) break;
+          start += 1000;
+        }
+        return all;
+      };
       // 1. 매장 매출
       const selectCols = isManager
         ? '*, brand:brands(name), product:products(name,code), customer:customers(name,phone)'
         : 'store_name, branch_name, quantity, price, returned_qty, payment';
-      let storeQ = supabase.from('sales')
-        .select(selectCols)
-        .neq('payment', '구매이력')
-        .gte('sold_at', monthStart).lte('sold_at', rangeEndStr)
-        .order('sold_at', { ascending: false });
-      if (isManager && profile?.department)
-        storeQ = storeQ.eq('store_name', profile.department).eq('branch_name', profile.branch);
-      const { data: storeData } = await storeQ;
+      const storeData = await pageAll((start) => {
+        let q = supabase.from('sales')
+          .select(selectCols)
+          .neq('payment', '구매이력')
+          .gte('sold_at', monthStart).lte('sold_at', rangeEndStr)
+          .order('sold_at', { ascending: false }).order('id', { ascending: false })
+          .range(start, start + 999);
+        if (isManager && profile?.department)
+          q = q.eq('store_name', profile.department).eq('branch_name', profile.branch);
+        return q;
+      });
       const sRows = (storeData || []).map(r => ({...r, _eff: Math.max(0,(r.quantity||0)-(r.returned_qty||0))}));
       // 본사(3카드) 화면에서는 강좌매출을 매장매출에서 제외하고 강좌 카드로 별도 집계 (중복 방지)
       // 매니저 화면은 강좌 카드가 없으므로 자기 매장 매출에 강좌매출 포함 유지
@@ -189,10 +205,11 @@ export default function HomePage({ profile, setPage }) {
         setBizRows([...bMap.values()].sort((a,b)=>b.amt-a.amt));
 
         // 4. 전월 동일기간 통합 매출
-        const [{ data: prevSales }, { data: prevLecture }, { data: prevBiz }] = await Promise.all([
-          supabase.from('sales').select('quantity, price, returned_qty')
+        const [prevSales, { data: prevLecture }, { data: prevBiz }] = await Promise.all([
+          pageAll((start) => supabase.from('sales').select('store_name, branch_name, quantity, price, returned_qty, payment')
             .neq('payment', '구매이력')
-            .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
+            .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd)
+            .order('id').range(start, start + 999)),
           supabase.from('lecture_sales').select('quantity, price')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
           supabase.from('biz_sales').select('quantity, supply_price')
@@ -202,6 +219,19 @@ export default function HomePage({ profile, setPage }) {
         const prevLect    = (prevLecture ||[]).reduce((s,r)=>s+Math.round(r.price*r.quantity), 0);
         const prevBizAmt  = (prevBiz     ||[]).reduce((s,r)=>s+Math.round(r.supply_price*r.quantity), 0);
         setPrevTotalAmt(prevStore + prevLect + prevBizAmt);
+
+        // 전월 동기간 매장별 집계 (매장별 표는 강좌매출 제외 기준 → 당월 storeRows와 동일)
+        const pMap = {};
+        for (const r of (prevSales || [])) {
+          if (r.payment === '강좌매출') continue;
+          const eff = Math.max(0, (r.quantity||0) - (r.returned_qty||0));
+          if (eff <= 0) continue;
+          const key = `${r.store_name}|||${r.branch_name}`;
+          if (!pMap[key]) pMap[key] = { count:0, qty:0, amt:0 };
+          const e = pMap[key];
+          e.count++; e.qty += eff; e.amt += Math.round((r.price||0) * eff);
+        }
+        setPrevStoreMap(pMap);
       }
       setLoading(false);
     };
@@ -209,6 +239,18 @@ export default function HomePage({ profile, setPage }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalAmt = storeSummary.amt + lectureSummary.amt + bizSummary.amt;
+
+  // 전월 동기간 대비 증감 표시 (▲증가 녹색 / ▼감소 빨강)
+  const deltaChip = (cur, prev) => {
+    const d = (cur || 0) - (prev || 0);
+    if (d === 0) return <span style={{color:'var(--text3)', fontSize:11, fontWeight:600, marginLeft:3}}>(–)</span>;
+    const up = d > 0;
+    return <span style={{color: up ? '#2e7d32' : '#c62828', fontSize:11, fontWeight:700, marginLeft:3, whiteSpace:'nowrap'}}>({up ? '▲' : '▼'} {Math.abs(d).toLocaleString()})</span>;
+  };
+  const prevStoreTotal = Object.values(prevStoreMap).reduce(
+    (a, e) => ({ count:a.count+e.count, qty:a.qty+e.qty, amt:a.amt+e.amt }),
+    { count:0, qty:0, amt:0 }
+  );
 
   if (loading) return <div className="empty"><span className="spinner"/></div>;
 
@@ -367,14 +409,15 @@ export default function HomePage({ profile, setPage }) {
                 <tbody>
                   {storeRows.map((r,i) => {
                     const pct = storeSummary.amt>0 ? (r.amt/storeSummary.amt*100).toFixed(1) : 0;
+                    const pv = prevStoreMap[`${r.store}|||${r.branch}`] || {count:0, qty:0, amt:0};
                     return (
                       <tr key={i}>
                         <td className="mono" style={{color:'var(--text3)',width:40}}>{i+1}</td>
                         <td><span className="badge badge-dept">{r.store}</span></td>
                         <td><span className="badge badge-store">{r.branch}</span></td>
-                        <td className="r">{r.count.toLocaleString()}건</td>
-                        <td className="r">{r.qty.toLocaleString()}개</td>
-                        <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)'}}>{r.amt.toLocaleString()}원</td>
+                        <td className="r" style={{whiteSpace:'nowrap'}}>{r.count.toLocaleString()}건 {deltaChip(r.count, pv.count)}</td>
+                        <td className="r" style={{whiteSpace:'nowrap'}}>{r.qty.toLocaleString()}개 {deltaChip(r.qty, pv.qty)}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)',whiteSpace:'nowrap'}}>{r.amt.toLocaleString()}원 {deltaChip(r.amt, pv.amt)}</td>
                         <td>
                           <div style={{display:'flex',alignItems:'center',gap:6}}>
                             <div style={{flex:1,height:6,background:'#f0f0f0',borderRadius:3,overflow:'hidden'}}>
@@ -388,9 +431,9 @@ export default function HomePage({ profile, setPage }) {
                   })}
                   <tr style={{background:'var(--bg3)',borderTop:'2px solid var(--border2)'}}>
                     <td colSpan={3} style={{padding:'9px 11px',fontWeight:700}}>합계</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{storeSummary.count.toLocaleString()}건</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700}}>{storeSummary.qty.toLocaleString()}개</td>
-                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)',fontSize:14}}>{storeSummary.amt.toLocaleString()}원</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,whiteSpace:'nowrap'}}>{storeSummary.count.toLocaleString()}건 {deltaChip(storeSummary.count, prevStoreTotal.count)}</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,whiteSpace:'nowrap'}}>{storeSummary.qty.toLocaleString()}개 {deltaChip(storeSummary.qty, prevStoreTotal.qty)}</td>
+                    <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)',fontSize:14,whiteSpace:'nowrap'}}>{storeSummary.amt.toLocaleString()}원 {deltaChip(storeSummary.amt, prevStoreTotal.amt)}</td>
                     <td/>
                   </tr>
                 </tbody>
