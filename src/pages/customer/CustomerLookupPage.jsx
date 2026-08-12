@@ -748,73 +748,81 @@ export default function CustomerLookupPage({ profile }) {
             ))}
           </div>
         )}
-        <div className="fbar" style={{ flexWrap:'wrap', gap:8 }}>
-          <input className="finput" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="이름 또는 연락처 검색" style={{ height:34 }}
-            onKeyDown={e => e.key==='Enter' && fetchCustomers()} />
-          <select className="fsel" value={fStore} onChange={e => handleStoreChange(e.target.value)}>
-            <option value="">전체 점포</option>
-            {allStores.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)}
-            disabled={!fStore} style={{ background: !fStore ? '#f0f0f0' : '#fff' }}>
-            <option value="">전체 지점</option>
-            {allBranches.map(b => <option key={b}>{b}</option>)}
-          </select>
-          <div style={{display:'flex', alignItems:'center', gap:4}}>
-            <span style={{fontSize:11, fontWeight:700, color:'var(--text2)', whiteSpace:'nowrap'}}>가입일</span>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {/* 1행: 이름/연락처 · 점포 · 지점 */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+            <input className="finput" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="이름 또는 연락처 검색" style={{ height:34, minWidth:200 }}
+              onKeyDown={e => e.key==='Enter' && fetchCustomers()} />
+            <select className="fsel" value={fStore} onChange={e => handleStoreChange(e.target.value)}>
+              <option value="">전체 점포</option>
+              {allStores.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select className="fsel" value={fBranch} onChange={e => setFBranch(e.target.value)}
+              disabled={!fStore} style={{ background: !fStore ? '#f0f0f0' : '#fff' }}>
+              <option value="">전체 지점</option>
+              {allBranches.map(b => <option key={b}>{b}</option>)}
+            </select>
+          </div>
+          {/* 2행: 가입일 */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, alignItems:'center' }}>
+            <span style={{ width:40, fontSize:12, fontWeight:700, color:'var(--text2)' }}>가입일</span>
             <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} title="가입일 시작" />
-            <span style={{fontSize:12,color:'var(--text3)'}}>~</span>
+            <span style={{ fontSize:12, color:'var(--text3)' }}>~</span>
             <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} title="가입일 종료" />
           </div>
-          <div style={{display:'flex', alignItems:'center', gap:4}}>
-            <span style={{fontSize:11, fontWeight:700, color:'#1565C0', whiteSpace:'nowrap'}}>구매일</span>
+          {/* 3행: 구매일 */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, alignItems:'center' }}>
+            <span style={{ width:40, fontSize:12, fontWeight:700, color:'#1565C0' }}>구매일</span>
             <input type="date" className="fsel" value={pFrom} onChange={e => setPFrom(e.target.value)} title="구매일 시작" />
-            <span style={{fontSize:12,color:'var(--text3)'}}>~</span>
+            <span style={{ fontSize:12, color:'var(--text3)' }}>~</span>
             <input type="date" className="fsel" value={pTo} onChange={e => setPTo(e.target.value)} title="구매일 종료" />
           </div>
-          <select className="fsel" value={fConsent}
-            onChange={e => { setFConsent(e.target.value); fetchCustomers(0, e.target.value); }}
-            title="마케팅 수신동의 상태">
-            <option value="">마케팅동의 전체</option>
-            <option value="valid">동의(유효·1년미만)</option>
-            <option value="expired">동의(만료)</option>
-            <option value="none">미동의</option>
-          </select>
-          <button type="button"
-            onClick={() => setFNewOnly(p => !p)}
-            title="가입한 지 1년 미만인 회원"
-            style={{ height:34, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
-              borderColor: fNewOnly ? '#1565C0' : 'var(--border)',
-              background: fNewOnly ? '#e3f2fd' : '#fff',
-              color: fNewOnly ? '#1565C0' : 'var(--text2)' }}>
-            {fNewOnly ? '✅ 가입 1년 미만' : '📅 가입 1년 미만'}
-          </button>
-          <select className="fsel" value={fGrade} onChange={e => setFGrade(e.target.value)}>
-            <option value="">전체 등급</option>
-            {['VVIP','VIP','로얄','골드','실버','패밀리'].map(g => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
-          {(search||fStore||fBranch||fFrom||fTo||pFrom||pTo||fConsent||fNewOnly||fGrade) &&
-            <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setPFrom(''); setPTo(''); setFConsent(''); setFNewOnly(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); setCheckedIds(new Set()); }}>✕ 초기화</button>}
-          <div className="fbar-right" style={{display:'flex', gap:8, alignItems:'center'}}>
-            {canUpload && (
-              <>
-                <input ref={memberUploadRef} type="file" accept=".xls,.xlsx"
-                  onChange={handleMemberUploadFile} style={{display:'none'}}/>
-                <button type="button" onClick={handleMemberUploadClick} disabled={memberUploading}
-                  title="회원정보 취합 엑셀을 일괄 반영 (휴대폰+이름 기준 갱신/추가)"
-                  style={{height:34, padding:'0 14px', border:'1px solid #2e7d32', borderRadius:'var(--radius)',
-                    background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700,
-                    cursor: memberUploading ? 'not-allowed' : 'pointer', whiteSpace:'nowrap'}}>
-                  {memberUploading ? <span className="spinner"/> : '📥 회원 일괄 업데이트'}
-                </button>
-              </>
-            )}
-            <button className="btn btn-p" onClick={() => fetchCustomers(0)} disabled={loading}>
-              {loading ? <span className="spinner"/> : '🔍 조회'}
+          {/* 4행: 등급 · 마케팅동의 · 가입1년미만 + 액션 */}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+            <select className="fsel" value={fGrade} onChange={e => setFGrade(e.target.value)}>
+              <option value="">전체 등급</option>
+              {['VVIP','VIP','로얄','골드','실버','패밀리'].map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+            <select className="fsel" value={fConsent}
+              onChange={e => { setFConsent(e.target.value); fetchCustomers(0, e.target.value); }}
+              title="마케팅 수신동의 상태">
+              <option value="">마케팅동의 전체</option>
+              <option value="valid">동의(유효·1년미만)</option>
+              <option value="expired">동의(만료)</option>
+              <option value="none">미동의</option>
+            </select>
+            <button type="button"
+              onClick={() => setFNewOnly(p => !p)}
+              title="가입한 지 1년 미만인 회원"
+              style={{ height:34, padding:'0 14px', border:'2px solid', borderRadius:'var(--radius)', fontSize:12, fontWeight:700, cursor:'pointer',
+                borderColor: fNewOnly ? '#1565C0' : 'var(--border)',
+                background: fNewOnly ? '#e3f2fd' : '#fff',
+                color: fNewOnly ? '#1565C0' : 'var(--text2)' }}>
+              {fNewOnly ? '✅ 가입 1년 미만' : '📅 가입 1년 미만'}
             </button>
+            {(search||fStore||fBranch||fFrom||fTo||pFrom||pTo||fConsent||fNewOnly||fGrade) &&
+              <button className="btn-ghost" onClick={() => { setSearch(''); setFStore(''); setFBranch(''); setFFrom(''); setFTo(''); setPFrom(''); setPTo(''); setFConsent(''); setFNewOnly(false); setFGrade(''); setCustomers([]); setSelected(null); setPage(0); setTotalCount(0); setHasMore(false); setCheckedIds(new Set()); }}>✕ 초기화</button>}
+            <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
+              {canUpload && (
+                <>
+                  <input ref={memberUploadRef} type="file" accept=".xls,.xlsx"
+                    onChange={handleMemberUploadFile} style={{display:'none'}}/>
+                  <button type="button" onClick={handleMemberUploadClick} disabled={memberUploading}
+                    title="회원정보 취합 엑셀을 일괄 반영 (휴대폰+이름 기준 갱신/추가)"
+                    style={{height:34, padding:'0 14px', border:'1px solid #2e7d32', borderRadius:'var(--radius)',
+                      background:'#e8f5e9', color:'#2e7d32', fontSize:12, fontWeight:700,
+                      cursor: memberUploading ? 'not-allowed' : 'pointer', whiteSpace:'nowrap'}}>
+                    {memberUploading ? <span className="spinner"/> : '📥 회원 일괄 업데이트'}
+                  </button>
+                </>
+              )}
+              <button className="btn btn-p" onClick={() => fetchCustomers(0)} disabled={loading}>
+                {loading ? <span className="spinner"/> : '🔍 조회'}
+              </button>
+            </div>
           </div>
           {memberUploading && memberProgress && (
             <div style={{width:'100%', marginTop:8, padding:'8px 12px', background:'#e8f5e9',
