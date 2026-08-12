@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
-import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
+import { STORE_NAMES, STORE_MAP, isSpecialSalesStore } from '../../lib/constants';
 import { computeMonthlyLaborByBranch } from '../../lib/laborCost';
 
 // 본사 매출정산 — 기간·점포별 상품 단위 정산 + 전월 동기간 비교
@@ -96,6 +96,27 @@ export default function SalesSettlementPage() {
     return all;
   };
 
+  // 특판 B2B(biz_sales) — 매출정산에 상품 단위로 합산 (판매가=공급가). sales 행 형태로 매핑.
+  const fetchBizRange = async (from, to) => {
+    const all = []; let start = 0; const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase.from('biz_sales')
+        .select('product_id, quantity, supply_price, product:products(code, name, price, cost)')
+        .gte('sold_at', from).lte('sold_at', to)
+        .order('id').range(start, start + PAGE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    return all.map(r => ({
+      product_id: r.product_id, payment: '특판',
+      price: Number(r.supply_price) || 0, quantity: Number(r.quantity) || 0,
+      product: r.product,
+    }));
+  };
+
   // 상품 단위 집계 → Map(product_id → {code,name,listPrice,unitCost,qty,gross,net,costTotal})
   const aggregate = (all) => {
     const map = new Map();
@@ -126,7 +147,15 @@ export default function SalesSettlementPage() {
     try {
       const [pf, pt] = (cmpFrom && cmpTo) ? [cmpFrom, cmpTo] : prevRange(fFrom, fTo);
       const [curAll, prevAll] = await Promise.all([fetchRange(fFrom, fTo), fetchRange(pf, pt)]);
-      const curMap = aggregate(curAll), prevMap = aggregate(prevAll);
+      // 특판(biz_sales)은 점포/지점 필터가 없을 때(전체 조회)만 합산 — 특정 매장 조회 시엔 제외
+      const includeBiz = fStores.length === 0 && !fBranch;
+      let curRows = curAll, prevRows = prevAll;
+      if (includeBiz) {
+        const [curBiz, prevBiz] = await Promise.all([fetchBizRange(fFrom, fTo), fetchBizRange(pf, pt)]);
+        curRows = [...curAll, ...curBiz];
+        prevRows = [...prevAll, ...prevBiz];
+      }
+      const curMap = aggregate(curRows), prevMap = aggregate(prevRows);
       const list = [...curMap.entries()].map(([id, g]) => {
         const p = prevMap.get(id) || { qty:0, gross:0, net:0 };
         return {
@@ -310,9 +339,10 @@ export default function SalesSettlementPage() {
       // 판매수량 (구매이력 제외, 반품은 차감 → 매출정산과 동일한 순판매수량) — 당월분 / 당월말 이후분
       const salesM = {}, salesAfter = {};
       { let start = 0; while (true) {
-        const { data } = await supabase.from('sales').select('product_id, quantity, price, payment, sold_at').neq('payment', '구매이력').gte('sold_at', mStart).order('id').range(start, start + 999);
+        const { data } = await supabase.from('sales').select('product_id, quantity, price, payment, sold_at, store_name').neq('payment', '구매이력').gte('sold_at', mStart).order('id').range(start, start + 999);
         if (!data || !data.length) break;
         data.forEach(s => { if (!s.product_id) return;
+          if (isSpecialSalesStore(s.store_name)) return; // 특판은 매장재고 대상 아님 → 재고결산 제외
           const isReturn = s.payment === '반품' || (Number(s.price) < 0);
           const q = (Number(s.quantity) || 0) * (isReturn ? -1 : 1);
           if (s.sold_at <= endM) salesM[s.product_id] = (salesM[s.product_id] || 0) + q;
