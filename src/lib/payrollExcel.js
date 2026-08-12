@@ -24,17 +24,19 @@ const DOW_KR = ['일','월','화','수','목','금','토'];
 // 그날의 일자 컬럼 인덱스 (휴일근무수당금액 열 추가로 1칸 우측 이동: 1일 → U=21, ...)
 const dayCol = (day) => 20 + day;
 
-// 표시 정책: 휴점 × 휴무신청 × 출근 × 휴무일/공휴일
+// 표시 정책: 출근한 날은 무조건 근무일로 인정 (휴무신청·휴점과 겹쳐도 근무 우선)
+//  → 급여계산 화면(출근 기준)과 엑셀·매출결산 인건비가 항상 일치.
 export function calcDayCell({ isClosed, hasLeave, hasAtt, isHoliday, isFriSatSun, isManager }) {
-  // 매장 휴점일 — 출근 없으면 '휴점', 출근 있으면 '확인필요'
-  if (isClosed) return hasAtt ? '확인필요' : '휴점';
-  if (hasLeave && !hasAtt) return 'X';
-  if (hasLeave &&  hasAtt) return '확인필요';
-  if (!hasLeave && !hasAtt) return '확인필요';
-  // 출근만 (정상)
-  if (isHoliday) return isManager ? 'O' : 'O(휴근)';
-  if (isFriSatSun) return 'O(연장)';
-  return 'O';
+  // 출근 기록이 있으면 근무일 (공휴일=휴근, 금·토·일=연장, 그 외=정상)
+  if (hasAtt) {
+    if (isHoliday) return isManager ? 'O' : 'O(휴근)';
+    if (isFriSatSun) return 'O(연장)';
+    return 'O';
+  }
+  // 출근 없음
+  if (isClosed) return '휴점';            // 매장 휴점일
+  if (hasLeave) return 'X';               // 휴무신청 (미출근)
+  return '확인필요';                       // 미출근·미휴무 → 확인필요
 }
 
 // 매니저별 회원 가입 인센티브 계산 (기존 IncentivePage 로직 그대로)
