@@ -144,41 +144,18 @@ export default function CustomerLookupPage({ profile }) {
 
   const PAGE_SIZE = 200;
 
-  // 구매일 기준: 해당 기간에 구매한 회원 customer_id 수집 (구매이력 포함)
-  const collectPurchaserIds = useCallback(async (from, to) => {
-    const idSet = new Set(); let s = 0; const PG = 1000;
-    while (true) {
-      let sq = supabase.from('sales').select('customer_id').not('customer_id', 'is', null);
-      if (from) sq = sq.gte('sold_at', from);
-      if (to)   sq = sq.lte('sold_at', to);
-      const { data, error } = await sq.order('id').range(s, s + PG - 1);
-      if (error) throw error;
-      if (!data || !data.length) break;
-      data.forEach(r => { if (r.customer_id != null) idSet.add(r.customer_id); });
-      if (data.length < PG) break;
-      s += PG;
-    }
-    return [...idSet];
-  }, []);
-
   const fetchCustomers = useCallback(async (pg = 0, consentOverride) => {
     const consent = consentOverride !== undefined ? consentOverride : fConsent;
     setLoading(true);
     setPage(pg);
     setCheckedIds(new Set());
-    // 구매일 필터가 있으면 먼저 구매자 id를 뽑아 회원 조회에 반영
-    let purchaserIds = null;
-    if (pFrom || pTo) {
-      try { purchaserIds = await collectPurchaserIds(pFrom, pTo); }
-      catch (e) { toast(e.message || '구매일 조회 실패', 'err'); setLoading(false); return; }
-      if (purchaserIds.length === 0) {
-        setCustomers([]); setTotalCount(0); setSelected(null); setPurchases([]); setLoading(false); return;
-      }
-    }
+    // 구매일 필터: sales inner join으로 해당 기간 구매 회원만 (id 목록 대신 서버 조인 → URL 초과 방지)
+    const usePurchase = !!(pFrom || pTo);
     let q = supabase.from('customers')
-      .select('*', { count: 'exact' })
+      .select(usePurchase ? '*, sales!inner(id)' : '*', { count: 'exact' })
       .order('joined_at', { ascending: false });
-    if (purchaserIds) q = q.in('id', purchaserIds);
+    if (pFrom) q = q.gte('sales.sold_at', pFrom);
+    if (pTo)   q = q.lte('sales.sold_at', pTo);
     if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
     if (fStore)  q = q.eq('store_name', fStore);
     if (fBranch) q = q.eq('branch_name', fBranch);
@@ -204,7 +181,7 @@ export default function CustomerLookupPage({ profile }) {
     setTotalCount(count || 0);
     setSelected(null); setPurchases([]);
     setLoading(false);
-  }, [search, fStore, fBranch, fFrom, fTo, pFrom, pTo, fConsent, fNewOnly, fGrade, consentCutoffISO, collectPurchaserIds]);
+  }, [search, fStore, fBranch, fFrom, fTo, pFrom, pTo, fConsent, fNewOnly, fGrade, consentCutoffISO]);
 
   // 필터 조건 전체 SMS동의 회원 가져오기 (Supabase 1000행 제한 우회)
   const fetchAllSmsTargets = useCallback(async () => {
@@ -213,20 +190,16 @@ export default function CustomerLookupPage({ profile }) {
     let all = [];
     let from = 0;
 
-    // 구매일 필터 반영
-    let purchaserIds = null;
-    if (pFrom || pTo) {
-      try { purchaserIds = await collectPurchaserIds(pFrom, pTo); }
-      catch (e) { toast(e.message || '구매일 조회 실패', 'err'); setLoadingBulk(false); return; }
-      if (purchaserIds.length === 0) { setLoadingBulk(false); toast('구매일 조건에 해당하는 회원이 없습니다', 'inf'); return; }
-    }
+    // 구매일 필터: sales inner join (id 목록 대신 서버 조인)
+    const usePurchase = !!(pFrom || pTo);
 
     const buildQuery = () => {
       let q = supabase.from('customers')
-        .select('id, name, phone')
+        .select(usePurchase ? 'id, name, phone, sales!inner(id)' : 'id, name, phone')
         .eq('sms_consent', true)
         .order('joined_at', { ascending: false });
-      if (purchaserIds) q = q.in('id', purchaserIds);
+      if (pFrom) q = q.gte('sales.sold_at', pFrom);
+      if (pTo)   q = q.lte('sales.sold_at', pTo);
       if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
       if (fStore)  q = q.eq('store_name', fStore);
       if (fBranch) q = q.eq('branch_name', fBranch);
@@ -257,7 +230,7 @@ export default function CustomerLookupPage({ profile }) {
     if (!all.length) { toast('SMS동의 회원이 없습니다', 'inf'); return; }
     setBulkTargets(all);
     setSmsModal(true);
-  }, [search, fStore, fBranch, fFrom, fTo, pFrom, pTo, fGrade, fNewOnly, fConsent, consentCutoffISO, collectPurchaserIds]);
+  }, [search, fStore, fBranch, fFrom, fTo, pFrom, pTo, fGrade, fNewOnly, fConsent, consentCutoffISO]);
 
   // 점포 변경시 지점 초기화
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
