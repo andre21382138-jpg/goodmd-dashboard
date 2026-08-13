@@ -150,9 +150,10 @@ export default function CustomerLookupPage({ profile }) {
     setPage(pg);
     setCheckedIds(new Set());
     // 구매일 필터: sales inner join으로 해당 기간 구매 회원만 (id 목록 대신 서버 조인 → URL 초과 방지)
+    // 넓은 기간은 정확한 count가 느려 타임아웃 → 구매필터 시엔 추정치(estimated) 사용
     const usePurchase = !!(pFrom || pTo);
     let q = supabase.from('customers')
-      .select(usePurchase ? '*, sales!inner(id)' : '*', { count: 'exact' })
+      .select(usePurchase ? '*, sales!inner(id)' : '*', { count: usePurchase ? 'estimated' : 'exact' })
       .order('joined_at', { ascending: false });
     if (pFrom) q = q.gte('sales.sold_at', pFrom);
     if (pTo)   q = q.lte('sales.sold_at', pTo);
@@ -830,7 +831,7 @@ export default function CustomerLookupPage({ profile }) {
       {customers.length > 0 && (
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
-            <span className="fresult">총 <b>{totalCount.toLocaleString()}</b>명 · 이 페이지 <b>{customers.length}</b>명 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
+            <span className="fresult">총 {(pFrom||pTo) && '약 '}<b>{totalCount.toLocaleString()}</b>명 · 이 페이지 <b>{customers.length}</b>명 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
             <div style={{display:'flex', gap:8}}>
               {checkedIds.size > 0 && (
                 <button
