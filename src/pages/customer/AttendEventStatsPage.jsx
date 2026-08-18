@@ -128,7 +128,7 @@ export default function AttendEventStatsPage() {
             <table>
               <thead>
                 <tr>
-                  <th style={{ position: 'sticky', left: 0, background: 'var(--bg2, #fff)' }}>매장</th>
+                  <th>매장</th>
                   <th>지점</th>
                   {dates.map(d => (
                     <th key={d} className="r" style={{ whiteSpace: 'nowrap' }}>
