@@ -55,13 +55,31 @@ export default function StoreReturnsHQPage({ profile }) {
   const pendingCnt = visible.filter(r => r.status === 'pending').length;
 
   const confirmOne = async (r) => {
-    if (!window.confirm(`${r.store_name} ${r.branch_name}\n${r.product_name} ${r.quantity}개 (${REASON_LABEL[r.reason] || r.reason})\n\n확인 처리하시겠습니까?`)) return;
+    if (!window.confirm(`${r.store_name} ${r.branch_name}\n${r.product_name} ${r.quantity}개 (${REASON_LABEL[r.reason] || r.reason})\n\n확인 처리하고 매장재고에서 ${r.quantity}개 차감하시겠습니까?`)) return;
     setProcessing(r.id);
-    const { error } = await supabase.from('store_returns')
-      .update({ status: 'confirmed', confirmed_by: profile?.id || null, confirmed_at: new Date().toISOString() })
-      .eq('id', r.id);
-    if (error) toast(error.message, 'err');
-    else { toast('확인 처리 완료', 'ok'); fetchData(); }
+    try {
+      // 매장재고 차감
+      if (r.product_code) {
+        const { data: st } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name', r.store_name).eq('branch_name', r.branch_name).eq('product_code', r.product_code)
+          .maybeSingle();
+        if (st) {
+          await supabase.from('store_stock')
+            .update({ stock_qty: Math.max(0, (st.stock_qty || 0) - (r.quantity || 0)), updated_at: new Date().toISOString() })
+            .eq('id', st.id);
+        }
+      }
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase.from('store_returns')
+        .update({ status: 'completed', confirmed_by: profile?.id || null, confirmed_at: nowIso, completed_by: profile?.id || null, completed_at: nowIso })
+        .eq('id', r.id);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('확인 완료 — 매장재고에서 차감됐습니다', 'ok');
+      fetchData();
+    } catch (e) {
+      toast('확인 처리 실패: ' + (e.message || e), 'err');
+    }
     setProcessing(null);
   };
 
