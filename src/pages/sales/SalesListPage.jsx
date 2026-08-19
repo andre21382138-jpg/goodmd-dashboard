@@ -171,7 +171,7 @@ export default function SalesListPage({ setPage }) {
     setLoading(true);
     // 1000건 페이징으로 5000건까지 안전하게 가져옴 (truncated 표시는 cap 도달 시에만)
     const PAGE = 1000;
-    const CAP  = 10000; // 구매이력(과거 import분) 제외 후 앱 실판매 수용 (기존 5000→상향)
+    const CAP  = 50000; // 구매이력(과거 import분) 제외 후 앱 실판매 수용 (기존 10000→상향)
     let all = [], start = 0;
     let lastError = null;
     while (start < CAP) {
@@ -411,7 +411,7 @@ export default function SalesListPage({ setPage }) {
       (s.branch_name || '-') === drillStore.branch_name
     );
   }, [filtered, drillStore]);
-  const truncated     = sales.length >= 10000; // 페이징 cap 도달 시에만 경고
+  const truncated     = sales.length >= 50000; // 페이징 cap 도달 시에만 경고
 
   const drillRows = useMemo(() => {
     if (!drillProduct) return [];
@@ -655,12 +655,12 @@ export default function SalesListPage({ setPage }) {
             ) : viewMode === 'product' ? (
               <span className="fresult">
                 <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
-                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 10,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
+                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 50,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
               </span>
             ) : (
               <span className="fresult">
                 <b>{storeAgg.length.toLocaleString()}</b>개 매장 · <b>{storeTotalCount.toLocaleString()}</b>건 · <b>{storeTotalQty.toLocaleString()}</b>개 · <b>{storeTotalAmt.toLocaleString()}</b>원
-                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 10,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
+                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 50,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
               </span>
             )}
           </div>
