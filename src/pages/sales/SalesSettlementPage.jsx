@@ -79,7 +79,7 @@ export default function SalesSettlementPage() {
     const all = []; let start = 0; const PAGE = 1000;
     while (true) {
       let q = supabase.from('sales')
-        .select('product_id, quantity, price, payment, points_used, product:products(code, name, price, cost)')
+        .select('product_id, quantity, price, payment, product:products(code, name, price, cost)')
         .neq('payment', '구매이력')
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
@@ -136,7 +136,7 @@ export default function SalesSettlementPage() {
       const g = map.get(key);
       g.qty       += netQty;
       g.gross     += listPrice * netQty;
-      g.net       += unitPrice * q - (Number(r.points_used) || 0); // 실매출 = 결제액 − 적립금 사용
+      g.net       += unitPrice * q;
       g.costTotal += unitCost * netQty;
     }
     return map;
@@ -185,7 +185,7 @@ export default function SalesSettlementPage() {
     const all = []; let start = 0; const PAGE = 1000;
     while (true) {
       const { data, error } = await supabase.from('sales')
-        .select('store_name, branch_name, quantity, price, payment, points_used, product:products(cost)')
+        .select('store_name, branch_name, quantity, price, payment, product:products(cost)')
         .neq('payment', '구매이력')
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
@@ -245,7 +245,7 @@ export default function SalesSettlementPage() {
         const cost = Number(r.product?.cost) || 0;
         const isReturn = r.payment === '반품' || price < 0;
         const netQty = isReturn ? -q : q;
-        g.revenue += price * q - (Number(r.points_used) || 0);   // C 매출액 = 결제액 − 적립금 사용
+        g.revenue += price * q;                       // C 매출액 (반품 음수·증정/시식 0 자동)
         if (r.payment === '증정')      g.giftCost    += cost * q;   // I
         else if (r.payment === '시식') g.tastingCost += cost * q;   // J
         else                           g.soldCost    += cost * netQty; // H (반품은 음수로 차감)

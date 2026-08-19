@@ -38,7 +38,7 @@ export default function SalesViewHub({ setPage }) {
       let start = 0;
       while (true) {
         const { data, error } = await supabase.from('sales')
-          .select('sold_at, store_name, branch_name, price, quantity, payment, points_used')
+          .select('sold_at, store_name, branch_name, price, quantity, payment')
           .neq('payment', '구매이력')
           .gte('sold_at', appliedFrom).lte('sold_at', appliedTo)
           .range(start, start + PAGE - 1);
@@ -110,13 +110,13 @@ export default function SalesViewHub({ setPage }) {
   // 강좌매출(신규) = 판매입력에서 결제 '강좌매출'로 잡힌 sales
   const lectureSalesTotal = useMemo(() => storeRows
     .filter(r => r.payment === '강좌매출')
-    .reduce((s, r) => s + Math.round((Number(r.price)||0) * (Number(r.quantity)||0) - (Number(r.points_used)||0)), 0), [storeRows]);
+    .reduce((s, r) => s + Math.round((Number(r.price)||0) * (Number(r.quantity)||0)), 0), [storeRows]);
 
   const storeGroups   = useMemo(() => groupBy(
     realStoreRows,
     r => `${r.store_name||''}|${r.branch_name||''}`,
     r => `${r.store_name||''} ${r.branch_name||''}`.trim(),
-    r => (Number(r.price)||0) * (Number(r.quantity)||0) - (Number(r.points_used)||0)
+    r => (Number(r.price)||0) * (Number(r.quantity)||0)
   ), [realStoreRows]);
 
   // 특판매출 = biz_sales(B2B 거래처) + 특판 sales(지점별)
@@ -130,7 +130,7 @@ export default function SalesViewHub({ setPage }) {
     specialSalesRows,
     r => `특판|${r.branch_name || r.store_name || '미지정'}`,
     r => r.branch_name || r.store_name || '(미지정)',
-    r => (Number(r.price)||0) * (Number(r.quantity)||0) - (Number(r.points_used)||0)
+    r => (Number(r.price)||0) * (Number(r.quantity)||0)
   ), [specialSalesRows]);
   const bizGroups = useMemo(
     () => [...bizSalesGroups, ...specialSalesGroups].sort((a,b) => b.total - a.total),

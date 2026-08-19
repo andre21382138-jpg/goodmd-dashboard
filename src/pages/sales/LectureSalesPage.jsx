@@ -61,7 +61,7 @@ export default function LectureSalesPage({ profile, setPage }) {
     const to = `${fMonth}-${pad(lastDay)}`;
     // 신규 강좌매출: 판매입력에서 결제 '강좌매출'로 등록된 sales
     let sq = supabase.from('sales')
-      .select('id, sold_at, store_name, branch_name, quantity, price, points_used, memo, created_at, product:products(name), brand:brands(name), seller:profiles(name)')
+      .select('id, sold_at, store_name, branch_name, quantity, price, memo, created_at, product:products(name), brand:brands(name), seller:profiles(name)')
       .eq('payment', '강좌매출')
       .gte('sold_at', from).lte('sold_at', to);
     if (fStore)  sq = sq.eq('store_name',  fStore);
@@ -74,7 +74,7 @@ export default function LectureSalesPage({ profile, setPage }) {
     if (fBranch) lq = lq.eq('branch_name', fBranch);
     const [{ data: sRows }, { data: lRows }] = await Promise.all([sq, lq]);
     const merged = [
-      ...(sRows || []).map(r => ({ ...r, amount: (Number(r.price)||0) * (Number(r.quantity)||0) - (Number(r.points_used)||0) })),
+      ...(sRows || []).map(r => ({ ...r, amount: (Number(r.price)||0) * (Number(r.quantity)||0) })),
       ...(lRows || []).map(r => ({ ...r, amount: Number(r.price)||0 })),
     ].sort((a, b) => String(b.sold_at).localeCompare(String(a.sold_at)));
     setSales(merged);
