@@ -245,7 +245,7 @@ export default function MgrSalesViewPage({ profile }) {
     for (const g of txnGroups) {
       const d = g.date;
       const gQty = g.rows.reduce((s, r) => s + r._eff, 0);
-      const gAmt = g.rows.reduce((s, r) => s + Math.round(r.price * r._eff), 0);
+      const gAmt = g.rows.reduce((s, r) => s + Math.round(r.price * r._eff - (Number(r.points_used)||0)), 0);
       if (!dMap.has(d)) dMap.set(d, { date: d, count: 0, qty: 0, amt: 0 });
       const e = dMap.get(d);
       e.count++; e.qty += gQty; e.amt += gAmt;
@@ -254,7 +254,7 @@ export default function MgrSalesViewPage({ profile }) {
       totC++; totQ += gQty; totA += gAmt;
       // 택배는 라인 단위(트랜잭션 일부만 택배일 수도 있음)
       for (const r of g.rows) {
-        if (r.delivery_requested) { delC++; delA += Math.round(r.price * r._eff); }
+        if (r.delivery_requested) { delC++; delA += Math.round(r.price * r._eff - (Number(r.points_used)||0)); }
       }
     }
     const list = [...dMap.values()].sort((a,b) => b.date.localeCompare(a.date));
@@ -425,7 +425,7 @@ export default function MgrSalesViewPage({ profile }) {
                                   const allFully = false; // 새 정책: 반품은 별도 음수 row, 원본은 그대로
                                   const isAllReturnEntries = g.rows.every(x => (Number(x.price)||0) < 0 || x.payment === '반품');
                                   const gQty = g.rows.reduce((s, x) => s + x._eff, 0);
-                                  const gAmt = g.rows.reduce((s, x) => s + Math.round(x.price * x._eff), 0);
+                                  const gAmt = g.rows.reduce((s, x) => s + Math.round(x.price * x._eff - (Number(x.points_used)||0)), 0);
                                   const gPts = g.rows.reduce((s, x) => s + (Number(x.points_used)||0), 0);
                                   const hasRejected = g.rows.some(x => x.delivery_type === 'hq' && x.delivery_status === 'rejected');
                                   const rejectReason = g.rows.find(x => x.delivery_status === 'rejected' && x.delivery_reject_reason)?.delivery_reject_reason;

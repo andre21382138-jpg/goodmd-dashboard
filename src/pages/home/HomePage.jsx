@@ -82,7 +82,9 @@ export default function HomePage({ profile, setPage }) {
       // 1. 매장 매출
       const selectCols = isManager
         ? '*, brand:brands(name), product:products(name,code), customer:customers(name,phone)'
-        : 'store_name, branch_name, quantity, price, returned_qty, payment';
+        : 'store_name, branch_name, quantity, price, returned_qty, payment, points_used';
+      // 매출액 = 판매가×실효수량 − 적립금 사용액 (실결제액 기준)
+      const rev = (r) => Math.round((r.price || 0) * r._eff - (Number(r.points_used) || 0));
       const storeData = await pageAll((start) => {
         let q = supabase.from('sales')
           .select(selectCols)
@@ -106,10 +108,10 @@ export default function HomePage({ profile, setPage }) {
         const key = `${r.store_name}|||${r.branch_name}`;
         if (!sMap.has(key)) sMap.set(key, {store:r.store_name, branch:r.branch_name, count:0, qty:0, amt:0});
         const e = sMap.get(key);
-        e.count++; e.qty += r._eff; e.amt += Math.round(r.price * r._eff);
+        e.count++; e.qty += r._eff; e.amt += rev(r);
       }
       setStoreSummary({
-        amt:   storeAggRows.reduce((s,r)=>s+Math.round(r.price*r._eff), 0),
+        amt:   storeAggRows.reduce((s,r)=>s+rev(r), 0),
         count: storeAggRows.filter(r => r._eff > 0).length,
         qty:   storeAggRows.reduce((s,r)=>s+r._eff, 0),
       });
@@ -124,7 +126,7 @@ export default function HomePage({ profile, setPage }) {
           const d = r.sold_at;
           if (!dMap.has(d)) dMap.set(d, { date: d, count: 0, qty: 0, amt: 0 });
           const e = dMap.get(d);
-          e.count++; e.qty += r._eff; e.amt += Math.round(r.price * r._eff);
+          e.count++; e.qty += r._eff; e.amt += rev(r);
           if (!dDetails[d]) dDetails[d] = [];
           dDetails[d].push(r);
         }
@@ -147,7 +149,7 @@ export default function HomePage({ profile, setPage }) {
             });
           }
           const { data: prev3Data } = await supabase.from('sales')
-            .select('sold_at, quantity, price, returned_qty')
+            .select('sold_at, quantity, price, returned_qty, points_used')
             .neq('payment', '구매이력')
             .eq('store_name', profile.department).eq('branch_name', profile.branch)
             .gte('sold_at', months[0].start).lte('sold_at', months[months.length-1].end);
@@ -156,7 +158,7 @@ export default function HomePage({ profile, setPage }) {
             const key = (r.sold_at || '').slice(0, 7);
             if (!monthAmt.has(key)) continue;
             const eff = Math.max(0, (r.quantity||0) - (r.returned_qty||0));
-            monthAmt.set(key, monthAmt.get(key) + Math.round((r.price||0) * eff));
+            monthAmt.set(key, monthAmt.get(key) + Math.round((r.price||0) * eff - (Number(r.points_used)||0)));
           }
           setPrevMonthsSales(months.map(m => ({ label: m.label, amt: monthAmt.get(m.key) || 0 })));
         }
@@ -169,7 +171,7 @@ export default function HomePage({ profile, setPage }) {
           .gte('sold_at', monthStart).lte('sold_at', rangeEndStr);
         const lRows = [
           ...sRows.filter(r => r.payment === '강좌매출')
-            .map(r => ({ store_name:r.store_name, branch_name:r.branch_name, qty:r._eff, amt:Math.round((r.price||0)*(r._eff||0)) })),
+            .map(r => ({ store_name:r.store_name, branch_name:r.branch_name, qty:r._eff, amt:Math.round((r.price||0)*(r._eff||0) - (Number(r.points_used)||0)) })),
           ...(legacyLect || [])
             .map(r => ({ store_name:r.store_name, branch_name:r.branch_name, qty:(r.quantity||0), amt:Math.round((r.price||0)*(r.quantity||0)) })),
         ];
@@ -206,7 +208,7 @@ export default function HomePage({ profile, setPage }) {
 
         // 4. 전월 동일기간 통합 매출
         const [prevSales, { data: prevLecture }, { data: prevBiz }] = await Promise.all([
-          pageAll((start) => supabase.from('sales').select('store_name, branch_name, quantity, price, returned_qty, payment')
+          pageAll((start) => supabase.from('sales').select('store_name, branch_name, quantity, price, returned_qty, payment, points_used')
             .neq('payment', '구매이력')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd)
             .order('id').range(start, start + 999)),
@@ -215,7 +217,7 @@ export default function HomePage({ profile, setPage }) {
           supabase.from('biz_sales').select('quantity, supply_price')
             .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd),
         ]);
-        const prevStore   = (prevSales   ||[]).reduce((s,r)=>s+Math.round(r.price*Math.max(0,(r.quantity||0)-(r.returned_qty||0))), 0);
+        const prevStore   = (prevSales   ||[]).reduce((s,r)=>s+Math.round(r.price*Math.max(0,(r.quantity||0)-(r.returned_qty||0)) - (Number(r.points_used)||0)), 0);
         const prevLect    = (prevLecture ||[]).reduce((s,r)=>s+Math.round(r.price*r.quantity), 0);
         const prevBizAmt  = (prevBiz     ||[]).reduce((s,r)=>s+Math.round(r.supply_price*r.quantity), 0);
         setPrevTotalAmt(prevStore + prevLect + prevBizAmt);
@@ -229,7 +231,7 @@ export default function HomePage({ profile, setPage }) {
           const key = `${r.store_name}|||${r.branch_name}`;
           if (!pMap[key]) pMap[key] = { count:0, qty:0, amt:0 };
           const e = pMap[key];
-          e.count++; e.qty += eff; e.amt += Math.round((r.price||0) * eff);
+          e.count++; e.qty += eff; e.amt += Math.round((r.price||0) * eff - (Number(r.points_used)||0));
         }
         setPrevStoreMap(pMap);
       }

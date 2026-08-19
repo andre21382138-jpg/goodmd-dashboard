@@ -79,7 +79,7 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
   // 5) 데이터 행 (행 높이/배경 미지정, Gulim 9 / Arial 10)
   rows.forEach((s, i) => {
     const effQty = Math.max(0, (s.quantity || 0) - (s.returned_qty || 0));
-    const finalAmount = effQty * (Number(s.price) || 0);
+    const finalAmount = effQty * (Number(s.price) || 0) - (Number(s.points_used) || 0);
     const cost = (s.product && s.product.cost != null) ? Number(s.product.cost) : null;
     const finalCost = cost != null ? cost * effQty : null;
     const ratio = (cost != null && finalAmount > 0) ? (finalCost / finalAmount) : null;
@@ -254,8 +254,9 @@ export default function SalesListPage({ setPage }) {
   };
 
   // 실효 수량/금액 — 반품은 별도 음수 매출 row로 처리되므로 returned_qty는 무시
+  // 매출액 = 판매가 합 − 적립금 사용액 (실결제액 기준)
   const effQty = (s) => (s.quantity || 0);
-  const effAmt = (s) => (s.quantity || 0) * (s.price || 0);
+  const effAmt = (s) => (s.quantity || 0) * (s.price || 0) - (Number(s.points_used) || 0);
   // 반품 row 식별 (price < 0 또는 payment='반품')
   const isReturnEntry = (s) => (Number(s.price) || 0) < 0 || s.payment === '반품';
   // 이전 호환 — 이제 사용 안 함 (음수 매출 정책)
