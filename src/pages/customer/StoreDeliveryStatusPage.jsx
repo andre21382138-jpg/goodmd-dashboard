@@ -14,7 +14,7 @@ export default function StoreDeliveryStatusPage({ profile }) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   };
 
-  const [tab, setTab] = useState('pending'); // 'pending' | 'dispatched'
+  const [tab, setTab] = useState('pending'); // 'pending' | 'dispatched' | 'rejected'
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fFrom, setFFrom] = useState(minusDays(30));
@@ -23,7 +23,7 @@ export default function StoreDeliveryStatusPage({ profile }) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     let q = supabase.from('sales')
-      .select('id, sold_at, recipient_name, recipient_phone, recipient_address, delivery_notes, delivery_type, delivery_status, dispatched_at, tracking_number, quantity, price, memo, brand:brands(name), product:products(name, code)')
+      .select('id, sold_at, recipient_name, recipient_phone, recipient_address, delivery_notes, delivery_type, delivery_status, delivery_reject_reason, dispatched_at, tracking_number, quantity, price, memo, brand:brands(name), product:products(name, code)')
       .eq('store_name',  profile.department)
       .eq('branch_name', profile.branch)
       .eq('delivery_type', 'hq');
@@ -31,6 +31,11 @@ export default function StoreDeliveryStatusPage({ profile }) {
     if (tab === 'pending') {
       // 발송 대기 — 미발송(null 또는 pending). dispatched/rejected 제외
       q = q.or('delivery_status.is.null,delivery_status.eq.pending')
+        .order('sold_at', { ascending: false })
+        .limit(300);
+    } else if (tab === 'rejected') {
+      // 반려됨 — 본사/SCM이 발송불가 처리한 건 (사유 포함)
+      q = q.eq('delivery_status', 'rejected')
         .order('sold_at', { ascending: false })
         .limit(300);
     } else {
@@ -61,6 +66,7 @@ export default function StoreDeliveryStatusPage({ profile }) {
         recipient_address: r.recipient_address,
         delivery_notes: r.delivery_notes,
         delivery_status: r.delivery_status,
+        delivery_reject_reason: r.delivery_reject_reason,
         dispatched_at: r.dispatched_at,
         tracking_number: r.tracking_number,
         items: [],
@@ -88,6 +94,9 @@ export default function StoreDeliveryStatusPage({ profile }) {
         <button className={`tab ${tab==='dispatched'?'on':''}`} onClick={() => setTab('dispatched')}>
           ✅ 발송 완료
         </button>
+        <button className={`tab ${tab==='rejected'?'on':''}`} onClick={() => setTab('rejected')}>
+          ⛔ 반려됨
+        </button>
       </div>
 
       <div className="card" style={{padding:'16px 20px'}}>
@@ -103,10 +112,17 @@ export default function StoreDeliveryStatusPage({ profile }) {
           </div>
         )}
 
+        {tab === 'rejected' && (
+          <div style={{background:'#ffebee', border:'1px solid #ef9a9a', borderRadius:'var(--radius)', padding:'10px 14px', marginBottom:12, fontSize:12, color:'#c62828', lineHeight:1.6}}>
+            ⛔ 본사/SCM에서 <strong>발송 불가(반려)</strong> 처리한 건입니다. 사유를 확인하고, <strong>판매조회</strong>에서 '매장발송'으로 전환하거나 재요청해주세요.
+          </div>
+        )}
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
           <span className="fresult">
             {tab === 'pending'
               ? <>발송 대기 — <b>{groups.length}</b>건 (라인 {rows.length}개)</>
+              : tab === 'rejected'
+              ? <>반려됨 — <b style={{color:'var(--danger)'}}>{groups.length}</b>건 (라인 {rows.length}개)</>
               : <>발송 완료 — <b>{groups.length}</b>건 (라인 {rows.length}개) <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>{fFrom} ~ {fTo}</span></>}
           </span>
           <button className="btn btn-s" onClick={fetchData} disabled={loading}>
@@ -116,7 +132,9 @@ export default function StoreDeliveryStatusPage({ profile }) {
 
         {loading ? <div className="empty"><span className="spinner"/></div>
         : rows.length === 0 ? <div className="empty">
-            {tab === 'pending' ? '발송 대기 중인 본사 택배가 없습니다' : '해당 기간 발송 완료된 본사 택배가 없습니다'}
+            {tab === 'pending' ? '발송 대기 중인 본사 택배가 없습니다'
+              : tab === 'rejected' ? '반려된 본사 택배가 없습니다'
+              : '해당 기간 발송 완료된 본사 택배가 없습니다'}
           </div>
         : (
           <div className="twrap">
@@ -135,6 +153,7 @@ export default function StoreDeliveryStatusPage({ profile }) {
                       <th style={{textAlign:'center', minWidth:160}}>송장번호</th>
                     </>
                   )}
+                  {tab === 'rejected' && <th style={{minWidth:180}}>반려 사유</th>}
                 </tr>
               </thead>
               <tbody>
@@ -151,6 +170,12 @@ export default function StoreDeliveryStatusPage({ profile }) {
                     <td className="mono" style={{fontSize:11, color:'var(--text2)'}}>{g.recipient_phone || '-'}</td>
                     <td style={{fontSize:12}}>{productSummary}</td>
                     <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{totalQty}</td>
+                    {tab === 'rejected' && (
+                      <td style={{fontSize:12}}>
+                        <span style={{display:'inline-block', padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:700, background:'#ffebee', color:'var(--danger)', border:'1px solid #ef9a9a', marginRight:6}}>⛔ 반려</span>
+                        <span style={{color:'var(--text2)'}}>{g.delivery_reject_reason || '사유 미기재'}</span>
+                      </td>
+                    )}
                     {tab === 'dispatched' && (
                       <>
                         <td className="mono" style={{fontSize:11, whiteSpace:'nowrap'}}>

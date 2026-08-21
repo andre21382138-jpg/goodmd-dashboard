@@ -65,6 +65,19 @@ export default function NotificationCenter({ profile, setPage }) {
           page:'stock_request',
         });
       }
+      // 1-2. 고객택배 반려 — 본사/SCM이 발송불가 처리한 건
+      const { count: rejCnt } = await supabase.from('sales')
+        .select('id', { count: 'exact', head: true })
+        .eq('store_name', profile.department).eq('branch_name', profile.branch)
+        .eq('delivery_type', 'hq').eq('delivery_status', 'rejected');
+      if (rejCnt && rejCnt > 0) {
+        list.push({
+          key: `hq_delivery_rejected_${rejCnt}`, color:'red', icon:'⛔',
+          title:`고객택배 반려 ${rejCnt}건`,
+          msg:'본사/SCM에서 발송 불가 처리 — 고객택배에서 사유 확인 후 처리해주세요',
+          page:'store_delivery_status',
+        });
+      }
       // 2. 입고 확인 대기
       const { data: recv } = await supabase.from('purchase_orders')
         .select('id')
