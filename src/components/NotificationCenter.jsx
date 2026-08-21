@@ -282,10 +282,10 @@ export default function NotificationCenter({ profile, setPage }) {
           const c = COLOR[n.color] || COLOR.blue;
           return (
             <div key={n.key} className="notif-card"
-              style={{background:'#fff', borderRadius:8, boxShadow:'0 8px 24px rgba(0,0,0,0.18)', borderLeft:`4px solid ${c.border}`, padding:'12px 14px'}}>
+              style={{background: c.light, borderRadius:10, boxShadow:`0 10px 30px rgba(0,0,0,0.28), 0 0 0 1px ${c.border}33`, border:`2px solid ${c.border}`, borderLeft:`7px solid ${c.border}`, padding:'12px 14px'}}>
               <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
                 <span style={{fontSize:15}}>{n.icon}</span>
-                <strong style={{fontSize:13, flex:1, color:'var(--text)'}}>{n.title}</strong>
+                <strong style={{fontSize:13, flex:1, color:c.border}}>{n.title}</strong>
                 <button onClick={() => handleClose(n)} aria-label="닫기"
                   style={{background:'none', border:'none', cursor:'pointer', color:'#999', fontSize:16, lineHeight:1, padding:0}}>✕</button>
               </div>
