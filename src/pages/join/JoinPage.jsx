@@ -13,6 +13,8 @@ export default function JoinPage({ managerId }) {
   const [name,         setName]        = useState('');
   const [phone,        setPhone]       = useState('');
   const [birthday,     setBirthday]    = useState('');
+  const [annMonth,     setAnnMonth]    = useState('');
+  const [annDay,       setAnnDay]      = useState('');
   const [gender,       setGender]      = useState('');
   const [referrerPhone, setReferrerPhone] = useState('');
   const [smsConsent,   setSmsConsent]  = useState(false);
@@ -65,6 +67,7 @@ export default function JoinPage({ managerId }) {
     const { error } = await supabase.from('customers').insert({
       joined_at: joinedDate,
       name: name.trim(), phone, birthday: birthday || null, gender: gender || null,
+      anniversary: (annMonth && annDay) ? `${String(annMonth).padStart(2,'0')}-${String(annDay).padStart(2,'0')}` : null,
       store_name: storeProfile.department, branch_name: storeProfile.branch,
       manager_name: selMember.name,
       sms_consent: smsConsent,
@@ -185,6 +188,23 @@ export default function JoinPage({ managerId }) {
               </label>
               <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
                 style={{width:'100%',maxWidth:'100%',height:50,padding:'0 40px 0 12px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:14,outline:'none',fontFamily:'inherit',boxSizing:'border-box',color: birthday ? '#222' : '#aaa',display:'block',WebkitAppearance:'none',appearance:'none'}}/>
+            </div>
+            <div style={{marginBottom:24}}>
+              <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>
+                기념일 <span style={{fontSize:11,fontWeight:400,color:'#999'}}>(선택 — 월/일만)</span>
+              </label>
+              <div style={{display:'flex', gap:10}}>
+                <select value={annMonth} onChange={e => setAnnMonth(e.target.value)}
+                  style={{flex:1,height:50,padding:'0 12px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:15,outline:'none',fontFamily:'inherit',boxSizing:'border-box',background:'#fff',color: annMonth ? '#222' : '#aaa'}}>
+                  <option value="">월</option>
+                  {Array.from({length:12},(_,i)=>i+1).map(m => <option key={m} value={m}>{m}월</option>)}
+                </select>
+                <select value={annDay} onChange={e => setAnnDay(e.target.value)}
+                  style={{flex:1,height:50,padding:'0 12px',border:'1.5px solid #e0e0e0',borderRadius:10,fontSize:15,outline:'none',fontFamily:'inherit',boxSizing:'border-box',background:'#fff',color: annDay ? '#222' : '#aaa'}}>
+                  <option value="">일</option>
+                  {Array.from({length:31},(_,i)=>i+1).map(d => <option key={d} value={d}>{d}일</option>)}
+                </select>
+              </div>
             </div>
             <div style={{marginBottom:24}}>
               <label style={{display:'block',fontSize:13,fontWeight:700,color:'#444',marginBottom:8}}>

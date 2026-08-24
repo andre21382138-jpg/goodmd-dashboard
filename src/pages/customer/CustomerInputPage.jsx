@@ -8,6 +8,8 @@ export default function CustomerInputPage({ profile }) {
   const [custName,    setCustName]    = useState('');
   const [phone,       setPhone]       = useState('');
   const [birthday,    setBirthday]    = useState('');
+  const [annMonth,    setAnnMonth]    = useState('');
+  const [annDay,      setAnnDay]      = useState('');
   const [referrerPhone, setReferrerPhone] = useState('');
   const [managerName, setManagerName] = useState('');
   const [smsConsent,  setSmsConsent]  = useState(false);
@@ -36,6 +38,7 @@ export default function CustomerInputPage({ profile }) {
       name: custName.trim(),
       phone: phone,
       birthday: birthday || null,
+      anniversary: (annMonth && annDay) ? `${String(annMonth).padStart(2,'0')}-${String(annDay).padStart(2,'0')}` : null,
       store_name: profile.department,
       branch_name: profile.branch,
       manager_name: managerName.trim() || null,
@@ -46,7 +49,7 @@ export default function CustomerInputPage({ profile }) {
       total_points: joinedAt >= '2026-08-01' ? 3000 : 0,  // 신규가입 3,000원 적립
     });
     if (error) { toast('저장 실패: ' + error.message, 'err'); }
-    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); setReferrerPhone(''); setManagerName(''); setSmsConsent(false); fetchRecent(); }
+    else { toast('회원 등록 완료', 'ok'); setCustName(''); setPhone(''); setBirthday(''); setAnnMonth(''); setAnnDay(''); setReferrerPhone(''); setManagerName(''); setSmsConsent(false); fetchRecent(); }
     setSaving(false);
   };
 
@@ -100,6 +103,19 @@ export default function CustomerInputPage({ profile }) {
               <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
                 style={inputStyle} />
             </div>
+            <div>
+              <label style={labelStyle}>기념일 <span style={{color:'var(--text3)',fontWeight:400}}>(선택 · 월/일)</span></label>
+              <div style={{ display:'flex', gap:8 }}>
+                <select value={annMonth} onChange={e => setAnnMonth(e.target.value)} style={{ ...inputStyle, flex:1 }}>
+                  <option value="">월</option>
+                  {Array.from({length:12},(_,i)=>i+1).map(m => <option key={m} value={m}>{m}월</option>)}
+                </select>
+                <select value={annDay} onChange={e => setAnnDay(e.target.value)} style={{ ...inputStyle, flex:1 }}>
+                  <option value="">일</option>
+                  {Array.from({length:31},(_,i)=>i+1).map(d => <option key={d} value={d}>{d}일</option>)}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* SMS 수신동의 */}
@@ -136,17 +152,18 @@ export default function CustomerInputPage({ profile }) {
         <div className="twrap">
           <table>
             <thead>
-              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>생일</th><th>담당 매니저</th><th>SMS동의</th><th>입력일시</th><th></th></tr>
+              <tr><th>가입일</th><th>이름</th><th>연락처</th><th>생일</th><th>기념일</th><th>담당 매니저</th><th>SMS동의</th><th>입력일시</th><th></th></tr>
             </thead>
             <tbody>
               {recentList.length === 0
-                ? <tr><td colSpan={7} className="empty">입력된 고객이 없습니다</td></tr>
+                ? <tr><td colSpan={9} className="empty">입력된 고객이 없습니다</td></tr>
                 : recentList.map(c => (
                   <tr key={c.id}>
                     <td className="mono">{c.joined_at}</td>
                     <td><strong>{c.name}</strong></td>
                     <td className="mono">{c.phone}</td>
                     <td className="mono" style={{fontSize:11}}>{c.birthday || '-'}</td>
+                    <td className="mono" style={{fontSize:11}}>{c.anniversary || '-'}</td>
                     <td style={{fontSize:12,color:'var(--accent)',fontWeight:600}}>{c.manager_name || '-'}</td>
                     <td>
                       {c.sms_consent
