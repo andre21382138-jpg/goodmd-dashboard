@@ -11,7 +11,11 @@ function encodeEucKr(str) {
   const buf = iconv.encode(str, 'EUC-KR');
   let encoded = '';
   for (const byte of buf) {
-    encoded += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
+    // 문자나라(encode=1)가 메시지를 한 번 더 urldecode → 웹서버 자동 디코딩과 합쳐 '이중 디코딩'.
+    // '+'(0x2B)는 2차 디코딩에서 공백으로, '%'(0x25)는 뒤 바이트를 깨뜨리므로 이중 인코딩으로 보존.
+    if (byte === 0x2B)      encoded += '%252B';   // '+' 보존
+    else if (byte === 0x25) encoded += '%2525';   // '%' 보존
+    else encoded += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
   }
   return encoded;
 }

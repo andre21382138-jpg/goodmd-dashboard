@@ -10,7 +10,12 @@ const BATCH = 50;
 function encodeEucKr(str) {
   const buf = iconv.encode(str, 'EUC-KR');
   let encoded = '';
-  for (const byte of buf) encoded += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
+  for (const byte of buf) {
+    // 문자나라(encode=1) 이중 디코딩 대응 — '+'는 공백, '%'는 깨짐 → 이중 인코딩으로 보존
+    if (byte === 0x2B)      encoded += '%252B';
+    else if (byte === 0x25) encoded += '%2525';
+    else encoded += '%' + byte.toString(16).toUpperCase().padStart(2, '0');
+  }
   return encoded;
 }
 
