@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, uniq, dlBlob } from '../../lib/utils';
-import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
+import { STORE_MAP, RETAIL_STORES } from '../../lib/constants';
 import SalesTabNav from './SalesTabNav';
 
 async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }) {
@@ -15,6 +15,7 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
       .order('sold_at', { ascending: true })
       .order('id',      { ascending: true });
     if (fStores && fStores.length > 0) q = q.in('store_name', fStores);
+    else q = q.in('store_name', RETAIL_STORES);   // 특판 제외 (정식 매장만)
     if (fBranch) q = q.eq('branch_name', fBranch);
     if (fBrand)  q = q.eq('brand_id', fBrand);
     if (fFrom)   q = q.gte('sold_at', fFrom);
@@ -180,7 +181,9 @@ export default function SalesListPage({ setPage }) {
         .neq('payment', '구매이력')
         .order('sold_at', { ascending: false })
         .order('id',      { ascending: false });
+      // 특판(store_name='특판' 등 비-정식매장)은 매장매출에서 제외 → 정식 매장만
       if (appliedStores && appliedStores.length > 0) q = q.in('store_name', appliedStores);
+      else q = q.in('store_name', RETAIL_STORES);
       if (appliedBranch) q = q.eq('branch_name', appliedBranch);
       if (fBrand)        q = q.eq('brand_id', fBrand);
       if (appliedFrom)   q = q.gte('sold_at', appliedFrom);
@@ -202,8 +205,8 @@ export default function SalesListPage({ setPage }) {
   const [brands, setBrands] = useState([]);
   useEffect(() => { supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || [])); }, []);
 
-  // 점포 전체 목록 — sales에서 추출하지 않고 상수 사용 (필터되어도 점포 목록은 그대로 보임)
-  const stores = STORE_NAMES;
+  // 점포 전체 목록 — 매장매출은 정식 매장만 (특판 제외)
+  const stores = RETAIL_STORES;
   // 점포 선택 시 그 점포(들)에 속한 지점만, 미선택이면 전체 지점
   // 사용자가 드롭다운에서 점포를 선택하면 [조회] 누르기 전에도 즉시 지점 옵션이 갱신되도록 fStores 기반
   const branches = useMemo(() => {
@@ -214,7 +217,7 @@ export default function SalesListPage({ setPage }) {
       }
       return uniq(list);
     }
-    return uniq(STORE_NAMES.flatMap(s => STORE_MAP[s] || []));
+    return uniq(RETAIL_STORES.flatMap(s => STORE_MAP[s] || []));
   }, [fStores]);
 
   // 점포 선택이 바뀌면 임시 지점도 그 범위 내가 아니면 비움
