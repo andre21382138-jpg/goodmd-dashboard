@@ -71,7 +71,21 @@ export default function MgrSalesViewPage({ profile }) {
         : { quantity: qty, price };
       const { error } = await supabase.from('sales').update(patch).eq('id', it.id);
       if (error) throw error;
-      toast('수정 완료', 'ok');
+      // 재고 반영 — 수량 변화(old−new)만큼 store_stock 조정 (판매 시 차감과 동일 조건)
+      const oldQty = Number(it.quantity) || 0;
+      const code = it.product?.code || it.product_code;
+      if (qty !== oldQty && code && it.delivery_type !== 'hq' && it.payment !== '강좌매출') {
+        const { data: stockRow } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name', it.store_name).eq('branch_name', it.branch_name).eq('product_code', code)
+          .maybeSingle();
+        if (stockRow) {
+          await supabase.from('store_stock')
+            .update({ stock_qty: (stockRow.stock_qty || 0) + (oldQty - qty), updated_at: new Date().toISOString() })
+            .eq('id', stockRow.id);
+        }
+      }
+      toast(qty !== oldQty ? '수정 완료 — 재고 반영됨' : '수정 완료', 'ok');
       cancelEditLine();
       fetchSales();
     } catch (err) {
@@ -651,12 +665,12 @@ export default function MgrSalesViewPage({ profile }) {
               )}
               <div style={{padding:'10px 12px', background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:6, fontSize:11, color:'#6d4c41', marginBottom:14}}>
                 {isHQ
-                  ? '⚠️ 합계 = 수량 × 단가. 반품 음수 매출은 단가에 음수 입력. 회원 적립금/누적구매는 자동 보정되지 않으므로 필요 시 별도 조정.'
+                  ? '⚠️ 합계 = 수량 × 단가. 반품 음수 매출은 단가에 음수 입력. 수량 변경분은 매장 재고에 자동 반영됩니다. 회원 적립금/누적구매는 자동 보정되지 않으므로 필요 시 별도 조정.'
                   : (() => {
                       const q = Number(editDraft.quantity) || 0;
                       const t = Number(parseNumInput(editDraft.total)) || 0;
                       const unit = q !== 0 ? Math.round((t / q) * 100) / 100 : 0;
-                      return `⚠️ 수량·합계를 수정합니다. 단가 = 합계 ÷ 수량 = ${unit.toLocaleString()}원으로 자동 계산됩니다. 회원 적립금/누적구매는 자동 보정되지 않을 수 있습니다.`;
+                      return `⚠️ 수량·합계를 수정합니다. 단가 = 합계 ÷ 수량 = ${unit.toLocaleString()}원으로 자동 계산됩니다. 수량 변경분은 매장 재고에 자동 반영됩니다. 회원 적립금/누적구매는 자동 보정되지 않을 수 있습니다.`;
                     })()}
               </div>
               <div style={{display:'flex', gap:8}}>
