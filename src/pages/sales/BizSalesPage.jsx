@@ -123,8 +123,14 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
       delivery_method: null,
       memo: null,
     }));
-    if (isSp) spRows = spRows.filter(r => r.company_name === fCompany.slice(3));
-    else if (fCompany) spRows = []; // 특정 B2B 업체 선택 시 특판 sales 제외
+    if (isSp) {
+      spRows = spRows.filter(r => r.company_name === fCompany.slice(3));
+    } else if (fCompany) {
+      // 특정 B2B 업체 선택 — 같은 이름의 특판(매장 판매입력) 매출도 함께 포함
+      // (국군복지단·중소기업명품마루대구점처럼 거래처 등록돼 있으나 판매입력으로 들어온 건)
+      const compName = (companies.find(c => String(c.id) === String(fCompany)) || {}).name || '';
+      spRows = spRows.filter(r => r.company_name === compName);
+    }
 
     const merged = [...bizData, ...spRows].sort((a, b) => String(b.sold_at).localeCompare(String(a.sold_at)));
     setSales(merged);
