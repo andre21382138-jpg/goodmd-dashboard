@@ -263,6 +263,9 @@ const GLOBAL_CSS = `
   td.mono { font-family: var(--mono); font-size: 12px; color: var(--text2); }
   tr:hover td { background: #fffde7; }
   tr:last-child td { border-bottom: none; }
+  /* 중첩(펼침) 상세 표 — 메인 표(흰색·노란 hover)와 구분되게 파란빛 회색 톤 */
+  .nested-table thead th { background: #e7edf5; color: #4a5568; }
+  .nested-table tr:hover td { background: #dbe6f5; }
   .badge { display: inline-flex; padding: 2px 9px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
   /* 매장/점포 배지 — 알록달록함 줄이고 회색 톤으로 통일 (점포=옅은 채움, 지점=외곽선) */
   .badge-dept  { background: #eef0f2; color: #2b2b2b; border: 1px solid #d6dadf; }

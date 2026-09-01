@@ -19,10 +19,10 @@ export default function MgrSalesViewPage({ profile }) {
   const todayStr = fmt(today);
   const monthStart = `${today.getFullYear()}-${pad(today.getMonth()+1)}-01`;
 
-  // 수정 권한: 본사(HQ)는 전체, 매장 매니저는 '당월' 매출만 (판매수량/판매금액)
+  // 수정 권한: 매장·본사 모두 전체 기간 수정 가능 (수량·합계)
   const curMonth = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
   const isCurrentMonth = (sold_at) => String(sold_at || '').slice(0, 7) === curMonth;
-  const canEditLine = (it) => isHQ || isCurrentMonth(it.sold_at);
+  const canEditLine = () => true;
 
   const [fFrom, setFFrom] = useState(monthStart);
   const [fTo,   setFTo]   = useState(todayStr);
@@ -43,19 +43,26 @@ export default function MgrSalesViewPage({ profile }) {
     setEditDraft({
       quantity: it.quantity,
       price:    it.price,
+      total:    Math.round(Number(it.price || 0) * Number(it.quantity || 0)), // 합계 = 단가 × 수량
       payment:  it.payment || '카드',
       memo:     it.memo || '',
     });
   };
   const cancelEditLine = () => { setEditingLine(null); setEditDraft({}); };
   const saveEditLine = async (it) => {
-    // 매장 매니저는 당월 매출만 수정 가능 (방어)
-    if (!isHQ && !isCurrentMonth(it.sold_at)) { toast('당월 매출만 수정할 수 있습니다', 'err'); return; }
-    const qty   = Number(editDraft.quantity);
-    const price = Number(parseNumInput(editDraft.price));
+    const qty = Number(editDraft.quantity);
     if (!Number.isFinite(qty) || qty === 0) { toast('수량은 0이 아닌 숫자여야 합니다', 'err'); return; }
-    if (!Number.isFinite(price))            { toast('판매금액이 유효하지 않습니다', 'err'); return; }
-    if (!isHQ && (qty < 0 || price < 0))    { toast('수량·판매금액은 0 이상이어야 합니다', 'err'); return; }
+    let price;
+    if (isHQ) {
+      price = Number(parseNumInput(editDraft.price));
+      if (!Number.isFinite(price)) { toast('단가가 유효하지 않습니다', 'err'); return; }
+    } else {
+      // 매장: 합계 입력 → 단가 = 합계 ÷ 수량
+      const total = Number(parseNumInput(editDraft.total));
+      if (!Number.isFinite(total) || total < 0) { toast('합계가 유효하지 않습니다', 'err'); return; }
+      if (qty < 0) { toast('수량은 0 이상이어야 합니다', 'err'); return; }
+      price = qty !== 0 ? total / qty : 0;
+    }
     setSavingLine(true);
     try {
       // 매장 매니저는 수량·금액만 갱신 (결제수단/메모는 본사만)
@@ -402,8 +409,8 @@ export default function MgrSalesViewPage({ profile }) {
                           <div style={{fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8}}>
                             📋 {r.date} 판매 내역 — {items.length}건 (결제 묶음)
                           </div>
-                          <div className="twrap" style={{background:'#fff', borderRadius:'var(--radius)', border:'1px solid var(--border)'}}>
-                            <table>
+                          <div className="twrap" style={{background:'#f4f7fb', borderRadius:'var(--radius)', border:'1px solid #cdd9e8'}}>
+                            <table className="nested-table">
                               <thead>
                                 <tr>
                                   <th>브랜드</th>
@@ -491,8 +498,8 @@ export default function MgrSalesViewPage({ profile }) {
                                   {isTxnOpen && (
                                     <tr>
                                       <td colSpan={9} style={{background:'#fafafa', padding:'8px 12px', borderTop:'1px dashed var(--border)'}}>
-                                        <div className="twrap" style={{background:'#fff', borderRadius:'var(--radius)', border:'1px solid var(--border)'}}>
-                                          <table>
+                                        <div className="twrap" style={{background:'#eaf0f8', borderRadius:'var(--radius)', border:'1px solid #cdd9e8'}}>
+                                          <table className="nested-table">
                                             <thead>
                                               <tr>
                                                 <th>상품명</th>
@@ -539,7 +546,7 @@ export default function MgrSalesViewPage({ profile }) {
                                                   <td style={{textAlign:'center'}}>
                                                     {canEditLine(it) ? (
                                                       <button type="button" onClick={() => startEditLine(it)}
-                                                        title={isHQ ? '라인 수정' : '당월 매출 수정·삭제 (수량·금액)'}
+                                                        title={isHQ ? '라인 수정' : '매출 수정 (수량·합계)'}
                                                         style={{padding:'2px 8px', fontSize:11, border:'1px solid var(--accent)', borderRadius:4, background:'#fff3e0', color:'var(--accent)', fontWeight:700, cursor:'pointer'}}>
                                                         ✏️ 수정
                                                       </button>
@@ -602,10 +609,16 @@ export default function MgrSalesViewPage({ profile }) {
                     style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)'}}/>
                 </div>
                 <div>
-                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>{isHQ ? '단가 (원) · 음수=반품' : '판매금액 (단가)'}</label>
-                  <input type="text" inputMode="numeric" value={formatNumInput(editDraft.price)}
-                    onChange={e => setEditDraft(p => ({...p, price: parseNumInput(e.target.value)}))}
-                    style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)'}}/>
+                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>{isHQ ? '단가 (원) · 음수=반품' : '합계 (원)'}</label>
+                  {isHQ ? (
+                    <input type="text" inputMode="numeric" value={formatNumInput(editDraft.price)}
+                      onChange={e => setEditDraft(p => ({...p, price: parseNumInput(e.target.value)}))}
+                      style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)'}}/>
+                  ) : (
+                    <input type="text" inputMode="numeric" value={formatNumInput(editDraft.total)}
+                      onChange={e => setEditDraft(p => ({...p, total: parseNumInput(e.target.value)}))}
+                      style={{width:'100%', height:36, padding:'0 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, textAlign:'right', fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}/>
+                  )}
                 </div>
               </div>
               {/* 결제수단/메모/삭제는 본사(HQ)만 — 매장 매니저는 당월 수량·금액만 수정 */}
@@ -639,7 +652,12 @@ export default function MgrSalesViewPage({ profile }) {
               <div style={{padding:'10px 12px', background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:6, fontSize:11, color:'#6d4c41', marginBottom:14}}>
                 {isHQ
                   ? '⚠️ 합계 = 수량 × 단가. 반품 음수 매출은 단가에 음수 입력. 회원 적립금/누적구매는 자동 보정되지 않으므로 필요 시 별도 조정.'
-                  : '⚠️ 당월 매출의 수량·판매금액만 수정됩니다. 합계 = 수량 × 판매금액.'}
+                  : (() => {
+                      const q = Number(editDraft.quantity) || 0;
+                      const t = Number(parseNumInput(editDraft.total)) || 0;
+                      const unit = q !== 0 ? Math.round((t / q) * 100) / 100 : 0;
+                      return `⚠️ 수량·합계를 수정합니다. 단가 = 합계 ÷ 수량 = ${unit.toLocaleString()}원으로 자동 계산됩니다. 회원 적립금/누적구매는 자동 보정되지 않을 수 있습니다.`;
+                    })()}
               </div>
               <div style={{display:'flex', gap:8}}>
                 {(isHQ || isCurrentMonth(it.sold_at)) && (
