@@ -74,6 +74,13 @@ export default function SalesInputPage({ profile }) {
   const [pmResults,  setPmResults]  = useState([]);
   const [pmSearching,setPmSearching]= useState(false);
   const [pmCustomer, setPmCustomer] = useState(null);
+  // 신규가입 적립(3,000원)은 가입 당일 사용 불가 → 익일부터. 당일엔 사용가능 적립금에서 3,000 제외.
+  const kstToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const joinedToday = (c) => String(c?.joined_at || '').slice(0, 10) === kstToday;
+  const usablePoints = (c) => {
+    const tp = Number(c?.total_points) || 0;
+    return joinedToday(c) ? Math.max(0, tp - 3000) : tp;
+  };
   const [pmAmount,   setPmAmount]   = useState('');
 
   // 회원 연결
@@ -306,7 +313,7 @@ export default function SalesInputPage({ profile }) {
     const amt = Number(pmAmount) || 0;
     if (amt <= 0) { toast('사용 금액을 입력해주세요', 'err'); return; }
     if (!pmCustomer) { toast('회원을 선택해주세요', 'err'); return; }
-    if (amt > (pmCustomer.total_points || 0)) { toast(`사용가능 적립금(${(pmCustomer.total_points||0).toLocaleString()}원)을 초과합니다`, 'err'); return; }
+    if (amt > usablePoints(pmCustomer)) { toast(`사용가능 적립금(${usablePoints(pmCustomer).toLocaleString()}원)을 초과합니다${joinedToday(pmCustomer) ? ' — 가입 적립금 3,000원은 익일부터 사용 가능' : ''}`, 'err'); return; }
     // 회원적립 영역 자동 동기화: 적립금 사용 회원을 그대로 적립 대상 회원으로 설정
     // (선택돼 있던 다른 회원/비회원 모드는 그대로 두어 매니저 의도를 보존)
     if (memberMode === 'none' && !selectedMember) {
@@ -378,7 +385,7 @@ export default function SalesInputPage({ profile }) {
           branch_name: branchName, manager_name: managerName.trim() || null,
           sms_consent: custConsent, sms_consent_at: custConsent ? new Date().toISOString() : null, created_by: profile.id,
           grade: '패밀리', total_purchase: 0,
-          total_points: soldAt >= '2026-08-01' ? 3000 : 0,  // 신규가입 3,000원 적립(즉시 사용 가능)
+          total_points: soldAt >= '2026-08-01' ? 3000 : 0,  // 신규가입 3,000원 적립(익일부터 사용 가능)
           referrer_phone: custReferrer.trim() ? formatPhone(custReferrer) : null,
         }).select().single();
         if (custErr) throw custErr;
@@ -1036,7 +1043,8 @@ export default function SalesInputPage({ profile }) {
                             <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)'}}>{m.phone}</span>
                           </div>
                           <div style={{fontSize:12, color:'#6a1b9a', marginTop:3, fontWeight:700}}>
-                            사용가능 적립금: {(m.total_points||0).toLocaleString()}원
+                            사용가능 적립금: {usablePoints(m).toLocaleString()}원
+                            {joinedToday(m) && <span style={{fontSize:10, fontWeight:600, color:'#c62828', marginLeft:6}}>가입적립 3,000원 익일부터</span>}
                           </div>
                         </div>
                       ))}
@@ -1059,7 +1067,8 @@ export default function SalesInputPage({ profile }) {
                       <button type="button" className="btn-ghost" onClick={() => setPmCustomer(null)}>변경</button>
                     </div>
                     <div style={{fontSize:13, color:'#6a1b9a', fontWeight:700, textAlign:'center', padding:'6px 0', background:'#fff', borderRadius:6}}>
-                      사용가능 적립금: <span style={{fontSize:16}}>{(pmCustomer.total_points||0).toLocaleString()}원</span>
+                      사용가능 적립금: <span style={{fontSize:16}}>{usablePoints(pmCustomer).toLocaleString()}원</span>
+                      {joinedToday(pmCustomer) && <div style={{fontSize:10, fontWeight:600, color:'#c62828', marginTop:2}}>가입 적립금 3,000원은 익일부터 사용 가능 (잔액 {(pmCustomer.total_points||0).toLocaleString()}원)</div>}
                     </div>
                   </div>
 
@@ -1067,7 +1076,7 @@ export default function SalesInputPage({ profile }) {
                   <div style={{marginBottom:14}}>
                     <label style={labelStyle}>사용할 금액 (원)</label>
                     <input type="number" min={0} value={pmAmount}
-                      max={Math.min(pmCustomer.total_points||0, maxAllowed)}
+                      max={Math.min(usablePoints(pmCustomer), maxAllowed)}
                       onChange={e => setPmAmount(e.target.value)}
                       style={{...inputStyle, fontWeight:700, fontSize:15, textAlign:'right'}}
                       placeholder="0" autoFocus/>
@@ -1076,11 +1085,11 @@ export default function SalesInputPage({ profile }) {
                       <span>적립금 잔액: {(pmCustomer.total_points||0).toLocaleString()}원</span>
                     </div>
                     <div style={{display:'flex', gap:6, marginTop:8}}>
-                      {[1000, 5000, 10000, Math.min(pmCustomer.total_points||0, maxAllowed)].filter((v, i, arr) => v > 0 && arr.indexOf(v) === i).map(amt => (
+                      {[1000, 5000, 10000, Math.min(usablePoints(pmCustomer), maxAllowed)].filter((v, i, arr) => v > 0 && arr.indexOf(v) === i).map(amt => (
                         <button key={amt} type="button"
                           onClick={() => setPmAmount(String(amt))}
                           style={{flex:1, height:30, fontSize:11, border:'1px solid var(--border)', borderRadius:6, background:'#fafafa', cursor:'pointer', color:'var(--text2)'}}>
-                          {amt === Math.min(pmCustomer.total_points||0, maxAllowed) ? '전액' : `${amt.toLocaleString()}원`}
+                          {amt === Math.min(usablePoints(pmCustomer), maxAllowed) ? '전액' : `${amt.toLocaleString()}원`}
                         </button>
                       ))}
                     </div>

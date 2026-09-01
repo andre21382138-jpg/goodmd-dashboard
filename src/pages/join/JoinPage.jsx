@@ -74,7 +74,7 @@ export default function JoinPage({ managerId }) {
       sms_consent_at: smsConsent ? new Date().toISOString() : null,
       consent_ip: consentIp, consent_ua: consentUa,
       referrer_phone: referrerPhone.trim() ? formatPhone(referrerPhone) : null,
-      total_points: joinedDate >= '2026-08-01' ? 3000 : 0,  // 신규가입 3,000원 적립(즉시 사용 가능)
+      total_points: joinedDate >= '2026-08-01' ? 3000 : 0,  // 신규가입 3,000원 적립(익일부터 사용 가능)
     });
     if (error) { alert('오류가 발생했습니다. 다시 시도해주세요.'); setSaving(false); return; }
 

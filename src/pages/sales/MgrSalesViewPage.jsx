@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, formatNumInput, parseNumInput, reverseSaleEffects, decrementVisitIfEmpty } from '../../lib/utils';
+import { toast, formatNumInput, parseNumInput, reverseSaleEffects, decrementVisitIfEmpty, getGrade } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 export default function MgrSalesViewPage({ profile }) {
@@ -65,14 +65,31 @@ export default function MgrSalesViewPage({ profile }) {
     }
     setSavingLine(true);
     try {
+      const oldQty = Number(it.quantity) || 0;
+      const oldAmt = (Number(it.price) || 0) * oldQty;
+      const newAmt = price * qty;
+
+      // 회원 적립 재계산 — 이 판매 제외한 누적 기준 등급률로 재적립 (판매입력 로직과 동일)
+      let custRow = null, newEarned = 0;
+      if (it.customer_id) {
+        const { data: cust } = await supabase.from('customers')
+          .select('total_points, used_points, total_purchase, purchase_qty').eq('id', it.customer_id).single();
+        custRow = cust || null;
+        if (custRow) {
+          const totalBefore = Math.max(0, (custRow.total_purchase || 0) - oldAmt);
+          newEarned = Math.floor(newAmt * getGrade(totalBefore).rate);
+        }
+      }
+
       // 매장 매니저는 수량·금액만 갱신 (결제수단/메모는 본사만)
       const patch = isHQ
         ? { quantity: qty, price, payment: editDraft.payment || '카드', memo: editDraft.memo?.trim() || null }
         : { quantity: qty, price };
+      if (custRow) patch.points_earned = newEarned;   // 적립분 재계산 반영 (이후 삭제 원복 정확)
       const { error } = await supabase.from('sales').update(patch).eq('id', it.id);
       if (error) throw error;
+
       // 재고 반영 — 수량 변화(old−new)만큼 store_stock 조정 (판매 시 차감과 동일 조건)
-      const oldQty = Number(it.quantity) || 0;
       const code = it.product?.code || it.product_code;
       if (qty !== oldQty && code && it.delivery_type !== 'hq' && it.payment !== '강좌매출') {
         const { data: stockRow } = await supabase.from('store_stock')
@@ -85,7 +102,20 @@ export default function MgrSalesViewPage({ profile }) {
             .eq('id', stockRow.id);
         }
       }
-      toast(qty !== oldQty ? '수정 완료 — 재고 반영됨' : '수정 완료', 'ok');
+
+      // 회원 적립금·누적구매액·구매수량·등급 반영
+      if (custRow) {
+        const oldEarned = Number(it.points_earned) || 0;
+        const newTotalPurchase = Math.max(0, (custRow.total_purchase || 0) - oldAmt + newAmt);
+        await supabase.from('customers').update({
+          total_purchase: newTotalPurchase,
+          purchase_qty:   Math.max(0, (custRow.purchase_qty || 0) - oldQty + qty),
+          total_points:   Math.max(0, (custRow.total_points || 0) - oldEarned + newEarned),
+          grade:          getGrade(newTotalPurchase).grade,
+        }).eq('id', it.customer_id);
+      }
+
+      toast(custRow ? '수정 완료 — 재고·적립금·누적구매 반영됨' : (qty !== oldQty ? '수정 완료 — 재고 반영됨' : '수정 완료'), 'ok');
       cancelEditLine();
       fetchSales();
     } catch (err) {
@@ -665,12 +695,12 @@ export default function MgrSalesViewPage({ profile }) {
               )}
               <div style={{padding:'10px 12px', background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:6, fontSize:11, color:'#6d4c41', marginBottom:14}}>
                 {isHQ
-                  ? '⚠️ 합계 = 수량 × 단가. 반품 음수 매출은 단가에 음수 입력. 수량 변경분은 매장 재고에 자동 반영됩니다. 회원 적립금/누적구매는 자동 보정되지 않으므로 필요 시 별도 조정.'
+                  ? '⚠️ 합계 = 수량 × 단가. 반품 음수 매출은 단가에 음수 입력. 수량 변경분은 매장 재고에, 금액 변경분은 회원 적립금·누적구매·등급에 자동 반영됩니다. (적립금 사용분은 변경 안 됨)'
                   : (() => {
                       const q = Number(editDraft.quantity) || 0;
                       const t = Number(parseNumInput(editDraft.total)) || 0;
                       const unit = q !== 0 ? Math.round((t / q) * 100) / 100 : 0;
-                      return `⚠️ 수량·합계를 수정합니다. 단가 = 합계 ÷ 수량 = ${unit.toLocaleString()}원으로 자동 계산됩니다. 수량 변경분은 매장 재고에 자동 반영됩니다. 회원 적립금/누적구매는 자동 보정되지 않을 수 있습니다.`;
+                      return `⚠️ 수량·합계를 수정합니다. 단가 = 합계 ÷ 수량 = ${unit.toLocaleString()}원. 수량 변경분은 매장 재고에, 금액 변경분은 회원 적립금·누적구매·등급에 자동 반영됩니다.`;
                     })()}
               </div>
               <div style={{display:'flex', gap:8}}>
