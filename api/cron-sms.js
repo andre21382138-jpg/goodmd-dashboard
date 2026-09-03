@@ -99,11 +99,16 @@ export default async function handler(req, res) {
 
   let processed = 0;
   for (const sch of schedules) {
-    // sending 상태로 먼저 변경 (중복 실행 방지)
-    await sb(`/sms_schedules?id=eq.${sch.id}`, {
+    // 원자적 클레임: pending → sending 을 'status=pending' 조건부로 수행.
+    // 겹쳐 실행된 다른 cron(또는 이미 처리한 자신)이 가져간 건은 0행이 반환되어 skip →
+    // 목록을 통째로 들고 순차 처리하는 구조에서도 '한 배치 = 한 번만 발송' 보장 (중복 발송 방지).
+    const claimRes = await sb(`/sms_schedules?id=eq.${sch.id}&status=eq.pending`, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'sending' }),
+      headers: { 'Prefer': 'return=representation' },
     });
+    const claimed = await claimRes.json().catch(() => []);
+    if (!Array.isArray(claimed) || claimed.length === 0) continue; // 이미 다른 실행이 클레임함
 
     try {
       const { okCount, details } = await sendAll(sch.receivers, sch.message, sch.sender);
