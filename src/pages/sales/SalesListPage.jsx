@@ -136,11 +136,13 @@ export default function SalesListPage({ setPage }) {
   const [fBranch,        setFBranch]        = useState('');
   const [appliedBranch,  setAppliedBranch]  = useState('');
   const [fBrand,  setFBrand]  = useState('');
+  const [appliedBrand, setAppliedBrand] = useState('');
   const [fFrom,   setFFrom]   = useState('');
   const [fTo,     setFTo]     = useState('');
   const [appliedFrom, setAppliedFrom] = useState('');
   const [appliedTo,   setAppliedTo]   = useState('');
   const [fKeyword,setFKeyword]= useState('');
+  const [appliedKeyword, setAppliedKeyword] = useState('');
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
   const [viewMode, setViewMode] = useState('store'); // 'store' | 'list' | 'product'
@@ -185,7 +187,7 @@ export default function SalesListPage({ setPage }) {
       if (appliedStores && appliedStores.length > 0) q = q.in('store_name', appliedStores);
       else q = q.in('store_name', RETAIL_STORES);
       if (appliedBranch) q = q.eq('branch_name', appliedBranch);
-      if (fBrand)        q = q.eq('brand_id', fBrand);
+      if (appliedBrand)  q = q.eq('brand_id', appliedBrand);
       if (appliedFrom)   q = q.gte('sold_at', appliedFrom);
       if (appliedTo)     q = q.lte('sold_at', appliedTo);
       const { data, error } = await q.range(start, start + PAGE - 1);
@@ -198,7 +200,7 @@ export default function SalesListPage({ setPage }) {
     if (lastError) toast(lastError.message, 'err');
     else setSales(all);
     setLoading(false);
-  }, [appliedStores, appliedBranch, fBrand, appliedFrom, appliedTo]);
+  }, [appliedStores, appliedBranch, appliedBrand, appliedFrom, appliedTo]);
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
@@ -244,16 +246,20 @@ export default function SalesListPage({ setPage }) {
     const s2 = [...appliedStores].sort();
     if (s1.some((v, i) => v !== s2[i])) return true;
     if (fBranch !== appliedBranch) return true;
+    if (fBrand  !== appliedBrand)  return true;
     if (fFrom   !== appliedFrom)   return true;
     if (fTo     !== appliedTo)     return true;
+    if (fKeyword !== appliedKeyword) return true;
     return false;
-  }, [fStores, appliedStores, fBranch, appliedBranch, fFrom, appliedFrom, fTo, appliedTo]);
+  }, [fStores, appliedStores, fBranch, appliedBranch, fBrand, appliedBrand, fFrom, appliedFrom, fTo, appliedTo, fKeyword, appliedKeyword]);
 
   const handleSearch = () => {
     setAppliedStores([...fStores]);
     setAppliedBranch(fBranch);
+    setAppliedBrand(fBrand);
     setAppliedFrom(fFrom);
     setAppliedTo(fTo);
+    setAppliedKeyword(fKeyword);
   };
 
   // 실효 수량/금액 — 반품은 별도 음수 매출 row로 처리되므로 returned_qty는 무시
@@ -269,8 +275,8 @@ export default function SalesListPage({ setPage }) {
   const filtered = useMemo(() => {
     let result = sales;
     if (!showReturned) result = result.filter(s => !isFullyReturned(s));
-    if (fKeyword.trim()) {
-      const kw = fKeyword.trim().toLowerCase();
+    if (appliedKeyword.trim()) {
+      const kw = appliedKeyword.trim().toLowerCase();
       result = result.filter(s =>
         (s.product?.name || '').toLowerCase().includes(kw) ||
         (s.brand?.name   || '').toLowerCase().includes(kw) ||
@@ -280,7 +286,7 @@ export default function SalesListPage({ setPage }) {
     if (sortBy === 'qty_desc') result = [...result].sort((a,b) => effQty(b) - effQty(a));
     if (sortBy === 'amt_desc') result = [...result].sort((a,b) => effAmt(b) - effAmt(a));
     return result;
-  }, [sales, fKeyword, sortBy, showReturned]);
+  }, [sales, appliedKeyword, sortBy, showReturned]);
 
   const totalQty = useMemo(() => filtered.reduce((s, r) => s + effQty(r), 0), [filtered]);
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
@@ -332,7 +338,7 @@ export default function SalesListPage({ setPage }) {
     if (exporting) return;
     setExporting(true);
     try {
-      const n = await exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword });
+      const n = await exportSalesRaw({ fStores: appliedStores, fBranch: appliedBranch, fBrand: appliedBrand, fFrom: appliedFrom, fTo: appliedTo, fKeyword: appliedKeyword });
       toast(`엑셀 다운로드 완료 (${n.toLocaleString()}건)`, 'ok');
     } catch (err) {
       toast('다운로드 실패: ' + (err.message || err), 'err');
@@ -596,7 +602,7 @@ export default function SalesListPage({ setPage }) {
           <button style={quickBtnStyle(isLastMonth)}  onClick={() => setDateRange('lastmonth')}>전월</button>
           {/* 조회 — 점포·지점·기간 선택을 쿼리에 반영 */}
           <button type="button" onClick={handleSearch} disabled={loading}
-            title="점포·지점·기간 선택을 조회에 반영"
+            title="점포·지점·브랜드·기간·검색어 선택을 조회에 반영"
             style={{
               height:34, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:'var(--radius)',
               background: filtersDirty ? 'var(--accent)' : '#fff3e0',
@@ -606,7 +612,8 @@ export default function SalesListPage({ setPage }) {
             {loading ? <span className="spinner"/> : '🔍 조회'}
           </button>
           <input className="finput" value={fKeyword} onChange={e => setFKeyword(e.target.value)}
-            placeholder="🔍 상품명·브랜드·메모 검색" style={{height:34, minWidth:180}} />
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="🔍 상품명·브랜드·메모 검색 (조회 시 적용)" style={{height:34, minWidth:180}} />
           {viewMode === 'list' ? (
             <select className="fsel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
               <option value="date">최신순</option>
@@ -631,7 +638,7 @@ export default function SalesListPage({ setPage }) {
               setFStores([]); setAppliedStores([]);
               setFBranch(''); setAppliedBranch('');
               setFFrom(''); setFTo(''); setAppliedFrom(''); setAppliedTo('');
-              setFBrand(''); setFKeyword(''); setSortBy('date'); setAggSortBy('amt_desc');
+              setFBrand(''); setAppliedBrand(''); setFKeyword(''); setAppliedKeyword(''); setSortBy('date'); setAggSortBy('amt_desc');
             }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
