@@ -266,14 +266,9 @@ export default function SalesReturnPage({ profile }) {
         }
         const unitPrice = qty > 0 ? lineTotal / qty : 0;
 
-        // 1) 원본 row — returned_qty 누적 (이중 반품 방지용. 매출 차감용으로는 더 이상 안 씀)
-        await supabase.from('sales').update({
-          returned_qty: newReturnedQty,
-          returned_at: fullyReturned ? nowIso : it.returned_at,
-        }).eq('id', it.id);
-
-        // 2) 반품일 기준 음수 매출 row INSERT — 매출조회는 이 row를 음수로 합산
-        await supabase.from('sales').insert({
+        // 1) 반품일 기준 음수 매출 row INSERT — 매출조회는 이 row를 음수로 합산 (매출 차감의 핵심)
+        //    먼저 생성하고, 실패 시 즉시 중단해 returned_qty만 남는(반품 미반영) 상태를 방지.
+        const { data: negRow, error: negErr } = await supabase.from('sales').insert({
           sold_at:    returnDate,
           store_name: it.store_name,
           branch_name: it.branch_name,
@@ -288,7 +283,15 @@ export default function SalesReturnPage({ profile }) {
           points_earned: 0,
           points_used: 0,
           delivery_type: 'none',
-        });
+        }).select('id');
+        if (negErr) throw negErr;
+        if (!negRow || negRow.length === 0) throw new Error('반품 매출 저장 실패 (RLS)');
+
+        // 2) 원본 row — returned_qty 누적 (음수 row 생성 성공 후에만. 이중 반품 방지용)
+        await supabase.from('sales').update({
+          returned_qty: newReturnedQty,
+          returned_at: fullyReturned ? nowIso : it.returned_at,
+        }).eq('id', it.id);
 
         // 본사 택배요청(hq)은 판매 시 매장 재고를 차감하지 않았으므로 반품 시에도 복구하지 않음
         if (it.product?.code && it.delivery_type !== 'hq') {
