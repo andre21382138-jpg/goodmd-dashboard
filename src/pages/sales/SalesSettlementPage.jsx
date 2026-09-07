@@ -289,7 +289,7 @@ export default function SalesSettlementPage() {
       const all = []; let start = 0; const PAGE = 1000;
       while (true) {
         const { data, error } = await supabase.from('store_expenses')
-          .select('store_name, branch_name, expense_date, category, amount, memo')
+          .select('id, store_name, branch_name, expense_date, category, amount, memo')
           .gte('expense_date', from).lte('expense_date', to)
           .order('expense_date').order('id').range(start, start + PAGE - 1);
         if (error) throw error;
@@ -426,6 +426,42 @@ export default function SalesSettlementPage() {
     setExDetail({ dept: row.dept, branch: row.branch, total: row.total, items });
   };
   const exTotal = exRows.reduce((s, r) => s + r.total, 0);
+
+  // 지출 건별 삭제 (본사)
+  const [delExpId, setDelExpId] = useState(null);
+  const deleteExpense = async (item) => {
+    if (!window.confirm(`이 지출을 삭제하시겠습니까?\n\n${item.expense_date} · ${item.category} · ${won(item.amount)}원\n${item.memo || ''}\n\n되돌릴 수 없습니다.`)) return;
+    setDelExpId(item.id);
+    try {
+      const { data, error } = await supabase.from('store_expenses').delete().eq('id', item.id).select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) { toast('삭제 권한이 없습니다 (RLS 정책 필요)', 'err'); setDelExpId(null); return; }
+      // 로컬 반영 — exRaw 제거 후 매장별 합계 재계산
+      const newRaw = exRaw.filter(e => e.id !== item.id);
+      const map = new Map();
+      for (const e of newRaw) {
+        const key = `${e.store_name}|${e.branch_name}`;
+        if (!map.has(key)) map.set(key, { key, dept: e.store_name, branch: e.branch_name, total: 0, count: 0 });
+        const g = map.get(key); g.total += e.amount || 0; g.count += 1;
+      }
+      const rank = s => { const i = STORE_NAMES.indexOf(s); return i === -1 ? 999 : i; };
+      const list = [...map.values()].sort((a, b) => rank(a.dept) - rank(b.dept) || a.dept.localeCompare(b.dept) || a.branch.localeCompare(b.branch, 'ko'));
+      setExRaw(newRaw);
+      setExRows(list);
+      setExSelKeys(prev => new Set([...prev].filter(k => list.some(r => r.key === k))));
+      // 상세 모달 갱신
+      if (exDetail) {
+        const items = newRaw.filter(e => e.store_name === exDetail.dept && e.branch_name === exDetail.branch)
+          .sort((a, b) => (a.expense_date < b.expense_date ? -1 : a.expense_date > b.expense_date ? 1 : 0));
+        if (items.length === 0) setExDetail(null);
+        else setExDetail({ ...exDetail, items, total: items.reduce((s, e) => s + (e.amount || 0), 0) });
+      }
+      toast('지출 삭제 완료', 'ok');
+    } catch (e) {
+      toast('삭제 실패: ' + (e.message || e), 'err');
+    }
+    setDelExpId(null);
+  };
 
   // 지출결의서 엑셀 다운로드 (점포 선택 → 지점별 시트)
   const abbrStore = s => (s || '').replace('백화점', '').replace('_SHOP', '');
@@ -1260,15 +1296,22 @@ export default function SalesSettlementPage() {
               <div className="twrap">
                 <table>
                   <thead>
-                    <tr><th style={{ width:110 }}>날짜</th><th style={{ width:90 }}>항목</th><th className="r" style={{ width:110 }}>금액</th><th>메모</th></tr>
+                    <tr><th style={{ width:110 }}>날짜</th><th style={{ width:90 }}>항목</th><th className="r" style={{ width:110 }}>금액</th><th>메모</th><th style={{ width:60, textAlign:'center' }}>삭제</th></tr>
                   </thead>
                   <tbody>
                     {exDetail.items.map((e, idx) => (
-                      <tr key={idx}>
+                      <tr key={e.id ?? idx}>
                         <td style={{ fontWeight:600 }}>{e.expense_date}</td>
                         <td><span className="badge" style={{ background:'#f5f5f5', color:'var(--text2)', border:'1px solid var(--border)' }}>{e.category}</span></td>
                         <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(e.amount)}원</td>
                         <td style={{ fontSize:13, color:'var(--text2)' }}>{e.memo || '-'}</td>
+                        <td style={{ textAlign:'center' }}>
+                          <button type="button" onClick={() => deleteExpense(e)} disabled={delExpId === e.id}
+                            title="이 지출 삭제"
+                            style={{ padding:'3px 9px', fontSize:11, fontWeight:700, border:'1px solid var(--danger)', borderRadius:4, background:'#fff', color:'var(--danger)', cursor: delExpId===e.id?'default':'pointer' }}>
+                            {delExpId === e.id ? '…' : '삭제'}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
