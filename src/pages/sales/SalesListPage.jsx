@@ -10,7 +10,7 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
   let all = [], start = 0;
   while (true) {
     let q = supabase.from('sales')
-      .select('id, sold_at, store_name, branch_name, payment, quantity, returned_qty, price, points_used, brand:brands(name), product:products(code, name, cost)')
+      .select('id, sold_at, store_name, branch_name, payment, quantity, returned_qty, price, points_used, unit_cost, brand:brands(name), product:products(code, name, cost)')
       .neq('payment', '구매이력')
       .order('sold_at', { ascending: true })
       .order('id',      { ascending: true });
@@ -81,7 +81,8 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
   rows.forEach((s, i) => {
     const effQty = Math.max(0, (s.quantity || 0) - (s.returned_qty || 0));
     const finalAmount = effQty * (Number(s.price) || 0);
-    const cost = (s.product && s.product.cost != null) ? Number(s.product.cost) : null;
+    const cost = (s.unit_cost != null) ? Number(s.unit_cost)
+               : (s.product && s.product.cost != null) ? Number(s.product.cost) : null;
     const finalCost = cost != null ? cost * effQty : null;
     const ratio = (cost != null && finalAmount > 0) ? (finalCost / finalAmount) : null;
     // KST 정오를 기준으로 Date 객체 생성 → 어느 timezone에서 표시해도 같은 일자 유지

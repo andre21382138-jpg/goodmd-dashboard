@@ -79,7 +79,7 @@ export default function SalesSettlementPage() {
     const all = []; let start = 0; const PAGE = 1000;
     while (true) {
       let q = supabase.from('sales')
-        .select('product_id, quantity, price, payment, product:products(code, name, price, cost)')
+        .select('product_id, quantity, price, payment, unit_cost, product:products(code, name, price, cost)')
         .neq('payment', '구매이력')
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
@@ -127,7 +127,7 @@ export default function SalesSettlementPage() {
       const netQty = isReturn ? -q : q;
       const unitPrice = Number(r.price) || 0;
       const listPrice = Number(r.product?.price) || 0;
-      const unitCost  = Number(r.product?.cost) || 0;
+      const unitCost  = (r.unit_cost != null ? Number(r.unit_cost) : Number(r.product?.cost)) || 0;
       const key = r.product_id;
       if (!map.has(key)) map.set(key, {
         code: r.product?.code || '', name: r.product?.name || '(삭제된 상품)',
@@ -185,7 +185,7 @@ export default function SalesSettlementPage() {
     const all = []; let start = 0; const PAGE = 1000;
     while (true) {
       const { data, error } = await supabase.from('sales')
-        .select('store_name, branch_name, quantity, price, payment, product:products(cost)')
+        .select('store_name, branch_name, quantity, price, payment, unit_cost, product:products(cost)')
         .neq('payment', '구매이력')
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
@@ -242,7 +242,7 @@ export default function SalesSettlementPage() {
         const g = ensure(r.store_name || '(미지정)', r.branch_name || '(미지정)');
         const q = Number(r.quantity) || 0;
         const price = Number(r.price) || 0;
-        const cost = Number(r.product?.cost) || 0;
+        const cost = (r.unit_cost != null ? Number(r.unit_cost) : Number(r.product?.cost)) || 0;
         const isReturn = r.payment === '반품' || price < 0;
         const netQty = isReturn ? -q : q;
         g.revenue += price * q;                       // C 매출액 (반품 음수·증정/시식 0 자동)

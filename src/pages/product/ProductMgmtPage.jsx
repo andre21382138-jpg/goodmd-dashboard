@@ -227,12 +227,25 @@ export default function ProductMgmtPage({ subPage }) {
 
   const startEdit = (p) => setEditing(prev => ({...prev, [p.id]: { cost: p.cost||0, price: p.price||0 }}));
   const cancelEdit = (id) => setEditing(prev => { const n={...prev}; delete n[id]; return n; });
+  const COST_EFFECTIVE_FROM = '2026-08-01'; // 원가 수정 적용 시작일 (이 날짜 이후 판매건에 반영)
   const saveEdit = async (p) => {
     setSavingP(prev => ({...prev, [p.id]: true}));
     const { cost, price } = editing[p.id];
-    const { error } = await supabase.from('products').update({ cost: Number(cost)||0, price: Number(price)||0 }).eq('id', p.id);
-    if (error) toast(error.message, 'err');
-    else { toast('저장 완료', 'ok'); cancelEdit(p.id); fetchAll(); }
+    const newCost = Number(cost) || 0;
+    const costChanged = newCost !== (Number(p.cost) || 0);
+    const { error } = await supabase.from('products').update({ cost: newCost, price: Number(price)||0 }).eq('id', p.id);
+    if (error) { toast(error.message, 'err'); setSavingP(prev => ({...prev, [p.id]: false})); return; }
+    // 원가가 바뀌면 8/1 이후 판매건 원가(unit_cost)에 전파. 8/1 이전은 기존 원가 유지.
+    if (costChanged) {
+      const { error: e2, count } = await supabase.from('sales')
+        .update({ unit_cost: newCost }, { count: 'exact' })
+        .eq('product_id', p.id).gte('sold_at', COST_EFFECTIVE_FROM);
+      if (e2) toast('원가 저장됨. 단, 판매건 반영 실패: ' + e2.message, 'err');
+      else toast(`저장 완료 — ${COST_EFFECTIVE_FROM} 이후 판매 ${count || 0}건 원가 반영`, 'ok');
+    } else {
+      toast('저장 완료', 'ok');
+    }
+    cancelEdit(p.id); fetchAll();
     setSavingP(prev => ({...prev, [p.id]: false}));
   };
 

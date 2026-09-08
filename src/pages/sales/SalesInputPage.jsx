@@ -425,6 +425,7 @@ export default function SalesInputPage({ profile }) {
           : dType === 'store'
           ? { delivery_type: 'store', delivery_requested: true }
           : { delivery_type: 'none', delivery_requested: false };
+        const unitCostSnap = Number(allProducts.find(p => String(p.id) === String(l.productId))?.cost) || 0;
         const { error } = await supabase.from('sales').insert({
           sold_at: soldAt, store_name: storeName, branch_name: branchName,
           brand_id: Number(l.brandId), product_id: Number(l.productId),
@@ -432,6 +433,7 @@ export default function SalesInputPage({ profile }) {
           payment: l.payment || '카드', memo: memo.trim() || null, created_by: profile.id,
           customer_id: customerId, points_earned: linePoints,
           points_used: pointsUsedLine,
+          unit_cost: unitCostSnap,   // 판매 시점 원가 스냅샷
           ...deliveryFields,
         });
         if (error) throw error;
