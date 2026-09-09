@@ -315,6 +315,104 @@ export default function StockRequestPage({ profile, demo = false }) {
     setReceiving(prev => { const n = { ...prev }; delete n[r.id]; return n; });
   };
 
+  // ── 매장 재고이동 (다른 매장에서 온 점간이동 입고) ──
+  const [transfers, setTransfers]       = useState([]);   // 도착 대기 (dispatched)
+  const [recvTransfers, setRecvTransfers] = useState([]); // 최근 입고완료 (received)
+  const [txLoading, setTxLoading]       = useState(true);
+  const [txScan, setTxScan]             = useState(null); // 입고확인(스캔) 중인 transfer
+  const [txScanCount, setTxScanCount]   = useState(0);    // 스캔된 수량
+  const [txScanInput, setTxScanInput]   = useState('');
+  const [txSaving, setTxSaving]         = useState(false);
+
+  const fetchTransfers = useCallback(async () => {
+    if (demo) { setTransfers([]); setRecvTransfers([]); setTxLoading(false); return; }
+    setTxLoading(true);
+    const { data: pend } = await supabase.from('store_transfers')
+      .select('*, product:products(name, code, erp_code)')
+      .eq('to_store_name', store).eq('to_branch_name', branch)
+      .eq('status', 'dispatched')
+      .order('dispatched_at', { ascending: false });
+    setTransfers(pend || []);
+    const { data: rcv } = await supabase.from('store_transfers')
+      .select('*, product:products(name, code, erp_code)')
+      .eq('to_store_name', store).eq('to_branch_name', branch)
+      .eq('status', 'received')
+      .order('received_at', { ascending: false }).limit(20);
+    setRecvTransfers(rcv || []);
+    setTxLoading(false);
+  }, [store, branch, demo]);
+
+  useEffect(() => { if (tab === 'transfer') fetchTransfers(); }, [tab, fetchTransfers]);
+
+  const openTxScan  = (t) => { setTxScan(t); setTxScanCount(0); setTxScanInput(''); };
+  const closeTxScan = () => { setTxScan(null); setTxScanCount(0); setTxScanInput(''); };
+
+  // 바코드 스캔 1회 = 코드 검증 후 스캔 수량 +1 (보낸 수량 초과 방지)
+  const onTxScanEnter = () => {
+    if (!txScan) return;
+    const expected = [txScan.product?.code, txScan.product?.erp_code]
+      .filter(Boolean).map(c => String(c).trim().toLowerCase());
+    const scanned = txScanInput.trim().toLowerCase();
+    setTxScanInput('');
+    if (!scanned) return;
+    if (expected.length && !expected.includes(scanned)) {
+      toast(`바코드 불일치 — 다른 상품입니다 (예상: ${txScan.product?.code || '-'})`, 'err');
+      return;
+    }
+    setTxScanCount(c => {
+      const next = c + 1;
+      if (next > (Number(txScan.quantity) || 0)) {
+        toast(`보낸 수량(${txScan.quantity}개)을 초과할 수 없습니다`, 'err');
+        return c;
+      }
+      toast(`📷 +1 (${next}/${txScan.quantity})`, 'ok');
+      return next;
+    });
+  };
+
+  const confirmTxReceive = async () => {
+    if (!txScan) return;
+    const qty  = Number(txScanCount) || 0;
+    const sent = Number(txScan.quantity) || 0;
+    if (qty <= 0) { toast('스캔된 수량이 없습니다 — 바코드를 스캔해주세요', 'err'); return; }
+    if (qty < sent && !window.confirm(`보낸 수량 ${sent}개 중 ${qty}개만 입고됩니다.\n부족분 ${sent - qty}개는 입고되지 않습니다. 진행할까요?`)) return;
+    setTxSaving(true);
+    try {
+      const code = txScan.product?.code;
+      if (!code) throw new Error('상품 코드 누락 — 본사에 문의해주세요');
+      const { data: stockRow } = await supabase.from('store_stock')
+        .select('id, stock_qty').eq('store_name', store).eq('branch_name', branch)
+        .eq('product_code', code).maybeSingle();
+      if (stockRow) {
+        const { error } = await supabase.from('store_stock').update({
+          stock_qty: (stockRow.stock_qty || 0) + qty, updated_at: new Date().toISOString(),
+        }).eq('id', stockRow.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('store_stock').insert({
+          store_name: store, branch_name: branch,
+          product_id: txScan.product_id, product_name: txScan.product?.name || null,
+          product_code: code, stock_qty: qty, updated_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+      }
+      // dispatched 상태일 때만 반영 (중복 입고 방지)
+      const { error: updErr } = await supabase.from('store_transfers').update({
+        status: 'received', received_qty: qty,
+        received_at: new Date().toISOString(), received_by: profile.id,
+        updated_at: new Date().toISOString(),
+      }).eq('id', txScan.id).eq('status', 'dispatched');
+      if (updErr) throw updErr;
+      toast(`입고완료 — 매장 재고에 +${qty}개 반영`, 'ok');
+      closeTxScan();
+      fetchTransfers();
+    } catch (err) {
+      toast('입고 실패: ' + (err.message || err), 'err');
+    } finally {
+      setTxSaving(false);
+    }
+  };
+
   const statusBadge = (s) => {
     const map = {
       pending:       { t:'⏳ 요청대기',   bg:'#fff3e0', c:'#E65100' },
@@ -339,6 +437,7 @@ export default function StockRequestPage({ profile, demo = false }) {
         <button className={`tab ${tab==='stock'?'on':''}`} onClick={() => setTab('stock')}>📊 재고현황</button>
         <button className={`tab ${tab==='request'?'on':''}`} onClick={() => setTab('request')}>📝 발주요청</button>
         <button className={`tab ${tab==='status'?'on':''}`} onClick={() => setTab('status')}>📥 입고확인</button>
+        <button className={`tab ${tab==='transfer'?'on':''}`} onClick={() => setTab('transfer')}>🔁 매장 재고이동</button>
       </div>
 
       {/* ── 재고현황 ── */}
@@ -543,6 +642,136 @@ export default function StockRequestPage({ profile, demo = false }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── 매장 재고이동 (점간이동 입고) ── */}
+      {tab === 'transfer' && (
+        <div className="card">
+          <div className="card-label">🔁 매장 재고이동 — 입고확인</div>
+          <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>
+            📍 {store} · {branch} · 다른 매장에서 이 매장으로 보낸 재고이동입니다. 실제 물품 도착 후 <b>[입고확인]</b> → 바코드 스캔한 수량만큼 재고에 반영됩니다.
+          </div>
+
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>📥 도착 대기 ({transfers.length}건)</div>
+          {txLoading ? <div className="empty"><span className="spinner"/></div>
+            : transfers.length === 0 ? <div className="empty">도착 대기 중인 재고이동이 없습니다</div>
+            : (
+            <div className="twrap" style={{ marginBottom:22 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>출고일</th><th>보낸 매장</th><th>상품</th>
+                    <th className="r" style={{ width:80 }}>수량</th><th>메모</th>
+                    <th style={{ textAlign:'center', width:120 }}>입고확인</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transfers.map(t => (
+                    <tr key={t.id}>
+                      <td className="mono" style={{ fontSize:11 }}>{t.dispatched_at ? new Date(t.dispatched_at).toLocaleDateString('ko-KR') : '-'}</td>
+                      <td><span className="badge badge-dept">{t.from_store_name}</span> <span className="badge badge-store">{t.from_branch_name}</span></td>
+                      <td style={{ fontSize:12 }}>
+                        {t.product?.name || '-'}
+                        {t.product?.code && <span style={{ fontSize:10, color:'var(--text3)', marginLeft:6, fontFamily:'var(--mono)' }}>{t.product.code}</span>}
+                      </td>
+                      <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{t.quantity}개</td>
+                      <td style={{ fontSize:11, color:'var(--text3)' }}>{t.memo || '-'}</td>
+                      <td style={{ textAlign:'center' }}>
+                        <button type="button" onClick={() => openTxScan(t)} disabled={txSaving}
+                          style={{ height:28, padding:'0 12px', border:'1px solid var(--success)', borderRadius:4, background:'#e8f5e9', color:'var(--success)', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                          📥 입고확인
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>✅ 최근 입고완료 (최근 20건)</div>
+          {recvTransfers.length === 0 ? <div className="empty">입고완료 이력이 없습니다</div>
+            : (
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>입고일</th><th>보낸 매장</th><th>상품</th>
+                    <th className="r" style={{ width:120 }}>입고/보낸</th><th>메모</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recvTransfers.map(t => {
+                    const rq = t.received_qty != null ? Number(t.received_qty) : Number(t.quantity);
+                    const short = rq < Number(t.quantity);
+                    return (
+                      <tr key={t.id}>
+                        <td className="mono" style={{ fontSize:11 }}>{t.received_at ? new Date(t.received_at).toLocaleDateString('ko-KR') : '-'}</td>
+                        <td><span className="badge badge-dept">{t.from_store_name}</span> <span className="badge badge-store">{t.from_branch_name}</span></td>
+                        <td style={{ fontSize:12 }}>{t.product?.name || '-'}</td>
+                        <td className="r" style={{ fontFamily:'var(--mono)' }}>
+                          <b style={{ color: short ? 'var(--danger)' : 'var(--text)' }}>{rq}</b> / {t.quantity}개
+                          {short && <span style={{ fontSize:10, color:'var(--danger)', marginLeft:4 }}>부족</span>}
+                        </td>
+                        <td style={{ fontSize:11, color:'var(--text3)' }}>{t.memo || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 재고이동 입고 — 바코드 스캔(수량 카운트) 모달 */}
+      {txScan && (
+        <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={closeTxScan}>
+          <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)' }}/>
+          <div style={{ position:'relative', background:'#fff', borderRadius:12, width:'min(440px, 92vw)', padding:'22px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.2)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>🔁 재고이동 입고 — 바코드 스캔</div>
+            <div style={{ fontSize:13, color:'var(--text2)', marginBottom:4 }}>
+              <strong>{txScan.product?.name}</strong>
+              <span style={{ marginLeft:8, color:'var(--text3)' }}>({txScan.from_store_name} {txScan.from_branch_name} → 보낸 수량 {txScan.quantity}개)</span>
+            </div>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:14, fontFamily:'var(--mono)' }}>
+              상품코드: {txScan.product?.code || '-'}
+            </div>
+
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, margin:'6px 0 14px' }}>
+              <button type="button" onClick={() => setTxScanCount(c => Math.max(0, c - 1))}
+                style={{ width:36, height:36, border:'1px solid var(--border)', borderRadius:8, background:'#fff', fontSize:18, fontWeight:700, cursor:'pointer' }}>−</button>
+              <div style={{ minWidth:120, textAlign:'center' }}>
+                <div style={{ fontSize:30, fontWeight:800, fontFamily:'var(--mono)', lineHeight:1, color: txScanCount > 0 ? 'var(--success)' : 'var(--text3)' }}>
+                  {txScanCount}<span style={{ fontSize:15, color:'var(--text3)', fontWeight:600 }}> / {txScan.quantity}</span>
+                </div>
+                <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>스캔 수량</div>
+              </div>
+              <button type="button" onClick={() => setTxScanCount(c => Math.min(Number(txScan.quantity) || 0, c + 1))}
+                style={{ width:36, height:36, border:'1px solid var(--border)', borderRadius:8, background:'#fff', fontSize:18, fontWeight:700, cursor:'pointer' }}>＋</button>
+            </div>
+
+            <input autoFocus value={txScanInput}
+              onChange={e => setTxScanInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onTxScanEnter(); } }}
+              placeholder="바코드 스캔 (스캔할 때마다 +1)"
+              style={{ width:'100%', height:42, padding:'0 12px', border:'2px solid var(--accent)', borderRadius:'var(--radius)', fontSize:14, fontFamily:'var(--mono)', outline:'none' }}/>
+            <div style={{ fontSize:11, color:'var(--text3)', marginTop:8 }}>
+              바코드를 스캔하면 자동으로 수량이 올라갑니다. 스캔한 수량만큼 매장 재고에 +반영됩니다. (±버튼으로 수동 조정 가능)
+            </div>
+
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:16 }}>
+              <button type="button" onClick={closeTxScan} disabled={txSaving}
+                style={{ height:38, padding:'0 18px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>취소</button>
+              <button type="button" onClick={confirmTxReceive} disabled={txSaving || txScanCount <= 0}
+                style={{ height:38, padding:'0 18px', border:'none', borderRadius:'var(--radius)', background: txScanCount > 0 ? 'var(--success)' : '#ccc', color:'#fff', fontSize:13, fontWeight:700, cursor: txScanCount > 0 ? 'pointer' : 'not-allowed' }}>
+                {txSaving ? <span className="spinner"/> : `입고확인 (${txScanCount}개)`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

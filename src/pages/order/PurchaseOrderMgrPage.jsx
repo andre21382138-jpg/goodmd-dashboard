@@ -74,11 +74,6 @@ export default function PurchaseOrderMgrPage({ profile }) {
     setReceivingOrder(p => { const n = {...p}; delete n[r.id]; return n; });
   };
 
-  // 재고이동 입고 탭
-  const [pendingTransfers, setPendingTransfers] = useState([]);
-  const [receivedTransfers, setReceivedTransfers] = useState([]);
-  const [loadingTransfers, setLoadingTransfers] = useState(false);
-
   // 본사 재고요청 입고 (order_requests)
   const [pendingOrderReqs,  setPendingOrderReqs]  = useState([]);
   const [receivedOrderReqs, setReceivedOrderReqs] = useState([]);
@@ -103,25 +98,6 @@ export default function PurchaseOrderMgrPage({ profile }) {
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   const fetchTransfers = useCallback(async () => {
-    setLoadingTransfers(true);
-    // 도착 대기 (status='dispatched')
-    const { data: pend } = await supabase.from('store_transfers')
-      .select('*, product:products(name, code)')
-      .eq('to_store_name', profile.department)
-      .eq('to_branch_name', profile.branch)
-      .eq('status', 'dispatched')
-      .order('dispatched_at', { ascending: false });
-    setPendingTransfers(pend || []);
-    // 최근 입고완료 (status='received', 최근 20건)
-    const { data: rcv } = await supabase.from('store_transfers')
-      .select('*, product:products(name, code)')
-      .eq('to_store_name', profile.department)
-      .eq('to_branch_name', profile.branch)
-      .eq('status', 'received')
-      .order('received_at', { ascending: false })
-      .limit(20);
-    setReceivedTransfers(rcv || []);
-
     // 본사 재고요청 입고 대기 (status='ordered') + 최근 입고완료(status='received')
     const { data: poPending } = await supabase.from('order_requests')
       .select('id, store_name, branch_name, quantity, memo, status, request_date, created_at, ordered_at, received_at, tracking_number, brand:brands(name), product:products(name, code)')
@@ -139,8 +115,6 @@ export default function PurchaseOrderMgrPage({ profile }) {
       .order('received_at', { ascending: false })
       .limit(20);
     setReceivedOrderReqs(poRecv || []);
-
-    setLoadingTransfers(false);
   }, [profile.department, profile.branch]);
 
   useEffect(() => { if (tab === 'receive') fetchTransfers(); }, [tab, fetchTransfers]);
@@ -378,59 +352,6 @@ export default function PurchaseOrderMgrPage({ profile }) {
       fetchOrders();
     } catch (err) { toast('처리 실패: ' + err.message, 'err'); }
     setSaving(false);
-  };
-
-  const handleReceiveTransfer = async (transfer) => {
-    if (!window.confirm(`${transfer.product?.name || '상품'} ${transfer.quantity}개 입고확인하시겠습니까?`)) return;
-    setSaving(true);
-    try {
-      // 1) 우리 매장 재고 가산 — 매장재고는 product_code 키이므로 코드로 매칭
-      const code = transfer.product?.code || null;
-      let stockRow = null;
-      if (code) {
-        const { data } = await supabase.from('store_stock')
-          .select('id, stock_qty')
-          .eq('store_name', profile.department)
-          .eq('branch_name', profile.branch)
-          .eq('product_code', code)
-          .maybeSingle();
-        stockRow = data;
-      }
-
-      if (stockRow) {
-        const { error } = await supabase.from('store_stock').update({
-          stock_qty: (stockRow.stock_qty || 0) + transfer.quantity,
-          updated_at: new Date().toISOString(),
-        }).eq('id', stockRow.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('store_stock').insert({
-          store_name: profile.department,
-          branch_name: profile.branch,
-          product_id: transfer.product_id,
-          product_name: transfer.product?.name || null,
-          product_code: code,
-          stock_qty: transfer.quantity,
-        });
-        if (error) throw error;
-      }
-
-      // 2) store_transfers status 업데이트
-      const { error: tErr } = await supabase.from('store_transfers').update({
-        status: 'received',
-        received_at: new Date().toISOString(),
-        received_by: profile.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', transfer.id);
-      if (tErr) throw tErr;
-
-      toast(`입고확인 완료 (재고 +${transfer.quantity})`, 'ok');
-      fetchTransfers();
-    } catch (err) {
-      toast('처리 실패: ' + (err.message || err), 'err');
-    } finally {
-      setSaving(false);
-    }
   };
 
   return (
@@ -839,67 +760,6 @@ export default function PurchaseOrderMgrPage({ profile }) {
             </>
           )}
 
-          {/* 도착 대기 */}
-          <div style={{fontSize:13, fontWeight:700, marginBottom:10}}>📥 점간 이동 입고 대기 ({pendingTransfers.length}건)</div>
-          {loadingTransfers ? <div className="empty"><span className="spinner"/></div>
-            : pendingTransfers.length === 0 ? <div className="empty">도착 대기 중인 재고이동이 없습니다</div>
-            : (
-            <div className="twrap" style={{marginBottom:20}}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>출고일</th><th>출고 매장</th><th>상품</th>
-                    <th className="r">수량</th><th>메모</th>
-                    <th style={{textAlign:'center', width:120}}>입고확인</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingTransfers.map(t => (
-                    <tr key={t.id}>
-                      <td className="mono" style={{fontSize:11}}>{new Date(t.dispatched_at).toLocaleDateString('ko-KR')}</td>
-                      <td><span className="badge badge-dept">{t.from_store_name}</span> <span className="badge badge-store">{t.from_branch_name}</span></td>
-                      <td>{t.product?.name || '-'}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{t.quantity}개</td>
-                      <td style={{fontSize:11, color:'var(--text3)'}}>{t.memo || '-'}</td>
-                      <td style={{textAlign:'center'}}>
-                        <button className="btn btn-p" onClick={() => handleReceiveTransfer(t)} disabled={saving}
-                          style={{height:30, padding:'0 14px', fontSize:12, fontWeight:700}}>
-                          ✓ 입고확인
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* 최근 입고완료 */}
-          <div style={{fontSize:13, fontWeight:700, marginBottom:10, marginTop:14}}>✅ 최근 입고완료 (최근 20건)</div>
-          {receivedTransfers.length === 0 ? <div className="empty">입고완료 이력이 없습니다</div>
-            : (
-            <div className="twrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>입고일</th><th>출고 매장</th><th>상품</th>
-                    <th className="r">수량</th><th>메모</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receivedTransfers.map(t => (
-                    <tr key={t.id}>
-                      <td className="mono" style={{fontSize:11}}>{t.received_at ? new Date(t.received_at).toLocaleDateString('ko-KR') : '-'}</td>
-                      <td><span className="badge badge-dept">{t.from_store_name}</span> <span className="badge badge-store">{t.from_branch_name}</span></td>
-                      <td>{t.product?.name || '-'}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)'}}>{t.quantity}개</td>
-                      <td style={{fontSize:11, color:'var(--text3)'}}>{t.memo || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
     </div>
