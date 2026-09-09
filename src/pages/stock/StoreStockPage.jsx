@@ -479,8 +479,9 @@ export default function StoreStockPage({ profile }) {
                             style={{width:70, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:13, textAlign:'right', outline:'none'}}/>
                         ) : (
                           <span style={{fontFamily:'var(--mono)', fontWeight:700,
-                            color: (s.stock_qty||0) === 0 ? 'var(--danger)' : isLow ? 'var(--accent)' : 'var(--text)'}}>
+                            color: (s.stock_qty||0) < 0 ? 'var(--danger)' : (s.stock_qty||0) === 0 ? 'var(--danger)' : isLow ? 'var(--accent)' : 'var(--text)'}}>
                             {(s.stock_qty||0).toLocaleString()}
+                            {(s.stock_qty||0) < 0 && <span style={{fontSize:10, marginLeft:4, fontWeight:700}}>부족</span>}
                             {(s.stock_qty||0) === 0 && <span style={{fontSize:10, marginLeft:4}}>품절</span>}
                             {isLow && (s.stock_qty||0) > 0 && <span style={{fontSize:10, marginLeft:4}}>⚠️</span>}
                           </span>

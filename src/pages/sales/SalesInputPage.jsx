@@ -450,7 +450,7 @@ export default function SalesInputPage({ profile }) {
             .eq('product_code', prod.code)
             .maybeSingle();
           if (stockRow) {
-            const newQty = Math.max(0, (stockRow.stock_qty||0) - (Number(l.quantity)||0));
+            const newQty = (stockRow.stock_qty||0) - (Number(l.quantity)||0);  // 음수 허용(재고 부족분 마이너스 표시)
             await supabase.from('store_stock')
               .update({ stock_qty: newQty, updated_at: new Date().toISOString() })
               .eq('id', stockRow.id);

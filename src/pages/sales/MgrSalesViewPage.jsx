@@ -216,7 +216,7 @@ export default function MgrSalesViewPage({ profile }) {
           .eq('product_code', code).maybeSingle();
         if (stockRow) {
           await supabase.from('store_stock').update({
-            stock_qty: Math.max(0, (stockRow.stock_qty||0) - (Number(r.quantity)||0)),
+            stock_qty: (stockRow.stock_qty||0) - (Number(r.quantity)||0),  // 음수 허용(재고 부족분 마이너스 표시)
             updated_at: new Date().toISOString(),
           }).eq('id', stockRow.id);
         }
