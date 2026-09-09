@@ -375,7 +375,7 @@ export default function StockRequestPage({ profile, demo = false }) {
     const qty  = Number(txScanCount) || 0;
     const sent = Number(txScan.quantity) || 0;
     if (qty <= 0) { toast('스캔된 수량이 없습니다 — 바코드를 스캔해주세요', 'err'); return; }
-    if (qty < sent && !window.confirm(`보낸 수량 ${sent}개 중 ${qty}개만 입고됩니다.\n부족분 ${sent - qty}개는 입고되지 않습니다. 진행할까요?`)) return;
+    if (qty < sent && !window.confirm(`보낸 수량 ${sent}개 중 ${qty}개만 입고됩니다.\n부족분 ${sent - qty}개는 보낸 매장(${txScan.from_store_name} ${txScan.from_branch_name}) 재고로 복원됩니다. 진행할까요?`)) return;
     setTxSaving(true);
     try {
       const code = txScan.product?.code;
@@ -403,7 +403,34 @@ export default function StockRequestPage({ profile, demo = false }) {
         updated_at: new Date().toISOString(),
       }).eq('id', txScan.id).eq('status', 'dispatched');
       if (updErr) throw updErr;
-      toast(`입고완료 — 매장 재고에 +${qty}개 반영`, 'ok');
+
+      // 부족 입고분은 보낸 매장 재고로 복원 (보낸 매장은 출고 시 이미 -sent 되었으므로
+      // 실제 도착이 적으면 그만큼 되돌려 실질 차감 = 받은 수량이 되도록 한다)
+      const shortfall = sent - qty;
+      if (shortfall > 0 && code) {
+        const { data: srcRow } = await supabase.from('store_stock')
+          .select('id, stock_qty')
+          .eq('store_name', txScan.from_store_name)
+          .eq('branch_name', txScan.from_branch_name)
+          .eq('product_code', code).maybeSingle();
+        if (srcRow) {
+          const { error: e } = await supabase.from('store_stock').update({
+            stock_qty: (srcRow.stock_qty || 0) + shortfall, updated_at: new Date().toISOString(),
+          }).eq('id', srcRow.id);
+          if (e) throw e;
+        } else {
+          const { error: e } = await supabase.from('store_stock').insert({
+            store_name: txScan.from_store_name, branch_name: txScan.from_branch_name,
+            product_id: txScan.product_id, product_name: txScan.product?.name || null,
+            product_code: code, stock_qty: shortfall, updated_at: new Date().toISOString(),
+          });
+          if (e) throw e;
+        }
+      }
+
+      toast(shortfall > 0
+        ? `입고완료 — ${store} +${qty}개 / 부족분 ${shortfall}개 ${txScan.from_store_name} ${txScan.from_branch_name} 재고로 복원`
+        : `입고완료 — 매장 재고에 +${qty}개 반영`, 'ok');
       closeTxScan();
       fetchTransfers();
     } catch (err) {
