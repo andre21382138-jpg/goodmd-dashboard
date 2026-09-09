@@ -324,6 +324,8 @@ export default function StockRequestPage({ profile, demo = false }) {
   const [txScanInput, setTxScanInput]   = useState('');
   const [txSaving, setTxSaving]         = useState(false);
 
+  // 출고일 2026-09-01(KST) 이후 재고이동만 노출 (그 이전 이력은 제외)
+  const TRANSFER_FROM = '2026-08-31T15:00:00Z';
   const fetchTransfers = useCallback(async () => {
     if (demo) { setTransfers([]); setRecvTransfers([]); setTxLoading(false); return; }
     setTxLoading(true);
@@ -331,12 +333,14 @@ export default function StockRequestPage({ profile, demo = false }) {
       .select('*, product:products(name, code, erp_code)')
       .eq('to_store_name', store).eq('to_branch_name', branch)
       .eq('status', 'dispatched')
+      .gte('dispatched_at', TRANSFER_FROM)
       .order('dispatched_at', { ascending: false });
     setTransfers(pend || []);
     const { data: rcv } = await supabase.from('store_transfers')
       .select('*, product:products(name, code, erp_code)')
       .eq('to_store_name', store).eq('to_branch_name', branch)
       .eq('status', 'received')
+      .gte('dispatched_at', TRANSFER_FROM)
       .order('received_at', { ascending: false }).limit(20);
     setRecvTransfers(rcv || []);
     setTxLoading(false);
