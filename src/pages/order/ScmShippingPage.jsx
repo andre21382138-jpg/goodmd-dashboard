@@ -68,6 +68,25 @@ export default function ScmShippingPage({ profile }) {
       const addrMap = new Map();
       for (const a of (addrs || [])) addrMap.set(`${a.store_name}|${a.branch_name}`, a);
 
+      // 수취인 전화번호 = 해당 매장의 현재 매니저 전화(없으면 부매니저) → 매니저 변경 시 자동 반영
+      // 매니저가 없으면 store_addresses.recipient_phone으로 폴백
+      const { data: members } = await supabase.from('store_members')
+        .select('phone, job_title, store:profiles!store_account_id(department, branch)');
+      const mgrPhone = new Map();  // key(dep|br) → { manager, sub }
+      for (const m of (members || [])) {
+        const dep = m.store?.department, br = m.store?.branch;
+        if (!dep || !m.phone) continue;
+        const key = `${dep}|${br}`;
+        const cur = mgrPhone.get(key) || {};
+        if (m.job_title === '매니저' && !cur.manager) cur.manager = m.phone;
+        else if (m.job_title === '부매니저' && !cur.sub) cur.sub = m.phone;
+        mgrPhone.set(key, cur);
+      }
+      const phoneFor = (dep, br) => {
+        const c = mgrPhone.get(`${dep}|${br}`) || {};
+        return c.manager || c.sub || null;
+      };
+
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('발송요청');
@@ -86,7 +105,7 @@ export default function ScmShippingPage({ profile }) {
         ws.addRow([
           now, '', orderNo, ORDER_CONSTANTS.CHANNEL, storeFull, storeFull, 0, 1, '', '',
           r.product?.name || '', storeFull, addr.postal_code || '', addr.address || '',
-          addr.recipient_phone || '', '', r.memo || '', '', storeFull,
+          phoneFor(r.store_name, r.branch_name) || addr.recipient_phone || '', '', r.memo || '', '', storeFull,
           ORDER_CONSTANTS.ORDERER_PHONE, ORDER_CONSTANTS.ORDERER_PHONE, '', '',
           `SIDR:${r.id}`, '', '', '', '', '', r.product?.erp_code || '', r.quantity || 0,
         ]);
