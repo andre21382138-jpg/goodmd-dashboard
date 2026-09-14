@@ -1133,58 +1133,108 @@ export default function SalesInputPage({ profile }) {
         );
       })()}
 
-      {/* 오늘 입력 내역 */}
-      <div className="card">
-        <div className="card-label">오늘 입력 내역 ({recentSales.length}건)</div>
-        <div className="twrap">
-          <table>
-            <thead>
-              <tr>
-                <th>판매일</th><th>브랜드</th><th>상품명</th>
-                <th className="r">수량</th><th className="r">판매가</th><th className="r">합계금액</th>
-                <th>결제</th><th>출고방식</th><th>고객</th><th>메모</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentSales.length === 0
-                ? <tr><td colSpan={11} className="empty">입력된 판매 내역이 없습니다</td></tr>
-                : recentSales.map(s => {
-                  const fully = (s.returned_qty||0) >= (s.quantity||0);
-                  const partial = (s.returned_qty||0) > 0 && !fully;
-                  const effQ = Math.max(0, (s.quantity||0) - (s.returned_qty||0));
-                  const strike = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
-                  return (
-                  <tr key={s.id} style={fully ? {background:'#fafafa'} : {}}>
-                    <td className="mono" style={strike}>{s.sold_at}</td>
-                    <td style={strike}>{s.brand?.name || '-'}</td>
-                    <td style={strike}>
-                      {s.product?.name || '-'}
-                      {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
-                      {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}</span>}
-                    </td>
-                    <td className="r" style={strike}>{effQ}</td>
-                    <td className="r" style={strike}>{Math.round(Number(s.price)||0).toLocaleString()}원</td>
-                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', ...strike}}>{Math.round(effQ * Number(s.price||0)).toLocaleString()}원</td>
-                    <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9', ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
-                    <td style={strike}>
-                      {s.payment === '강좌매출' && <span style={{fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>강좌매출</span>}
-                      {s.payment !== '강좌매출' && (!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
-                      {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
-                      {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
-                      {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
-                    </td>
-                    <td style={{fontSize:12, ...strike}}>
-                      {s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}
-                    </td>
-                    <td style={{fontSize:11,color:'var(--text2)', ...strike}}>{s.memo || '-'}</td>
-                    <td><button className="btn-danger" onClick={() => handleDelete(s.id)}>삭제</button></td>
-                  </tr>
-                )})
-              }
-            </tbody>
-          </table>
+      {/* 오늘 입력 내역 — 판매 / 반품 분리 */}
+      {(() => {
+        const saleRows   = recentSales.filter(s => s.payment !== '반품');
+        const returnRows = recentSales.filter(s => s.payment === '반품');
+        return (
+        <>
+        {/* 오늘 판매입력 내역 */}
+        <div className="card">
+          <div className="card-label">오늘 판매입력 내역 ({saleRows.length}건)</div>
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>판매일</th><th>브랜드</th><th>상품명</th>
+                  <th className="r">수량</th><th className="r">판매가</th><th className="r">합계금액</th>
+                  <th>결제</th><th>출고방식</th><th>고객</th><th>메모</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {saleRows.length === 0
+                  ? <tr><td colSpan={11} className="empty">입력된 판매 내역이 없습니다</td></tr>
+                  : saleRows.map(s => {
+                    const fully = (s.returned_qty||0) >= (s.quantity||0);
+                    const partial = (s.returned_qty||0) > 0 && !fully;
+                    const effQ = Math.max(0, (s.quantity||0) - (s.returned_qty||0));
+                    const strike = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};
+                    return (
+                    <tr key={s.id} style={fully ? {background:'#fafafa'} : {}}>
+                      <td className="mono" style={strike}>{s.sold_at}</td>
+                      <td style={strike}>{s.brand?.name || '-'}</td>
+                      <td style={strike}>
+                        {s.product?.name || '-'}
+                        {fully   && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품됨</span>}
+                        {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}</span>}
+                      </td>
+                      <td className="r" style={strike}>{effQ}</td>
+                      <td className="r" style={strike}>{Math.round(Number(s.price)||0).toLocaleString()}원</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', ...strike}}>{Math.round(effQ * Number(s.price||0)).toLocaleString()}원</td>
+                      <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9', ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
+                      <td style={strike}>
+                        {s.payment === '강좌매출' && <span style={{fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>강좌매출</span>}
+                        {s.payment !== '강좌매출' && (!s.delivery_type || s.delivery_type === 'none') && <span style={{fontSize:10, fontWeight:700, color:'#455a64', background:'#eceff1', border:'1px solid #b0bec5', padding:'1px 6px', borderRadius:3}}>매장판매</span>}
+                        {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(매장)</span>}
+                        {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                        {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3}}>택배(본사)</span>}
+                      </td>
+                      <td style={{fontSize:12, ...strike}}>
+                        {s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}
+                      </td>
+                      <td style={{fontSize:11,color:'var(--text2)', ...strike}}>{s.memo || '-'}</td>
+                      <td><button className="btn-danger" onClick={() => handleDelete(s.id)}>삭제</button></td>
+                    </tr>
+                  )})
+                }
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+
+        {/* 오늘 반품입력 내역 (삭제 불가) */}
+        <div className="card" style={{marginTop:14}}>
+          <div className="card-label">
+            오늘 반품입력 내역 ({returnRows.length}건)
+            <span style={{marginLeft:8, fontSize:11, fontWeight:600, color:'var(--danger)'}}>· 반품 내역은 삭제할 수 없습니다</span>
+          </div>
+          <div className="twrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>반품일</th><th>브랜드</th><th>상품명</th>
+                  <th className="r">수량</th><th className="r">판매가</th><th className="r">합계금액</th>
+                  <th>고객</th><th>메모</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnRows.length === 0
+                  ? <tr><td colSpan={8} className="empty">오늘 반품 내역이 없습니다</td></tr>
+                  : returnRows.map(s => (
+                    <tr key={s.id} style={{background:'#fff5f5'}}>
+                      <td className="mono">{s.sold_at}</td>
+                      <td>{s.brand?.name || '-'}</td>
+                      <td>
+                        {s.product?.name || '-'}
+                        <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'1px 6px', borderRadius:3}}>반품</span>
+                      </td>
+                      <td className="r">{s.quantity}</td>
+                      <td className="r" style={{color:'var(--danger)'}}>{Math.round(Number(s.price)||0).toLocaleString()}원</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--danger)'}}>{Math.round((Number(s.quantity)||0) * (Number(s.price)||0)).toLocaleString()}원</td>
+                      <td style={{fontSize:12}}>
+                        {s.customer ? <span style={{color:'var(--success)',fontWeight:600}}>👤 {s.customer.name}</span> : '-'}
+                      </td>
+                      <td style={{fontSize:11,color:'var(--text2)'}}>{s.memo || '-'}</td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+        </>
+        );
+      })()}
     </div>
   );
 }
