@@ -89,7 +89,8 @@ async function exportDeliveryRequests(groups) {
 }
 
 function groupKey(s) {
-  return `${s.sold_at}|${s.recipient_phone || ''}|${s.customer_id || ''}|${s.store_name}|${s.branch_name}`;
+  // 배송지(받는사람+주소)까지 키에 포함 — 구매자 연락처가 같아도 받는사람/주소가 다르면 별도 배송건으로 분리
+  return `${s.sold_at}|${s.recipient_phone || ''}|${s.recipient_name || ''}|${s.recipient_address || ''}|${s.customer_id || ''}|${s.store_name}|${s.branch_name}`;
 }
 
 function groupSales(rows) {
