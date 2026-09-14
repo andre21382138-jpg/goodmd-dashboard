@@ -1163,8 +1163,8 @@ export default function SalesInputPage({ profile }) {
                       {partial && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>부분반품 {s.returned_qty}</span>}
                     </td>
                     <td className="r" style={strike}>{effQ}</td>
-                    <td className="r" style={strike}>{Number(s.price).toLocaleString()}원</td>
-                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', ...strike}}>{(effQ * Number(s.price||0)).toLocaleString()}원</td>
+                    <td className="r" style={strike}>{Math.round(Number(s.price)||0).toLocaleString()}원</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', ...strike}}>{Math.round(effQ * Number(s.price||0)).toLocaleString()}원</td>
                     <td><span className="badge" style={{background:'#e3f2fd',color:'#1565C0',border:'1px solid #90caf9', ...(fully?{opacity:0.5}:{})}}>{s.payment}</span></td>
                     <td style={strike}>
                       {s.payment === '강좌매출' && <span style={{fontSize:10, fontWeight:700, color:'#6a1b9a', background:'#f3e5f5', border:'1px solid #ce93d8', padding:'1px 6px', borderRadius:3}}>강좌매출</span>}
