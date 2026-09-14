@@ -27,13 +27,12 @@ async function exportDeliveryRequests(groups) {
   const yymmdd = `${String(now.getFullYear()).slice(-2)}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
 
   // 그룹의 각 라인을 한 행씩 추가
-  // 주문번호: 요청건에 고정 — 판매일 + 그룹 대표 sale id 기반 (재다운로드해도 동일)
+  // 주문번호: 상품(라인) 단위 — 판매일 + 각 sale id 기반 (같은 주문이라도 상품마다 다른 번호)
   for (const g of groups) {
     const storeFull = `${g.store_name || ''}${g.branch_name || ''}`;
     const soldYmd = (g.sold_at || '').replace(/-/g, '') || ymd;
-    const repId = Math.min(...g.items.map(it => Number(it.id) || 0));
-    const orderNo = `${soldYmd}-${String(repId).padStart(6, '0')}`; // 그룹(주문) 단위 고정값
     for (const it of g.items) {
+      const orderNo = `${soldYmd}-${String(it.id).padStart(6, '0')}`; // 상품(라인)마다 고유
       const soldDate = g.sold_at ? new Date(g.sold_at) : null;
       ws.addRow([
         soldDate,                                  // 0  발송일
