@@ -292,7 +292,10 @@ export default function HQDeliveryBizView({ kind, profile }) {
                   <tr key={r.id}>
                     <td className="mono" style={{fontSize:11}}>{r.sold_at}</td>
                     <td style={{fontSize:12, fontWeight:600}}>{r.company_name || '-'}</td>
-                    <td style={{fontSize:12}}>{r.product_name || r.product?.name || '-'}</td>
+                    <td style={{fontSize:12}}>
+                      {r.product_name || r.product?.name || '-'}
+                      {r.product?.erp_code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>ERP: {r.product.erp_code}</div>}
+                    </td>
                     <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{r.quantity}</td>
                     <td style={{fontSize:12}}>{r.recipient_name || '-'}</td>
                     <td style={{fontSize:11, color:'var(--text2)'}}>{r.recipient_address || '-'}</td>
