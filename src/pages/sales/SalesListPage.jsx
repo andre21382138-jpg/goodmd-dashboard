@@ -265,7 +265,7 @@ export default function SalesListPage({ setPage }) {
 
   // 실효 수량/금액 — 반품은 별도 음수 매출 row로 처리되므로 returned_qty는 무시
   const effQty = (s) => (s.quantity || 0);
-  const effAmt = (s) => (s.quantity || 0) * (s.price || 0);
+  const effAmt = (s) => Math.round((s.quantity || 0) * (s.price || 0));  // 라인별 원 단위 반올림(소수점 제거)
   // 반품 row 식별 (price < 0 또는 payment='반품')
   const isReturnEntry = (s) => (Number(s.price) || 0) < 0 || s.payment === '반품';
   // 이전 호환 — 이제 사용 안 함 (음수 매출 정책)
