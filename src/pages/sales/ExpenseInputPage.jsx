@@ -25,10 +25,14 @@ export default function ExpenseInputPage({ profile }) {
 
   const loadMonth = useCallback(async () => {
     if (!storeName || !branchName) { setMonthRows([]); return; }
-    const { data } = await supabase.from('store_expenses').select('*')
+    // 월말 경계는 '다음 달 1일 미만'으로 — 30일/2월 등 월 길이와 무관하게 정확히 당월만 조회
+    const [cy, cm] = curMonth.split('-').map(Number);
+    const nextMonthFirst = cm === 12 ? `${cy + 1}-01-01` : `${cy}-${String(cm + 1).padStart(2, '0')}-01`;
+    const { data, error } = await supabase.from('store_expenses').select('*')
       .eq('store_name', storeName).eq('branch_name', branchName)
-      .gte('expense_date', `${curMonth}-01`).lte('expense_date', `${curMonth}-31`)
+      .gte('expense_date', `${curMonth}-01`).lt('expense_date', nextMonthFirst)
       .order('expense_date', { ascending: false }).order('id', { ascending: false });
+    if (error) { toast('지출 내역 조회 실패: ' + error.message, 'err'); setMonthRows([]); return; }
     const map = new Map(); // date → {date, items, total} (쿼리가 날짜 내림차순이라 삽입순 유지)
     for (const e of (data || [])) {
       if (!map.has(e.expense_date)) map.set(e.expense_date, { date: e.expense_date, items: [], total: 0 });
