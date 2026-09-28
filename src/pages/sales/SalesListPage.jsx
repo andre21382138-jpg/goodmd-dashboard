@@ -692,14 +692,17 @@ export default function SalesListPage({ setPage }) {
                   <th className="r">총 수량</th>
                   <th className="r">카드매출</th>
                   <th className="r">현금매출</th>
+                  <th className="r" title="강좌매출·반품 등 (카드/현금 외)">기타</th>
                   <th className="r">총 매출액</th>
                   <th style={{width:120, textAlign:'center'}}>상세</th>
                 </tr>
               </thead>
               <tbody>
                 {storeAgg.length === 0
-                  ? <tr><td colSpan={8} className="empty">조회된 매장이 없습니다</td></tr>
-                  : storeAgg.map(g => (
+                  ? <tr><td colSpan={9} className="empty">조회된 매장이 없습니다</td></tr>
+                  : storeAgg.map(g => {
+                    const etcAmt = g.amt - g.cardAmt - g.cashAmt;  // 강좌매출·반품 등 (카드/현금 외) — 카드+현금+기타 = 총매출
+                    return (
                     <tr key={g.key}>
                       <td><span className="badge badge-dept">{g.store_name}</span></td>
                       <td><span className="badge badge-store">{g.branch_name}</span></td>
@@ -707,6 +710,7 @@ export default function SalesListPage({ setPage }) {
                       <td className="r" style={{fontFamily:'var(--mono)'}}>{g.qty.toLocaleString()}</td>
                       <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{g.cardAmt.toLocaleString()}원</td>
                       <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{g.cashAmt.toLocaleString()}원</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', color: etcAmt < 0 ? 'var(--danger)' : 'var(--text3)'}}>{etcAmt.toLocaleString()}원</td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{g.amt.toLocaleString()}원</td>
                       <td style={{textAlign:'center'}}>
                         <button className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}}
@@ -715,7 +719,8 @@ export default function SalesListPage({ setPage }) {
                         </button>
                       </td>
                     </tr>
-                  ))
+                  );
+                  })
                 }
               </tbody>
             </table>
