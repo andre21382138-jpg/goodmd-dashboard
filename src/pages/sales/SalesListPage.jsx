@@ -401,12 +401,17 @@ export default function SalesListPage({ setPage }) {
           count: 0,
           qty: 0,
           amt: 0,
+          cardAmt: 0,
+          cashAmt: 0,
         });
       }
       const g = map.get(key);
       g.count += 1;
       g.qty   += effQty(s);
-      g.amt   += effAmt(s);
+      const ea = effAmt(s);
+      g.amt   += ea;
+      if (s.payment === '카드') g.cardAmt += ea;
+      else if (s.payment === '현금') g.cashAmt += ea;
     }
     return [...map.values()].sort((a,b) => b.amt - a.amt);
   }, [filtered]);
@@ -685,19 +690,23 @@ export default function SalesListPage({ setPage }) {
                   <th>지점</th>
                   <th className="r">판매건수</th>
                   <th className="r">총 수량</th>
+                  <th className="r">카드매출</th>
+                  <th className="r">현금매출</th>
                   <th className="r">총 매출액</th>
                   <th style={{width:120, textAlign:'center'}}>상세</th>
                 </tr>
               </thead>
               <tbody>
                 {storeAgg.length === 0
-                  ? <tr><td colSpan={6} className="empty">조회된 매장이 없습니다</td></tr>
+                  ? <tr><td colSpan={8} className="empty">조회된 매장이 없습니다</td></tr>
                   : storeAgg.map(g => (
                     <tr key={g.key}>
                       <td><span className="badge badge-dept">{g.store_name}</span></td>
                       <td><span className="badge badge-store">{g.branch_name}</span></td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{g.count.toLocaleString()}</td>
                       <td className="r" style={{fontFamily:'var(--mono)'}}>{g.qty.toLocaleString()}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{g.cardAmt.toLocaleString()}원</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{g.cashAmt.toLocaleString()}원</td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{g.amt.toLocaleString()}원</td>
                       <td style={{textAlign:'center'}}>
                         <button className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}}
