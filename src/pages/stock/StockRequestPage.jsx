@@ -395,7 +395,7 @@ export default function StockRequestPage({ profile, demo = false }) {
       } else {
         const { error } = await supabase.from('store_stock').insert({
           store_name: store, branch_name: branch,
-          product_id: txScan.product_id, product_name: txScan.product?.name || null,
+          product_name: txScan.product?.name || null,
           product_code: code, stock_qty: qty, updated_at: new Date().toISOString(),
         });
         if (error) throw error;
@@ -425,7 +425,7 @@ export default function StockRequestPage({ profile, demo = false }) {
         } else {
           const { error: e } = await supabase.from('store_stock').insert({
             store_name: txScan.from_store_name, branch_name: txScan.from_branch_name,
-            product_id: txScan.product_id, product_name: txScan.product?.name || null,
+            product_name: txScan.product?.name || null,
             product_code: code, stock_qty: shortfall, updated_at: new Date().toISOString(),
           });
           if (e) throw e;

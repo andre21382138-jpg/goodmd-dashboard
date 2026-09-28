@@ -47,9 +47,12 @@ export default function ProductMgmtPage({ subPage }) {
     const codeTrim    = newCode.trim();
     const erpCodeTrim = newErpCode.trim();
     // 중복 검증 — 최신 상태를 DB에서 직접 확인(판매중지 포함, 목록 staleness 방지)
+    // ⚠️ 코드에 괄호 등 특수문자(예: 8809722525684_B(30P))가 있으면 .or() 파싱이 깨지므로 값을 큰따옴표로 감싼다
+    const dupVals = [...new Set([codeTrim, erpCodeTrim].filter(Boolean))];
+    const dupOr = dupVals.flatMap(v => [`code.eq."${v}"`, `erp_code.eq."${v}"`]).join(',');
     const { data: dupRows } = await supabase.from('products')
       .select('id, name, code, erp_code, is_sales_stopped')
-      .or(`code.eq.${codeTrim},erp_code.eq.${erpCodeTrim},code.eq.${erpCodeTrim},erp_code.eq.${codeTrim}`)
+      .or(dupOr)
       .limit(5);
     const dup = (dupRows || [])[0];
     if (dup) {
