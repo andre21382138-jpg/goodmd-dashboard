@@ -205,6 +205,29 @@ export default function SalesListPage({ setPage }) {
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
+  // 반품(음수)행의 '원본 매출' 결제수단 조회 → 카드/현금 매출을 반품 반영(순액)으로 계산하기 위함
+  const [origPayMap, setOrigPayMap] = useState(new Map()); // 원본 sale_id → payment('카드'/'현금'...)
+  useEffect(() => {
+    const ids = [...new Set(
+      sales.filter(s => s.payment === '반품')
+        .map(s => { const m = String(s.memo || '').match(/매출 ID:(\d+)/); return m ? Number(m[1]) : null; })
+        .filter(Boolean)
+    )];
+    if (ids.length === 0) { setOrigPayMap(new Map()); return; }
+    let cancelled = false;
+    (async () => {
+      const map = new Map();
+      const CHUNK = 200;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const { data } = await supabase.from('sales').select('id, payment').in('id', ids.slice(i, i + CHUNK));
+        if (cancelled) return;
+        for (const r of (data || [])) map.set(r.id, r.payment);
+      }
+      if (!cancelled) setOrigPayMap(map);
+    })();
+    return () => { cancelled = true; };
+  }, [sales]);
+
   const [brands, setBrands] = useState([]);
   useEffect(() => { supabase.from('brands').select('*').order('name').then(({ data }) => setBrands(data || [])); }, []);
 
@@ -412,9 +435,16 @@ export default function SalesListPage({ setPage }) {
       g.amt   += ea;
       if (s.payment === '카드') g.cardAmt += ea;
       else if (s.payment === '현금') g.cashAmt += ea;
+      else if (s.payment === '반품') {
+        // 반품(음수)은 원본 판매의 결제수단으로 되돌려 차감 (카드/현금 순액 반영)
+        const m = String(s.memo || '').match(/매출 ID:(\d+)/);
+        const origPay = m ? origPayMap.get(Number(m[1])) : null;
+        if (origPay === '카드') g.cardAmt += ea;
+        else if (origPay === '현금') g.cashAmt += ea;
+      }
     }
     return [...map.values()].sort((a,b) => b.amt - a.amt);
-  }, [filtered]);
+  }, [filtered, origPayMap]);
   const storeTotalCount = useMemo(() => storeAgg.reduce((s,r) => s + r.count, 0), [storeAgg]);
   const storeTotalQty   = useMemo(() => storeAgg.reduce((s,r) => s + r.qty,   0), [storeAgg]);
   const storeTotalAmt   = useMemo(() => storeAgg.reduce((s,r) => s + r.amt,   0), [storeAgg]);
