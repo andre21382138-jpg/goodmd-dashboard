@@ -9,6 +9,7 @@ export default function SalesInputPage({ profile }) {
   const [hqStore,  setHqStore]  = useState('');
   const [hqBranch, setHqBranch] = useState('');
   const storeName  = isStoreMgr ? profile.department : hqStore;
+  const isDaedong  = storeName === '대동백화점';  // 대동백화점만 현금영수증 발행 유무 선택
   const branchName = isStoreMgr ? profile.branch     : hqBranch;
   const hqBranchOptions = useMemo(() => hqStore ? (STORE_MAP[hqStore] || []) : [], [hqStore]);
 
@@ -61,6 +62,7 @@ export default function SalesInputPage({ profile }) {
     brandId:'', productId:'', productSearch:'', showSuggestions:false,
     quantity:1, normalPrice:'', discount:'0', price:'',
     payment:'',  // 결제수단 미선택 — 매니저가 카드/현금/증정/시식 중 명시적으로 선택해야 저장 가능
+    cashReceipt:'',  // 대동백화점 현금결제 시 '발행' | '미발행'
 
     delivery:'none',  // 'none' | 'store' | 'hq'
     pointCustomer:null,  // {id,name,phone,total_points,used_points,grade}
@@ -363,6 +365,15 @@ export default function SalesInputPage({ profile }) {
       toast(`결제수단을 선택해주세요${prod ? ` (${prod.name})` : ''}`, 'err');
       return;
     }
+    // 대동백화점 현금결제는 현금영수증 발행 유무 선택 필수
+    if (isDaedong) {
+      const noReceiptLine = validLines.find(l => l.payment === '현금' && !l.cashReceipt);
+      if (noReceiptLine) {
+        const prod = allProducts.find(p => String(p.id) === String(noReceiptLine.productId));
+        toast(`현금영수증 발행 유무를 선택해주세요${prod ? ` (${prod.name})` : ''}`, 'err');
+        return;
+      }
+    }
     if (memberMode === 'search' && !selectedMember) { toast('회원을 선택해주세요', 'err'); return; }
     if (memberMode === 'new') {
       if (!custName.trim()) { toast('고객 이름을 입력해주세요', 'err'); return; }
@@ -434,6 +445,8 @@ export default function SalesInputPage({ profile }) {
           customer_id: customerId, points_earned: linePoints,
           points_used: pointsUsedLine,
           unit_cost: unitCostSnap,   // 판매 시점 원가 스냅샷
+          // 대동백화점 현금결제만 발행 유무 저장(발행=true/미발행=false), 그 외 null
+          cash_receipt: (isDaedong && l.payment === '현금') ? (l.cashReceipt === '발행') : null,
           ...deliveryFields,
         });
         if (error) throw error;
@@ -758,6 +771,28 @@ export default function SalesInputPage({ profile }) {
                     title={lines.length > 1 ? '삭제' : '초기화'}
                     style={{ height:38, width:36, border:'1px solid var(--border)', background:'#fff', color:'var(--danger)', borderRadius:'var(--radius)', cursor:'pointer', fontSize:14, lineHeight:1, padding:0 }}>✕</button>
                 </div>
+                {/* 현금영수증 발행 유무 — 대동백화점 + 현금결제 시에만 노출 */}
+                {isDaedong && l.payment === '현금' && (
+                  <div style={{ marginTop:8, paddingTop:8, borderTop:'1px dashed var(--border)', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:'var(--text2)' }}>🧾 현금영수증</span>
+                    {['발행','미발행'].map(opt => {
+                      const on = l.cashReceipt === opt;
+                      const okColor = opt === '발행' ? 'var(--success)' : '#455a64';
+                      const okBg    = opt === '발행' ? '#e8f5e9' : '#eceff1';
+                      return (
+                        <button key={opt} type="button" onClick={() => updateLine(l.id, 'cashReceipt', opt)}
+                          style={{ height:30, padding:'0 16px', border:'1px solid', borderRadius:'var(--radius)', cursor:'pointer', fontSize:12,
+                            borderColor: on ? okColor : 'var(--border)',
+                            background:  on ? okBg : '#fff',
+                            color:       on ? okColor : 'var(--text2)',
+                            fontWeight:  on ? 700 : 500 }}>
+                          {opt}
+                        </button>
+                      );
+                    })}
+                    {!l.cashReceipt && <span style={{ fontSize:11, color:'var(--danger)', fontWeight:600 }}>← 발행 유무를 선택해주세요</span>}
+                  </div>
+                )}
                 {/* 1개당 단가 (수량 > 1일 때) */}
                 {l.productId && Number(l.quantity) > 1 && (
                   <div style={{ display:'grid', gridTemplateColumns:'minmax(220px, 1fr) 60px 100px 100px 100px 220px 110px 80px 72px 34px', gap:6, marginTop:4, fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)' }}>
