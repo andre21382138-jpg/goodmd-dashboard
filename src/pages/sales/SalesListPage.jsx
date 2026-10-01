@@ -128,7 +128,8 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
 
 export default function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false); // [조회] 눌러야 조회 실행 (페이지 진입 시 자동 조회 방지)
   // 점포/지점/기간 — 사용자가 선택 중인 임시 값 vs [조회] 클릭 시 실제 쿼리에 반영되는 확정 값
   const [fStores,        setFStores]        = useState([]);
   const [appliedStores,  setAppliedStores]  = useState([]);
@@ -203,7 +204,7 @@ export default function SalesListPage({ setPage }) {
     setLoading(false);
   }, [appliedStores, appliedBranch, appliedBrand, appliedFrom, appliedTo]);
 
-  useEffect(() => { fetchSales(); }, [fetchSales]);
+  useEffect(() => { if (searched) fetchSales(); }, [fetchSales, searched]);
 
   // 반품(음수)행의 '원본 매출' 결제수단 조회 → 카드/현금 매출을 반품 반영(순액)으로 계산하기 위함
   const [origPayMap, setOrigPayMap] = useState(new Map()); // 원본 sale_id → payment('카드'/'현금'...)
@@ -284,6 +285,7 @@ export default function SalesListPage({ setPage }) {
     setAppliedFrom(fFrom);
     setAppliedTo(fTo);
     setAppliedKeyword(fKeyword);
+    setSearched(true);
   };
 
   // 실효 수량/금액 — 반품은 별도 음수 매출 row로 처리되므로 returned_qty는 무시
@@ -364,6 +366,49 @@ export default function SalesListPage({ setPage }) {
     try {
       const n = await exportSalesRaw({ fStores: appliedStores, fBranch: appliedBranch, fBrand: appliedBrand, fFrom: appliedFrom, fTo: appliedTo, fKeyword: appliedKeyword });
       toast(`엑셀 다운로드 완료 (${n.toLocaleString()}건)`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // 매장별 집계 엑셀 다운로드 (점포·지점·판매건수·총수량·카드·현금·기타·총매출)
+  const handleExportStoreAgg = async () => {
+    if (exporting) return;
+    if (storeAgg.length === 0) { toast('조회된 매장이 없습니다', 'err'); return; }
+    setExporting(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('매장별 집계');
+      ws.addRow(['점포명', '지점명', '판매건수', '총 판매수량', '카드매출', '현금매출', '기타', '총 매출액']);
+      for (const g of storeAgg) {
+        const etc = g.amt - g.cardAmt - g.cashAmt;
+        ws.addRow([g.store_name, g.branch_name, g.count, g.qty, g.cardAmt, g.cashAmt, etc, g.amt]);
+      }
+      ws.addRow([
+        '합계', '', storeTotalCount, storeTotalQty,
+        storeAgg.reduce((s, r) => s + r.cardAmt, 0),
+        storeAgg.reduce((s, r) => s + r.cashAmt, 0),
+        storeAgg.reduce((s, r) => s + (r.amt - r.cardAmt - r.cashAmt), 0),
+        storeTotalAmt,
+      ]);
+      // 숫자 천단위 서식 (3~8열, 데이터+합계행)
+      ws.eachRow((row, i) => {
+        if (i < 2) return;
+        [3, 4, 5, 6, 7, 8].forEach(c => { row.getCell(c).numFmt = '#,##0'; });
+      });
+      ws.getRow(1).font = { bold: true };
+      ws.getRow(ws.rowCount).font = { bold: true };
+      ws.columns.forEach((col, idx) => { col.width = idx < 2 ? 16 : 13; });
+      const buf = await wb.xlsx.writeBuffer();
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const stamp = `${String(now.getFullYear()).slice(-2)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+      const range = (appliedFrom || appliedTo) ? `_${appliedFrom || ''}~${appliedTo || ''}` : '';
+      dlBlob(buf, `매장별집계${range}_${stamp}.xlsx`);
+      toast(`엑셀 다운로드 완료 (${storeAgg.length}개 매장)`, 'ok');
     } catch (err) {
       toast('다운로드 실패: ' + (err.message || err), 'err');
     } finally {
@@ -675,6 +720,7 @@ export default function SalesListPage({ setPage }) {
               setFBranch(''); setAppliedBranch('');
               setFFrom(''); setFTo(''); setAppliedFrom(''); setAppliedTo('');
               setFBrand(''); setAppliedBrand(''); setFKeyword(''); setAppliedKeyword(''); setSortBy('date'); setAggSortBy('amt_desc');
+              setSearched(false); setSales([]);
             }}>✕ 초기화</button>}
           <div className="fbar-right">
             {viewMode === 'list' ? (
@@ -704,14 +750,37 @@ export default function SalesListPage({ setPage }) {
                 {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 50,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
               </span>
             ) : (
-              <span className="fresult">
-                <b>{storeAgg.length.toLocaleString()}</b>개 매장 · <b>{storeTotalCount.toLocaleString()}</b>건 · <b>{storeTotalQty.toLocaleString()}</b>개 · <b>{storeTotalAmt.toLocaleString()}</b>원
-                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 50,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
-              </span>
+              <>
+                <span className="fresult">
+                  <b>{storeAgg.length.toLocaleString()}</b>개 매장 · <b>{storeTotalCount.toLocaleString()}</b>건 · <b>{storeTotalQty.toLocaleString()}</b>개 · <b>{storeTotalAmt.toLocaleString()}</b>원
+                  {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 50,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleExportStoreAgg}
+                  disabled={exporting || storeAgg.length === 0}
+                  title="매장별 집계(점포·지점·건수·수량·카드·현금·기타·총매출) 엑셀 다운로드"
+                  style={{
+                    marginLeft: 10, height: 30, padding: '0 12px',
+                    border: '1px solid var(--accent)', borderRadius: 'var(--radius)',
+                    background: (exporting || storeAgg.length === 0) ? '#fafafa' : '#fff3e0',
+                    color: 'var(--accent)', fontSize: 12, fontWeight: 700,
+                    cursor: (exporting || storeAgg.length === 0) ? 'not-allowed' : 'pointer',
+                    opacity: (exporting || storeAgg.length === 0) ? 0.7 : 1,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  {exporting ? <span className="spinner"/> : '📥'} 엑셀 다운로드
+                </button>
+              </>
             )}
           </div>
         </div>
-        {loading ? <div className="empty"><span className="spinner"/></div> : viewMode === 'store' ? (
+        {!searched ? (
+          <div className="empty" style={{padding:'48px 16px', color:'var(--text3)'}}>
+            조회 조건(점포·지점·기간 등)을 선택하고 <b style={{color:'var(--accent)'}}>🔍 조회</b> 버튼을 눌러주세요
+          </div>
+        ) : loading ? <div className="empty"><span className="spinner"/></div> : viewMode === 'store' ? (
           <div className="twrap">
             <table>
               <thead>
