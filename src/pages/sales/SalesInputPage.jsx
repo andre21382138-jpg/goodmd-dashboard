@@ -453,9 +453,9 @@ export default function SalesInputPage({ profile }) {
 
         // (적립금 사용분 차감은 아래에서 회원별로 집계해 한 번에 처리 — 구매 적립과 충돌 방지)
 
-        // 매장재고 자동 차감 — 본사 택배요청(hq)·강좌매출(결제=강좌매출)은 매장 재고 차감 제외
+        // 매장재고 자동 차감 — 본사 택배요청(hq)만 제외 (강좌매출도 실물 상품이 출고되므로 차감)
         const prod = allProducts.find(p => String(p.id) === String(l.productId));
-        if (prod?.code && dType !== 'hq' && l.payment !== '강좌매출') {
+        if (prod?.code && dType !== 'hq') {
           const { data: stockRow } = await supabase.from('store_stock')
             .select('id, stock_qty')
             .eq('store_name',  storeName)

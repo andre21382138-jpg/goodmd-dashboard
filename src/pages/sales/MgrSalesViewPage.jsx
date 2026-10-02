@@ -91,7 +91,7 @@ export default function MgrSalesViewPage({ profile }) {
 
       // 재고 반영 — 수량 변화(old−new)만큼 store_stock 조정 (판매 시 차감과 동일 조건)
       const code = it.product?.code || it.product_code;
-      if (qty !== oldQty && code && it.delivery_type !== 'hq' && it.payment !== '강좌매출') {
+      if (qty !== oldQty && code && it.delivery_type !== 'hq') {  // 강좌매출도 재고 차감 대상이므로 포함
         const { data: stockRow } = await supabase.from('store_stock')
           .select('id, stock_qty')
           .eq('store_name', it.store_name).eq('branch_name', it.branch_name).eq('product_code', code)

@@ -127,7 +127,7 @@ export async function reverseSaleEffects(sale) {
     }
   }
   const code = sale.product?.code || sale.product_code;
-  if (code && sale.delivery_type !== 'hq' && sale.payment !== '강좌매출') {
+  if (code && sale.delivery_type !== 'hq') {  // 강좌매출도 판매 시 재고 차감하므로 복원 대상에 포함
     const { data: stockRow } = await supabase.from('store_stock')
       .select('id, stock_qty')
       .eq('store_name', sale.store_name).eq('branch_name', sale.branch_name).eq('product_code', code)
