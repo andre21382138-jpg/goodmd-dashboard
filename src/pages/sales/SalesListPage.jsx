@@ -501,6 +501,42 @@ export default function SalesListPage({ setPage }) {
       (s.branch_name || '-') === drillStore.branch_name
     );
   }, [filtered, drillStore]);
+
+  // 대동백화점 상세보기 — 일자별 매출(날짜·총매출액) 엑셀 다운로드
+  const handleExportDrillDaily = async () => {
+    if (exporting || !drillStore) return;
+    const map = new Map(); // 'YYYY-MM-DD' → 매출액
+    for (const s of drillStoreRows) {
+      const d = String(s.sold_at || '').slice(0, 10);
+      if (!d) continue;
+      map.set(d, (map.get(d) || 0) + effAmt(s));
+    }
+    const rows = [...map.entries()].sort((a, b) => b[0].localeCompare(a[0])); // 날짜 내림차순
+    if (rows.length === 0) { toast('내보낼 데이터가 없습니다', 'err'); return; }
+    setExporting(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('일자별 매출');
+      ws.addRow(['날짜', '매출액']);
+      for (const [d, amt] of rows) ws.addRow([d, amt]);
+      ws.addRow(['합계', rows.reduce((s, [, a]) => s + a, 0)]);
+      ws.eachRow((row, i) => { if (i >= 2) row.getCell(2).numFmt = '#,##0'; });
+      ws.getRow(1).font = { bold: true };
+      ws.getRow(ws.rowCount).font = { bold: true };
+      ws.getColumn(1).width = 16; ws.getColumn(2).width = 16;
+      const buf = await wb.xlsx.writeBuffer();
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const stamp = `${String(now.getFullYear()).slice(-2)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+      dlBlob(buf, `${drillStore.store_name}_일자별매출_${stamp}.xlsx`);
+      toast(`엑셀 다운로드 완료 (${rows.length}일)`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
   const truncated     = sales.length >= 50000; // 페이징 cap 도달 시에만 경고
 
   const drillRows = useMemo(() => {
@@ -1048,8 +1084,17 @@ export default function SalesListPage({ setPage }) {
               <span className="badge badge-dept">{drillStore.store_name}</span>
               <span className="badge badge-store">{drillStore.branch_name}</span>
               <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>판매 상세 — {drillStoreRows.length}건</span>
+              {drillStore.store_name === '대동백화점' && (
+                <button type="button" onClick={handleExportDrillDaily} disabled={exporting}
+                  title="일자별 매출(날짜·총매출액) 엑셀 다운로드"
+                  style={{marginLeft:'auto', height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)',
+                    background: exporting ? '#fafafa' : '#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700,
+                    cursor: exporting ? 'not-allowed' : 'pointer', display:'inline-flex', alignItems:'center', gap:6}}>
+                  {exporting ? <span className="spinner"/> : '📥'} 일자별 매출 엑셀
+                </button>
+              )}
               <button type="button" onClick={() => setDrillStore(null)}
-                style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+                style={{marginLeft: drillStore.store_name === '대동백화점' ? 8 : 'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
             </div>
             <div className="twrap">
               <table>
