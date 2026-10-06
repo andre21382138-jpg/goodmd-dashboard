@@ -416,6 +416,41 @@ export default function SalesListPage({ setPage }) {
     }
   };
 
+  // 상품별 집계 엑셀 다운로드 (브랜드·상품명·판매건수·총수량·매출액)
+  const handleExportProductAgg = async () => {
+    if (exporting) return;
+    if (productAggSorted.length === 0) { toast('조회된 상품이 없습니다', 'err'); return; }
+    setExporting(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('상품별 집계');
+      ws.addRow(['브랜드', '상품명', '판매건수', '총 판매수량', '매출액']);
+      for (const p of productAggSorted) {
+        ws.addRow([p.brand_name, p.product_name, p.count, p.qty, p.amt]);
+      }
+      ws.addRow(['합계', '', aggTotalCount, aggTotalQty, aggTotalAmt]);
+      ws.eachRow((row, i) => {
+        if (i < 2) return;
+        [3, 4, 5].forEach(c => { row.getCell(c).numFmt = '#,##0'; });
+      });
+      ws.getRow(1).font = { bold: true };
+      ws.getRow(ws.rowCount).font = { bold: true };
+      ws.columns.forEach((col, idx) => { col.width = idx === 1 ? 42 : (idx === 0 ? 14 : 13); });
+      const buf = await wb.xlsx.writeBuffer();
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const stamp = `${String(now.getFullYear()).slice(-2)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+      const range = (appliedFrom || appliedTo) ? `_${appliedFrom || ''}~${appliedTo || ''}` : '';
+      dlBlob(buf, `상품별집계${range}_${stamp}.xlsx`);
+      toast(`엑셀 다운로드 완료 (${productAggSorted.length}개 상품)`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // 상품별 집계 (filtered 기준)
   const productAgg = useMemo(() => {
     const map = new Map();
@@ -781,10 +816,29 @@ export default function SalesListPage({ setPage }) {
                 </button>
               </>
             ) : viewMode === 'product' ? (
-              <span className="fresult">
-                <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
-                {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 50,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
-              </span>
+              <>
+                <span className="fresult">
+                  <b>{productAgg.length.toLocaleString()}</b>개 상품 · <b>{aggTotalCount.toLocaleString()}</b>건 · <b>{aggTotalQty.toLocaleString()}</b>개 · <b>{aggTotalAmt.toLocaleString()}</b>원
+                  {truncated && <span style={{marginLeft:8, fontSize:11, fontWeight:700, color:'var(--danger)', background:'#fce4ec', border:'1px solid #f48fb1', padding:'2px 8px', borderRadius:3}}>⚠️ 서버 조회 50,000건 한도 도달 - 기간/필터를 좁혀주세요</span>}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleExportProductAgg}
+                  disabled={exporting || productAggSorted.length === 0}
+                  title="상품별 집계(브랜드·상품명·건수·수량·매출액) 엑셀 다운로드"
+                  style={{
+                    marginLeft: 10, height: 30, padding: '0 12px',
+                    border: '1px solid var(--accent)', borderRadius: 'var(--radius)',
+                    background: (exporting || productAggSorted.length === 0) ? '#fafafa' : '#fff3e0',
+                    color: 'var(--accent)', fontSize: 12, fontWeight: 700,
+                    cursor: (exporting || productAggSorted.length === 0) ? 'not-allowed' : 'pointer',
+                    opacity: (exporting || productAggSorted.length === 0) ? 0.7 : 1,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  {exporting ? <span className="spinner"/> : '📥'} 엑셀 다운로드
+                </button>
+              </>
             ) : (
               <>
                 <span className="fresult">

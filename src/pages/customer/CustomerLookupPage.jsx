@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, GradeBadge, formatPhone } from '../../lib/utils';
+import { toast, GradeBadge, formatPhone, dlBlob } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
 
 function byteLen(str) {
@@ -72,6 +72,7 @@ export default function CustomerLookupPage({ profile }) {
   const [allStores,  setAllStores] = useState([]);
   const [page,       setPage]      = useState(0);
   const [totalCount, setTotalCount]= useState(0);
+  const [exporting,  setExporting] = useState(false);
   const [hasMore,    setHasMore]   = useState(false); // eslint-disable-line no-unused-vars
 
   // 체크박스 선택 (현재 페이지)
@@ -232,6 +233,73 @@ export default function CustomerLookupPage({ profile }) {
     setBulkTargets(all);
     setSmsModal(true);
   }, [search, fStore, fBranch, fFrom, fTo, pFrom, pTo, fGrade, fNewOnly, fConsent, consentCutoffISO]);
+
+  // 조회결과(현재 필터) 전체 엑셀 다운로드 — 페이지 제한 없이 전부
+  const handleExportCustomers = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const usePurchase = !!(pFrom || pTo);
+      const build = () => {
+        let q = supabase.from('customers')
+          .select(usePurchase ? '*, sales!inner(id)' : '*')
+          .order('joined_at', { ascending: false });
+        if (pFrom) q = q.gte('sales.sold_at', pFrom);
+        if (pTo)   q = q.lte('sales.sold_at', pTo);
+        if (search.trim()) q = q.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+        if (fStore)  q = q.eq('store_name', fStore);
+        if (fBranch) q = q.eq('branch_name', fBranch);
+        if (fFrom)   q = q.gte('joined_at', fFrom);
+        if (fTo)     q = q.lte('joined_at', fTo);
+        if (fGrade)  q = q.eq('grade', fGrade);
+        if (fNewOnly) {
+          const y = new Date(); y.setFullYear(y.getFullYear() - 1);
+          q = q.gte('joined_at', y.toISOString().slice(0, 10));
+        }
+        if (fConsent === 'valid')        q = q.eq('sms_consent', true).gte('sms_consent_at', consentCutoffISO);
+        else if (fConsent === 'expired') q = q.eq('sms_consent', true).or(`sms_consent_at.lt.${consentCutoffISO},sms_consent_at.is.null`);
+        else if (fConsent === 'none')    q = q.eq('sms_consent', false);
+        return q;
+      };
+      const CHUNK = 1000; let all = []; let from = 0;
+      while (true) {
+        const { data, error } = await build().range(from, from + CHUNK - 1);
+        if (error) throw error;
+        if (!data?.length) break;
+        all = all.concat(data);
+        if (data.length < CHUNK) break;
+        from += CHUNK;
+      }
+      if (!all.length) { toast('조회된 회원이 없습니다', 'err'); setExporting(false); return; }
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('고객목록');
+      ws.addRow(['이름', '휴대폰', '점포', '지점', '등급', '가입일', '생일', '기념일',
+        '누적구매액', '구매건수', '구매수량', '적립금', '사용적립금', '마케팅동의', '동의일']);
+      for (const c of all) {
+        ws.addRow([
+          c.name || '', c.phone || '', c.store_name || '', c.branch_name || '', c.grade || '',
+          c.joined_at || '', c.birthday || '', c.anniversary || '',
+          Number(c.total_purchase) || 0, Number(c.purchase_count) || 0, Number(c.purchase_qty) || 0,
+          Number(c.total_points) || 0, Number(c.used_points) || 0,
+          c.sms_consent ? '동의' : '미동의', c.sms_consent_at ? String(c.sms_consent_at).slice(0, 10) : '',
+        ]);
+      }
+      ws.eachRow((row, i) => { if (i >= 2) [9, 10, 11, 12, 13].forEach(cc => { row.getCell(cc).numFmt = '#,##0'; }); });
+      ws.getRow(1).font = { bold: true };
+      ws.columns.forEach((col, idx) => { col.width = idx === 0 ? 12 : idx === 1 ? 15 : 11; });
+      const buf = await wb.xlsx.writeBuffer();
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const stamp = `${String(now.getFullYear()).slice(-2)}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
+      dlBlob(buf, `고객목록_${stamp}.xlsx`);
+      toast(`엑셀 다운로드 완료 (${all.length.toLocaleString()}명)`, 'ok');
+    } catch (err) {
+      toast('다운로드 실패: ' + (err.message || err), 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // 점포 변경시 지점 초기화
   const handleStoreChange = (val) => { setFStore(val); setFBranch(''); };
@@ -833,6 +901,14 @@ export default function CustomerLookupPage({ profile }) {
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8}}>
             <span className="fresult">총 {(pFrom||pTo) && '약 '}<b>{totalCount.toLocaleString()}</b>명 · 이 페이지 <b>{customers.length}</b>명 · SMS동의 <b>{customers.filter(c=>c.sms_consent).length}</b>명</span>
             <div style={{display:'flex', gap:8}}>
+              <button
+                className="btn btn-s"
+                style={{padding:'6px 18px', fontSize:13, fontWeight:700}}
+                onClick={handleExportCustomers}
+                disabled={exporting}
+                title="현재 조회조건의 회원 전체를 엑셀로 다운로드">
+                {exporting ? <span className="spinner"/> : '📥 엑셀 다운로드'}
+              </button>
               {checkedIds.size > 0 && (
                 <button
                   className="btn btn-p"
