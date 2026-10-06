@@ -515,7 +515,7 @@ export default function StockRequestsAdminView({ mode = 'pending', profile }) {
                                     <td style={{fontSize:12}}>{r.brand?.name || '-'}</td>
                                     <td style={{fontSize:12, fontWeight:600}}>
                                       {r.product?.name || '-'}
-                                      {r.product?.code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>코드: {r.product.code}</div>}
+                                      {r.product?.erp_code && <div style={{fontSize:10, color:'var(--text3)', fontFamily:'var(--mono)', marginTop:2}}>ERP: {r.product.erp_code}</div>}
                                     </td>
                                     <td className="r">
                                       {isPending ? (
