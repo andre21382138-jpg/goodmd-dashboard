@@ -126,6 +126,8 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
   return rows.length;
 }
 
+const dividerL = { borderLeft: '2px solid #cfd8dc' };  // 컬럼 그룹 구분선 (카드/현금/기타 | 회원/비회원 | 총매출)
+
 export default function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
   const [loading, setLoading] = useState(false);
@@ -149,6 +151,7 @@ export default function SalesListPage({ setPage }) {
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
   const [viewMode, setViewMode] = useState('store'); // 'store' | 'list' | 'product'
   const [drillStore, setDrillStore] = useState(null); // { store_name, branch_name } 상세보기 대상
+  const [drillMember, setDrillMember] = useState(null); // { store_name, branch_name } 회원매출 날짜별 모달
   const [exporting, setExporting] = useState(false);
   const [aggSortBy, setAggSortBy] = useState('amt_desc'); // 'amt_desc' | 'qty_desc' | 'count_desc' | 'name'
   const [drillProduct, setDrillProduct] = useState(null); // {key, product_id, product_name, brand_name, count, qty, amt} | null
@@ -382,22 +385,24 @@ export default function SalesListPage({ setPage }) {
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('매장별 집계');
-      ws.addRow(['점포명', '지점명', '판매건수', '총 판매수량', '카드매출', '현금매출', '기타', '총 매출액']);
+      ws.addRow(['점포명', '지점명', '판매건수', '총 판매수량', '카드매출', '현금매출', '기타매출', '회원매출', '비회원매출', '총 매출액']);
       for (const g of storeAgg) {
         const etc = g.amt - g.cardAmt - g.cashAmt;
-        ws.addRow([g.store_name, g.branch_name, g.count, g.qty, g.cardAmt, g.cashAmt, etc, g.amt]);
+        ws.addRow([g.store_name, g.branch_name, g.count, g.qty, g.cardAmt, g.cashAmt, etc, g.memberAmt, g.nonMemberAmt, g.amt]);
       }
       ws.addRow([
         '합계', '', storeTotalCount, storeTotalQty,
         storeAgg.reduce((s, r) => s + r.cardAmt, 0),
         storeAgg.reduce((s, r) => s + r.cashAmt, 0),
         storeAgg.reduce((s, r) => s + (r.amt - r.cardAmt - r.cashAmt), 0),
+        storeAgg.reduce((s, r) => s + r.memberAmt, 0),
+        storeAgg.reduce((s, r) => s + r.nonMemberAmt, 0),
         storeTotalAmt,
       ]);
-      // 숫자 천단위 서식 (3~8열, 데이터+합계행)
+      // 숫자 천단위 서식 (3~10열, 데이터+합계행)
       ws.eachRow((row, i) => {
         if (i < 2) return;
-        [3, 4, 5, 6, 7, 8].forEach(c => { row.getCell(c).numFmt = '#,##0'; });
+        [3, 4, 5, 6, 7, 8, 9, 10].forEach(c => { row.getCell(c).numFmt = '#,##0'; });
       });
       ws.getRow(1).font = { bold: true };
       ws.getRow(ws.rowCount).font = { bold: true };
@@ -506,6 +511,8 @@ export default function SalesListPage({ setPage }) {
           amt: 0,
           cardAmt: 0,
           cashAmt: 0,
+          memberAmt: 0,
+          nonMemberAmt: 0,
         });
       }
       const g = map.get(key);
@@ -513,6 +520,8 @@ export default function SalesListPage({ setPage }) {
       g.qty   += effQty(s);
       const ea = effAmt(s);
       g.amt   += ea;
+      if (s.customer_id) g.memberAmt += ea;   // 회원/비회원 분리 (customer_id 유무)
+      else g.nonMemberAmt += ea;
       if (s.payment === '카드') g.cardAmt += ea;
       else if (s.payment === '현금') g.cashAmt += ea;
       else if (s.payment === '반품') {
@@ -536,6 +545,24 @@ export default function SalesListPage({ setPage }) {
       (s.branch_name || '-') === drillStore.branch_name
     );
   }, [filtered, drillStore]);
+
+  // 회원매출 날짜별 집계 — 선택 매장의 '회원(customer_id 있음)' 판매만 날짜별로
+  const memberByDate = useMemo(() => {
+    if (!drillMember) return [];
+    const map = new Map(); // date → {date, count, amt}
+    for (const s of filtered) {
+      if ((s.store_name || '-') !== drillMember.store_name) continue;
+      if ((s.branch_name || '-') !== drillMember.branch_name) continue;
+      if (!s.customer_id) continue;
+      const d = String(s.sold_at || '').slice(0, 10) || '-';
+      if (!map.has(d)) map.set(d, { date: d, count: 0, amt: 0 });
+      const g = map.get(d);
+      g.count += 1;
+      g.amt   += effAmt(s);
+    }
+    return [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
+  }, [filtered, drillMember]);
+  const memberTotalAmt = useMemo(() => memberByDate.reduce((s, r) => s + r.amt, 0), [memberByDate]);
 
   // 대동백화점 상세보기 — 일자별 매출(날짜·총매출액) 엑셀 다운로드
   const handleExportDrillDaily = async () => {
@@ -881,14 +908,16 @@ export default function SalesListPage({ setPage }) {
                   <th className="r">총 수량</th>
                   <th className="r">카드매출</th>
                   <th className="r">현금매출</th>
-                  <th className="r" title="강좌매출·반품 등 (카드/현금 외)">기타</th>
-                  <th className="r">총 매출액</th>
+                  <th className="r" title="강좌매출·반품 등 (카드/현금 외)">기타매출</th>
+                  <th className="r" style={dividerL}>회원매출</th>
+                  <th className="r">비회원매출</th>
+                  <th className="r" style={dividerL}>총 매출액</th>
                   <th style={{width:120, textAlign:'center'}}>상세</th>
                 </tr>
               </thead>
               <tbody>
                 {storeAgg.length === 0
-                  ? <tr><td colSpan={9} className="empty">조회된 매장이 없습니다</td></tr>
+                  ? <tr><td colSpan={11} className="empty">조회된 매장이 없습니다</td></tr>
                   : storeAgg.map(g => {
                     const etcAmt = g.amt - g.cardAmt - g.cashAmt;  // 강좌매출·반품 등 (카드/현금 외) — 카드+현금+기타 = 총매출
                     return (
@@ -900,7 +929,16 @@ export default function SalesListPage({ setPage }) {
                       <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{g.cardAmt.toLocaleString()}원</td>
                       <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{g.cashAmt.toLocaleString()}원</td>
                       <td className="r" style={{fontFamily:'var(--mono)', color: etcAmt < 0 ? 'var(--danger)' : 'var(--text3)'}}>{etcAmt.toLocaleString()}원</td>
-                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)'}}>{g.amt.toLocaleString()}원</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, ...dividerL}}>
+                        <button type="button"
+                          onClick={() => setDrillMember({ store_name: g.store_name, branch_name: g.branch_name })}
+                          title="날짜별 회원 매출 보기"
+                          style={{border:'none', background:'none', padding:0, cursor:'pointer', fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0', textDecoration:'underline'}}>
+                          {g.memberAmt.toLocaleString()}원
+                        </button>
+                      </td>
+                      <td className="r" style={{fontFamily:'var(--mono)', color:'var(--text2)'}}>{g.nonMemberAmt.toLocaleString()}원</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', ...dividerL}}>{g.amt.toLocaleString()}원</td>
                       <td style={{textAlign:'center'}}>
                         <button className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}}
                           onClick={() => setDrillStore({ store_name: g.store_name, branch_name: g.branch_name })}>
@@ -1130,6 +1168,54 @@ export default function SalesListPage({ setPage }) {
       )}
 
       {/* 매장별 상세보기 모달 */}
+      {/* 회원매출 날짜별 모달 */}
+      {drillMember && (
+        <div style={{position:'fixed', inset:0, zIndex:310, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setDrillMember(null)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'20px 24px', width:'min(560px, 94vw)', maxHeight:'85vh', overflow:'auto', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
+              <span className="badge badge-dept">{drillMember.store_name}</span>
+              <span className="badge badge-store">{drillMember.branch_name}</span>
+              <span style={{fontSize:13, color:'#1565C0', fontWeight:700}}>👤 날짜별 회원 매출</span>
+              <button type="button" onClick={() => setDrillMember(null)}
+                style={{marginLeft:'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
+            </div>
+            <div className="twrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>날짜</th>
+                    <th className="r">회원 판매건수</th>
+                    <th className="r">회원 매출액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {memberByDate.length === 0
+                    ? <tr><td colSpan={3} className="empty">회원 매출 내역이 없습니다</td></tr>
+                    : memberByDate.map(r => (
+                      <tr key={r.date}>
+                        <td className="mono" style={{fontSize:12}}>{r.date}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)'}}>{r.count.toLocaleString()}</td>
+                        <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0'}}>{r.amt.toLocaleString()}원</td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+                {memberByDate.length > 0 && (
+                  <tfoot>
+                    <tr>
+                      <td style={{fontWeight:700}}>합계</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{memberByDate.reduce((s,r)=>s+r.count,0).toLocaleString()}</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, color:'#1565C0'}}>{memberTotalAmt.toLocaleString()}원</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {drillStore && (
         <div style={{position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center'}}>
           <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.5)'}} onClick={() => setDrillStore(null)}/>
