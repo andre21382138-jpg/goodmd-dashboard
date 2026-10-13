@@ -564,14 +564,25 @@ export default function SalesListPage({ setPage }) {
   }, [filtered, drillMember]);
   const memberTotalAmt = useMemo(() => memberByDate.reduce((s, r) => s + r.amt, 0), [memberByDate]);
 
-  // 대동백화점 상세보기 — 일자별 매출(날짜·총매출액) 엑셀 다운로드
+  // 대동백화점 상세보기 — 일자별 매출(날짜·카드·현금·총매출) 엑셀 다운로드
   const handleExportDrillDaily = async () => {
     if (exporting || !drillStore) return;
-    const map = new Map(); // 'YYYY-MM-DD' → 매출액
+    const map = new Map(); // 'YYYY-MM-DD' → {amt, card, cash}
     for (const s of drillStoreRows) {
       const d = String(s.sold_at || '').slice(0, 10);
       if (!d) continue;
-      map.set(d, (map.get(d) || 0) + effAmt(s));
+      if (!map.has(d)) map.set(d, { amt: 0, card: 0, cash: 0 });
+      const g = map.get(d);
+      const ea = effAmt(s);
+      g.amt += ea;
+      if (s.payment === '카드') g.card += ea;
+      else if (s.payment === '현금') g.cash += ea;
+      else if (s.payment === '반품') {   // 반품은 원본 결제수단으로 차감 (순액)
+        const m = String(s.memo || '').match(/매출 ID:(\d+)/);
+        const origPay = m ? origPayMap.get(Number(m[1])) : null;
+        if (origPay === '카드') g.card += ea;
+        else if (origPay === '현금') g.cash += ea;
+      }
     }
     const rows = [...map.entries()].sort((a, b) => b[0].localeCompare(a[0])); // 날짜 내림차순
     if (rows.length === 0) { toast('내보낼 데이터가 없습니다', 'err'); return; }
@@ -580,13 +591,18 @@ export default function SalesListPage({ setPage }) {
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('일자별 매출');
-      ws.addRow(['날짜', '매출액']);
-      for (const [d, amt] of rows) ws.addRow([d, amt]);
-      ws.addRow(['합계', rows.reduce((s, [, a]) => s + a, 0)]);
-      ws.eachRow((row, i) => { if (i >= 2) row.getCell(2).numFmt = '#,##0'; });
+      ws.addRow(['날짜', '카드매출', '현금매출', '총매출']);
+      for (const [d, g] of rows) ws.addRow([d, g.card, g.cash, g.amt]);
+      ws.addRow([
+        '합계',
+        rows.reduce((s, [, g]) => s + g.card, 0),
+        rows.reduce((s, [, g]) => s + g.cash, 0),
+        rows.reduce((s, [, g]) => s + g.amt, 0),
+      ]);
+      ws.eachRow((row, i) => { if (i >= 2) [2, 3, 4].forEach(c => { row.getCell(c).numFmt = '#,##0'; }); });
       ws.getRow(1).font = { bold: true };
       ws.getRow(ws.rowCount).font = { bold: true };
-      ws.getColumn(1).width = 16; ws.getColumn(2).width = 16;
+      ws.getColumn(1).width = 16; ws.getColumn(2).width = 14; ws.getColumn(3).width = 14; ws.getColumn(4).width = 16;
       const buf = await wb.xlsx.writeBuffer();
       const now = new Date();
       const pad = n => String(n).padStart(2, '0');
