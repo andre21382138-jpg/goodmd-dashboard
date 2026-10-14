@@ -1299,6 +1299,7 @@ export default function SalesListPage({ setPage }) {
                           {s.delivery_type === 'store' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(매장)</span>}
                           {s.delivery_type === 'hq' && s.delivery_status !== 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#e65100', background:'#fff3e0', border:'1px solid #ffcc80', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
                           {s.delivery_type === 'hq' && s.delivery_status === 'dispatched' && <span style={{fontSize:10, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>택배(본사)</span>}
+                          {s.payment === '카톡' && <span style={{marginLeft:4, fontSize:10, fontWeight:700, color:'#3c1e1e', background:'#fee500', border:'1px solid #e6cf00', padding:'1px 6px', borderRadius:3, whiteSpace:'nowrap'}}>카톡</span>}
                         </td>
                         <td style={{fontSize:11,color:'var(--text2)', whiteSpace:'nowrap', ...strikeStyle}}>{s.memo || '-'}</td>
                       </tr>
