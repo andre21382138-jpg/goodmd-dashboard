@@ -55,6 +55,10 @@ export default function SalesInputPage({ profile }) {
   const [recentSales, setRecent] = useState([]);
 
   const PAYMENTS = ['카드','현금','증정','시식','강좌매출'];
+  // 카톡(오픈채팅방 홍보 유입) 결제항목 노출 매장 — 현재 롯데 건대스타시티점만, 추후 확대
+  const KATALK_STORES = [['롯데백화점', '건대스타시티점']];
+  const showKatalk = KATALK_STORES.some(([s, b]) => s === storeName && b === branchName);
+  const paymentOptions = showKatalk ? ['카드', '현금', '카톡', '증정', '시식', '강좌매출'] : PAYMENTS;
 
   // 상품 라인 (여러 개)
   const newLine = () => ({
@@ -713,15 +717,16 @@ export default function SalesInputPage({ profile }) {
                   <input type="text" inputMode="numeric" data-tour={idx===0 ? 'sales-price' : undefined} value={formatNumInput(totalPrice === '' ? '' : String(Math.round(totalPrice)))} onChange={e => updateLine(l.id,'price',parseNumInput(e.target.value))} style={{...inputStyle, textAlign:'right', fontWeight:700, color:'var(--accent)'}} placeholder="0" />
                   {/* 결제 */}
                   <div data-tour={idx===0 ? 'sales-pay' : undefined} style={{ display:'flex', gap:2 }}>
-                    {PAYMENTS.map(p => {
+                    {paymentOptions.map(p => {
                       const active = l.payment === p;
                       const isLec = p === '강좌매출';
-                      const onColor = isLec ? '#6a1b9a' : 'var(--accent)';
-                      const onBg    = isLec ? '#f3e5f5' : '#fff3e0';
+                      const isKatalk = p === '카톡';
+                      const onColor = isLec ? '#6a1b9a' : isKatalk ? '#3c1e1e' : 'var(--accent)';
+                      const onBg    = isLec ? '#f3e5f5' : isKatalk ? '#fee500' : '#fff3e0';
                       return (
                       <button key={p} type="button"
                         onClick={() => updateLine(l.id,'payment',p)}
-                        title={isLec ? '강좌매출로 입력 (결제수단 대신)' : p}
+                        title={isLec ? '강좌매출로 입력 (결제수단 대신)' : isKatalk ? '카톡(오픈채팅방) 홍보 유입 고객' : p}
                         style={{ flex: isLec ? 1.4 : 1, height:38, border:'1px solid', cursor:'pointer', borderRadius:'var(--radius)', padding:0,
                           borderColor: active ? onColor : 'var(--border)',
                           background: active ? onBg : '#fff',
