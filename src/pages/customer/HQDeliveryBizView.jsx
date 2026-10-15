@@ -16,6 +16,10 @@ export default function HQDeliveryBizView({ kind, profile }) {
   const [processing, setProcessing] = useState(null);
   const [uploading,  setUploading]  = useState(false);
   const fileInputRef = useRef(null);
+  // 발송대기건 수정 모달
+  const [editRow, setEditRow] = useState(null);
+  const [eForm,   setEForm]   = useState({});
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const todayStr = () => {
     const d = new Date();
@@ -74,6 +78,62 @@ export default function HQDeliveryBizView({ kind, profile }) {
       fetchData();
     } catch (err) {
       toast('처리 실패: ' + (err.message || err), 'err');
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  // 발송대기건 수정 (수량·받는사람·연락처·주소·공급가·메모)
+  const openEdit = (r) => {
+    setEditRow(r);
+    setEForm({
+      quantity:          r.quantity ?? '',
+      supply_price:      r.supply_price ?? '',
+      recipient_name:    r.recipient_name ?? '',
+      recipient_phone:   r.recipient_phone ?? '',
+      recipient_address: r.recipient_address ?? '',
+      memo:              r.memo ?? '',
+    });
+  };
+  const saveEdit = async () => {
+    if (!editRow) return;
+    const qty = Number(String(eForm.quantity).replace(/,/g, ''));
+    if (!Number.isFinite(qty) || qty <= 0) { toast('수량을 올바르게 입력해주세요', 'err'); return; }
+    setSavingEdit(true);
+    try {
+      const { data, error } = await supabase.from('biz_sales').update({
+        quantity:          qty,
+        supply_price:      String(eForm.supply_price).trim() === '' ? null : Number(String(eForm.supply_price).replace(/,/g, '')),
+        recipient_name:    eForm.recipient_name.trim()    || null,
+        recipient_phone:   eForm.recipient_phone.trim()   || null,
+        recipient_address: eForm.recipient_address.trim() || null,
+        memo:              eForm.memo.trim()              || null,
+      }).eq('id', editRow.id).eq('delivery_status', 'pending').select('id');  // 발송대기건만
+      if (error) throw error;
+      if (!data || data.length === 0) { toast('수정할 수 없습니다 (이미 발송처리됨)', 'err'); setSavingEdit(false); return; }
+      toast('수정 완료', 'ok');
+      setEditRow(null);
+      fetchData();
+    } catch (err) {
+      toast('수정 실패: ' + (err.message || err), 'err');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // 발송대기건 삭제
+  const handleDelete = async (r) => {
+    if (!window.confirm(`'${r.company_name}' / ${r.product_name || r.product?.name || ''} ${r.quantity}개\n이 특판 ${deliveryMethod} 요청을 삭제하시겠습니까?`)) return;
+    setProcessing(r.id);
+    try {
+      const { data, error } = await supabase.from('biz_sales')
+        .delete().eq('id', r.id).eq('delivery_status', 'pending').select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) { toast('삭제할 수 없습니다 (이미 발송처리됨)', 'err'); return; }
+      toast('삭제 완료', 'inf');
+      fetchData();
+    } catch (err) {
+      toast('삭제 실패: ' + (err.message || err), 'err');
     } finally {
       setProcessing(null);
     }
@@ -282,7 +342,7 @@ export default function HQDeliveryBizView({ kind, profile }) {
                   <th>연락처</th>
                   <th>메모</th>
                   {isCourier && <th style={{textAlign:'center', width:160}}>송장번호</th>}
-                  <th style={{textAlign:'center', width:130}}>
+                  <th style={{textAlign:'center', width: tab === 'pending' ? 210 : 130}}>
                     {tab === 'pending' ? '작업' : '발송일'}
                   </th>
                 </tr>
@@ -318,10 +378,20 @@ export default function HQDeliveryBizView({ kind, profile }) {
                     )}
                     <td style={{textAlign:'center'}}>
                       {tab === 'pending' ? (
-                        <button className="btn btn-p" onClick={() => handleDispatch(r)} disabled={processing === r.id}
-                          style={{padding:'0 14px', height:30, fontWeight:700, fontSize:12}}>
-                          {processing === r.id ? <span className="spinner"/> : '✓ 발송처리'}
-                        </button>
+                        <div style={{display:'flex', gap:4, justifyContent:'center', flexWrap:'wrap'}}>
+                          <button className="btn btn-p" onClick={() => handleDispatch(r)} disabled={processing === r.id}
+                            style={{padding:'0 10px', height:30, fontWeight:700, fontSize:12}}>
+                            {processing === r.id ? <span className="spinner"/> : '✓ 발송'}
+                          </button>
+                          <button type="button" onClick={() => openEdit(r)} disabled={processing === r.id}
+                            style={{padding:'0 10px', height:30, border:'1px solid var(--accent)', borderRadius:4, background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                            수정
+                          </button>
+                          <button type="button" onClick={() => handleDelete(r)} disabled={processing === r.id}
+                            style={{padding:'0 10px', height:30, border:'1px solid var(--border)', borderRadius:4, background:'#fff', color:'var(--danger)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
+                            삭제
+                          </button>
+                        </div>
                       ) : (
                         r.dispatched_at && (
                           <span style={{fontSize:11, color:'var(--success)', fontWeight:600}}>
@@ -337,6 +407,54 @@ export default function HQDeliveryBizView({ kind, profile }) {
           </div>
         )}
       </div>
+
+      {/* 발송대기건 수정 모달 */}
+      {editRow && (
+        <div style={{position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}} onClick={() => !savingEdit && setEditRow(null)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, width:'min(500px, 94vw)', maxHeight:'88vh', overflow:'auto', padding:'22px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:4}}>✏️ 특판 {deliveryMethod} 요청 수정</div>
+            <div style={{fontSize:12, color:'var(--text2)', marginBottom:14}}>
+              <b>{editRow.company_name}</b> · {editRow.product_name || editRow.product?.name || '-'}
+            </div>
+            {(() => {
+              const field = (label, key, opts = {}) => (
+                <div style={{marginBottom:12}}>
+                  <label style={{display:'block', fontSize:12, fontWeight:600, color:'var(--text2)', marginBottom:4}}>{label}</label>
+                  {opts.area ? (
+                    <textarea value={eForm[key]} onChange={e => setEForm(p => ({...p, [key]: e.target.value}))} rows={2}
+                      style={{width:'100%', padding:'8px 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none', resize:'vertical'}}/>
+                  ) : (
+                    <input value={eForm[key]} onChange={e => setEForm(p => ({...p, [key]: e.target.value}))}
+                      inputMode={opts.numeric ? 'numeric' : undefined}
+                      style={{width:'100%', height:38, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:13, outline:'none'}}/>
+                  )}
+                </div>
+              );
+              return (
+                <>
+                  <div style={{display:'flex', gap:10}}>
+                    <div style={{flex:1}}>{field('수량 *', 'quantity', {numeric:true})}</div>
+                    <div style={{flex:1}}>{field('공급가', 'supply_price', {numeric:true})}</div>
+                  </div>
+                  {field('받는사람', 'recipient_name')}
+                  {field('연락처', 'recipient_phone', {numeric:true})}
+                  {field('주소', 'recipient_address', {area:true})}
+                  {field('메모', 'memo', {area:true})}
+                </>
+              );
+            })()}
+            <div style={{display:'flex', gap:8, justifyContent:'flex-end', marginTop:8}}>
+              <button type="button" onClick={() => setEditRow(null)} disabled={savingEdit}
+                style={{height:40, padding:'0 18px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontWeight:600, cursor:'pointer'}}>취소</button>
+              <button type="button" onClick={saveEdit} disabled={savingEdit}
+                style={{height:40, padding:'0 22px', border:'none', borderRadius:'var(--radius)', background:'var(--accent)', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer'}}>
+                {savingEdit ? <span className="spinner"/> : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
