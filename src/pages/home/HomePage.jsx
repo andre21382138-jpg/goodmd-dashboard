@@ -236,7 +236,8 @@ export default function HomePage({ profile, setPage }) {
       setLoading(false);
     };
     fetch();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // profile(매장 전환/본사 복귀 포함) 또는 조회기준일이 바뀌면 재조회
+  }, [profile?.id, profile?.department, profile?.branch, profile?.job_title, profile?.role, rangeEndStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalAmt = storeSummary.amt + lectureSummary.amt + bizSummary.amt;
 
