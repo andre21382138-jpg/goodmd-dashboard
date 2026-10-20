@@ -487,7 +487,7 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
         {!isScm && (isManager || isAdmin || isHQ) && (
           <>
             <div className="sidebar-section" style={{marginTop: canSeeMain ? 8 : 0}}>매장</div>
-            {MANAGER_MENUS.map(m => {
+            {MANAGER_MENUS.filter(m => !((isAdmin || isHQ) && m.key === 'claim_intake')).map(m => {
               const hasSub = m.sub && m.sub.length > 0;
               const isActive = page===m.key || (hasSub && m.sub.some(s => page===s.key));
               const isOpen = flyoutKey === m.key;

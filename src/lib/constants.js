@@ -72,6 +72,7 @@ export const HQ_MENUS = [
   { key: 'biz_delivery_request', icon: '🏭', label: '특판 발주요청' },
   { key: 'scm_shipping',   icon: '🚚', label: '매장 발주요청' },
   { key: 'daily_checklist_hq', icon: '📋', label: '매장 일일 체크' },
+  { key: 'claim_intake',       icon: '📣', label: '고객 클레임 접수' },
 ];
 export const MANAGER_MENUS = [
   { key: 'home',           icon: '🏠', label: '홈 대시보드' },
