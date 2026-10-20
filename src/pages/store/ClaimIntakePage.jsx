@@ -58,6 +58,9 @@ export default function ClaimIntakePage({ profile }) {
   const [actModal, setActModal] = useState(null); // { action, prev }
   const [tEx, setTEx]     = useState({ name: '', code: '' });
   const [tGift, setTGift] = useState({ name: '', code: '' });
+  // 구매상품 선택 팝업
+  const [prodModal, setProdModal] = useState(false);
+  const [tProd, setTProd] = useState({ name: '', code: '' });
 
   // 회원 조회 팝업
   const [custModal, setCustModal]   = useState(false);
@@ -122,11 +125,8 @@ export default function ClaimIntakePage({ profile }) {
     if (!data || data.length === 0) ({ data } = await supabase.from('products').select('name, code').eq('erp_code', c).limit(1));
     return data?.[0] ? { name: data[0].name, code: data[0].code || c } : { name: '', code: c, notFound: true };
   };
-  const lookupPurchased = async (code) => {
-    const p = await findProduct(code); if (!p) return;
-    if (p.notFound) { setForm(f => ({ ...f, product_code: p.code })); toast('상품관리에 없는 코드 — 상품명 직접 입력', 'inf'); }
-    else { setForm(f => ({ ...f, product_name: p.name, product_code: p.code })); toast(`상품 인식: ${p.name}`, 'ok'); }
-  };
+  const openProdModal = () => { setTProd({ name: form.product_name, code: form.product_code }); setProdModal(true); };
+  const confirmProdModal = () => { setForm(f => ({ ...f, product_name: tProd.name.trim(), product_code: tProd.code.trim() })); setProdModal(false); };
 
   // 조치내용 선택 → 상품필요 시 팝업
   const onActionChange = (val) => {
@@ -318,15 +318,14 @@ export default function ClaimIntakePage({ profile }) {
               <input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)} placeholder="010-0000-0000" style={inputStyle} inputMode="numeric" />
             </div>
 
-            {/* 구매상품명 (바코드) */}
+            {/* 구매상품명 (팝업 선택) */}
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>구매상품명 <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(바코드 스캔 또는 직접 입력)</span></label>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <input placeholder="📷 바코드 스캔 후 Enter"
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); lookupPurchased(e.currentTarget.value); e.currentTarget.value = ''; } }}
-                  style={{ ...inputStyle, width: 200, border: '2px solid var(--accent)' }} />
-                <input value={form.product_name} onChange={e => update('product_name', e.target.value)} placeholder="구매상품명" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
-                {form.product_code && <span style={{ alignSelf: 'center', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>코드: {form.product_code}</span>}
+              <label style={labelStyle}>구매상품명</label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button type="button" onClick={openProdModal} style={{ height: 38, padding: '0 14px', border: '1px solid var(--accent)', borderRadius: 'var(--radius)', background: '#fff3e0', color: 'var(--accent)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>📷 구매상품 선택하기</button>
+                {form.product_name
+                  ? <span style={{ fontSize: 13 }}><b>{form.product_name}</b>{form.product_code && <span style={{ fontFamily: 'var(--mono)', color: 'var(--text3)', marginLeft: 6 }}>코드: {form.product_code}</span>}</span>
+                  : <span style={{ fontSize: 12, color: 'var(--text3)' }}>선택된 상품 없음</span>}
               </div>
             </div>
 
@@ -445,6 +444,28 @@ export default function ClaimIntakePage({ profile }) {
           </div>
         )}
       </div>
+
+      {/* 구매상품 선택 팝업 */}
+      {prodModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} onClick={() => setProdModal(false)} />
+          <div style={{ position: 'relative', background: '#fff', borderRadius: 12, width: 'min(460px, 94vw)', padding: '22px 24px', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>📷 구매상품 선택</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14 }}>바코드로 스캔하거나 상품명을 직접 입력하세요</div>
+            <label style={labelStyle}>바코드 스캔</label>
+            <input autoFocus placeholder="📷 바코드 스캔 후 Enter"
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); scanInto(e.currentTarget.value, setTProd); e.currentTarget.value = ''; } }}
+              style={{ ...inputStyle, border: '2px solid var(--accent)', marginBottom: 12 }} />
+            <label style={labelStyle}>구매상품명</label>
+            <input value={tProd.name} onChange={e => setTProd(t => ({ ...t, name: e.target.value }))} placeholder="상품명 (직접 입력 가능)" style={inputStyle} />
+            {tProd.code && <div style={{ marginTop: 6, fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text3)' }}>코드: {tProd.code}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button type="button" onClick={() => setProdModal(false)} style={{ height: 40, padding: '0 18px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>취소</button>
+              <button type="button" onClick={confirmProdModal} style={{ height: 40, padding: '0 24px', border: 'none', borderRadius: 'var(--radius)', background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>확인</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 조치상품 선택 팝업 */}
       {actModal && (() => {
