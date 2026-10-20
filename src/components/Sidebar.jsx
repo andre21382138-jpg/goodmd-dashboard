@@ -367,8 +367,8 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
   const openSwitch = async () => {
     setSwitchModal(true); setStoreQuery('');
     const { data } = await supabase.from('profiles')
-      .select('id, name, email, department, branch, job_title, role')
-      .eq('job_title', '매니저').not('department', 'is', null)
+      .select('*')   // approved 등 전 컬럼 포함 (전환 프로필이 완전해야 승인 게이트 통과)
+      .eq('job_title', '매니저').eq('approved', true).not('department', 'is', null)
       .order('department').order('branch');
     setStoreList(data || []);
   };
