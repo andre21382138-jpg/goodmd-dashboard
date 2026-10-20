@@ -629,7 +629,7 @@ export default function App() {
 
   // 본사 담당자/관리자의 '매장 전환(보기)' — 세션은 유지하고 프로필 컨텍스트만 선택 매장으로 전환
   const canImpersonate = realProfile?.role === 'admin' || realProfile?.job_title === '담당자';
-  const profile = useMemo(() => (canImpersonate && impersonated?.approved) ? impersonated : realProfile, [canImpersonate, impersonated, realProfile]);
+  const profile = useMemo(() => (canImpersonate && impersonated) ? impersonated : realProfile, [canImpersonate, impersonated, realProfile]);
   const startImpersonate = (sp) => { setImpersonated(sp); localStorage.setItem('gmd_impersonate', JSON.stringify(sp)); setPage('home'); };
   const stopImpersonate = () => { setImpersonated(null); localStorage.removeItem('gmd_impersonate'); setPage('home'); };
   // 불완전/미승인 전환 프로필은 자동 해제 (승인대기 화면에 갇히지 않도록)
