@@ -41,6 +41,14 @@ export default function ClaimIntakePage({ profile }) {
   const [fOnlyHQ, setFOnlyHQ]   = useState(false);
   const branchOpts = useMemo(() => (fStore ? (STORE_MAP[fStore] || []) : []), [fStore]);
 
+  const setDateRange = (type) => {
+    const now = new Date(); const pad = n => String(n).padStart(2, '0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (type === 'yesterday') { const y = new Date(now); y.setDate(now.getDate() - 1); setFFrom(fmt(y)); setFTo(fmt(y)); }
+    else if (type === 'thismonth') { setFFrom(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`); setFTo(fmt(now)); }
+    else if (type === 'lastmonth') { const first = new Date(now.getFullYear(), now.getMonth() - 1, 1); const last = new Date(now.getFullYear(), now.getMonth(), 0); setFFrom(fmt(first)); setFTo(fmt(last)); }
+  };
+
   const [claims, setClaims]   = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -385,6 +393,12 @@ export default function ClaimIntakePage({ profile }) {
           <input type="date" value={fFrom} onChange={e => setFFrom(e.target.value)} style={{ ...inputStyle, width: 150, height: 34 }} />
           <span>~</span>
           <input type="date" value={fTo} onChange={e => setFTo(e.target.value)} style={{ ...inputStyle, width: 150, height: 34 }} />
+          {['yesterday', 'thismonth', 'lastmonth'].map(t => (
+            <button key={t} type="button" onClick={() => setDateRange(t)}
+              style={{ height: 34, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              {t === 'yesterday' ? '어제' : t === 'thismonth' ? '당월' : '전월'}
+            </button>
+          ))}
           <input value={fProduct} onChange={e => setFProduct(e.target.value)} placeholder="🔍 상품명 검색" style={{ ...inputStyle, width: 160, height: 34 }} />
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--danger)', cursor: 'pointer' }}>
             <input type="checkbox" checked={fOnlyHQ} onChange={e => setFOnlyHQ(e.target.checked)} style={{ cursor: 'pointer' }} /> 본사처리필요만
