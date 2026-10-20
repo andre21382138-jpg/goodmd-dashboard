@@ -93,6 +93,7 @@ export const MANAGER_MENUS = [
     { key: 'store_closure', icon: '🏪', label: '휴점 등록' },
   ]},
   { key: 'daily_checklist', icon: '📋', label: '일일 체크리스트' },
+  { key: 'claim_intake',    icon: '📣', label: '고객 클레임 접수' },
 ];
 export const ADMIN_MENUS = [
   { key: 'admin',  icon: '🔐', label: '사용자 관리' },

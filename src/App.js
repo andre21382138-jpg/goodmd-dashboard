@@ -22,6 +22,7 @@ import ExpenseInputPage from './pages/sales/ExpenseInputPage';
 import SalesReturnPage from './pages/sales/SalesReturnPage';
 import MgrSalesViewPage from './pages/sales/MgrSalesViewPage';
 import StoreDeliveryStatusPage from './pages/customer/StoreDeliveryStatusPage';
+import ClaimIntakePage from './pages/store/ClaimIntakePage';
 import PurchaseOrderHQPage from './pages/order/PurchaseOrderHQPage';
 import PurchaseOrderMgrPage from './pages/order/PurchaseOrderMgrPage';
 import ScmShippingPage from './pages/order/ScmShippingPage';
@@ -783,6 +784,7 @@ export default function App() {
     order_request_hq: '매장 발주요청',
     store_returns_hq: '매장 반품신청',
     daily_checklist: '일일 체크리스트',
+    claim_intake: '고객 클레임 접수',
     daily_checklist_hq: '매장 일일 체크',
     scm_shipping:   '매장 발주요청',
     purchase_check: '발주 확인',
@@ -888,6 +890,7 @@ export default function App() {
             {page === 'order_request_hq' && (isAdmin || isHQ) && <OrderRequestHQPage profile={profile}/>}
             {page === 'store_returns_hq' && (isAdmin || isHQ) && <StoreReturnsHQPage profile={profile}/>}
             {page === 'daily_checklist' && (isManager || isAdmin || isHQ) && <DailyChecklistPage profile={profile}/>}
+            {page === 'claim_intake'   && (isManager || isAdmin || isHQ) && <ClaimIntakePage profile={profile}/>}
             {page === 'daily_checklist_hq' && (isAdmin || isHQ) && <DailyChecklistHQPage/>}
             {page === 'purchase_check' && (isManager || isAdmin || isHQ) && <PurchaseOrderMgrPage profile={profile}/>}
             {page === 'customer_input' && (isManager || isAdmin || isHQ) && <CustomerInputPage profile={profile}/>}
