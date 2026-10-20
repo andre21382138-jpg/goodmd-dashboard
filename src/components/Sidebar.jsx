@@ -354,11 +354,28 @@ function SidebarClockPanel({ profile, setPage }) {
   );
 }
 
-export default function Sidebar({ page, setPage, profile, onLogout }) {
+export default function Sidebar({ page, setPage, profile, onLogout, canImpersonate, impersonated, onStartImpersonate, onStopImpersonate }) {
   const isAdmin    = profile?.role === 'admin';
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
   const isScm      = profile?.role === 'scm';
+
+  // 본사 '매장 전환' — 매장 계정 목록
+  const [switchModal, setSwitchModal] = useState(false);
+  const [storeList, setStoreList] = useState([]);
+  const [storeQuery, setStoreQuery] = useState('');
+  const openSwitch = async () => {
+    setSwitchModal(true); setStoreQuery('');
+    const { data } = await supabase.from('profiles')
+      .select('id, name, email, department, branch, job_title, role')
+      .eq('job_title', '매니저').not('department', 'is', null)
+      .order('department').order('branch');
+    setStoreList(data || []);
+  };
+  const filteredStores = (storeList || []).filter(s => {
+    const q = storeQuery.trim(); if (!q) return true;
+    return `${s.department || ''} ${s.branch || ''} ${s.name || ''}`.toLowerCase().includes(q.toLowerCase());
+  });
   const canSeeMain = isAdmin || isHQ;
   const [newPlanCount,  setNewPlanCount]  = useState(0);
   const [hasNewNotice,  setHasNewNotice]  = useState(false);
@@ -570,15 +587,58 @@ export default function Sidebar({ page, setPage, profile, onLogout }) {
           style={{marginBottom:6, width:'100%'}}>
           <span className="sidebar-item-icon">❓</span>사용 안내
         </button>
+        {impersonated && (
+          <div style={{margin:'6px 0', padding:'7px 10px', borderRadius:6, background:'#fff3e0', border:'1px solid #ffcc80', fontSize:11, color:'#e65100', fontWeight:700}}>
+            🔁 {impersonated.department} {impersonated.branch} 전환 중
+          </div>
+        )}
         <div className="sidebar-user">
           {isAdmin && <span className="admin-badge" style={{marginRight:6}}>ADMIN</span>}
           {profile?.name && <strong style={{marginRight:4}}>{profile.name}</strong>}
           {profile?.email}
         </div>
+        {canImpersonate && (
+          <div style={{display:'flex', gap:6, marginBottom:6}}>
+            <button className="sidebar-logout" style={{flex:1, justifyContent:'center'}} onClick={openSwitch}>
+              <span>🏪</span> 매장 전환
+            </button>
+            {impersonated && (
+              <button className="sidebar-logout" style={{flex:1, justifyContent:'center', color:'#1565c0'}} onClick={onStopImpersonate}>
+                <span>↩️</span> 본사 복귀
+              </button>
+            )}
+          </div>
+        )}
         <button className="sidebar-logout" onClick={onLogout}>
           <span>🚪</span> 로그아웃
         </button>
       </div>
+
+      {switchModal && (
+        <div style={{position:'fixed', inset:0, zIndex:600, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}} onClick={() => setSwitchModal(false)}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, width:'min(460px, 94vw)', maxHeight:'82vh', overflow:'auto', padding:'20px 22px', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
+            <div style={{fontSize:16, fontWeight:700, marginBottom:4}}>🏪 매장 전환 (보기)</div>
+            <div style={{fontSize:12, color:'#666', marginBottom:12}}>선택한 매장 계정 화면으로 전환됩니다. 본사 복귀 전까지 유지됩니다.</div>
+            <input autoFocus value={storeQuery} onChange={e => setStoreQuery(e.target.value)} placeholder="점포·지점·이름 검색"
+              style={{width:'100%', height:38, padding:'0 10px', border:'1px solid #ddd', borderRadius:8, fontSize:13, outline:'none', marginBottom:10}}/>
+            <div style={{border:'1px solid #eee', borderRadius:8, maxHeight:360, overflowY:'auto'}}>
+              {filteredStores.length === 0 ? <div style={{padding:'16px', textAlign:'center', color:'#999', fontSize:13}}>매장이 없습니다</div>
+                : filteredStores.map(s => (
+                  <div key={s.id} onClick={() => { onStartImpersonate(s); setSwitchModal(false); }}
+                    style={{padding:'10px 12px', borderBottom:'1px solid #f2f2f2', cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', gap:8}}
+                    onMouseEnter={e => e.currentTarget.style.background='#fffde7'} onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                    <strong>{s.department}</strong><span style={{color:'#888'}}>{s.branch}</span>
+                    {s.name && <span style={{marginLeft:'auto', fontSize:11, color:'#aaa'}}>{s.name}</span>}
+                  </div>
+                ))}
+            </div>
+            <div style={{textAlign:'right', marginTop:12}}>
+              <button type="button" onClick={() => setSwitchModal(false)} style={{height:36, padding:'0 16px', border:'1px solid #ddd', borderRadius:8, background:'#fff', fontSize:13, cursor:'pointer'}}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

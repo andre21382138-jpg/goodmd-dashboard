@@ -610,7 +610,8 @@ export default function App() {
 
   // 모든 hooks는 조건부 return 전에 선언해야 함 (Rules of Hooks)
   const [session, setSession]   = useState(null);
-  const [profile, setProfile]   = useState(null);
+  const [realProfile, setRealProfile] = useState(null);
+  const [impersonated, setImpersonated] = useState(() => { try { const v = localStorage.getItem('gmd_impersonate'); return v ? JSON.parse(v) : null; } catch { return null; } });
   const [authLoading, setAL]    = useState(true);
   const [page, setPage]         = useState('home');
   const [parsed, setParsed]     = useState(null);
@@ -626,6 +627,12 @@ export default function App() {
     else localStorage.removeItem('gmd_active_id');
   };
 
+  // 본사 담당자/관리자의 '매장 전환(보기)' — 세션은 유지하고 프로필 컨텍스트만 선택 매장으로 전환
+  const canImpersonate = realProfile?.role === 'admin' || realProfile?.job_title === '담당자';
+  const profile = useMemo(() => (canImpersonate && impersonated) ? impersonated : realProfile, [canImpersonate, impersonated, realProfile]);
+  const startImpersonate = (sp) => { setImpersonated(sp); localStorage.setItem('gmd_impersonate', JSON.stringify(sp)); setPage('home'); };
+  const stopImpersonate = () => { setImpersonated(null); localStorage.removeItem('gmd_impersonate'); setPage('home'); };
+
   useEffect(() => {
     if (publicPage) return; // 공개 페이지(QR 가입·수신 재동의)면 인증 불필요
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -634,7 +641,7 @@ export default function App() {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setSession(session);
-      if (!session) { setProfile(null); setAL(false); }
+      if (!session) { setRealProfile(null); setAL(false); }
     });
     return () => subscription.unsubscribe();
   }, [publicPage]);
@@ -642,7 +649,7 @@ export default function App() {
   useEffect(() => {
     if (!session || publicPage) return;
     supabase.from('profiles').select('*').eq('id', session.user.id).single()
-      .then(({ data }) => { setProfile(data); setAL(false); });
+      .then(({ data }) => { setRealProfile(data); setAL(false); });
   }, [session, publicPage]);
 
   // SCM 담당자는 본사 택배요청 + 재고관리 메뉴만 접근 가능 — 그 외 페이지로 가지 못하도록 자동 리다이렉트
@@ -740,6 +747,7 @@ export default function App() {
   if (attendStore) return <><Toasts/><AttendancePage storeId={attendStore}/></>;
 
   const handleLogout = async () => {
+    setImpersonated(null); localStorage.removeItem('gmd_impersonate');
     await supabase.auth.signOut();
     toast('로그아웃 됐습니다', 'inf');
   };
@@ -842,7 +850,9 @@ export default function App() {
         </div>
       )}
       <div className="app-layout" style={hasUpdate ? {paddingTop:54} : undefined}>
-        <Sidebar page={page} setPage={setPage} profile={profile} onLogout={handleLogout}/>
+        <Sidebar page={page} setPage={setPage} profile={profile} onLogout={handleLogout}
+          canImpersonate={canImpersonate} impersonated={canImpersonate ? impersonated : null}
+          onStartImpersonate={startImpersonate} onStopImpersonate={stopImpersonate}/>
         <div className="content">
           <div className="content-header">
             <div className="content-title">{PAGE_TITLES[page]}</div>
