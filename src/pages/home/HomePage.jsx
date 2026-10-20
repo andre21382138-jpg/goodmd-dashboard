@@ -57,11 +57,11 @@ export default function HomePage({ profile, setPage }) {
   const daysLeft = 20 - today;
 
   useEffect(() => {
-    if (!isManager || !isReminderPeriod) return;
+    if (!isManager || !isReminderPeriod) { setShowBanner(false); return; }  // 본사/비해당 시 배너 해제(매장 전환→복귀 잔존 방지)
     supabase.from('leave_plans')
       .select('id').eq('manager_id', profile.id).eq('target_month', nextMonStr)
       .maybeSingle()
-      .then(({ data }) => { if (!data) setShowBanner(true); });
+      .then(({ data }) => setShowBanner(!data));
   }, [isManager, isReminderPeriod, profile?.id, nextMonStr]);
 
   useEffect(() => {
