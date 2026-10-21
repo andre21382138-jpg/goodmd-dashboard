@@ -39,6 +39,7 @@ export default function SmsUnsubscribeSyncPage() {
   const [parsed, setParsed] = useState(null);
   const [applying, setApplying] = useState(false);
   const [done, setDone] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const handleFile = async (f) => {
     if (!f) return;
@@ -132,8 +133,13 @@ export default function SmsUnsubscribeSyncPage() {
           <input type="file" accept=".xls,.html,.htm"
             style={{display:'none'}}
             onChange={e => handleFile(e.target.files?.[0])}/>
-          <div style={{padding:'40px 20px', border:'2px dashed var(--border)', borderRadius:8, textAlign:'center',
-            background: file ? '#fff8e1' : '#fafafa'}}>
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragEnter={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={e => { e.preventDefault(); setDragOver(false); }}
+            onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer?.files?.[0]); }}
+            style={{padding:'40px 20px', border:`2px dashed ${dragOver ? '#2e7d32' : 'var(--border)'}`, borderRadius:8, textAlign:'center',
+            background: dragOver ? '#e8f5e9' : (file ? '#fff8e1' : '#fafafa')}}>
             {file ? (
               <>
                 <div style={{fontSize:32, marginBottom:8}}>📄</div>
