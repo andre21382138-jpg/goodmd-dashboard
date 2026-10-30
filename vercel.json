@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':(exclude)work-log'",
   "functions": {
     "api/*.js": {
       "maxDuration": 300
