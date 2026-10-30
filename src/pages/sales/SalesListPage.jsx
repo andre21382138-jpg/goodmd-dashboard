@@ -127,6 +127,7 @@ async function exportSalesRaw({ fStores, fBranch, fBrand, fFrom, fTo, fKeyword }
 }
 
 const dividerL = { borderLeft: '2px solid #cfd8dc' };  // 컬럼 그룹 구분선 (카드/현금/기타 | 회원/비회원 | 총매출)
+const PAY_ORDER = ['카드', '현금', '적립금사용', '증정', '시식', '강좌매출', '반품', '기타'];  // 결제방식 필터 표시 순서
 
 export default function SalesListPage({ setPage }) {
   const [sales,   setSales]   = useState([]);
@@ -148,6 +149,7 @@ export default function SalesListPage({ setPage }) {
   const [fKeyword,setFKeyword]= useState('');
   const [appliedKeyword, setAppliedKeyword] = useState('');
   const [sortBy,  setSortBy]  = useState('date'); // 'date' | 'qty_desc' | 'amt_desc'
+  const [fPayment, setFPayment] = useState(''); // 결제방식 필터 (판매내역 전용, ''=전체)
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
   const [viewMode, setViewMode] = useState('store'); // 'store' | 'list' | 'product'
   const [drillStore, setDrillStore] = useState(null); // { store_name, branch_name } 상세보기 대상
@@ -300,7 +302,15 @@ export default function SalesListPage({ setPage }) {
   const isFullyReturned = () => false;
   const isPartialReturn = () => false;
 
-  // 키워드 필터 + 반품 필터 + 정렬 (클라이언트 사이드)
+  // 조회된 데이터에 존재하는 결제방식 목록 (선호 순서대로)
+  const paymentOptions = useMemo(() => {
+    const present = new Set(sales.map(s => s.payment).filter(Boolean));
+    const ordered = PAY_ORDER.filter(p => present.has(p));
+    for (const p of present) if (!ordered.includes(p)) ordered.push(p);
+    return ordered;
+  }, [sales]);
+
+  // 키워드 필터 + 반품 필터 + 결제방식 필터(판매내역 전용) + 정렬 (클라이언트 사이드)
   const filtered = useMemo(() => {
     let result = sales;
     if (!showReturned) result = result.filter(s => !isFullyReturned(s));
@@ -312,10 +322,12 @@ export default function SalesListPage({ setPage }) {
         (s.memo          || '').toLowerCase().includes(kw)
       );
     }
+    // 결제방식 필터는 판매내역(list) 화면에서만 적용 (집계 화면은 전체 기준 유지)
+    if (fPayment && viewMode === 'list') result = result.filter(s => s.payment === fPayment);
     if (sortBy === 'qty_desc') result = [...result].sort((a,b) => effQty(b) - effQty(a));
     if (sortBy === 'amt_desc') result = [...result].sort((a,b) => effAmt(b) - effAmt(a));
     return result;
-  }, [sales, appliedKeyword, sortBy, showReturned]);
+  }, [sales, appliedKeyword, sortBy, showReturned, fPayment, viewMode]);
 
   const totalQty = useMemo(() => filtered.reduce((s, r) => s + effQty(r), 0), [filtered]);
   const totalAmt = useMemo(() => filtered.reduce((s, r) => s + effAmt(r), 0), [filtered]);
@@ -810,11 +822,17 @@ export default function SalesListPage({ setPage }) {
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             placeholder="🔍 상품명·브랜드·메모 검색 (조회 시 적용)" style={{height:34, minWidth:180}} />
           {viewMode === 'list' ? (
-            <select className="fsel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-              <option value="date">최신순</option>
-              <option value="qty_desc">판매건수 높은순</option>
-              <option value="amt_desc">매출액 높은순</option>
-            </select>
+            <>
+              <select className="fsel" value={fPayment} onChange={e => setFPayment(e.target.value)} title="결제방식">
+                <option value="">전체 결제방식</option>
+                {paymentOptions.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select className="fsel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                <option value="date">최신순</option>
+                <option value="qty_desc">판매건수 높은순</option>
+                <option value="amt_desc">매출액 높은순</option>
+              </select>
+            </>
           ) : (
             <select className="fsel" value={aggSortBy} onChange={e => setAggSortBy(e.target.value)}>
               <option value="amt_desc">매출액 높은순</option>
@@ -828,12 +846,13 @@ export default function SalesListPage({ setPage }) {
               style={{width:15, height:15, cursor:'pointer'}}/>
             완전반품 포함 {returnedCount > 0 && <span style={{color:'var(--danger)', fontWeight:700}}>({returnedCount})</span>}
           </label>
-          {(fStores.length > 0||appliedStores.length > 0||fBranch||appliedBranch||fBrand||fFrom||fTo||appliedFrom||appliedTo||fKeyword) &&
+          {(fStores.length > 0||appliedStores.length > 0||fBranch||appliedBranch||fBrand||fFrom||fTo||appliedFrom||appliedTo||fKeyword||fPayment) &&
             <button className="btn-ghost" onClick={() => {
               setFStores([]); setAppliedStores([]);
               setFBranch(''); setAppliedBranch('');
               setFFrom(''); setFTo(''); setAppliedFrom(''); setAppliedTo('');
               setFBrand(''); setAppliedBrand(''); setFKeyword(''); setAppliedKeyword(''); setSortBy('date'); setAggSortBy('amt_desc');
+              setFPayment('');
               setSearched(false); setSales([]);
             }}>✕ 초기화</button>}
           <div className="fbar-right">
