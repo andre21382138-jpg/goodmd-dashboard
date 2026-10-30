@@ -186,6 +186,7 @@ export default function ProductMgmtPage({ subPage }) {
   const inputStyle = { height:34, padding:'0 10px', border:'1px solid var(--border)', borderRadius:'var(--radius)', background:'#fff', fontSize:13, fontFamily:'var(--sans)', outline:'none' };
   const [pSearch,  setPSearch]  = useState('');
   const [pStatus,  setPStatus]  = useState(''); // '' 전체 | selling 판매중 | stopped 판매중지
+  const [pSort,    setPSort]    = useState('name'); // 'name' 이름순 | 'recent' 최근등록순 | 'oldest' 오래된등록순
   const [editing,  setEditing]  = useState({});
   const [saving,   setSavingP]  = useState({});
 
@@ -201,6 +202,11 @@ export default function ProductMgmtPage({ subPage }) {
         (p.erp_code||'').toLowerCase().includes(kw)
       );
     }
+    // 정렬 — 이름순(기본) / 최근 등록순 / 오래된 등록순
+    const cmpName = (a, b) => (a.name||'').localeCompare(b.name||'', 'ko');
+    if (pSort === 'recent')      list = [...list].sort((a, b) => String(b.created_at||'').localeCompare(String(a.created_at||'')) || cmpName(a, b));
+    else if (pSort === 'oldest') list = [...list].sort((a, b) => String(a.created_at||'').localeCompare(String(b.created_at||'')) || cmpName(a, b));
+    else                         list = [...list].sort(cmpName);
     return list;
   })();
 
@@ -215,9 +221,10 @@ export default function ProductMgmtPage({ subPage }) {
       '원가': Number(p.cost) || 0,
       '판매가': Number(p.price) || 0,
       '판매상태': p.is_sales_stopped ? '판매중지' : '판매중',
+      '등록일': p.created_at ? String(p.created_at).slice(0,10) : '',
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch:14 },{ wch:30 },{ wch:14 },{ wch:14 },{ wch:10 },{ wch:10 },{ wch:10 }];
+    ws['!cols'] = [{ wch:14 },{ wch:30 },{ wch:14 },{ wch:14 },{ wch:10 },{ wch:10 },{ wch:10 },{ wch:12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '상품목록');
     const label = selBrand ? selBrand.name : '전체';
@@ -361,8 +368,14 @@ export default function ProductMgmtPage({ subPage }) {
         <div className="card">
           <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12}}>
             <div className="card-label" style={{marginBottom:0}}>{selBrand ? selBrand.name : '전체'} 상품 현황 ({filteredProducts.length}개)</div>
+            <select className="fsel" value={pSort} onChange={e => setPSort(e.target.value)}
+              style={{ height:32, fontSize:12, marginLeft:'auto' }} title="정렬">
+              <option value="name">이름순</option>
+              <option value="recent">최근 등록순</option>
+              <option value="oldest">오래된 등록순</option>
+            </select>
             <select className="fsel" value={pStatus} onChange={e => setPStatus(e.target.value)}
-              style={{ height:32, fontSize:12, marginLeft:'auto' }} title="판매상태 필터">
+              style={{ height:32, fontSize:12 }} title="판매상태 필터">
               <option value="">판매상태 전체</option>
               <option value="selling">판매중만</option>
               <option value="stopped">판매중지만</option>
@@ -379,10 +392,10 @@ export default function ProductMgmtPage({ subPage }) {
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th className="r">원가</th><th className="r">판매가</th><th style={{width:100, textAlign:'center'}}>수정</th><th style={{width:90, textAlign:'center'}}>판매상태</th><th></th></tr></thead>
+                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th style={{width:100, textAlign:'center'}}>등록일</th><th className="r">원가</th><th className="r">판매가</th><th style={{width:100, textAlign:'center'}}>수정</th><th style={{width:90, textAlign:'center'}}>판매상태</th><th></th></tr></thead>
                 <tbody>
                   {filteredProducts.length === 0
-                    ? <tr><td colSpan={9} className="empty">등록된 상품이 없습니다</td></tr>
+                    ? <tr><td colSpan={10} className="empty">등록된 상품이 없습니다</td></tr>
                     : filteredProducts.map(p => {
                       const isEditing = !!editing[p.id];
                       const ed = editing[p.id] || {};
@@ -392,6 +405,7 @@ export default function ProductMgmtPage({ subPage }) {
                           <td className="mono" style={{fontSize:12, color:'var(--text3)'}}>{p.erp_code || '-'}</td>
                           <td><span className="badge badge-dept">{p.brand?.name}</span></td>
                           <td style={{fontWeight:600, color: p.is_sales_stopped ? 'var(--text3)' : undefined, textDecoration: p.is_sales_stopped ? 'line-through' : undefined}}>{p.name}</td>
+                          <td className="mono" style={{textAlign:'center', fontSize:12, color:'var(--text3)'}}>{p.created_at ? String(p.created_at).slice(0,10) : '-'}</td>
                           <td className="r">
                             {isEditing
                               ? <input type="text" inputMode="numeric" value={formatNumInput(ed.cost)} onChange={e => setEditing(prev=>({...prev,[p.id]:{...prev[p.id],cost:parseNumInput(e.target.value)}}))}
