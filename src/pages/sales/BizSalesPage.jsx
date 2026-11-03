@@ -751,7 +751,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
                     <th>날짜</th><th>업체</th><th>브랜드</th><th>상품명</th>
                     <th className="r">수량</th><th className="r">공급가</th><th className="r">합계</th>
                     <th style={{width:80}}>배송</th><th>메모</th>
-                    {canManage && <th style={{width:120, textAlign:'center'}}>관리</th>}
+                    {canManage && <th style={{width:170, textAlign:'center'}}>관리</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -822,12 +822,12 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
                               <button className="btn btn-s" style={{height:26, padding:'0 8px', fontSize:11}} onClick={cancelEdit}>취소</button>
                             </div>
                           ) : s.is_return ? (
-                            <button className="btn-danger" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => cancelReturn(s)}>반품취소</button>
+                            <button className="btn-danger" style={{height:26, padding:'0 10px', fontSize:11, whiteSpace:'nowrap'}} onClick={() => cancelReturn(s)}>반품취소</button>
                           ) : (
                             <div style={{display:'flex', gap:4, justifyContent:'center'}}>
-                              <button className="btn btn-s" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => startEdit(s)}>수정</button>
-                              <button className="btn-danger" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => deleteRow(s)}>삭제</button>
-                              <button type="button" style={{height:26, padding:'0 8px', fontSize:11, border:'1px solid #e65100', borderRadius:'var(--radius)', background:'#fff3e0', color:'#e65100', fontWeight:700, cursor:'pointer'}} onClick={() => openReturn(s)}>반품</button>
+                              <button className="btn btn-s" style={{height:26, padding:'0 8px', fontSize:11, whiteSpace:'nowrap', flexShrink:0}} onClick={() => startEdit(s)}>수정</button>
+                              <button className="btn-danger" style={{height:26, padding:'0 8px', fontSize:11, whiteSpace:'nowrap', flexShrink:0}} onClick={() => deleteRow(s)}>삭제</button>
+                              <button type="button" style={{height:26, padding:'0 8px', fontSize:11, border:'1px solid #e65100', borderRadius:'var(--radius)', background:'#fff3e0', color:'#e65100', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0}} onClick={() => openReturn(s)}>반품</button>
                             </div>
                           )}
                         </td>
