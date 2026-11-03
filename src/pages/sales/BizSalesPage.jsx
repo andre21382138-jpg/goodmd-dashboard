@@ -36,6 +36,13 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
   const [editData,   setEditData]   = useState({});
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // 반품 처리 모달
+  const [returnTarget, setReturnTarget] = useState(null); // 반품 대상 매출 행
+  const [returnDate,   setReturnDate]   = useState(today);
+  const [returnQty,    setReturnQty]    = useState(1);
+  const [returnMemo,   setReturnMemo]   = useState('');
+  const [savingReturn, setSavingReturn] = useState(false);
+
   // 신규업체 추가 모달
   const [showAddCompany,   setShowAddCompany]   = useState(false);
   const [newCompName,      setNewCompName]      = useState('');
@@ -353,6 +360,54 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
     if (error) { toast(error.message, 'err'); return; }
     toast('삭제 완료', 'inf');
     if (editingId === s.id) cancelEdit();
+    fetchSales();
+  };
+
+  // 반품 — 원매출 기준 음수수량 행을 추가해 매출에서 차감
+  const openReturn = (s) => {
+    setReturnTarget(s);
+    setReturnDate(today);
+    setReturnQty(Math.max(1, Number(s.quantity) || 1));
+    setReturnMemo('');
+  };
+  const closeReturn = () => { setReturnTarget(null); setReturnMemo(''); };
+  const submitReturn = async () => {
+    const s = returnTarget;
+    if (!s) return;
+    const qty = Number(returnQty) || 0;
+    const maxQty = Number(s.quantity) || 0;
+    if (!returnDate) { toast('반품날짜를 입력해주세요', 'err'); return; }
+    if (qty <= 0) { toast('반품수량은 1 이상이어야 합니다', 'err'); return; }
+    if (qty > maxQty) { toast(`반품수량은 원매출 수량(${maxQty})을 초과할 수 없습니다`, 'err'); return; }
+    setSavingReturn(true);
+    const { error } = await supabase.from('biz_sales').insert({
+      sold_at: returnDate,
+      company_id:   s.company_id || null,
+      company_name: s.company?.name || s.company_name || null,
+      brand_id:     s.brand_id || null,
+      brand_name:   s.brand?.name || s.brand_name || null,
+      product_id:   s.product_id || null,
+      product_name: s.product?.name || s.product_name || null,
+      quantity:     -Math.abs(qty),
+      supply_price: Number(s.supply_price) || 0,
+      is_return:    true,
+      return_of:    s.id,
+      memo:         returnMemo.trim() || `반품 (원매출 #${s.id})`,
+      delivery_method: null,
+      created_by:   profile.id,
+    });
+    setSavingReturn(false);
+    if (error) { toast(error.message, 'err'); return; }
+    const amt = (Number(s.supply_price) || 0) * qty;
+    toast(`반품 처리 완료 (${qty}개 · -${amt.toLocaleString()}원)`, 'ok');
+    closeReturn();
+    fetchSales();
+  };
+  const cancelReturn = async (s) => {
+    if (!window.confirm(`이 반품 내역을 취소(삭제)하시겠습니까?\n매출 차감이 되돌려집니다.`)) return;
+    const { error } = await supabase.from('biz_sales').delete().eq('id', s.id);
+    if (error) { toast(error.message, 'err'); return; }
+    toast('반품 취소 완료', 'inf');
     fetchSales();
   };
 
@@ -704,7 +759,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
                     const isEditing = editingId === s.id;
                     const numInput = { width:70, height:28, padding:'0 6px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:12, textAlign:'right', outline:'none', fontFamily:'var(--mono)' };
                     return (
-                    <tr key={s.id} style={isEditing ? {background:'#fffde7'} : {}}>
+                    <tr key={s.id} style={isEditing ? {background:'#fffde7'} : s.is_return ? {background:'#fff5f5'} : {}}>
                       <td className="mono" style={{fontSize:12}}>
                         {isEditing
                           ? <input type="date" value={editData.sold_at}
@@ -715,6 +770,7 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
                       <td style={{fontWeight:600}}>
                         {s.company?.name||s.company_name}
                         {s._special && <span className="badge badge-store" style={{marginLeft:6}}>매장</span>}
+                        {s.is_return && <span className="badge" style={{marginLeft:6, background:'#ffebee', color:'var(--danger)', border:'1px solid #ef9a9a'}}>반품</span>}
                       </td>
                       <td><span className="badge badge-dept">{s.brand?.name||s.brand_name||'-'}</span></td>
                       <td style={{fontSize:13}}>{s.product?.name||s.product_name}</td>
@@ -765,10 +821,13 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
                               </button>
                               <button className="btn btn-s" style={{height:26, padding:'0 8px', fontSize:11}} onClick={cancelEdit}>취소</button>
                             </div>
+                          ) : s.is_return ? (
+                            <button className="btn-danger" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => cancelReturn(s)}>반품취소</button>
                           ) : (
                             <div style={{display:'flex', gap:4, justifyContent:'center'}}>
                               <button className="btn btn-s" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => startEdit(s)}>수정</button>
                               <button className="btn-danger" style={{height:26, padding:'0 8px', fontSize:11}} onClick={() => deleteRow(s)}>삭제</button>
+                              <button type="button" style={{height:26, padding:'0 8px', fontSize:11, border:'1px solid #e65100', borderRadius:'var(--radius)', background:'#fff3e0', color:'#e65100', fontWeight:700, cursor:'pointer'}} onClick={() => openReturn(s)}>반품</button>
                             </div>
                           )}
                         </td>
@@ -840,6 +899,55 @@ export default function BizSalesPage({ profile, setPage, mode = 'full' }) {
               <button type="button" onClick={submitAddCompany} disabled={savingCompany}
                 style={{flex:2, height:42, border:'none', background:'var(--accent)', color:'#fff', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, cursor:'pointer'}}>
                 {savingCompany ? <span className="spinner"/> : '✅ 업체 등록'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 반품 처리 모달 */}
+      {returnTarget && (
+        <div style={{position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}} onClick={() => !savingReturn && closeReturn()}/>
+          <div style={{position:'relative', background:'#fff', borderRadius:12, padding:'22px 24px', width:440, maxWidth:'92vw', boxShadow:'0 8px 40px rgba(0,0,0,0.22)'}}>
+            <div style={{display:'flex', alignItems:'center', marginBottom:14}}>
+              <div style={{fontSize:16, fontWeight:700, color:'var(--danger)'}}>↩️ 특판 매출 반품</div>
+              <button type="button" onClick={() => !savingReturn && closeReturn()}
+                style={{marginLeft:'auto', background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#999'}}>✕</button>
+            </div>
+            <div style={{background:'#fafafa', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'10px 12px', marginBottom:14, fontSize:13}}>
+              <div style={{fontWeight:700, marginBottom:4}}>{returnTarget.company?.name || returnTarget.company_name}</div>
+              <div style={{color:'var(--text2)'}}>{returnTarget.product?.name || returnTarget.product_name}</div>
+              <div style={{color:'var(--text3)', fontSize:12, marginTop:4, fontFamily:'var(--mono)'}}>
+                원매출: {returnTarget.quantity}개 · 단가 {Math.round(returnTarget.supply_price||0).toLocaleString()}원 ({returnTarget.sold_at})
+              </div>
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12}}>
+              <div>
+                <label style={labelStyle}>반품날짜 <span style={{color:'var(--danger)'}}>*</span></label>
+                <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>반품수량 <span style={{color:'var(--danger)'}}>*</span> <span style={{color:'var(--text3)', fontWeight:500}}>(최대 {returnTarget.quantity})</span></label>
+                <input type="number" min={1} max={returnTarget.quantity} value={returnQty}
+                  onChange={e => setReturnQty(e.target.value)} style={{...inputStyle, textAlign:'right'}}/>
+              </div>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={labelStyle}>메모 (선택)</label>
+              <input value={returnMemo} onChange={e => setReturnMemo(e.target.value)} placeholder="반품 사유 등" style={inputStyle}/>
+            </div>
+            <div style={{background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:'var(--radius)', padding:'8px 12px', marginBottom:14, fontSize:13, textAlign:'right', fontFamily:'var(--mono)', fontWeight:700, color:'var(--danger)'}}>
+              차감 금액: -{((Number(returnTarget.supply_price)||0) * (Number(returnQty)||0)).toLocaleString()}원
+            </div>
+            <div style={{display:'flex', gap:8}}>
+              <button type="button" onClick={closeReturn} disabled={savingReturn}
+                style={{flex:1, height:42, border:'1px solid var(--border)', background:'#fff', color:'var(--text2)', borderRadius:'var(--radius)', fontSize:13, fontWeight:600, cursor:'pointer'}}>
+                취소
+              </button>
+              <button type="button" onClick={submitReturn} disabled={savingReturn}
+                style={{flex:2, height:42, border:'none', background:'var(--danger)', color:'#fff', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, cursor:'pointer'}}>
+                {savingReturn ? <span className="spinner"/> : '✅ 반품 처리'}
               </button>
             </div>
           </div>

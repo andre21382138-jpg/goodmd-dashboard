@@ -4,6 +4,7 @@ import { toast, dlBlob, reverseSaleEffects, decrementVisitIfEmpty } from '../../
 import { ORDER_CONSTANTS, STORE_MAP, STORE_NAMES } from '../../lib/constants';
 import HQDeliveryBizView from './HQDeliveryBizView';
 import BizSalesPage from '../sales/BizSalesPage';
+import BizReturnsView from './BizReturnsView';
 
 // 31-컬럼 발주 양식 헤더 (sample: 매장발주_26.05.21_전송건.xls)
 export const DELIVERY_HEADERS = [
@@ -407,6 +408,7 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
             ...(isApprover ? [{ key:'biz_input', label:'📝 특판 발주입력' }] : []),
             { key:'biz_courier', label:'🏭 특판 택배' },
             { key:'biz_truck',   label:'🚚 특판 용차' },
+            { key:'biz_return',  label:'↩️ 반품내역' },
           ].map(t => (
             <button key={t.key} type="button" onClick={() => setMainTab(t.key)}
               style={{
@@ -426,6 +428,7 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
       {/* 특판 발송 처리 */}
       {mainTab === 'biz_courier' && <HQDeliveryBizView kind="courier" profile={profile}/>}
       {mainTab === 'biz_truck'   && <HQDeliveryBizView kind="truck"   profile={profile}/>}
+      {mainTab === 'biz_return'  && <BizReturnsView profile={profile}/>}
 
       {/* 매장 본사요청 — 기존 sub 탭 + 표 */}
       {mainTab === 'store' && (<>
