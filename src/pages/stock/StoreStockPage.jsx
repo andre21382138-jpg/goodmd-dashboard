@@ -345,55 +345,17 @@ export default function StoreStockPage({ profile }) {
     }
     setTransferProcessing(true);
     try {
-      // 0) product_id 확보 — 업로드된 매장재고는 product_code만 있고 product_id가 없으므로
-      //    products에서 code/erp_code로 조회해 채운다
-      let productId = transferModal.product_id;
-      if (!productId) {
-        const code = String(transferModal.product_code || '').trim();
-        if (!code) { toast('상품 코드가 없어 이동할 수 없습니다', 'err'); setTransferProcessing(false); return; }
-        // 같은 코드가 여러 개(중복 등록)일 수 있으므로 정상 상품(is_sales_stopped=false) 우선 1건 선택.
-        // ⚠️ 코드에 괄호 등 특수문자(예: 8809722525684_B(30P))가 있으면 .or() 파싱이 깨지므로 .eq()로 분리 조회
-        let { data: prods } = await supabase.from('products')
-          .select('id, is_sales_stopped').eq('code', code)
-          .order('is_sales_stopped', { ascending: true }).limit(1);
-        if (!prods || prods.length === 0) {
-          ({ data: prods } = await supabase.from('products')
-            .select('id, is_sales_stopped').eq('erp_code', code)
-            .order('is_sales_stopped', { ascending: true }).limit(1));
-        }
-        const prod = prods?.[0];
-        if (!prod?.id) { toast('상품관리에 등록되지 않은 상품입니다 (먼저 상품 등록 필요)', 'err'); setTransferProcessing(false); return; }
-        productId = prod.id;
-      }
-
-      // 1) 출처 재고 차감
-      const newQty = (transferModal.stock_qty||0) - qty;
-      const { error: stockErr } = await supabase.from('store_stock')
-        .update({ stock_qty: newQty, updated_at: new Date().toISOString() })
-        .eq('id', transferModal.id);
-      if (stockErr) throw stockErr;
-
-      // 2) store_transfers insert
-      const { error: txErr } = await supabase.from('store_transfers').insert({
-        from_store_name: transferModal.store_name,
-        from_branch_name: transferModal.branch_name,
-        to_store_name: toStore,
-        to_branch_name: toBranch,
-        product_id: productId,
-        quantity: qty,
-        status: 'dispatched',
-        dispatched_by: profile.id,
-        memo: transferMemo.trim() || null,
+      // 차감 + 이동기록 + 발주완료를 서버 RPC 한 트랜잭션으로 원자 처리.
+      // (과거: 차감/기록을 별도 요청으로 순차 실행 → 기록 실패 시 '재고만 빠지는' 부분 실패 발생)
+      // product_id 보정·검증·동시성 잠금 모두 RPC 내부에서 처리된다.
+      const { error } = await supabase.rpc('transfer_store_stock', {
+        p_stock_id: transferModal.id,
+        p_to_store: toStore,
+        p_to_branch: toBranch,
+        p_qty: qty,
+        p_memo: transferMemo.trim() || null,
       });
-      if (txErr) throw txErr;
-
-      // 3) 매칭되는 pending order_requests fulfilled
-      await supabase.from('order_requests')
-        .update({ status: 'fulfilled', updated_at: new Date().toISOString() })
-        .eq('store_name', toStore)
-        .eq('branch_name', toBranch)
-        .eq('product_id', productId)
-        .eq('status', 'pending');
+      if (error) throw error;
 
       toast(`${toStore} ${toBranch}으로 ${qty}개 이동 완료`, 'ok');
       closeTransfer();
