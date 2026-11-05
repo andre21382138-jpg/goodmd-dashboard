@@ -48,20 +48,21 @@ begin
     raise exception '현재 재고를 초과합니다 (현재 %, 요청 %)', coalesce(v_src.stock_qty,0), p_qty;
   end if;
 
-  -- product_id 확보 (업로드 재고는 code 만 있을 수 있어 products 에서 보정)
-  v_product_id := v_src.product_id;
+  -- product_id 확보 (store_stock 에는 product_id 컬럼이 없고 product_code 만 있으므로
+  --                   products 에서 code → erp_code 순으로 조회해 보정)
+  if v_src.product_code is null or btrim(v_src.product_code) = '' then
+    raise exception '상품 코드가 없어 이동할 수 없습니다';
+  end if;
+  select id into v_product_id from public.products
+    where code = v_src.product_code
+    order by is_sales_stopped asc nulls last limit 1;
   if v_product_id is null then
     select id into v_product_id from public.products
-      where code = v_src.product_code
+      where erp_code = v_src.product_code
       order by is_sales_stopped asc nulls last limit 1;
-    if v_product_id is null then
-      select id into v_product_id from public.products
-        where erp_code = v_src.product_code
-        order by is_sales_stopped asc nulls last limit 1;
-    end if;
-    if v_product_id is null then
-      raise exception '상품관리에 등록되지 않은 상품입니다 (code=%)', v_src.product_code;
-    end if;
+  end if;
+  if v_product_id is null then
+    raise exception '상품관리에 등록되지 않은 상품입니다 (code=%)', v_src.product_code;
   end if;
 
   -- 1) 출발 재고 차감
