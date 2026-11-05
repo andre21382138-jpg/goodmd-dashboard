@@ -51,6 +51,7 @@ export const HQ_MENUS = [
   { key: 'stock_mgmt', icon: '📦', label: '재고관리', sub: [
     { key: 'stock_center',    icon: '🏭', label: '센터재고' },
     { key: 'stock_store',     icon: '🏬', label: '매장재고' },
+    { key: 'stock_transfers', icon: '🔁', label: '재고이동 내역' },
     { key: 'store_info',      icon: '📍', label: '매장주소정보' },
   ]},
   { key: 'sales_view',     icon: '📋', label: '매출조회' },

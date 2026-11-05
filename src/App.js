@@ -41,6 +41,7 @@ import CenterStockPage from './pages/stock/CenterStockPage';
 import StockMgmtPage from './pages/stock/StockMgmtPage';
 import StoreStockPage from './pages/stock/StoreStockPage';
 import StockRequestPage from './pages/stock/StockRequestPage';
+import StoreTransfersPage from './pages/stock/StoreTransfersPage';
 import UploadPage from './pages/stock/UploadPage';
 import UploadHistoryPage from './pages/stock/UploadHistoryPage';
 import ProductMgmtPage from './pages/product/ProductMgmtPage';
@@ -768,6 +769,7 @@ export default function App() {
     stock_mgmt:     '재고관리',
     stock_center:   '센터재고',
     stock_store:    '매장재고',
+    stock_transfers: '재고이동 내역',
     manager_mgmt:   '매니저 현황',
     incentive:      '급여관리',
     member_mgmt:    '회원 조회',
@@ -875,6 +877,7 @@ export default function App() {
             {page === 'stock_mgmt'     && (canSeeMain || isScm) && <StockMgmtPage/>}
             {page === 'stock_center'   && (canSeeMain || isScm) && <CenterStockPage/>}
             {page === 'stock_store'    && (canSeeMain || isScm) && <StoreStockPage profile={profile}/>}
+            {page === 'stock_transfers' && (canSeeMain || isScm) && <StoreTransfersPage profile={profile}/>}
             {page === 'manager_mgmt'   && canSeeMain && <ManagerMgmtPage/>}
             {page === 'incentive'      && canSeeMain && <IncentivePage profile={profile}/>}
             {page === 'member_mgmt'    && canSeeMain && <CustomerLookupPage profile={profile}/>}
