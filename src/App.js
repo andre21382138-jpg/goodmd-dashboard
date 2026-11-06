@@ -42,6 +42,7 @@ import StockMgmtPage from './pages/stock/StockMgmtPage';
 import StoreStockPage from './pages/stock/StoreStockPage';
 import StockRequestPage from './pages/stock/StockRequestPage';
 import StoreTransfersPage from './pages/stock/StoreTransfersPage';
+import SettlementReportPage from './pages/report/SettlementReportPage';
 import UploadPage from './pages/stock/UploadPage';
 import UploadHistoryPage from './pages/stock/UploadHistoryPage';
 import ProductMgmtPage from './pages/product/ProductMgmtPage';
@@ -784,6 +785,7 @@ export default function App() {
     store_info:     '매장주소정보',
     sales_view:          '매출조회',
     sales_settlement:    '매출확인',
+    settlement_report:   '결산 리포트',
     sales_list:          '매장 매출',
     biz_sales_view:      '특판 매출',
     lecture_sales_view:  '강좌 매출',
@@ -892,6 +894,7 @@ export default function App() {
             {page === 'store_info'     && (canSeeMain || isScm) && <StoreInfoPage/>}
             {page === 'sales_view'         && canSeeMain && <SalesViewHub setPage={setPage}/>}
             {page === 'sales_settlement'   && canSeeMain && <SalesSettlementPage/>}
+            {page === 'settlement_report'  && canSeeMain && <SettlementReportPage profile={profile}/>}
             {page === 'sales_list'          && canSeeMain && <SalesListPage setPage={setPage}/>}
             {page === 'biz_sales_view'      && canSeeMain && <BizSalesPage profile={profile} setPage={setPage} mode="view"/>}
             {page === 'lecture_sales_view'  && canSeeMain && <LectureSalesPage profile={profile} setPage={setPage}/>}

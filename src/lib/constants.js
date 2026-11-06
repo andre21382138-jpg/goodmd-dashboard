@@ -56,6 +56,7 @@ export const HQ_MENUS = [
   ]},
   { key: 'sales_view',     icon: '📋', label: '매출조회' },
   { key: 'sales_settlement', icon: '🧮', label: '매출확인' },
+  { key: 'settlement_report', icon: '📊', label: '결산 리포트' },
   { key: 'attendance_mgmt',icon: '🗓️', label: '근태관리' },
   { key: 'incentive',      icon: '💰', label: '급여관리' },
   { key: 'member_mgmt', icon: '👥', label: '고객관리', sub: [
