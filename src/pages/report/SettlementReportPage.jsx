@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 import { STORE_MAP, STORE_NAMES } from '../../lib/constants';
@@ -194,39 +193,76 @@ function WeeklyReport() {
     );
   };
 
-  const downloadExcel = () => {
-    const header = ['구분', `당월(${mmdd(curM.s)}~${mmdd(curM.e)})`, `전월(${mmdd(prevM.s)}~${mmdd(prevM.e)})`, '전월대비',
-      `금주(${periodLabel})`, `D-1주전(${mmdd(weeks[1].s)}~${mmdd(weeks[1].e)})`,
-      `D-2주전(${mmdd(weeks[2].s)}~${mmdd(weeks[2].e)})`, `D-3주전(${mmdd(weeks[3].s)}~${mmdd(weeks[3].e)})`,
-      `D-4주전(${mmdd(weeks[4].s)}~${mmdd(weeks[4].e)})`];
-    const g = growth(grand.cur, grand.prev);
-    const line = (label, c) => {
-      const gg = growth(c.cur, c.prev);
-      return [label, Math.round(c.cur), Math.round(c.prev), gg === null ? '-' : +(gg * 100).toFixed(1),
-        Math.round(c.w[0]), Math.round(c.w[1]), Math.round(c.w[2]), Math.round(c.w[3]), Math.round(c.w[4])];
+  const downloadExcel = async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('주간결산', { views: [{ showGridLines: false }] });
+    // 원본 업무보고서 양식과 동일: 맑은 고딕 10 · 전체 테두리 · 회계형 #,##0 · 0.0% · 중앙정렬
+    const FONT = { name: '맑은 고딕', size: 10 };
+    const BORDER = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+    const ACC = '_-* #,##0_-;\\-* #,##0_-;_-* "-"_-;_-@_-';
+    const PCT = '0.0%';
+    const widths = [13.125, 12.625, 12.625, 8, 12.125, 12.125, 11.125, 11.125, 10.5];
+    widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+    const rng = (s, e) => `${mmdd(s)}~${mmdd(e)}`;
+    const hdr = (r) => {
+      const labels = ['구분', `당월\n(${rng(curM.s, curM.e)})`, `전월\n(${rng(prevM.s, prevM.e)})`, '전월대비',
+        `금주\n(${rng(weeks[0].s, weeks[0].e)})`, `D-1주전\n(${rng(weeks[1].s, weeks[1].e)})`,
+        `D-2주전\n(${rng(weeks[2].s, weeks[2].e)})`, `D-3주전\n(${rng(weeks[3].s, weeks[3].e)})`,
+        `D-4주전\n(${rng(weeks[4].s, weeks[4].e)})`];
+      const row = ws.getRow(r); row.height = 30;
+      labels.forEach((t, i) => {
+        const c = row.getCell(i + 1);
+        c.value = t; c.font = { ...FONT, bold: true };
+        c.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+        c.border = BORDER;
+      });
+      return r + 1;
     };
-    const aoa = [
-      [`■ 결산 리포트(주간) ${periodLabel}`],
-      [],
-      ['[ 전체 / 체인별 요약 ]'],
-      header,
-      ['전체 합계', Math.round(grand.cur), Math.round(grand.prev), g === null ? '-' : +(g * 100).toFixed(1),
-        Math.round(grand.w[0]), Math.round(grand.w[1]), Math.round(grand.w[2]), Math.round(grand.w[3]), Math.round(grand.w[4])],
-      ...chains.map(c => line(c.chain, c.total)),
-      [],
-    ];
+    const dataRow = (r, label, cell, opt = {}) => {
+      const { bold = false, indent = false } = opt;
+      const row = ws.getRow(r); row.height = 17.25;
+      const g = growth(cell.cur, cell.prev);
+      const vals = [(indent ? '   ' : '') + label, cell.cur, cell.prev, (g === null ? '-' : g),
+        cell.w[0], cell.w[1], cell.w[2], cell.w[3], cell.w[4]];
+      vals.forEach((v, i) => {
+        const c = row.getCell(i + 1);
+        c.value = v; c.font = { ...FONT, bold }; c.border = BORDER;
+        if (i === 0) c.alignment = { horizontal: 'left', vertical: 'center' };
+        else if (i === 3) { c.numFmt = g === null ? 'General' : PCT; c.alignment = { horizontal: 'center', vertical: 'center' }; }
+        else { c.numFmt = ACC; c.alignment = { horizontal: 'right', vertical: 'center' }; }
+      });
+      return r + 1;
+    };
+    const sectionRow = (r, text, size = 11) => {
+      ws.getRow(r).getCell(1).value = text;
+      ws.getRow(r).getCell(1).font = { ...FONT, bold: true, size };
+      return r + 1;
+    };
+
+    let r = 1;
+    r = sectionRow(r, `■ 결산 리포트(주간) ${periodLabel}`, 12);
+    r += 1;
+    r = sectionRow(r, '[ 전체 / 체인별 요약 ]');
+    r = hdr(r);
+    r = dataRow(r, '전체 합계', grand, { bold: true });
+    for (const c of chains) r = dataRow(r, c.chain, c.total);
+    r += 1;
     for (const c of chains) {
-      aoa.push([`[ ${c.chain} ]`]);
-      aoa.push(header);
-      aoa.push(line(`${c.chain} 합계`, c.total));
-      for (const b of c.branches) aoa.push(line(`  ${b.name}`, b.cell));
-      aoa.push([]);
+      r = sectionRow(r, `[ ${c.chain} ]`);
+      r = hdr(r);
+      r = dataRow(r, `${c.chain} 합계`, c.total, { bold: true });
+      for (const b of c.branches) r = dataRow(r, b.name, b.cell, { indent: true });
+      r += 1;
     }
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 22 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '주간결산');
-    XLSX.writeFile(wb, `결산리포트_주간_${ymd(start)}~${ymd(end)}.xlsx`);
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `결산리포트_주간_${ymd(start)}~${ymd(end)}.xlsx`;
+    a.click(); URL.revokeObjectURL(url);
   };
 
   return (
