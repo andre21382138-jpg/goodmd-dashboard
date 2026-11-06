@@ -164,6 +164,15 @@ function WeeklyReport() {
 
   const periodLabel = `${mmdd(ymd(start))}~${mmdd(ymd(end))}`;
   const rangeTd = { fontSize: 11, color: 'var(--text3)', fontWeight: 600, fontFamily: 'var(--mono)', paddingTop: 8, borderTop: '2px solid var(--border)' };
+  const hCell = { fontSize: 12, fontWeight: 700, color: 'var(--text2)', padding: '8px 14px', background: 'var(--bg3, #eef1f6)', borderBottom: '1px solid var(--border)' };
+  const hCellR = { ...hCell, textAlign: 'right' };
+  const COLS = ['당월', '전월', '전월대비', '금주', 'D-1주전', 'D-2주전', 'D-3주전', 'D-4주전'];
+  const BlockHeader = () => (
+    <tr>
+      <td style={hCell}>구분</td>
+      {COLS.map(c => <td key={c} style={hCellR}>{c}</td>)}
+    </tr>
+  );
 
   const Row = ({ label, cell, bold, indent, emphasis }) => {
     const bd = emphasis ? { borderTop: '2.5px solid var(--text)', borderBottom: '2.5px solid var(--text)' } : null;
@@ -263,7 +272,9 @@ function WeeklyReport() {
                     {chains.map(c => <Row key={`sum-${c.chain}`} label={c.chain} cell={c.total} />)}
                     {chains.map(c => (
                       <React.Fragment key={`blk-${c.chain}`}>
-                        <tr><td colSpan={9} style={{ background: 'var(--accent, #1565C0)', color: '#fff', fontWeight: 800, padding: '6px 10px' }}>{c.chain}</td></tr>
+                        <tr><td colSpan={9} style={{ height: 20, background: '#fff', border: 'none' }} /></tr>
+                        <tr><td colSpan={9} style={{ background: 'var(--accent, #1565C0)', color: '#fff', fontWeight: 800, fontSize: 15, padding: '8px 12px', borderRadius: '6px 6px 0 0' }}>🏬 {c.chain}</td></tr>
+                        <BlockHeader />
                         <Row label={`${c.chain} 합계`} cell={c.total} bold />
                         {c.branches.map(b => <Row key={`${c.chain}-${b.name}`} label={b.name} cell={b.cell} indent />)}
                       </React.Fragment>
