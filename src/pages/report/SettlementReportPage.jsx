@@ -153,30 +153,37 @@ function WeeklyReport() {
     if (!prev) return null;
     return (cur - prev) / prev;
   };
-  const GrowthCell = ({ cur, prev }) => {
+  const GrowthCell = ({ cur, prev, tdStyle }) => {
     const g = growth(cur, prev);
-    if (g === null) return <td className="r" style={{ color: 'var(--text3)' }}>-</td>;
+    if (g === null) return <td className="r" style={{ color: 'var(--text3)', ...tdStyle }}>-</td>;
     const pos = g >= 0;
-    return <td className="r" style={{ color: pos ? '#2e7d32' : 'var(--danger)', fontWeight: 700 }}>
+    return <td className="r" style={{ color: pos ? '#2e7d32' : 'var(--danger)', fontWeight: 700, ...tdStyle }}>
       {pos ? '+' : ''}{(g * 100).toFixed(1)}%
     </td>;
   };
 
   const periodLabel = `${mmdd(ymd(start))}~${mmdd(ymd(end))}`;
+  const rangeTd = { fontSize: 11, color: 'var(--text3)', fontWeight: 600, fontFamily: 'var(--mono)', paddingTop: 8, borderTop: '2px solid var(--border)' };
 
-  const Row = ({ label, cell, bold, indent }) => (
-    <tr style={bold ? { background: 'var(--bg2, #f7f7f9)', fontWeight: 700 } : undefined}>
-      <td style={{ paddingLeft: indent ? 24 : undefined, fontWeight: bold ? 700 : 500, whiteSpace: 'nowrap' }}>{label}</td>
-      <td className="r">{won(cell.cur)}</td>
-      <td className="r" style={{ color: 'var(--text3)' }}>{won(cell.prev)}</td>
-      <GrowthCell cur={cell.cur} prev={cell.prev} />
-      <td className="r" style={{ fontWeight: 700 }}>{won(cell.w[0])}</td>
-      <td className="r" style={{ color: 'var(--text3)' }}>{won(cell.w[1])}</td>
-      <td className="r" style={{ color: 'var(--text3)' }}>{won(cell.w[2])}</td>
-      <td className="r" style={{ color: 'var(--text3)' }}>{won(cell.w[3])}</td>
-      <td className="r" style={{ color: 'var(--text3)' }}>{won(cell.w[4])}</td>
-    </tr>
-  );
+  const Row = ({ label, cell, bold, indent, emphasis }) => {
+    const bd = emphasis ? { borderTop: '2.5px solid var(--text)', borderBottom: '2.5px solid var(--text)' } : null;
+    return (
+      <tr style={{
+        ...(bold ? { fontWeight: 700 } : null),
+        ...(emphasis ? { background: 'var(--bg3, #eef1f6)' } : bold ? { background: 'var(--bg2, #f7f7f9)' } : null),
+      }}>
+        <td style={{ ...bd, paddingLeft: indent ? 24 : undefined, fontWeight: (bold || emphasis) ? 800 : 500, whiteSpace: 'nowrap' }}>{label}</td>
+        <td className="r" style={{ ...bd }}>{won(cell.cur)}</td>
+        <td className="r" style={{ ...bd, color: 'var(--text3)' }}>{won(cell.prev)}</td>
+        <GrowthCell cur={cell.cur} prev={cell.prev} tdStyle={bd} />
+        <td className="r" style={{ ...bd, fontWeight: 700 }}>{won(cell.w[0])}</td>
+        <td className="r" style={{ ...bd, color: 'var(--text3)' }}>{won(cell.w[1])}</td>
+        <td className="r" style={{ ...bd, color: 'var(--text3)' }}>{won(cell.w[2])}</td>
+        <td className="r" style={{ ...bd, color: 'var(--text3)' }}>{won(cell.w[3])}</td>
+        <td className="r" style={{ ...bd, color: 'var(--text3)' }}>{won(cell.w[4])}</td>
+      </tr>
+    );
+  };
 
   const downloadExcel = () => {
     const header = ['구분', `당월(${mmdd(curM.s)}~${mmdd(curM.e)})`, `전월(${mmdd(prevM.s)}~${mmdd(prevM.e)})`, '전월대비',
@@ -252,7 +259,7 @@ function WeeklyReport() {
                 ? <tr><td colSpan={9} className="empty">해당 기간 매출 데이터가 없습니다</td></tr>
                 : (
                   <>
-                    <Row label="전체 합계" cell={grand} bold />
+                    <Row label="전체 합계" cell={grand} emphasis />
                     {chains.map(c => <Row key={`sum-${c.chain}`} label={c.chain} cell={c.total} />)}
                     {chains.map(c => (
                       <React.Fragment key={`blk-${c.chain}`}>
@@ -264,6 +271,19 @@ function WeeklyReport() {
                   </>
                 )}
             </tbody>
+            <tfoot>
+              <tr>
+                <td style={{ ...rangeTd, fontWeight: 700 }}>기간</td>
+                <td className="r" style={rangeTd}>{mmdd(curM.s)}~{mmdd(curM.e)}</td>
+                <td className="r" style={rangeTd}>{mmdd(prevM.s)}~{mmdd(prevM.e)}</td>
+                <td style={rangeTd}></td>
+                <td className="r" style={rangeTd}>{mmdd(weeks[0].s)}~{mmdd(weeks[0].e)}</td>
+                <td className="r" style={rangeTd}>{mmdd(weeks[1].s)}~{mmdd(weeks[1].e)}</td>
+                <td className="r" style={rangeTd}>{mmdd(weeks[2].s)}~{mmdd(weeks[2].e)}</td>
+                <td className="r" style={rangeTd}>{mmdd(weeks[3].s)}~{mmdd(weeks[3].e)}</td>
+                <td className="r" style={rangeTd}>{mmdd(weeks[4].s)}~{mmdd(weeks[4].e)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
