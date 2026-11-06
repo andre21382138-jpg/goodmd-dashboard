@@ -161,14 +161,24 @@ function WeeklyReport() {
   };
 
   const periodLabel = `${mmdd(ymd(start))}~${mmdd(ymd(end))}`;
-  const rangeTd = { fontSize: 11, color: 'var(--text3)', fontWeight: 600, fontFamily: 'var(--mono)', paddingTop: 8, borderTop: '2px solid var(--border)' };
   const hCell = { fontSize: 12, fontWeight: 700, color: 'var(--text2)', padding: '8px 14px', background: 'var(--bg3, #eef1f6)', borderBottom: '1px solid var(--border)' };
   const hCellR = { ...hCell, textAlign: 'right' };
-  const COLS = ['당월', '전월', '전월대비', '금주', 'D-1주전', 'D-2주전', 'D-3주전', 'D-4주전'];
+  const subRange = { display: 'block', fontSize: 10, fontWeight: 500, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 };
+  const rangeOf = (s, e) => `${mmdd(s)}~${mmdd(e)}`;
+  const COLS = [
+    { l: '당월', r: rangeOf(curM.s, curM.e) },
+    { l: '전월', r: rangeOf(prevM.s, prevM.e) },
+    { l: '전월대비', r: '' },
+    { l: '금주', r: rangeOf(weeks[0].s, weeks[0].e) },
+    { l: 'D-1주전', r: rangeOf(weeks[1].s, weeks[1].e) },
+    { l: 'D-2주전', r: rangeOf(weeks[2].s, weeks[2].e) },
+    { l: 'D-3주전', r: rangeOf(weeks[3].s, weeks[3].e) },
+    { l: 'D-4주전', r: rangeOf(weeks[4].s, weeks[4].e) },
+  ];
   const BlockHeader = () => (
     <tr>
       <td style={hCell}>구분</td>
-      {COLS.map(c => <td key={c} style={hCellR}>{c}</td>)}
+      {COLS.map(c => <td key={c.l} style={hCellR}>{c.l}{c.r && <span style={subRange}>{c.r}</span>}</td>)}
     </tr>
   );
 
@@ -288,14 +298,7 @@ function WeeklyReport() {
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>구분</th>
-                <th className="r">당월</th>
-                <th className="r">전월</th>
-                <th className="r">전월대비</th>
-                <th className="r">금주</th>
-                <th className="r">D-1주전</th>
-                <th className="r">D-2주전</th>
-                <th className="r">D-3주전</th>
-                <th className="r">D-4주전</th>
+                {COLS.map(c => <th key={c.l} className="r">{c.l}{c.r && <span style={subRange}>{c.r}</span>}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -317,19 +320,6 @@ function WeeklyReport() {
                   </>
                 )}
             </tbody>
-            <tfoot>
-              <tr>
-                <td style={{ ...rangeTd, fontWeight: 700 }}>기간</td>
-                <td className="r" style={rangeTd}>{mmdd(curM.s)}~{mmdd(curM.e)}</td>
-                <td className="r" style={rangeTd}>{mmdd(prevM.s)}~{mmdd(prevM.e)}</td>
-                <td style={rangeTd}></td>
-                <td className="r" style={rangeTd}>{mmdd(weeks[0].s)}~{mmdd(weeks[0].e)}</td>
-                <td className="r" style={rangeTd}>{mmdd(weeks[1].s)}~{mmdd(weeks[1].e)}</td>
-                <td className="r" style={rangeTd}>{mmdd(weeks[2].s)}~{mmdd(weeks[2].e)}</td>
-                <td className="r" style={rangeTd}>{mmdd(weeks[3].s)}~{mmdd(weeks[3].e)}</td>
-                <td className="r" style={rangeTd}>{mmdd(weeks[4].s)}~{mmdd(weeks[4].e)}</td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}
