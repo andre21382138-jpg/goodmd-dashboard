@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
-import { STORE_MAP, STORE_NAMES } from '../../lib/constants';
+import { STORE_MAP } from '../../lib/constants';
+
+// 결산 리포트 집계 대상 — 원본 업무보고서와 동일하게 정식 백화점 7개 체인만 (그린푸드·특판 제외)
+const REPORT_CHAINS = ['롯데백화점', '갤러리아백화점', 'AK백화점', '현대백화점', '신세계백화점', '농협_SHOP', '대동백화점'];
 
 // ════════════════════════════════════════════════════════════════
 // 결산 리포트 — 주간(지난주 금 ~ 금주 목) / 월간(구현 예정)
@@ -127,12 +130,8 @@ function WeeklyReport() {
       if (d >= curM.s && d <= curM.e) { cell.cur += amt; ct.cur += amt; }
       if (d >= prevM.s && d <= prevM.e) { cell.prev += amt; ct.prev += amt; }
     }
-    // 체인 정렬: STORE_NAMES 순 우선, 그 외 뒤에. 지점: STORE_MAP 순 우선.
-    const presentChains = Object.keys(map);
-    const orderedChains = [
-      ...STORE_NAMES.filter(c => presentChains.includes(c)),
-      ...presentChains.filter(c => !STORE_NAMES.includes(c)),
-    ];
+    // 집계 대상: 정식 백화점 7개 체인만, 원본 순서대로. 지점: STORE_MAP 순 우선.
+    const orderedChains = REPORT_CHAINS.filter(c => map[c]);
     const grand = mkCell();
     const chains = orderedChains.map(chain => {
       const { branches, total } = map[chain];
@@ -337,7 +336,8 @@ function WeeklyReport() {
 
       <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', lineHeight: 1.7 }}>
         · 1주 = 금요일~목요일. 기본값은 가장 최근 완료주, [◀ 이전주/다음주 ▶]로 과거 주 조회.<br />
-        · 매출 = 단가 × 수량, 구매이력 제외, 반품은 음수 반영. 당월·전월은 '동일 날짜(1일~금주 목요일)' 기준.
+        · 매출 = 단가 × 수량, 구매이력 제외, 반품은 음수 반영. 당월·전월은 '동일 날짜(1일~금주 목요일)' 기준.<br />
+        · 집계 대상: 정식 백화점 7개 체인(롯데·갤러리아·AK·현대·신세계·농협·대동). 그린푸드·특판은 제외(원본 업무보고서 기준).
       </div>
     </div>
   );
