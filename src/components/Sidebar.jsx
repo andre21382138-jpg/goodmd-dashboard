@@ -376,6 +376,9 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
     const q = storeQuery.trim(); if (!q) return true;
     return `${s.department || ''} ${s.branch || ''} ${s.name || ''}`.toLowerCase().includes(q.toLowerCase());
   });
+  // 계정 없이 전환 가능한 '테스트매장' 합성 프로필 (created_by가 유효하도록 현재 계정 id 사용)
+  const testStoreProfile = { ...profile, id: profile?.id, name: '테스트매니저', display_name: '테스트매니저', department: '테스트매장', branch: '테스트점', job_title: '매니저', role: 'store', approved: true };
+  const showTestStore = (() => { const q = storeQuery.trim().toLowerCase(); return !q || '테스트매장 테스트점 테스트매니저 test'.includes(q); })();
   const canSeeMain = isAdmin || isHQ;
   const [newPlanCount,  setNewPlanCount]  = useState(0);
   const [hasNewNotice,  setHasNewNotice]  = useState(false);
@@ -623,7 +626,15 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
             <input autoFocus value={storeQuery} onChange={e => setStoreQuery(e.target.value)} placeholder="점포·지점·이름 검색"
               style={{width:'100%', height:38, padding:'0 10px', border:'1px solid #ddd', borderRadius:8, fontSize:13, outline:'none', marginBottom:10}}/>
             <div style={{border:'1px solid #eee', borderRadius:8, maxHeight:360, overflowY:'auto'}}>
-              {filteredStores.length === 0 ? <div style={{padding:'16px', textAlign:'center', color:'#999', fontSize:13}}>매장이 없습니다</div>
+              {showTestStore && (
+                <div onClick={() => { onStartImpersonate(testStoreProfile); setSwitchModal(false); }}
+                  style={{padding:'10px 12px', borderBottom:'1px solid #f2f2f2', cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', gap:8, background:'#f1f8e9'}}
+                  onMouseEnter={e => e.currentTarget.style.background='#dcedc8'} onMouseLeave={e => e.currentTarget.style.background='#f1f8e9'}>
+                  <span>🧪</span><strong>테스트매장</strong><span style={{color:'#888'}}>테스트점</span>
+                  <span style={{marginLeft:'auto', fontSize:11, color:'#7cb342', fontWeight:700}}>업데이트 테스트용</span>
+                </div>
+              )}
+              {filteredStores.length === 0 && !showTestStore ? <div style={{padding:'16px', textAlign:'center', color:'#999', fontSize:13}}>매장이 없습니다</div>
                 : filteredStores.map(s => (
                   <div key={s.id} onClick={() => { onStartImpersonate(s); setSwitchModal(false); }}
                     style={{padding:'10px 12px', borderBottom:'1px solid #f2f2f2', cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', gap:8}}
