@@ -280,15 +280,17 @@ export default function SalesReturnPage({ profile }) {
     if (!rActObj.refund) {
       if (rActObj.needEx && !rAction.exchange.code) { toast('교환할 다른상품을 선택해주세요', 'err'); return; }
       if (rActObj.needGift && !rAction.gift.code) { toast('서비스증정 상품을 선택해주세요', 'err'); return; }
+      const exQty = Number(rAction.exchange.qty) || totalQty;
+      const giftQty = Number(rAction.gift.qty) || 1;
       const movements = [];
       if (rActObj.needEx) {
         for (const it of toReturn) if (it.product?.code) movements.push({ code: it.product.code, name: it.product?.name, delta: Number(returnMap[it.id]) });
-        movements.push({ code: rAction.exchange.code, name: rAction.exchange.name, delta: -totalQty });
+        movements.push({ code: rAction.exchange.code, name: rAction.exchange.name, delta: -exQty });
       }
-      if (rActObj.needGift) movements.push({ code: rAction.gift.code, name: rAction.gift.name, delta: -1 });
-      if (!window.confirm(`${rAction.action_type} 처리하시겠습니까?\n\n대상: ${prodNames}` +
-        (rActObj.needEx ? `\n교환상품: ${rAction.exchange.name} (−${totalQty})` : '') +
-        (rActObj.needGift ? `\n증정상품: ${rAction.gift.name} (−1)` : '') +
+      if (rActObj.needGift) movements.push({ code: rAction.gift.code, name: rAction.gift.name, delta: -giftQty });
+      if (!window.confirm(`${rAction.action_type} 처리하시겠습니까?\n\n회수상품: ${prodNames}` +
+        (rActObj.needEx ? `\n교환상품: ${rAction.exchange.name} (−${exQty})` : '') +
+        (rActObj.needGift ? `\n증정상품: ${rAction.gift.name} (−${giftQty})` : '') +
         `\n\n※ 매출·적립금 변화 없음 · 클레임 현황에 기록됩니다`)) return;
       setSaving(true);
       try {
@@ -441,15 +443,17 @@ export default function SalesReturnPage({ profile }) {
     if (!mActObj.refund) {
       if (mActObj.needEx && !mAction.exchange.code) { toast('교환할 다른상품을 선택해주세요', 'err'); return; }
       if (mActObj.needGift && !mAction.gift.code) { toast('서비스증정 상품을 선택해주세요', 'err'); return; }
+      const exQty = Number(mAction.exchange.qty) || qty;
+      const giftQty = Number(mAction.gift.qty) || 1;
       const movements = [];
       if (mActObj.needEx) {
         if (mProduct.code) movements.push({ code: mProduct.code, name: mProduct.name, delta: qty });
-        movements.push({ code: mAction.exchange.code, name: mAction.exchange.name, delta: -qty });
+        movements.push({ code: mAction.exchange.code, name: mAction.exchange.name, delta: -exQty });
       }
-      if (mActObj.needGift) movements.push({ code: mAction.gift.code, name: mAction.gift.name, delta: -1 });
-      if (!window.confirm(`${mAction.action_type} 처리하시겠습니까?\n\n상품: ${mProduct.name} ×${qty}` +
-        (mActObj.needEx ? `\n교환상품: ${mAction.exchange.name} (−${qty})` : '') +
-        (mActObj.needGift ? `\n증정상품: ${mAction.gift.name} (−1)` : '') +
+      if (mActObj.needGift) movements.push({ code: mAction.gift.code, name: mAction.gift.name, delta: -giftQty });
+      if (!window.confirm(`${mAction.action_type} 처리하시겠습니까?\n\n회수상품: ${mProduct.name} ×${qty}` +
+        (mActObj.needEx ? `\n교환상품: ${mAction.exchange.name} (−${exQty})` : '') +
+        (mActObj.needGift ? `\n증정상품: ${mAction.gift.name} (−${giftQty})` : '') +
         `\n\n※ 매출·적립금 변화 없음 · 클레임 현황에 기록됩니다`)) return;
       setMSaving(true);
       try {
@@ -748,10 +752,10 @@ export default function SalesReturnPage({ profile }) {
                               {/* 클레임 사유 (선택 — 입력 시 클레임 현황에 기록) */}
                               <div style={{display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12, padding:'10px 12px', background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)'}}>
                                 <div>
-                                  <label style={{display:'block', fontSize:11, fontWeight:700, color:'#6a1b9a', marginBottom:4}}>📣 클레임 사유 <span style={{color:'var(--text3)', fontWeight:400}}>(선택 · 입력 시 클레임 현황 기록)</span></label>
+                                  <label style={{display:'block', fontSize:11, fontWeight:700, color:'#6a1b9a', marginBottom:4}}>📣 클레임 사유 <span style={{color:'var(--text3)', fontWeight:400}}>(단순변심은 현황 미기록 · 품질불만 등 선택 시 기록)</span></label>
                                   <select value={rClaimType} onChange={e => setRClaimType(e.target.value)}
                                     style={{height:34, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:4, fontSize:13, background:'#fff', outline:'none'}}>
-                                    <option value="">사유 없음 (일반 반품)</option>{CLAIM_TYPES.map(t => <option key={t}>{t}</option>)}
+                                    <option value="">단순변심</option>{CLAIM_TYPES.map(t => <option key={t}>{t}</option>)}
                                   </select>
                                 </div>
                                 {rClaimType === '직접입력' && (
@@ -765,7 +769,8 @@ export default function SalesReturnPage({ profile }) {
                               </div>
                               {/* 처리방법 (환불/교환/증정/본사) */}
                               <div style={{marginBottom:12}}>
-                                <ClaimActionPicker value={rAction} onChange={setRAction} />
+                                <ClaimActionPicker value={rAction} onChange={setRAction}
+                                  returnedItems={o.items.filter(i => Number(returnMap[i.id]||0) > 0).map(i => ({ name: i.product?.name, code: i.product?.code, qty: Number(returnMap[i.id]) }))} />
                               </div>
                               {/* 환불 합계 수정 (환불일 때만) */}
                               {rActObj.refund && (
@@ -907,7 +912,8 @@ export default function SalesReturnPage({ profile }) {
             </div>
 
             {/* 처리방법 (환불/교환/증정/본사) */}
-            <ClaimActionPicker value={mAction} onChange={setMAction} />
+            <ClaimActionPicker value={mAction} onChange={setMAction}
+              returnedItems={mProduct ? [{ name: mProduct.name, code: mProduct.code, qty: Number(mQty) || 0 }] : []} />
 
             {mActObj.refund && (<>
             {/* 4) 환불 합계 (직접 입력) */}
@@ -937,10 +943,10 @@ export default function SalesReturnPage({ profile }) {
 
             {/* 클레임 사유 (선택 — 입력 시 클레임 현황에 기록) */}
             <div style={{padding:'12px 14px', background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)'}}>
-              <label style={{display:'block', fontSize:11, fontWeight:700, color:'#6a1b9a', marginBottom:5}}>📣 클레임 사유 <span style={{color:'var(--text3)', fontWeight:400}}>(선택 · 입력 시 클레임 현황 기록)</span></label>
+              <label style={{display:'block', fontSize:11, fontWeight:700, color:'#6a1b9a', marginBottom:5}}>📣 클레임 사유 <span style={{color:'var(--text3)', fontWeight:400}}>(단순변심은 현황 미기록 · 품질불만 등 선택 시 기록)</span></label>
               <select value={mClaimType} onChange={e => setMClaimType(e.target.value)}
                 style={{width:'100%', height:38, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:'var(--radius)', fontSize:14, background:'#fff', outline:'none', boxSizing:'border-box'}}>
-                <option value="">사유 없음 (일반 반품)</option>{CLAIM_TYPES.map(t => <option key={t}>{t}</option>)}
+                <option value="">단순변심</option>{CLAIM_TYPES.map(t => <option key={t}>{t}</option>)}
               </select>
               {mClaimType === '직접입력' && (
                 <input value={mClaimCustom} onChange={e => setMClaimCustom(e.target.value)} placeholder="사유 직접 입력"
