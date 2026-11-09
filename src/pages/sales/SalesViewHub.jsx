@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
-import { isSpecialSalesStore } from '../../lib/constants';
+import { isSpecialSalesStore, isTestStore } from '../../lib/constants';
 
 export default function SalesViewHub({ setPage }) {
   const items = [
@@ -48,7 +48,7 @@ export default function SalesViewHub({ setPage }) {
         if (data.length < PAGE) break;
         start += PAGE;
       }
-      setStoreRows(allSales);
+      setStoreRows(allSales.filter(r => !isTestStore(r.store_name)));  // 테스트매장 제외
 
       // 특판매출
       const { data: bizData, error: bizErr } = await supabase.from('biz_sales')
@@ -62,7 +62,7 @@ export default function SalesViewHub({ setPage }) {
         .select('sold_at, store_name, branch_name, price')
         .gte('sold_at', appliedFrom).lte('sold_at', appliedTo);
       if (lecErr) throw lecErr;
-      setLectureRows(lecData || []);
+      setLectureRows((lecData || []).filter(r => !isTestStore(r.store_name)));  // 테스트매장 제외
     } catch (err) {
       toast('조회 실패: ' + (err.message || err), 'err');
     }

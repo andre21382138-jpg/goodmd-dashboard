@@ -171,7 +171,7 @@ function TargetIncentiveTab() {
       const prevLast = new Date(prevM.getFullYear(), prevM.getMonth()+1, 0).getDate();
       const prevTo   = `${prevMonStr}-${String(prevLast).padStart(2,'0')}`;
       const { data: salesData } = await supabase.from('sales')
-        .select('branch_name, price, quantity').neq('payment', '구매이력').gte('sold_at', prevFrom).lte('sold_at', prevTo);
+        .select('branch_name, price, quantity').neq('payment', '구매이력').neq('store_name', '테스트매장').gte('sold_at', prevFrom).lte('sold_at', prevTo);
       const salesMap = {};
       (salesData||[]).forEach(s => {
         if (!salesMap[s.branch_name]) salesMap[s.branch_name] = 0;
@@ -299,6 +299,7 @@ function MemberIncentiveTab() {
     const { data: salesData } = await supabase.from('sales')
       .select('customer_id, price, quantity')
       .neq('payment', '구매이력')
+      .neq('store_name', '테스트매장')
       .in('customer_id', memberIds)
       .gte('sold_at', from).lte('sold_at', to);
 
@@ -711,6 +712,7 @@ function SalaryCalcTab() {
       const { data: custSales } = await supabase.from('sales')
         .select('customer_id, price, quantity')
         .neq('payment', '구매이력')
+        .neq('store_name', '테스트매장')
         .in('customer_id', custIds)
         .gte('sold_at', from).lte('sold_at', to);
       (custSales||[]).forEach(s => {

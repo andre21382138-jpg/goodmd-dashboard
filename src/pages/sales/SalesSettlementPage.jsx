@@ -81,6 +81,7 @@ export default function SalesSettlementPage() {
       let q = supabase.from('sales')
         .select('product_id, quantity, price, payment, unit_cost, product:products(code, name, price, cost)')
         .neq('payment', '구매이력')
+        .neq('store_name', '테스트매장')
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
       if (fStores.length === 1) q = q.eq('store_name', fStores[0]);
@@ -187,6 +188,7 @@ export default function SalesSettlementPage() {
       const { data, error } = await supabase.from('sales')
         .select('store_name, branch_name, quantity, price, payment, unit_cost, product:products(cost)')
         .neq('payment', '구매이력')
+        .neq('store_name', '테스트매장')
         .gte('sold_at', from).lte('sold_at', to)
         .order('id').range(start, start + PAGE - 1);
       if (error) throw error;
@@ -290,6 +292,7 @@ export default function SalesSettlementPage() {
       while (true) {
         const { data, error } = await supabase.from('store_expenses')
           .select('id, store_name, branch_name, expense_date, category, amount, memo')
+          .neq('store_name', '테스트매장')
           .gte('expense_date', from).lte('expense_date', to)
           .order('expense_date').order('id').range(start, start + PAGE - 1);
         if (error) throw error;
@@ -339,7 +342,7 @@ export default function SalesSettlementPage() {
       // 판매수량 (구매이력 제외, 반품은 차감 → 매출정산과 동일한 순판매수량) — 당월분 / 당월말 이후분
       const salesM = {}, salesAfter = {};
       { let start = 0; while (true) {
-        const { data } = await supabase.from('sales').select('product_id, quantity, price, payment, sold_at, store_name').neq('payment', '구매이력').gte('sold_at', mStart).order('id').range(start, start + 999);
+        const { data } = await supabase.from('sales').select('product_id, quantity, price, payment, sold_at, store_name').neq('payment', '구매이력').neq('store_name', '테스트매장').gte('sold_at', mStart).order('id').range(start, start + 999);
         if (!data || !data.length) break;
         data.forEach(s => { if (!s.product_id) return;
           if (isSpecialSalesStore(s.store_name)) return; // 특판은 매장재고 대상 아님 → 재고결산 제외
