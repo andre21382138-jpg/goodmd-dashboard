@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { toast, GradeBadge, getGrade, formatNumInput, parseNumInput } from '../../lib/utils';
+import { toast, GradeBadge, formatNumInput, parseNumInput } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP, CLAIM_TYPES } from '../../lib/constants';
 import HqReturnTab from './HqReturnTab';
 import ClaimActionPicker, { getRetAction, emptyClaimAction } from './ClaimActionPicker';
+import { ReturnModal, ExchangeModal } from './MemberClaimModals';
 
 export default function SalesReturnPage({ profile }) {
   // 본사 계정(매니저가 아닌 admin/hq)이면 점포·지점을 직접 선택해 매장 반품 접수
@@ -22,19 +23,12 @@ export default function SalesReturnPage({ profile }) {
   const [fSearch,  setFSearch]  = useState('');
   const [orders,   setOrders]   = useState([]);
   const [loading,  setLoading]  = useState(false);
-  const [expanded, setExpanded] = useState(null);
-  const [returnMap, setReturnMap] = useState({});
-  const [saving,   setSaving]   = useState(false);
-  // 검색 반품: 반품 날짜 + 환불 합계 수정(빈값='' = 자동계산 그대로)
-  const kstToday = () => new Date(Date.now() + 9*60*60*1000).toISOString().slice(0, 10);
-  const [returnDate, setReturnDate] = useState(kstToday());
-  const [refundEdit, setRefundEdit] = useState('');
-  // 회원반품 클레임 사유 (선택 — 입력 시 store_claims에 기록)
-  const [rClaimType, setRClaimType]     = useState('');
-  const [rClaimCustom, setRClaimCustom] = useState('');
-  const [rClaimDetail, setRClaimDetail] = useState('');
-  const [rAction, setRAction]           = useState(emptyClaimAction()); // 처리방법(환불/교환/증정/본사)
-  const rActObj = getRetAction(rAction.action_type);
+  // 회원반품: 주문건별 [반품]/[교환] 팝업
+  const [modalOrder, setModalOrder] = useState(null);
+  const [modalType, setModalType]   = useState(null); // 'return' | 'exchange'
+  const openModal  = (o, type) => { setModalOrder(o); setModalType(type); };
+  const closeModal = () => { setModalOrder(null); setModalType(null); };
+  const afterDone  = () => { closeModal(); fetchOrders(); };
 
   // 직접입력 탭
   const [allProducts, setAllProducts] = useState([]);
@@ -179,8 +173,6 @@ export default function SalesReturnPage({ profile }) {
     }
     const list = Object.values(grouped).sort((a,b) => b.sold_at.localeCompare(a.sold_at));
     setOrders(list);
-    setExpanded(null);
-    setReturnMap({});
     setLoading(false);
   }, [storeName, branchName, fFrom, fTo, fSearch, searchMode]);
 
@@ -192,47 +184,6 @@ export default function SalesReturnPage({ profile }) {
   }, 0);
 
   const orderQty = (o) => o.items.reduce((s,i) => s + (i.quantity - (i.returned_qty||0)), 0);
-
-  const toggleExpand = (order) => {
-    if (expanded === order.key) {
-      setExpanded(null); setReturnMap({});
-    } else {
-      const map = {};
-      for (const i of order.items) map[i.id] = 0;
-      setReturnMap(map);
-      setReturnDate(kstToday()); setRefundEdit('');
-      setRClaimType(''); setRClaimCustom(''); setRClaimDetail(''); setRAction(emptyClaimAction());
-      setExpanded(order.key);
-    }
-  };
-
-  const setAllFull = (order) => {
-    const map = {};
-    for (const i of order.items) map[i.id] = i.quantity - (i.returned_qty||0);
-    setReturnMap(map);
-  };
-  const setAllZero = (order) => {
-    const map = {};
-    for (const i of order.items) map[i.id] = 0;
-    setReturnMap(map);
-  };
-
-  const expandedOrder = useMemo(() => orders.find(o => o.key === expanded) || null, [orders, expanded]);
-
-  const preview = useMemo(() => {
-    if (!expandedOrder) return null;
-    let cash = 0, pointsRestore = 0, pointsRevoke = 0, qtySum = 0;
-    for (const it of expandedOrder.items) {
-      const qty = Number(returnMap[it.id] || 0);
-      if (qty <= 0) continue;
-      const ratio = qty / it.quantity;
-      cash += it.price * qty;
-      pointsRestore += Math.floor((it.points_used||0) * ratio);
-      pointsRevoke  += Math.floor((it.points_earned||0) * ratio);
-      qtySum += qty;
-    }
-    return { cash, pointsRestore, pointsRevoke, qtySum };
-  }, [expandedOrder, returnMap]);
 
   // 매장재고 반영 (교환·증정 조치용)
   const applyStockMovements = async (movements, sName, bName) => {
@@ -260,173 +211,6 @@ export default function SalesReturnPage({ profile }) {
       claim_type: ct, claim_detail: (claimDetail || '').trim() || null,
       status: '완료', action_type: '환불', source: '반품', stock_movements: [],
     });
-  };
-
-  const handleReturn = async () => {
-    if (!expandedOrder) return;
-    const toReturn = expandedOrder.items.filter(i => Number(returnMap[i.id] || 0) > 0);
-    if (toReturn.length === 0) { toast('반품/교환할 수량을 입력해주세요', 'err'); return; }
-    for (const it of toReturn) {
-      const qty = Number(returnMap[it.id]);
-      const remain = it.quantity - (it.returned_qty||0);
-      if (qty > remain) { toast(`${it.product?.name}: 남은 수량(${remain})을 초과합니다`, 'err'); return; }
-    }
-    const rType = rClaimType === '직접입력' ? rClaimCustom.trim() : rClaimType;
-    const totalQty = toReturn.reduce((s, it) => s + Number(returnMap[it.id]), 0);
-    const prodNames = toReturn.map(i => `${i.product?.name || ''}×${Number(returnMap[i.id])}`).join(', ');
-    const singleCode = toReturn.length === 1 ? (toReturn[0].product?.code || null) : null;
-
-    // ===== 교환·증정·본사처리 — 매출/적립금 변화 없이 재고만 반영 + 클레임 기록 =====
-    if (!rActObj.refund) {
-      if (rActObj.needEx && !rAction.exchange.code) { toast('교환할 다른상품을 선택해주세요', 'err'); return; }
-      if (rActObj.needGift && !rAction.gift.code) { toast('서비스증정 상품을 선택해주세요', 'err'); return; }
-      const exQty = Number(rAction.exchange.qty) || totalQty;
-      const giftQty = Number(rAction.gift.qty) || 1;
-      const movements = [];
-      if (rActObj.needEx) {
-        for (const it of toReturn) if (it.product?.code) movements.push({ code: it.product.code, name: it.product?.name, delta: Number(returnMap[it.id]) });
-        movements.push({ code: rAction.exchange.code, name: rAction.exchange.name, delta: -exQty });
-      }
-      if (rActObj.needGift) movements.push({ code: rAction.gift.code, name: rAction.gift.name, delta: -giftQty });
-      if (!window.confirm(`${rAction.action_type} 처리하시겠습니까?\n\n회수상품: ${prodNames}` +
-        (rActObj.needEx ? `\n교환상품: ${rAction.exchange.name} (−${exQty})` : '') +
-        (rActObj.needGift ? `\n증정상품: ${rAction.gift.name} (−${giftQty})` : '') +
-        `\n\n※ 매출·적립금 변화 없음 · 클레임 현황에 기록됩니다`)) return;
-      setSaving(true);
-      try {
-        await applyStockMovements(movements, storeName, branchName);
-        await insertClaim({
-          store_name: storeName, branch_name: branchName, worker_name: null,
-          customer_name: expandedOrder.customer?.name || null, customer_phone: expandedOrder.customer?.phone || null, customer_id: expandedOrder.customerId || null,
-          product_name: prodNames, product_code: singleCode,
-          claim_type: rType || null, claim_detail: rClaimDetail.trim() || null,
-          status: rAction.action_type === '본사처리필요' ? '본사확인' : '완료',
-          action_type: rAction.action_type,
-          exchange_product_name: rAction.exchange.name || null, exchange_product_code: rAction.exchange.code || null,
-          gift_product_name: rAction.gift.name || null, gift_product_code: rAction.gift.code || null,
-          source: '교환·증정', stock_movements: movements,
-        });
-        toast(`${rAction.action_type} 처리 완료`, 'ok');
-        setExpanded(null); setReturnMap({}); fetchOrders();
-      } catch (err) { toast('처리 실패: ' + err.message, 'err'); }
-      setSaving(false);
-      return;
-    }
-
-    // ===== 환불(반품) — 기존 로직 (음수 매출·적립금·재고 복구) =====
-    if (!returnDate) { toast('반품 날짜를 선택해주세요', 'err'); return; }
-    // 환불 합계 — 수정값(있으면) vs 자동계산값
-    const refundComputed = preview.cash;
-    const refundFinal = refundEdit.trim() !== '' ? Number(parseNumInput(refundEdit)) : refundComputed;
-    if (!Number.isFinite(refundFinal) || refundFinal < 0) { toast('환불 합계가 유효하지 않습니다', 'err'); return; }
-    const overridden = refundFinal !== refundComputed;
-
-    if (!window.confirm(`총 ${toReturn.length}개 상품을 반품 처리하시겠습니까?\n\n` +
-      `반품 날짜: ${returnDate}\n` +
-      `환불 금액: ${refundFinal.toLocaleString()}원${overridden ? ` (수정됨, 원래 ${refundComputed.toLocaleString()}원)` : ''}\n` +
-      `복구 적립금: ${preview.pointsRestore.toLocaleString()}원\n` +
-      `적립금 회수: ${preview.pointsRevoke.toLocaleString()}원`)) return;
-
-    setSaving(true);
-    try {
-      const nowIso = new Date().toISOString();
-      // 환불 합계 수정 시 각 라인 음수 금액을 비례 배분(마지막 라인이 잔차 흡수)
-      const refundRatio = (overridden && refundComputed > 0) ? (refundFinal / refundComputed) : 1;
-      let allocated = 0;
-      for (let idx = 0; idx < toReturn.length; idx++) {
-        const it = toReturn[idx];
-        const qty = Number(returnMap[it.id]);
-        const newReturnedQty = (it.returned_qty||0) + qty;
-        const fullyReturned = newReturnedQty >= it.quantity;
-
-        // 이 라인의 환불 합계(비례 배분, 마지막 라인은 잔차)
-        const lineOrig = Math.abs(Number(it.price) || 0) * qty;
-        let lineTotal;
-        if (idx === toReturn.length - 1) {
-          lineTotal = Math.max(0, refundFinal - allocated);
-        } else {
-          lineTotal = overridden ? Math.round(lineOrig * refundRatio) : lineOrig;
-          allocated += lineTotal;
-        }
-        const unitPrice = qty > 0 ? lineTotal / qty : 0;
-
-        // 1) 반품일 기준 음수 매출 row INSERT — 매출조회는 이 row를 음수로 합산 (매출 차감의 핵심)
-        //    먼저 생성하고, 실패 시 즉시 중단해 returned_qty만 남는(반품 미반영) 상태를 방지.
-        const { data: negRow, error: negErr } = await supabase.from('sales').insert({
-          sold_at:    returnDate,
-          store_name: it.store_name,
-          branch_name: it.branch_name,
-          brand_id:   it.brand_id,
-          product_id: it.product_id,
-          quantity:   qty,
-          price:      -Math.abs(unitPrice),
-          payment:    '반품',
-          memo:       `반품 (원본 매출일 ${it.sold_at}, 매출 ID:${it.id})${overridden ? ' · 환불합계 수정' : ''}`,
-          created_by: profile.id,
-          customer_id: it.customer_id,
-          points_earned: 0,
-          points_used: 0,
-          delivery_type: 'none',
-        }).select('id');
-        if (negErr) throw negErr;
-        if (!negRow || negRow.length === 0) throw new Error('반품 매출 저장 실패 (RLS)');
-
-        // 2) 원본 row — returned_qty 누적 (음수 row 생성 성공 후에만. 이중 반품 방지용)
-        await supabase.from('sales').update({
-          returned_qty: newReturnedQty,
-          returned_at: fullyReturned ? nowIso : it.returned_at,
-        }).eq('id', it.id);
-
-        // 본사 택배요청(hq)은 판매 시 매장 재고를 차감하지 않았으므로 반품 시에도 복구하지 않음
-        if (it.product?.code && it.delivery_type !== 'hq') {
-          const { data: stockRow } = await supabase.from('store_stock')
-            .select('id, stock_qty')
-            .eq('store_name',  it.store_name || storeName)
-            .eq('branch_name', it.branch_name || branchName)
-            .eq('product_code', it.product.code)
-            .maybeSingle();
-          if (stockRow) {
-            await supabase.from('store_stock').update({
-              stock_qty: (stockRow.stock_qty||0) + qty,
-              updated_at: new Date().toISOString(),
-            }).eq('id', stockRow.id);
-          }
-        }
-
-        if (it.customer_id && it.customer) {
-          const ratio = qty / it.quantity;
-          const pointsUsedRefund    = Math.floor((it.points_used||0) * ratio);
-          const pointsEarnedReverse = Math.floor((it.points_earned||0) * ratio);
-          const cashRefund = lineTotal; // 실제 환불 금액(합계 수정 반영)
-
-          const newTotalPoints   = Math.max(0, (it.customer.total_points||0) + pointsUsedRefund - pointsEarnedReverse);
-          const newUsedPoints    = Math.max(0, (it.customer.used_points||0) - pointsUsedRefund);
-          const newTotalPurchase = Math.max(0, (it.customer.total_purchase||0) - cashRefund);
-          const newGrade = getGrade(newTotalPurchase);
-
-          await supabase.from('customers').update({
-            total_points:   newTotalPoints,
-            used_points:    newUsedPoints,
-            total_purchase: newTotalPurchase,
-            grade:          newGrade.grade,
-          }).eq('id', it.customer_id);
-        }
-      }
-      // 반품 사유 입력 시 클레임 현황에 기록
-      await recordRefundClaim({
-        claimType: rType, claimDetail: rClaimDetail,
-        customer: expandedOrder.customer,
-        productName: prodNames, productCode: singleCode,
-        sName: storeName, bName: branchName,
-      });
-      toast('반품 처리 완료', 'ok');
-      setExpanded(null);
-      setReturnMap({});
-      fetchOrders();
-    } catch (err) {
-      toast('반품 실패: ' + err.message, 'err');
-    }
-    setSaving(false);
   };
 
   // 직접입력 반품 처리
@@ -639,13 +423,12 @@ export default function SalesReturnPage({ profile }) {
         <div className="card" style={{padding:'16px 20px'}}>
           <div style={{marginBottom:12}}>
             <span className="fresult">총 <b>{orders.length}</b>건의 주문</span>
-            <span style={{fontSize:11, color:'var(--text3)', marginLeft:8}}>(행 클릭 시 상세보기/반품처리 펼쳐짐)</span>
+            <span style={{fontSize:11, color:'var(--text3)', marginLeft:8}}>(주문건별 [반품]/[교환] 버튼으로 처리)</span>
           </div>
           <div className="twrap">
             <table>
               <thead>
                 <tr>
-                  <th style={{width:30}}></th>
                   <th>판매일</th>
                   <th>고객</th>
                   <th>등급</th>
@@ -653,181 +436,39 @@ export default function SalesReturnPage({ profile }) {
                   <th className="r">상품수</th>
                   <th className="r">총수량</th>
                   <th className="r">미반품 잔여금액</th>
+                  <th style={{textAlign:'center', width:160}}>처리</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.map(o => {
-                  const open = expanded === o.key;
-                  return (
-                  <React.Fragment key={o.key}>
-                    <tr style={{cursor:'pointer', background: open ? '#f8f9fa' : 'transparent'}} onClick={() => toggleExpand(o)}>
-                      <td style={{textAlign:'center', fontWeight:700, color:'var(--text2)'}}>{open ? '▼' : '▶'}</td>
-                      <td className="mono">{o.sold_at}</td>
-                      <td><strong>{o.customer?.name || <span style={{color:'var(--text3)'}}>비회원</span>}</strong></td>
-                      <td>{o.customer?.grade ? <GradeBadge grade={o.customer.grade}/> : '-'}</td>
-                      <td className="mono" style={{fontSize:12}}>{o.customer?.phone || '-'}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)'}}>{o.items.length}개</td>
-                      <td className="r" style={{fontFamily:'var(--mono)'}}>{orderQty(o)}개</td>
-                      <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{orderTotal(o).toLocaleString()}원</td>
-                    </tr>
-                    {open && (
-                      <tr>
-                        <td colSpan={8} style={{background:'#fff', padding:'14px 18px', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)'}}>
-                          {/* 헤더 - 심플하게 텍스트만 */}
-                          <div style={{display:'flex', alignItems:'center', flexWrap:'wrap', gap:10, marginBottom:12, paddingBottom:10, borderBottom:'1px solid var(--border)'}}>
-                            <div style={{fontSize:13, fontWeight:700, color:'var(--text)'}}>반품 처리</div>
-                            {o.customer && <>
-                              <strong style={{fontSize:13}}>{o.customer.name}</strong>
-                              <span style={{fontFamily:'var(--mono)', fontSize:12, color:'var(--text2)'}}>{o.customer.phone}</span>
-                              <span style={{fontSize:12, color:'var(--text3)'}}>사용가능 적립금</span>
-                              <strong style={{fontSize:12, fontFamily:'var(--mono)'}}>{(o.customer.total_points||0).toLocaleString()}원</strong>
-                            </>}
-                            {/* 반품 날짜 */}
-                            <div style={{display:'flex', alignItems:'center', gap:6, padding:'4px 8px', background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:6}}>
-                              <span style={{fontSize:11, fontWeight:700, color:'#e65100'}}>📅 반품 날짜</span>
-                              <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)}
-                                style={{height:30, padding:'0 8px', border:'1px solid var(--accent)', borderRadius:4, fontSize:13, fontWeight:700, color:'var(--accent)', outline:'none', background:'#fff'}}/>
-                            </div>
-                            <div style={{marginLeft:'auto', display:'flex', gap:6}}>
-                              <button type="button" className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}} onClick={() => setAllZero(o)}>전체 0</button>
-                              <button type="button" className="btn btn-s" style={{fontSize:11, padding:'4px 10px'}} onClick={() => setAllFull(o)}>전체 반품</button>
-                            </div>
-                          </div>
-
-                          {/* 상품 목록 */}
-                          <div className="twrap">
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>브랜드</th>
-                                  <th>상품명 (코드)</th>
-                                  <th className="r">판매수량</th>
-                                  <th className="r">이미반품</th>
-                                  <th className="r">잔여</th>
-                                  <th className="r">단가</th>
-                                  <th className="r">합계</th>
-                                  <th className="r">적립금사용</th>
-                                  <th>결제</th>
-                                  <th style={{textAlign:'center', width:130}}>반품 수량</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {o.items.map(it => {
-                                  const remain = it.quantity - (it.returned_qty||0);
-                                  return (
-                                  <tr key={it.id}>
-                                    <td>{it.brand?.name || '-'}</td>
-                                    <td style={{fontSize:12}}>
-                                      <strong>{it.product?.name || '-'}</strong>
-                                      {it.product?.code && <span style={{fontSize:11, color:'var(--text3)', fontFamily:'var(--mono)', marginLeft:6}}>{it.product.code}</span>}
-                                    </td>
-                                    <td className="r">{it.quantity}</td>
-                                    <td className="r" style={{color:'var(--text3)'}}>{it.returned_qty||0}</td>
-                                    <td className="r" style={{fontWeight:700}}>{remain}</td>
-                                    <td className="r" style={{fontFamily:'var(--mono)'}}>{Number(it.price).toLocaleString()}원</td>
-                                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{(it.price * remain).toLocaleString()}원</td>
-                                    <td className="r" style={{fontFamily:'var(--mono)', color:(it.points_used||0)>0?'var(--text2)':'var(--text3)'}}>
-                                      {(it.points_used||0) > 0 ? `-${Number(it.points_used).toLocaleString()}` : '-'}
-                                    </td>
-                                    <td style={{fontSize:12, color:'var(--text2)'}}>{it.payment}</td>
-                                    <td style={{textAlign:'center'}}>
-                                      <input type="number" min={0} max={remain}
-                                        value={returnMap[it.id] || 0}
-                                        onChange={e => {
-                                          const v = Math.max(0, Math.min(remain, Number(e.target.value)||0));
-                                          setReturnMap(prev => ({...prev, [it.id]: v}));
-                                        }}
-                                        style={{width:70, height:30, padding:'0 8px', border:'1px solid var(--border)', borderRadius:4, fontSize:13, textAlign:'center'}}/>
-                                      <span style={{fontSize:11, color:'var(--text3)', marginLeft:4}}>/ {remain}</span>
-                                    </td>
-                                  </tr>
-                                )})}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {/* 반품 미리보기 + 액션 */}
-                          {preview && (
-                            <div style={{marginTop:14, paddingTop:12, borderTop:'1px solid var(--border)'}}>
-                              {/* 클레임 사유 (선택 — 입력 시 클레임 현황에 기록) */}
-                              <div style={{display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12, padding:'10px 12px', background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)'}}>
-                                <div>
-                                  <label style={{display:'block', fontSize:11, fontWeight:700, color:'#6a1b9a', marginBottom:4}}>📣 클레임 사유 <span style={{color:'var(--text3)', fontWeight:400}}>(단순변심은 현황 미기록 · 품질불만 등 선택 시 기록)</span></label>
-                                  <select value={rClaimType} onChange={e => setRClaimType(e.target.value)}
-                                    style={{height:34, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:4, fontSize:13, background:'#fff', outline:'none'}}>
-                                    <option value="">단순변심</option>{CLAIM_TYPES.map(t => <option key={t}>{t}</option>)}
-                                  </select>
-                                </div>
-                                {rClaimType === '직접입력' && (
-                                  <input value={rClaimCustom} onChange={e => setRClaimCustom(e.target.value)} placeholder="사유 직접 입력"
-                                    style={{height:34, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:4, fontSize:13, background:'#fff', outline:'none', width:160}}/>
-                                )}
-                                {rClaimType && (
-                                  <input value={rClaimDetail} onChange={e => setRClaimDetail(e.target.value)} placeholder="상세내용 (선택)"
-                                    style={{height:34, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:4, fontSize:13, background:'#fff', outline:'none', flex:'1 1 220px'}}/>
-                                )}
-                              </div>
-                              {/* 처리방법 (환불/교환/증정/본사) */}
-                              <div style={{marginBottom:12}}>
-                                <ClaimActionPicker value={rAction} onChange={setRAction}
-                                  returnedItems={o.items.filter(i => Number(returnMap[i.id]||0) > 0).map(i => ({ name: i.product?.name, code: i.product?.code, qty: Number(returnMap[i.id]) }))} />
-                              </div>
-                              {/* 환불 합계 수정 (환불일 때만) */}
-                              {rActObj.refund && (
-                              <div style={{display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12}}>
-                                <div>
-                                  <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>환불 합계 <span style={{color:'var(--text3)', fontWeight:400}}>(비우면 자동계산 {preview.cash.toLocaleString()}원)</span></label>
-                                  <input type="text" inputMode="numeric"
-                                    value={refundEdit === '' ? '' : formatNumInput(refundEdit)}
-                                    onChange={e => setRefundEdit(parseNumInput(e.target.value))}
-                                    placeholder={preview.cash.toLocaleString()}
-                                    style={{width:160, height:34, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4, fontSize:14, fontWeight:700, fontFamily:'var(--mono)', textAlign:'right', outline:'none', background:'#fff3e0', color:'var(--accent)'}}/>
-                                </div>
-                              </div>
-                              )}
-                              <div style={{display:'flex', gap:24, flexWrap:'wrap', alignItems:'center'}}>
-                                {rActObj.refund ? (
-                                <div style={{display:'flex', gap:24, fontSize:13, flexWrap:'wrap'}}>
-                                  <div>
-                                    <span style={{color:'var(--text3)', marginRight:6}}>환불 금액</span>
-                                    <strong style={{fontFamily:'var(--mono)', color: refundEdit.trim()!=='' ? 'var(--accent)' : undefined}}>
-                                      {(refundEdit.trim()!=='' ? Number(parseNumInput(refundEdit))||0 : preview.cash).toLocaleString()}원
-                                    </strong>
-                                  </div>
-                                  <div>
-                                    <span style={{color:'var(--text3)', marginRight:6}}>복구 적립금</span>
-                                    <strong style={{fontFamily:'var(--mono)'}}>+{preview.pointsRestore.toLocaleString()}원</strong>
-                                  </div>
-                                  <div>
-                                    <span style={{color:'var(--text3)', marginRight:6}}>회수 적립금</span>
-                                    <strong style={{fontFamily:'var(--mono)'}}>-{preview.pointsRevoke.toLocaleString()}원</strong>
-                                  </div>
-                                </div>
-                                ) : (
-                                  <div style={{fontSize:12, color:'#6a1b9a', fontWeight:600}}>교환·증정 — 매출·적립금 변화 없음, 재고만 반영됩니다</div>
-                                )}
-                                <div style={{marginLeft:'auto', display:'flex', gap:8}}>
-                                  <button className="btn btn-s" style={{padding:'0 16px', height:36, fontSize:12}}
-                                    onClick={() => { setExpanded(null); setReturnMap({}); }} disabled={saving}>
-                                    접기
-                                  </button>
-                                  <button className="btn btn-p" style={{padding:'0 20px', height:36, fontSize:13, fontWeight:700}}
-                                    onClick={handleReturn} disabled={saving || preview.qtySum === 0}>
-                                    {saving ? <span className="spinner"/> : `${rActObj.refund ? '반품 처리' : rAction.action_type + ' 처리'}${preview.qtySum > 0 ? ` (${preview.qtySum}개)` : ''}`}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                )})}
+                {orders.map(o => (
+                  <tr key={o.key}>
+                    <td className="mono">{o.sold_at}</td>
+                    <td><strong>{o.customer?.name || <span style={{color:'var(--text3)'}}>비회원</span>}</strong></td>
+                    <td>{o.customer?.grade ? <GradeBadge grade={o.customer.grade}/> : '-'}</td>
+                    <td className="mono" style={{fontSize:12}}>{o.customer?.phone || '-'}</td>
+                    <td className="r" style={{fontFamily:'var(--mono)'}}>{o.items.length}개</td>
+                    <td className="r" style={{fontFamily:'var(--mono)'}}>{orderQty(o)}개</td>
+                    <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700}}>{orderTotal(o).toLocaleString()}원</td>
+                    <td style={{textAlign:'center', whiteSpace:'nowrap'}}>
+                      <button type="button" onClick={() => openModal(o, 'return')}
+                        style={{height:30, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:6, background:'var(--accent)', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer'}}>반품</button>
+                      <button type="button" onClick={() => openModal(o, 'exchange')}
+                        style={{marginLeft:6, height:30, padding:'0 14px', border:'1px solid var(--accent)', borderRadius:6, background:'#fff', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer'}}>교환</button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
+      )}
+
+      {/* 반품/교환 팝업 */}
+      {modalOrder && modalType === 'return' && (
+        <ReturnModal order={modalOrder} storeName={storeName} branchName={branchName} profile={profile} onClose={closeModal} onDone={afterDone} />
+      )}
+      {modalOrder && modalType === 'exchange' && (
+        <ExchangeModal order={modalOrder} storeName={storeName} branchName={branchName} profile={profile} onClose={closeModal} onDone={afterDone} />
       )}
       </>)}
 
