@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge, getGrade, formatNumInput, parseNumInput } from '../../lib/utils';
 import { STORE_NAMES, STORE_MAP, CLAIM_TYPES } from '../../lib/constants';
 import HqReturnTab from './HqReturnTab';
-import ExchangeGiftTab from './ExchangeGiftTab';
+import ClaimActionPicker, { getRetAction, emptyClaimAction } from './ClaimActionPicker';
 
 export default function SalesReturnPage({ profile }) {
   // 본사 계정(매니저가 아닌 admin/hq)이면 점포·지점을 직접 선택해 매장 반품 접수
@@ -33,6 +33,8 @@ export default function SalesReturnPage({ profile }) {
   const [rClaimType, setRClaimType]     = useState('');
   const [rClaimCustom, setRClaimCustom] = useState('');
   const [rClaimDetail, setRClaimDetail] = useState('');
+  const [rAction, setRAction]           = useState(emptyClaimAction()); // 처리방법(환불/교환/증정/본사)
+  const rActObj = getRetAction(rAction.action_type);
 
   // 직접입력 탭
   const [allProducts, setAllProducts] = useState([]);
@@ -49,6 +51,8 @@ export default function SalesReturnPage({ profile }) {
   const [mClaimType, setMClaimType]     = useState('');
   const [mClaimCustom, setMClaimCustom] = useState('');
   const [mClaimDetail, setMClaimDetail] = useState('');
+  const [mAction, setMAction]           = useState(emptyClaimAction());
+  const mActObj = getRetAction(mAction.action_type);
 
   useEffect(() => {
     if (tab === 'manual' && allProducts.length === 0) {
@@ -197,7 +201,7 @@ export default function SalesReturnPage({ profile }) {
       for (const i of order.items) map[i.id] = 0;
       setReturnMap(map);
       setReturnDate(kstToday()); setRefundEdit('');
-      setRClaimType(''); setRClaimCustom(''); setRClaimDetail('');
+      setRClaimType(''); setRClaimCustom(''); setRClaimDetail(''); setRAction(emptyClaimAction());
       setExpanded(order.key);
     }
   };
@@ -230,33 +234,84 @@ export default function SalesReturnPage({ profile }) {
     return { cash, pointsRestore, pointsRevoke, qtySum };
   }, [expandedOrder, returnMap]);
 
-  // 반품 사유가 입력된 경우 store_claims에 기록 (재고·매출은 반품 로직이 처리 → movements 비움)
-  const recordReturnClaim = async ({ claimType, claimDetail, customer, productName, productCode, sName, bName }) => {
+  // 매장재고 반영 (교환·증정 조치용)
+  const applyStockMovements = async (movements, sName, bName) => {
+    for (const m of (movements || [])) {
+      if (!m.code || !m.delta) continue;
+      const { data: row } = await supabase.from('store_stock').select('id, stock_qty')
+        .eq('store_name', sName).eq('branch_name', bName).eq('product_code', m.code).maybeSingle();
+      if (row) await supabase.from('store_stock').update({ stock_qty: (row.stock_qty || 0) + m.delta, updated_at: new Date().toISOString() }).eq('id', row.id);
+      else await supabase.from('store_stock').insert({ store_name: sName, branch_name: bName, product_code: m.code, product_name: m.name || null, stock_qty: m.delta, updated_at: new Date().toISOString() });
+    }
+  };
+  // store_claims 기록 (실패해도 처리 자체는 막지 않음)
+  const insertClaim = async (row) => {
+    try { await supabase.from('store_claims').insert({ ...row, created_by: profile?.id || null }); }
+    catch (e) { /* ignore */ }
+  };
+  // 환불(반품) 건에 사유가 입력된 경우만 클레임 기록 (재고·매출은 반품 로직이 처리 → movements 비움)
+  const recordRefundClaim = async ({ claimType, claimDetail, customer, productName, productCode, sName, bName }) => {
     const ct = (claimType || '').trim();
     if (!ct) return; // 사유 미입력 = 일반 반품, 클레임 기록 안 함
-    try {
-      await supabase.from('store_claims').insert({
-        store_name: sName, branch_name: bName,
-        worker_name: null,
-        customer_name: customer?.name || null, customer_phone: customer?.phone || null, customer_id: customer?.id || null,
-        product_name: productName || null, product_code: productCode || null,
-        claim_type: ct, claim_detail: (claimDetail || '').trim() || null,
-        status: '완료', action_type: '환불', source: '반품',
-        stock_movements: [], created_by: profile?.id || null,
-      });
-    } catch (e) { /* 클레임 기록 실패는 반품 자체를 막지 않음 */ }
+    await insertClaim({
+      store_name: sName, branch_name: bName, worker_name: null,
+      customer_name: customer?.name || null, customer_phone: customer?.phone || null, customer_id: customer?.id || null,
+      product_name: productName || null, product_code: productCode || null,
+      claim_type: ct, claim_detail: (claimDetail || '').trim() || null,
+      status: '완료', action_type: '환불', source: '반품', stock_movements: [],
+    });
   };
 
   const handleReturn = async () => {
     if (!expandedOrder) return;
     const toReturn = expandedOrder.items.filter(i => Number(returnMap[i.id] || 0) > 0);
-    if (toReturn.length === 0) { toast('반품할 수량을 입력해주세요', 'err'); return; }
+    if (toReturn.length === 0) { toast('반품/교환할 수량을 입력해주세요', 'err'); return; }
     for (const it of toReturn) {
       const qty = Number(returnMap[it.id]);
       const remain = it.quantity - (it.returned_qty||0);
       if (qty > remain) { toast(`${it.product?.name}: 남은 수량(${remain})을 초과합니다`, 'err'); return; }
     }
+    const rType = rClaimType === '직접입력' ? rClaimCustom.trim() : rClaimType;
+    const totalQty = toReturn.reduce((s, it) => s + Number(returnMap[it.id]), 0);
+    const prodNames = toReturn.map(i => `${i.product?.name || ''}×${Number(returnMap[i.id])}`).join(', ');
+    const singleCode = toReturn.length === 1 ? (toReturn[0].product?.code || null) : null;
 
+    // ===== 교환·증정·본사처리 — 매출/적립금 변화 없이 재고만 반영 + 클레임 기록 =====
+    if (!rActObj.refund) {
+      if (rActObj.needEx && !rAction.exchange.code) { toast('교환할 다른상품을 선택해주세요', 'err'); return; }
+      if (rActObj.needGift && !rAction.gift.code) { toast('서비스증정 상품을 선택해주세요', 'err'); return; }
+      const movements = [];
+      if (rActObj.needEx) {
+        for (const it of toReturn) if (it.product?.code) movements.push({ code: it.product.code, name: it.product?.name, delta: Number(returnMap[it.id]) });
+        movements.push({ code: rAction.exchange.code, name: rAction.exchange.name, delta: -totalQty });
+      }
+      if (rActObj.needGift) movements.push({ code: rAction.gift.code, name: rAction.gift.name, delta: -1 });
+      if (!window.confirm(`${rAction.action_type} 처리하시겠습니까?\n\n대상: ${prodNames}` +
+        (rActObj.needEx ? `\n교환상품: ${rAction.exchange.name} (−${totalQty})` : '') +
+        (rActObj.needGift ? `\n증정상품: ${rAction.gift.name} (−1)` : '') +
+        `\n\n※ 매출·적립금 변화 없음 · 클레임 현황에 기록됩니다`)) return;
+      setSaving(true);
+      try {
+        await applyStockMovements(movements, storeName, branchName);
+        await insertClaim({
+          store_name: storeName, branch_name: branchName, worker_name: null,
+          customer_name: expandedOrder.customer?.name || null, customer_phone: expandedOrder.customer?.phone || null, customer_id: expandedOrder.customerId || null,
+          product_name: prodNames, product_code: singleCode,
+          claim_type: rType || null, claim_detail: rClaimDetail.trim() || null,
+          status: rAction.action_type === '본사처리필요' ? '본사확인' : '완료',
+          action_type: rAction.action_type,
+          exchange_product_name: rAction.exchange.name || null, exchange_product_code: rAction.exchange.code || null,
+          gift_product_name: rAction.gift.name || null, gift_product_code: rAction.gift.code || null,
+          source: '교환·증정', stock_movements: movements,
+        });
+        toast(`${rAction.action_type} 처리 완료`, 'ok');
+        setExpanded(null); setReturnMap({}); fetchOrders();
+      } catch (err) { toast('처리 실패: ' + err.message, 'err'); }
+      setSaving(false);
+      return;
+    }
+
+    // ===== 환불(반품) — 기존 로직 (음수 매출·적립금·재고 복구) =====
     if (!returnDate) { toast('반품 날짜를 선택해주세요', 'err'); return; }
     // 환불 합계 — 수정값(있으면) vs 자동계산값
     const refundComputed = preview.cash;
@@ -356,12 +411,10 @@ export default function SalesReturnPage({ profile }) {
         }
       }
       // 반품 사유 입력 시 클레임 현황에 기록
-      const rType = rClaimType === '직접입력' ? rClaimCustom : rClaimType;
-      await recordReturnClaim({
+      await recordRefundClaim({
         claimType: rType, claimDetail: rClaimDetail,
         customer: expandedOrder.customer,
-        productName: toReturn.map(i => `${i.product?.name || ''}×${Number(returnMap[i.id])}`).join(', '),
-        productCode: toReturn.length === 1 ? (toReturn[0].product?.code || null) : null,
+        productName: prodNames, productCode: singleCode,
         sName: storeName, bName: branchName,
       });
       toast('반품 처리 완료', 'ok');
@@ -381,8 +434,47 @@ export default function SalesReturnPage({ profile }) {
     }
     if (!mProduct) { toast('상품을 선택해주세요', 'err'); return; }
     const qty = Number(mQty) || 0;
-    const refundTotal = Number(parseNumInput(mRefund)) || 0;
     if (qty <= 0)  { toast('수량을 입력해주세요', 'err'); return; }
+    const mType = mClaimType === '직접입력' ? mClaimCustom.trim() : mClaimType;
+
+    // ===== 교환·증정·본사처리 — 매출/적립금 변화 없이 재고만 반영 + 클레임 기록 =====
+    if (!mActObj.refund) {
+      if (mActObj.needEx && !mAction.exchange.code) { toast('교환할 다른상품을 선택해주세요', 'err'); return; }
+      if (mActObj.needGift && !mAction.gift.code) { toast('서비스증정 상품을 선택해주세요', 'err'); return; }
+      const movements = [];
+      if (mActObj.needEx) {
+        if (mProduct.code) movements.push({ code: mProduct.code, name: mProduct.name, delta: qty });
+        movements.push({ code: mAction.exchange.code, name: mAction.exchange.name, delta: -qty });
+      }
+      if (mActObj.needGift) movements.push({ code: mAction.gift.code, name: mAction.gift.name, delta: -1 });
+      if (!window.confirm(`${mAction.action_type} 처리하시겠습니까?\n\n상품: ${mProduct.name} ×${qty}` +
+        (mActObj.needEx ? `\n교환상품: ${mAction.exchange.name} (−${qty})` : '') +
+        (mActObj.needGift ? `\n증정상품: ${mAction.gift.name} (−1)` : '') +
+        `\n\n※ 매출·적립금 변화 없음 · 클레임 현황에 기록됩니다`)) return;
+      setMSaving(true);
+      try {
+        await applyStockMovements(movements, storeName, branchName);
+        await insertClaim({
+          store_name: storeName, branch_name: branchName, worker_name: null,
+          customer_name: null, customer_phone: null, customer_id: null,
+          product_name: mProduct.name, product_code: mProduct.code || null,
+          claim_type: mType || null, claim_detail: mClaimDetail.trim() || null,
+          status: mAction.action_type === '본사처리필요' ? '본사확인' : '완료',
+          action_type: mAction.action_type,
+          exchange_product_name: mAction.exchange.name || null, exchange_product_code: mAction.exchange.code || null,
+          gift_product_name: mAction.gift.name || null, gift_product_code: mAction.gift.code || null,
+          source: '교환·증정', stock_movements: movements,
+        });
+        toast(`${mAction.action_type} 처리 완료`, 'ok');
+        setMProduct(null); setMSearch(''); setMQty(1); setMRefund(''); setMMemo(''); setMDate(''); setMReturnDate(today);
+        setMClaimType(''); setMClaimCustom(''); setMClaimDetail(''); setMAction(emptyClaimAction());
+      } catch (err) { toast('처리 실패: ' + err.message, 'err'); }
+      setMSaving(false);
+      return;
+    }
+
+    // ===== 환불(반품) — 기존 로직 (음수 매출·재고 복구) =====
+    const refundTotal = Number(parseNumInput(mRefund)) || 0;
     if (refundTotal < 0) { toast('환불 합계를 확인해주세요', 'err'); return; }
     if (!mReturnDate) { toast('반품 날짜를 선택해주세요', 'err'); return; }
     if (!window.confirm(`비회원 반품 처리하시겠습니까?\n\n반품 날짜: ${mReturnDate}\n원 판매일: ${mDate || '미상'}\n상품: ${mProduct.name}\n수량: ${qty}개\n환불 합계: ${refundTotal.toLocaleString()}원`)) return;
@@ -427,8 +519,7 @@ export default function SalesReturnPage({ profile }) {
       }
 
       // 반품 사유 입력 시 클레임 현황에 기록
-      const mType = mClaimType === '직접입력' ? mClaimCustom : mClaimType;
-      await recordReturnClaim({
+      await recordRefundClaim({
         claimType: mType, claimDetail: mClaimDetail,
         customer: null,
         productName: mProduct.name, productCode: mProduct.code || null,
@@ -437,7 +528,7 @@ export default function SalesReturnPage({ profile }) {
 
       toast('수기 반품 접수 완료', 'ok');
       setMProduct(null); setMSearch(''); setMQty(1); setMRefund(''); setMMemo(''); setMDate(''); setMReturnDate(today);
-      setMClaimType(''); setMClaimCustom(''); setMClaimDetail('');
+      setMClaimType(''); setMClaimCustom(''); setMClaimDetail(''); setMAction(emptyClaimAction());
     } catch (err) {
       toast('반품 실패: ' + err.message, 'err');
     }
@@ -460,30 +551,10 @@ export default function SalesReturnPage({ profile }) {
       <div className="tabs">
         <button className={`tab ${tab==='search'?'on':''}`} onClick={() => setTab('search')}>회원반품</button>
         <button className={`tab ${tab==='manual'?'on':''}`} onClick={() => setTab('manual')}>비회원반품</button>
-        <button className={`tab ${tab==='exchange'?'on':''}`} onClick={() => setTab('exchange')}>교환·증정</button>
         <button className={`tab ${tab==='hq'?'on':''}`} onClick={() => setTab('hq')}>본사 반품</button>
       </div>
 
       {tab === 'hq' && <HqReturnTab profile={profile}/>}
-      {tab === 'exchange' && (<>
-        {!isStoreMgr && (
-          <div className="card" style={{marginBottom:12}}>
-            <div className="card-label">점포 선택</div>
-            <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
-              <select className="fsel" value={hqStore} onChange={e => { setHqStore(e.target.value); setHqBranch(''); }}>
-                <option value="">점포 선택</option>
-                {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select className="fsel" value={hqBranch} onChange={e => setHqBranch(e.target.value)}
-                disabled={!hqStore} style={{background:!hqStore?'#f0f0f0':'#fff'}}>
-                <option value="">{hqStore ? '지점 선택' : '먼저 점포 선택'}</option>
-                {hqBranchOptions.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </div>
-          </div>
-        )}
-        <ExchangeGiftTab profile={profile} storeName={storeName} branchName={branchName}/>
-      </>)}
 
       {tab === 'search' && (<>
       {/* 필터 */}
@@ -692,7 +763,12 @@ export default function SalesReturnPage({ profile }) {
                                     style={{height:34, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:4, fontSize:13, background:'#fff', outline:'none', flex:'1 1 220px'}}/>
                                 )}
                               </div>
-                              {/* 환불 합계 수정 */}
+                              {/* 처리방법 (환불/교환/증정/본사) */}
+                              <div style={{marginBottom:12}}>
+                                <ClaimActionPicker value={rAction} onChange={setRAction} />
+                              </div>
+                              {/* 환불 합계 수정 (환불일 때만) */}
+                              {rActObj.refund && (
                               <div style={{display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12}}>
                                 <div>
                                   <label style={{display:'block', fontSize:11, fontWeight:600, color:'var(--text2)', marginBottom:4}}>환불 합계 <span style={{color:'var(--text3)', fontWeight:400}}>(비우면 자동계산 {preview.cash.toLocaleString()}원)</span></label>
@@ -703,7 +779,9 @@ export default function SalesReturnPage({ profile }) {
                                     style={{width:160, height:34, padding:'0 10px', border:'1px solid var(--accent)', borderRadius:4, fontSize:14, fontWeight:700, fontFamily:'var(--mono)', textAlign:'right', outline:'none', background:'#fff3e0', color:'var(--accent)'}}/>
                                 </div>
                               </div>
+                              )}
                               <div style={{display:'flex', gap:24, flexWrap:'wrap', alignItems:'center'}}>
+                                {rActObj.refund ? (
                                 <div style={{display:'flex', gap:24, fontSize:13, flexWrap:'wrap'}}>
                                   <div>
                                     <span style={{color:'var(--text3)', marginRight:6}}>환불 금액</span>
@@ -720,6 +798,9 @@ export default function SalesReturnPage({ profile }) {
                                     <strong style={{fontFamily:'var(--mono)'}}>-{preview.pointsRevoke.toLocaleString()}원</strong>
                                   </div>
                                 </div>
+                                ) : (
+                                  <div style={{fontSize:12, color:'#6a1b9a', fontWeight:600}}>교환·증정 — 매출·적립금 변화 없음, 재고만 반영됩니다</div>
+                                )}
                                 <div style={{marginLeft:'auto', display:'flex', gap:8}}>
                                   <button className="btn btn-s" style={{padding:'0 16px', height:36, fontSize:12}}
                                     onClick={() => { setExpanded(null); setReturnMap({}); }} disabled={saving}>
@@ -727,7 +808,7 @@ export default function SalesReturnPage({ profile }) {
                                   </button>
                                   <button className="btn btn-p" style={{padding:'0 20px', height:36, fontSize:13, fontWeight:700}}
                                     onClick={handleReturn} disabled={saving || preview.qtySum === 0}>
-                                    {saving ? <span className="spinner"/> : `반품 처리${preview.qtySum > 0 ? ` (${preview.qtySum}개)` : ''}`}
+                                    {saving ? <span className="spinner"/> : `${rActObj.refund ? '반품 처리' : rAction.action_type + ' 처리'}${preview.qtySum > 0 ? ` (${preview.qtySum}개)` : ''}`}
                                   </button>
                                 </div>
                               </div>
@@ -825,6 +906,10 @@ export default function SalesReturnPage({ profile }) {
                 style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, outline:'none', boxSizing:'border-box', textAlign:'right'}}/>
             </div>
 
+            {/* 처리방법 (환불/교환/증정/본사) */}
+            <ClaimActionPicker value={mAction} onChange={setMAction} />
+
+            {mActObj.refund && (<>
             {/* 4) 환불 합계 (직접 입력) */}
             <div>
               <label style={{display:'block', fontSize:11, fontWeight:700, color:'#e65100', marginBottom:5}}>④ 환불 합계</label>
@@ -840,6 +925,7 @@ export default function SalesReturnPage({ profile }) {
               <input type="date" value={mReturnDate} onChange={e => setMReturnDate(e.target.value)}
                 style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, color:'var(--accent)', outline:'none', boxSizing:'border-box', background:'#fff3e0'}}/>
             </div>
+            </>)}
 
             {/* 메모 */}
             <div>
@@ -866,10 +952,10 @@ export default function SalesReturnPage({ profile }) {
               )}
             </div>
 
-            <button className="btn btn-p" disabled={mSaving || !mProduct || !mQty || mRefund === ''}
+            <button className="btn btn-p" disabled={mSaving || !mProduct || !mQty || (mActObj.refund && mRefund === '')}
               style={{width:'100%', justifyContent:'center', height:46, fontWeight:700, fontSize:15}}
               onClick={handleManualReturn}>
-              {mSaving ? <span className="spinner"/> : '↩️ 반품 접수'}
+              {mSaving ? <span className="spinner"/> : (mActObj.refund ? '↩️ 반품 접수' : `✓ ${mAction.action_type} 접수`)}
             </button>
           </div>
         </div>
