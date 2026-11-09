@@ -14,6 +14,9 @@ export const STORE_MAP = {
 };
 export const STORE_NAMES = Object.keys(STORE_MAP);
 
+// 고객 클레임 유형 (반품접수·클레임조회 공용)
+export const CLAIM_TYPES = ['품질불만(맛)', '품질불만(냄새)', '품질불만(캡슐터짐)', '품질불만(분말굳음)', '효능불만', '가격불만', '섭취후이상', '단순변심', '직접입력'];
+
 // 정식 백화점/매장 (매출조회에서 '매장매출'로 집계)
 export const RETAIL_STORES = ['롯데백화점','신세계백화점','현대백화점','AK백화점','갤러리아백화점','그린푸드','농협_SHOP','대동백화점'];
 // 위 정식 매장이 아닌 store_name(특판/영남실업/동화상사/창원지점/중소기업명품마루 등,
@@ -74,7 +77,7 @@ export const HQ_MENUS = [
   { key: 'biz_delivery_request', icon: '🏭', label: '특판 발주요청' },
   { key: 'scm_shipping',   icon: '🚚', label: '매장 발주요청' },
   { key: 'daily_checklist_hq', icon: '📋', label: '매장 일일 체크' },
-  { key: 'claim_intake',       icon: '📣', label: '고객 클레임 접수' },
+  { key: 'claim_intake',       icon: '📣', label: '고객 클레임 현황' },
 ];
 export const MANAGER_MENUS = [
   { key: 'home',           icon: '🏠', label: '홈 대시보드' },
@@ -96,7 +99,7 @@ export const MANAGER_MENUS = [
     { key: 'store_closure', icon: '🏪', label: '휴점 등록' },
   ]},
   { key: 'daily_checklist', icon: '📋', label: '일일 체크리스트' },
-  { key: 'claim_intake',    icon: '📣', label: '고객 클레임 접수' },
+  { key: 'claim_intake',    icon: '📣', label: '고객 클레임 현황' },
 ];
 export const ADMIN_MENUS = [
   { key: 'admin',  icon: '🔐', label: '사용자 관리' },

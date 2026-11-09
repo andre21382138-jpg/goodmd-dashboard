@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast, GradeBadge, getGrade, formatNumInput, parseNumInput } from '../../lib/utils';
-import { STORE_NAMES, STORE_MAP } from '../../lib/constants';
+import { STORE_NAMES, STORE_MAP, CLAIM_TYPES } from '../../lib/constants';
 import HqReturnTab from './HqReturnTab';
+import ExchangeGiftTab from './ExchangeGiftTab';
 
 export default function SalesReturnPage({ profile }) {
   // 본사 계정(매니저가 아닌 admin/hq)이면 점포·지점을 직접 선택해 매장 반품 접수
@@ -28,6 +29,10 @@ export default function SalesReturnPage({ profile }) {
   const kstToday = () => new Date(Date.now() + 9*60*60*1000).toISOString().slice(0, 10);
   const [returnDate, setReturnDate] = useState(kstToday());
   const [refundEdit, setRefundEdit] = useState('');
+  // 회원반품 클레임 사유 (선택 — 입력 시 store_claims에 기록)
+  const [rClaimType, setRClaimType]     = useState('');
+  const [rClaimCustom, setRClaimCustom] = useState('');
+  const [rClaimDetail, setRClaimDetail] = useState('');
 
   // 직접입력 탭
   const [allProducts, setAllProducts] = useState([]);
@@ -40,6 +45,10 @@ export default function SalesReturnPage({ profile }) {
   const [mRefund,  setMRefund]  = useState('');   // 환불 합계(직접 입력, 독립값)
   const [mMemo,    setMMemo]    = useState('');
   const [mSaving,  setMSaving]  = useState(false);
+  // 비회원반품 클레임 사유 (선택)
+  const [mClaimType, setMClaimType]     = useState('');
+  const [mClaimCustom, setMClaimCustom] = useState('');
+  const [mClaimDetail, setMClaimDetail] = useState('');
 
   useEffect(() => {
     if (tab === 'manual' && allProducts.length === 0) {
@@ -188,6 +197,7 @@ export default function SalesReturnPage({ profile }) {
       for (const i of order.items) map[i.id] = 0;
       setReturnMap(map);
       setReturnDate(kstToday()); setRefundEdit('');
+      setRClaimType(''); setRClaimCustom(''); setRClaimDetail('');
       setExpanded(order.key);
     }
   };
@@ -219,6 +229,23 @@ export default function SalesReturnPage({ profile }) {
     }
     return { cash, pointsRestore, pointsRevoke, qtySum };
   }, [expandedOrder, returnMap]);
+
+  // 반품 사유가 입력된 경우 store_claims에 기록 (재고·매출은 반품 로직이 처리 → movements 비움)
+  const recordReturnClaim = async ({ claimType, claimDetail, customer, productName, productCode, sName, bName }) => {
+    const ct = (claimType || '').trim();
+    if (!ct) return; // 사유 미입력 = 일반 반품, 클레임 기록 안 함
+    try {
+      await supabase.from('store_claims').insert({
+        store_name: sName, branch_name: bName,
+        worker_name: null,
+        customer_name: customer?.name || null, customer_phone: customer?.phone || null, customer_id: customer?.id || null,
+        product_name: productName || null, product_code: productCode || null,
+        claim_type: ct, claim_detail: (claimDetail || '').trim() || null,
+        status: '완료', action_type: '환불', source: '반품',
+        stock_movements: [], created_by: profile?.id || null,
+      });
+    } catch (e) { /* 클레임 기록 실패는 반품 자체를 막지 않음 */ }
+  };
 
   const handleReturn = async () => {
     if (!expandedOrder) return;
@@ -328,6 +355,15 @@ export default function SalesReturnPage({ profile }) {
           }).eq('id', it.customer_id);
         }
       }
+      // 반품 사유 입력 시 클레임 현황에 기록
+      const rType = rClaimType === '직접입력' ? rClaimCustom : rClaimType;
+      await recordReturnClaim({
+        claimType: rType, claimDetail: rClaimDetail,
+        customer: expandedOrder.customer,
+        productName: toReturn.map(i => `${i.product?.name || ''}×${Number(returnMap[i.id])}`).join(', '),
+        productCode: toReturn.length === 1 ? (toReturn[0].product?.code || null) : null,
+        sName: storeName, bName: branchName,
+      });
       toast('반품 처리 완료', 'ok');
       setExpanded(null);
       setReturnMap({});
@@ -390,8 +426,18 @@ export default function SalesReturnPage({ profile }) {
         }
       }
 
+      // 반품 사유 입력 시 클레임 현황에 기록
+      const mType = mClaimType === '직접입력' ? mClaimCustom : mClaimType;
+      await recordReturnClaim({
+        claimType: mType, claimDetail: mClaimDetail,
+        customer: null,
+        productName: mProduct.name, productCode: mProduct.code || null,
+        sName: storeName, bName: branchName,
+      });
+
       toast('수기 반품 접수 완료', 'ok');
       setMProduct(null); setMSearch(''); setMQty(1); setMRefund(''); setMMemo(''); setMDate(''); setMReturnDate(today);
+      setMClaimType(''); setMClaimCustom(''); setMClaimDetail('');
     } catch (err) {
       toast('반품 실패: ' + err.message, 'err');
     }
@@ -414,10 +460,30 @@ export default function SalesReturnPage({ profile }) {
       <div className="tabs">
         <button className={`tab ${tab==='search'?'on':''}`} onClick={() => setTab('search')}>회원반품</button>
         <button className={`tab ${tab==='manual'?'on':''}`} onClick={() => setTab('manual')}>비회원반품</button>
+        <button className={`tab ${tab==='exchange'?'on':''}`} onClick={() => setTab('exchange')}>교환·증정</button>
         <button className={`tab ${tab==='hq'?'on':''}`} onClick={() => setTab('hq')}>본사 반품</button>
       </div>
 
       {tab === 'hq' && <HqReturnTab profile={profile}/>}
+      {tab === 'exchange' && (<>
+        {!isStoreMgr && (
+          <div className="card" style={{marginBottom:12}}>
+            <div className="card-label">점포 선택</div>
+            <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+              <select className="fsel" value={hqStore} onChange={e => { setHqStore(e.target.value); setHqBranch(''); }}>
+                <option value="">점포 선택</option>
+                {STORE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select className="fsel" value={hqBranch} onChange={e => setHqBranch(e.target.value)}
+                disabled={!hqStore} style={{background:!hqStore?'#f0f0f0':'#fff'}}>
+                <option value="">{hqStore ? '지점 선택' : '먼저 점포 선택'}</option>
+                {hqBranchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+        <ExchangeGiftTab profile={profile} storeName={storeName} branchName={branchName}/>
+      </>)}
 
       {tab === 'search' && (<>
       {/* 필터 */}
@@ -608,6 +674,24 @@ export default function SalesReturnPage({ profile }) {
                           {/* 반품 미리보기 + 액션 */}
                           {preview && (
                             <div style={{marginTop:14, paddingTop:12, borderTop:'1px solid var(--border)'}}>
+                              {/* 클레임 사유 (선택 — 입력 시 클레임 현황에 기록) */}
+                              <div style={{display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12, padding:'10px 12px', background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)'}}>
+                                <div>
+                                  <label style={{display:'block', fontSize:11, fontWeight:700, color:'#6a1b9a', marginBottom:4}}>📣 클레임 사유 <span style={{color:'var(--text3)', fontWeight:400}}>(선택 · 입력 시 클레임 현황 기록)</span></label>
+                                  <select value={rClaimType} onChange={e => setRClaimType(e.target.value)}
+                                    style={{height:34, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:4, fontSize:13, background:'#fff', outline:'none'}}>
+                                    <option value="">사유 없음 (일반 반품)</option>{CLAIM_TYPES.map(t => <option key={t}>{t}</option>)}
+                                  </select>
+                                </div>
+                                {rClaimType === '직접입력' && (
+                                  <input value={rClaimCustom} onChange={e => setRClaimCustom(e.target.value)} placeholder="사유 직접 입력"
+                                    style={{height:34, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:4, fontSize:13, background:'#fff', outline:'none', width:160}}/>
+                                )}
+                                {rClaimType && (
+                                  <input value={rClaimDetail} onChange={e => setRClaimDetail(e.target.value)} placeholder="상세내용 (선택)"
+                                    style={{height:34, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:4, fontSize:13, background:'#fff', outline:'none', flex:'1 1 220px'}}/>
+                                )}
+                              </div>
                               {/* 환불 합계 수정 */}
                               <div style={{display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-end', marginBottom:12}}>
                                 <div>
@@ -763,6 +847,23 @@ export default function SalesReturnPage({ profile }) {
               <input value={mMemo} onChange={e => setMMemo(e.target.value)}
                 style={{width:'100%', height:40, padding:'0 12px', border:'1px solid var(--border)', borderRadius:'var(--radius)', fontSize:14, outline:'none', boxSizing:'border-box'}}
                 placeholder="반품 사유 등"/>
+            </div>
+
+            {/* 클레임 사유 (선택 — 입력 시 클레임 현황에 기록) */}
+            <div style={{padding:'12px 14px', background:'#f3e5f5', border:'1px solid #ce93d8', borderRadius:'var(--radius)'}}>
+              <label style={{display:'block', fontSize:11, fontWeight:700, color:'#6a1b9a', marginBottom:5}}>📣 클레임 사유 <span style={{color:'var(--text3)', fontWeight:400}}>(선택 · 입력 시 클레임 현황 기록)</span></label>
+              <select value={mClaimType} onChange={e => setMClaimType(e.target.value)}
+                style={{width:'100%', height:38, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:'var(--radius)', fontSize:14, background:'#fff', outline:'none', boxSizing:'border-box'}}>
+                <option value="">사유 없음 (일반 반품)</option>{CLAIM_TYPES.map(t => <option key={t}>{t}</option>)}
+              </select>
+              {mClaimType === '직접입력' && (
+                <input value={mClaimCustom} onChange={e => setMClaimCustom(e.target.value)} placeholder="사유 직접 입력"
+                  style={{width:'100%', height:38, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:'var(--radius)', fontSize:14, background:'#fff', outline:'none', boxSizing:'border-box', marginTop:8}}/>
+              )}
+              {mClaimType && (
+                <input value={mClaimDetail} onChange={e => setMClaimDetail(e.target.value)} placeholder="상세내용 (선택)"
+                  style={{width:'100%', height:38, padding:'0 10px', border:'1px solid #ce93d8', borderRadius:'var(--radius)', fontSize:14, background:'#fff', outline:'none', boxSizing:'border-box', marginTop:8}}/>
+              )}
             </div>
 
             <button className="btn btn-p" disabled={mSaving || !mProduct || !mQty || mRefund === ''}

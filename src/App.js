@@ -798,7 +798,7 @@ export default function App() {
     order_request_hq: '매장 발주요청',
     store_returns_hq: '매장 반품신청',
     daily_checklist: '일일 체크리스트',
-    claim_intake: '고객 클레임 접수',
+    claim_intake: '고객 클레임 현황',
     daily_checklist_hq: '매장 일일 체크',
     scm_shipping:   '매장 발주요청',
     purchase_check: '발주 확인',
