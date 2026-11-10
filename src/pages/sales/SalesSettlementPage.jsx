@@ -824,6 +824,33 @@ export default function SalesSettlementPage() {
   const storeBtnLabel   = fStores.length === 0 ? '전체 점포' : fStores.length === 1 ? fStores[0] : `${fStores.length}개 점포`;
   const storeScopeLabel = fStores.length === 0 ? '전체 점포' : fStores.join(', ');
 
+  // 기간 빠른 선택 (어제 / 전월 / 당월)
+  const setRange = (type) => {
+    if (type === 'yesterday') {
+      const d = new Date(now); d.setDate(d.getDate() - 1);
+      const s = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      setFFrom(s); setFTo(s);
+    } else if (type === 'thismonth') {
+      setFFrom(monthStart); setFTo(todayStr);
+    } else if (type === 'lastmonth') {
+      const first = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const last  = new Date(now.getFullYear(), now.getMonth(), 0);
+      setFFrom(`${first.getFullYear()}-${pad(first.getMonth()+1)}-${pad(first.getDate())}`);
+      setFTo(`${last.getFullYear()}-${pad(last.getMonth()+1)}-${pad(last.getDate())}`);
+    }
+  };
+  const yesterdayStr = (() => { const d = new Date(now); d.setDate(d.getDate()-1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; })();
+  const lmFirst = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const lmLast  = new Date(now.getFullYear(), now.getMonth(), 0);
+  const lmFirstStr = `${lmFirst.getFullYear()}-${pad(lmFirst.getMonth()+1)}-${pad(lmFirst.getDate())}`;
+  const lmLastStr  = `${lmLast.getFullYear()}-${pad(lmLast.getMonth()+1)}-${pad(lmLast.getDate())}`;
+  const quickBtn = (active) => ({
+    height:34, padding:'0 12px', borderRadius:'var(--radius)', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap',
+    border: active ? '1px solid var(--accent)' : '1px solid var(--border)',
+    background: active ? 'var(--accent)' : '#fff',
+    color: active ? '#fff' : 'var(--text2)',
+  });
+
   const grp = { borderLeft: '2px solid var(--border2)' }; // 그룹 구분 세로선
   const th = (label, extra) => <th className="r" style={{ whiteSpace:'nowrap', ...extra }}>{label}</th>;
   // 클릭 정렬 헤더: 활성 컬럼은 ▼(높은순)/▲(낮은순), 비활성은 ⇅
@@ -854,6 +881,9 @@ export default function SalesSettlementPage() {
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
           <span style={{ fontSize:12, color:'var(--text3)' }}>~</span>
           <input type="date" className="fsel" value={fTo} onChange={e => setFTo(e.target.value)} />
+          <button type="button" style={quickBtn(fFrom===yesterdayStr && fTo===yesterdayStr)} onClick={() => setRange('yesterday')}>어제</button>
+          <button type="button" style={quickBtn(fFrom===lmFirstStr && fTo===lmLastStr)} onClick={() => setRange('lastmonth')}>전월</button>
+          <button type="button" style={quickBtn(fFrom===monthStart && fTo===todayStr)} onClick={() => setRange('thismonth')}>당월</button>
           <div style={{ position:'relative' }}>
             <button type="button" onClick={() => setStoreMenu(o => !o)} className="fsel"
               style={{ cursor:'pointer', textAlign:'left', minWidth:130, display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}
