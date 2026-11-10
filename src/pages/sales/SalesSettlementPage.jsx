@@ -925,13 +925,13 @@ export default function SalesSettlementPage() {
               <thead>
                 <tr style={{ borderBottom:'1px solid var(--border)' }}>
                   <th colSpan={2}></th>
-                  <th colSpan={8} style={{ textAlign:'center', ...grp }}>조회기간</th>
+                  <th colSpan={9} style={{ textAlign:'center', ...grp }}>조회기간</th>
                   <th colSpan={4} style={{ textAlign:'center', ...grp }}>전월 동기간</th>
                   <th style={{ textAlign:'center', ...grp }}>전월증감</th>
                 </tr>
                 <tr>
                   <th>상품코드</th><th>상품명</th>
-                  {th('원가', grp)}{th('판매가')}{sortTh('판매수량','qty')}{sortTh('매출액','gross')}{th('할인금액')}{sortTh('실제매출','net')}{sortTh('이익','profit')}{sortTh('원가비중','costPct')}
+                  {th('원가', grp)}{th('판매가')}{sortTh('판매수량','qty')}{sortTh('총원가','costTotal')}{sortTh('매출액','gross')}{th('할인금액')}{sortTh('실제매출','net')}{sortTh('이익','profit')}{sortTh('원가비중','costPct')}
                   {th('판매수량', grp)}{th('판매금액')}{th('할인금액')}{th('실제매출')}
                   {th('실제매출', grp)}
                 </tr>
@@ -944,6 +944,7 @@ export default function SalesSettlementPage() {
                     <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text3)', ...grp }}>{won(r.unitCost)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.listPrice)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{r.qty.toLocaleString()}</td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{won(r.costTotal)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.gross)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--danger)' }}>{won(r.discount)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{won(r.net)}</td>
@@ -960,6 +961,7 @@ export default function SalesSettlementPage() {
                   <td colSpan={2} style={{ fontWeight:700, padding:'9px 11px' }}>합계</td>
                   <td className="r" style={{ ...grp }}></td><td></td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{totals.qty.toLocaleString()}</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--text2)' }}>{won(totals.cost)}</td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(totals.gross)}</td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--danger)' }}>{won(totals.discount)}</td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14 }}>{won(totals.net)}</td>
