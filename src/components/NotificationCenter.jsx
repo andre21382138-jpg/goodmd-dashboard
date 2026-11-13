@@ -78,6 +78,20 @@ export default function NotificationCenter({ profile, setPage }) {
           page:'store_delivery_status',
         });
       }
+      // 1-3. 고객택배 재발송 — 반려됐던 건이 본사/SCM에서 '발송대기'로 복구됨
+      const { count: restoredCnt } = await supabase.from('sales')
+        .select('id', { count: 'exact', head: true })
+        .eq('store_name', profile.department).eq('branch_name', profile.branch)
+        .eq('delivery_type', 'hq').eq('delivery_status', 'pending')
+        .not('delivery_restored_at', 'is', null);
+      if (restoredCnt && restoredCnt > 0) {
+        list.push({
+          key: `hq_delivery_restored_${restoredCnt}`, color:'blue', icon:'📦',
+          title:`고객택배 재발송 ${restoredCnt}건`,
+          msg:'반려됐던 고객택배가 다시 발송 진행됩니다 — 발송현황에서 확인하세요',
+          page:'store_delivery_status',
+        });
+      }
       // 2. 입고 확인 대기
       const { data: recv } = await supabase.from('purchase_orders')
         .select('id')

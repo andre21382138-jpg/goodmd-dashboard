@@ -256,9 +256,10 @@ export default function MgrSalesViewPage({ profile }) {
       // 반려 시 바뀐 값(rejected + 사유)을 신규 요청 상태(pending)로 되돌림
       const { error } = await supabase.from('sales').update({
         delivery_status: 'pending', delivery_reject_reason: null,
+        delivery_restored_at: new Date().toISOString(),  // 매장 알림 트리거
       }).in('id', ids);
       if (error) throw error;
-      toast('반려 취소 완료 — 본사 발송대기로 복구됨', 'ok');
+      toast('반려 취소 완료 — 본사 발송대기로 복구 · 매장 알림 전송', 'ok');
       fetchSales();
     } catch (err) {
       toast('복구 실패: ' + (err.message || err), 'err');

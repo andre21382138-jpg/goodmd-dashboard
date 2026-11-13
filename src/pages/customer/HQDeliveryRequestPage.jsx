@@ -161,8 +161,15 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                product:products(name, code, erp_code)`)
       .eq('delivery_type', 'hq')
       .eq('delivery_status', tab);
-    if (tab === 'pending' || tab === 'rejected') {
+    if (tab === 'pending') {
       q = q.order('sold_at', { ascending: false }).limit(200);
+    } else if (tab === 'rejected') {
+      // 반려내역: 판매일(sold_at) 기준 기간·점포·지점 필터
+      if (fFrom)   q = q.gte('sold_at', fFrom);
+      if (fTo)     q = q.lte('sold_at', fTo);
+      if (fStore)  q = q.eq('store_name',  fStore);
+      if (fBranch) q = q.eq('branch_name', fBranch);
+      q = q.order('sold_at', { ascending: false }).limit(500);
     } else {
       // 발송완료: 기간·점포·지점 필터
       if (fFrom)   q = q.gte('dispatched_at', `${fFrom}T00:00:00`);
@@ -363,9 +370,10 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     try {
       const { error } = await supabase.from('sales').update({
         delivery_status: 'pending', delivery_reject_reason: null,
+        delivery_restored_at: new Date().toISOString(),  // 매장 알림 트리거
       }).in('id', ids);
       if (error) throw error;
-      toast(`${ids.length}건 발송대기로 복구 완료`, 'ok');
+      toast(`${ids.length}건 발송대기로 복구 완료 — 해당 매장에 알림 전송`, 'ok');
       fetchData();
     } catch (err) {
       toast('복구 실패: ' + (err.message || err), 'err');
@@ -459,13 +467,14 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
           ✅ 발송 완료
         </button>
         <button className={`tab ${tab==='rejected'?'on':''}`} onClick={() => setTab('rejected')}>
-          ⛔ 반려됨
+          ⛔ 반려내역
         </button>
       </div>
 
       <div className="card" style={{padding:'16px 20px'}}>
-        {tab === 'dispatched' && (
+        {(tab === 'dispatched' || tab === 'rejected') && (
           <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12, flexWrap:'wrap'}}>
+            {tab === 'rejected' && <span style={{fontSize:11, color:'var(--text3)', fontWeight:600}}>판매일</span>}
             <input type="date" className="fsel" value={fFrom}
               onChange={e => setFFrom(e.target.value || todayStr())}
               style={{height:32, padding:'0 8px', fontSize:12}}/>
@@ -500,7 +509,7 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                   ? <>발송요청 받은 건 — <b>{displayGroups.length}</b>건{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>
                   : <>발송 대기 중인 고객 택배 요청 — <b>{groups.length}</b>건 · 발송요청됨 <b style={{color:'#2e7d32'}}>{approvedGroups.length}</b> / 대기 <b style={{color:'#e65100'}}>{groups.length - approvedGroups.length}</b>{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>)
               : tab === 'rejected'
-              ? <>반려됨 — <b style={{color:'var(--danger)'}}>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>재고 확인 후 '발송대기로 복구' 가능</span></>
+              ? <>반려내역 — <b style={{color:'var(--danger)'}}>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>{fFrom} ~ {fTo} · 재고 확인 후 '발송대기로 복구' 가능</span></>
               : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>{fFrom} ~ {fTo}</span></>}
           </span>
           {tab === 'pending' && (
