@@ -244,6 +244,28 @@ export default function MgrSalesViewPage({ profile }) {
     setConvertingTxn(null);
   };
 
+  // 본사 반려 취소 → 본사 발송대기로 복구 (SCM이 다시 발송 가능)
+  const [restoringTxn, setRestoringTxn] = useState(null);
+  const restoreToHq = async (rows) => {
+    const targets = rows.filter(r => r.delivery_type === 'hq' && r.delivery_status === 'rejected');
+    if (targets.length === 0) return;
+    if (!window.confirm(`이 건의 반려를 취소하고 '본사 발송대기'로 되돌리시겠습니까?\n\n상품 ${targets.length}건이 본사/SCM 발송대기 목록에 다시 표시되어 정상 발송할 수 있습니다. (매장 재고 차감 없음)`)) return;
+    setRestoringTxn(rows[0].id);
+    try {
+      const ids = targets.map(r => r.id);
+      // 반려 시 바뀐 값(rejected + 사유)을 신규 요청 상태(pending)로 되돌림
+      const { error } = await supabase.from('sales').update({
+        delivery_status: 'pending', delivery_reject_reason: null,
+      }).in('id', ids);
+      if (error) throw error;
+      toast('반려 취소 완료 — 본사 발송대기로 복구됨', 'ok');
+      fetchSales();
+    } catch (err) {
+      toast('복구 실패: ' + (err.message || err), 'err');
+    }
+    setRestoringTxn(null);
+  };
+
   const setRange = (type) => {
     if (type === 'today') {
       setFFrom(todayStr); setFTo(todayStr);
@@ -537,7 +559,12 @@ export default function MgrSalesViewPage({ profile }) {
                                       {hasRejected && (
                                         <div onClick={e => e.stopPropagation()} style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap'}}>
                                           <span style={{fontSize:10, fontWeight:700, color:'var(--danger)', background:'#ffebee', border:'1px solid #ef9a9a', padding:'1px 6px', borderRadius:3}}>본사반려</span>
-                                          <button type="button" onClick={() => convertToStore(g.rows)} disabled={convertingTxn === txnId}
+                                          <button type="button" onClick={() => restoreToHq(g.rows)} disabled={restoringTxn === txnId || convertingTxn === txnId}
+                                            title="반려 취소 → 본사 발송대기로 복구 (SCM이 다시 발송, 매장 재고 차감 없음)"
+                                            style={{height:24, padding:'0 8px', border:'1px solid #1565C0', borderRadius:4, background:'#e3f2fd', color:'#1565C0', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                                            {restoringTxn === txnId ? '…' : '📦 본사 재발송(반려취소)'}
+                                          </button>
+                                          <button type="button" onClick={() => convertToStore(g.rows)} disabled={convertingTxn === txnId || restoringTxn === txnId}
                                             title="본사가 반려함 → 매장발송으로 변경 (매장 재고 차감)"
                                             style={{height:24, padding:'0 8px', border:'1px solid #e65100', borderRadius:4, background:'#fff3e0', color:'#e65100', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
                                             {convertingTxn === txnId ? '…' : '🏪 매장발송 전환'}
