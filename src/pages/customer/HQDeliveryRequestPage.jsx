@@ -109,6 +109,7 @@ function groupSales(rows) {
         recipient_address: s.recipient_address,
         delivery_notes: s.delivery_notes,
         dispatched_at: s.dispatched_at,
+        delivery_reject_reason: s.delivery_reject_reason,
         items: [],
       });
     }
@@ -156,11 +157,11 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
       .select(`id, sold_at, store_name, branch_name, quantity, price,
                recipient_name, recipient_phone, recipient_address, delivery_notes,
                dispatched_at, customer_id, tracking_number,
-               delivery_approved_at, delivery_approved_by,
+               delivery_approved_at, delivery_approved_by, delivery_reject_reason,
                product:products(name, code, erp_code)`)
       .eq('delivery_type', 'hq')
       .eq('delivery_status', tab);
-    if (tab === 'pending') {
+    if (tab === 'pending' || tab === 'rejected') {
       q = q.order('sold_at', { ascending: false }).limit(200);
     } else {
       // 발송완료: 기간·점포·지점 필터
@@ -353,6 +354,24 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     setRejectingItem(false);
   };
 
+  // 반려 취소 → 발송대기로 복구 (재고 확인 후 재발송). 이전 승인상태 유지 → SCM 즉시 발송 가능
+  const [restoringKey, setRestoringKey] = useState(null);
+  const restoreRejected = async (g) => {
+    const ids = g.items.map(it => it.id);
+    if (!window.confirm(`${g.recipient_name || ''} 반려 ${ids.length}건을 '발송대기'로 되돌리시겠습니까?\n\n발송대기 목록에 다시 표시되어 정상 발송할 수 있습니다.`)) return;
+    setRestoringKey(g.key);
+    try {
+      const { error } = await supabase.from('sales').update({
+        delivery_status: 'pending', delivery_reject_reason: null,
+      }).in('id', ids);
+      if (error) throw error;
+      toast(`${ids.length}건 발송대기로 복구 완료`, 'ok');
+      fetchData();
+    } catch (err) {
+      toast('복구 실패: ' + (err.message || err), 'err');
+    } finally { setRestoringKey(null); }
+  };
+
   // 선택 건 엑셀 다운로드 (선택 없으면 승인된 전체)
   const handleExportSelected = async () => {
     const target = selectedKeys.size > 0 ? groups.filter(g => selectedKeys.has(g.key)) : approvedGroups;
@@ -439,6 +458,9 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
         <button className={`tab ${tab==='dispatched'?'on':''}`} onClick={() => setTab('dispatched')}>
           ✅ 발송 완료
         </button>
+        <button className={`tab ${tab==='rejected'?'on':''}`} onClick={() => setTab('rejected')}>
+          ⛔ 반려됨
+        </button>
       </div>
 
       <div className="card" style={{padding:'16px 20px'}}>
@@ -477,6 +499,8 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
               ? (isScm
                   ? <>발송요청 받은 건 — <b>{displayGroups.length}</b>건{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>
                   : <>발송 대기 중인 고객 택배 요청 — <b>{groups.length}</b>건 · 발송요청됨 <b style={{color:'#2e7d32'}}>{approvedGroups.length}</b> / 대기 <b style={{color:'#e65100'}}>{groups.length - approvedGroups.length}</b>{selectedKeys.size > 0 && <> · 선택 <b style={{color:'var(--accent)'}}>{selectedKeys.size}</b>건</>}</>)
+              : tab === 'rejected'
+              ? <>반려됨 — <b style={{color:'var(--danger)'}}>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>재고 확인 후 '발송대기로 복구' 가능</span></>
               : <>발송 완료 — <b>{groups.length}</b>건 <span style={{fontSize:11, color:'var(--text3)', marginLeft:6}}>{fFrom} ~ {fTo}</span></>}
           </span>
           {tab === 'pending' && (
@@ -505,7 +529,7 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
               </button>
             </div>
           )}
-          {tab === 'dispatched' && (
+          {(tab === 'dispatched' || tab === 'rejected') && (
             <button className="btn btn-s" onClick={fetchData} disabled={loading}>
               {loading ? <span className="spinner"/> : '🔄 새로고침'}
             </button>
@@ -514,7 +538,9 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
 
         {loading ? <div className="empty"><span className="spinner"/></div>
           : (tab === 'pending' ? displayGroups.length === 0 : groups.length === 0) ? <div className="empty">
-              {tab === 'pending' ? (isScm ? '본사가 발송요청한 건이 없습니다' : '발송 대기 중인 요청이 없습니다') : '발송 완료 이력이 없습니다'}
+              {tab === 'pending' ? (isScm ? '본사가 발송요청한 건이 없습니다' : '발송 대기 중인 요청이 없습니다')
+                : tab === 'rejected' ? '반려된 고객 택배가 없습니다'
+                : '발송 완료 이력이 없습니다'}
             </div>
           : (
           <div className="twrap">
@@ -542,6 +568,8 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                   <th style={{textAlign:'center', width:140}}>송장번호</th>
                   {tab === 'pending' && <th style={{textAlign:'center', width:130}}>발송요청</th>}
                   {tab === 'dispatched' && <th style={{textAlign:'center', width:110}}>발송일</th>}
+                  {tab === 'rejected' && <th style={{minWidth:140}}>반려 사유</th>}
+                  {tab === 'rejected' && <th style={{textAlign:'center', width:150}}>작업</th>}
                 </tr>
               </thead>
               <tbody>
@@ -642,6 +670,22 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                               {new Date(g.dispatched_at).toLocaleDateString('ko-KR')}
                             </span>
                           )}
+                        </td>
+                      )}
+                      {iIdx === 0 && tab === 'rejected' && (
+                        <td rowSpan={rs} style={{fontSize:11, color:'var(--danger)', ...mergedStyle}}>
+                          {g.delivery_reject_reason || '사유 미기재'}
+                        </td>
+                      )}
+                      {iIdx === 0 && tab === 'rejected' && (
+                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
+                          {(isScm || isApprover) ? (
+                            <button type="button" onClick={() => restoreRejected(g)} disabled={restoringKey === g.key}
+                              title="반려 취소 → 발송대기로 복구 (재고 확인 후 재발송)"
+                              style={{height:28, padding:'0 10px', border:'1px solid #1565C0', borderRadius:'var(--radius)', background:'#e3f2fd', color:'#1565C0', fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'}}>
+                              {restoringKey === g.key ? <span className="spinner"/> : '📦 발송대기로 복구'}
+                            </button>
+                          ) : <span style={{fontSize:11, color:'var(--text3)'}}>-</span>}
                         </td>
                       )}
                     </tr>
