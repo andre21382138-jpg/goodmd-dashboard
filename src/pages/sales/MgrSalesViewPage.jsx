@@ -52,6 +52,8 @@ export default function MgrSalesViewPage({ profile }) {
   const saveEditLine = async (it) => {
     const qty = Number(editDraft.quantity);
     if (!Number.isFinite(qty) || qty === 0) { toast('수량은 0이 아닌 숫자여야 합니다', 'err'); return; }
+    // 반품행: quantity 양수(+), price 음수(−), 합계 음수(−). 생성 시 재고는 +qty 증가.
+    const isReturnLine = it.payment === '반품' || (Number(it.price) || 0) < 0;
     let price;
     if (isHQ) {
       price = Number(parseNumInput(editDraft.price));
@@ -59,7 +61,12 @@ export default function MgrSalesViewPage({ profile }) {
     } else {
       // 매장: 합계 입력 → 단가 = 합계 ÷ 수량
       const total = Number(parseNumInput(editDraft.total));
-      if (!Number.isFinite(total) || total < 0) { toast('합계가 유효하지 않습니다', 'err'); return; }
+      if (!Number.isFinite(total)) { toast('합계가 유효하지 않습니다', 'err'); return; }
+      if (isReturnLine) {
+        if (total > 0) { toast('반품 라인의 합계는 0 이하여야 합니다', 'err'); return; }
+      } else {
+        if (total < 0) { toast('합계가 유효하지 않습니다', 'err'); return; }
+      }
       if (qty < 0) { toast('수량은 0 이상이어야 합니다', 'err'); return; }
       price = qty !== 0 ? total / qty : 0;
     }
@@ -75,9 +82,11 @@ export default function MgrSalesViewPage({ profile }) {
         const { data: cust } = await supabase.from('customers')
           .select('total_points, used_points, total_purchase, purchase_qty').eq('id', it.customer_id).single();
         custRow = cust || null;
-        if (custRow) {
+        if (custRow && !isReturnLine) {
           const totalBefore = Math.max(0, (custRow.total_purchase || 0) - oldAmt);
           newEarned = Math.floor(newAmt * getGrade(totalBefore).rate);
+        } else if (custRow) {
+          newEarned = Number(it.points_earned) || 0; // 반품행은 적립 변화 없음
         }
       }
 
@@ -97,8 +106,10 @@ export default function MgrSalesViewPage({ profile }) {
           .eq('store_name', it.store_name).eq('branch_name', it.branch_name).eq('product_code', code)
           .maybeSingle();
         if (stockRow) {
+          // 판매행: 수량↑ → 재고↓ (oldQty-qty). 반품행: 반품수량↑ → 재고↑ (qty-oldQty).
+          const stockDelta = isReturnLine ? (qty - oldQty) : (oldQty - qty);
           await supabase.from('store_stock')
-            .update({ stock_qty: (stockRow.stock_qty || 0) + (oldQty - qty), updated_at: new Date().toISOString() })
+            .update({ stock_qty: (stockRow.stock_qty || 0) + stockDelta, updated_at: new Date().toISOString() })
             .eq('id', stockRow.id);
         }
       }
@@ -107,12 +118,16 @@ export default function MgrSalesViewPage({ profile }) {
       if (custRow) {
         const oldEarned = Number(it.points_earned) || 0;
         const newTotalPurchase = Math.max(0, (custRow.total_purchase || 0) - oldAmt + newAmt);
-        await supabase.from('customers').update({
+        const custPatch = {
           total_purchase: newTotalPurchase,
-          purchase_qty:   Math.max(0, (custRow.purchase_qty || 0) - oldQty + qty),
-          total_points:   Math.max(0, (custRow.total_points || 0) - oldEarned + newEarned),
           grade:          getGrade(newTotalPurchase).grade,
-        }).eq('id', it.customer_id);
+        };
+        // 반품행 수량 수정은 적립금·구매수량을 건드리지 않는다(생성 시 이미 비례 반영됨).
+        if (!isReturnLine) {
+          custPatch.purchase_qty = Math.max(0, (custRow.purchase_qty || 0) - oldQty + qty);
+          custPatch.total_points = Math.max(0, (custRow.total_points || 0) - oldEarned + newEarned);
+        }
+        await supabase.from('customers').update(custPatch).eq('id', it.customer_id);
       }
 
       toast(custRow ? '수정 완료 — 재고·적립금·누적구매 반영됨' : (qty !== oldQty ? '수정 완료 — 재고 반영됨' : '수정 완료'), 'ok');
