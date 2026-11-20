@@ -39,7 +39,7 @@ export default function ProductPicker({ products, value, onChange }) {
       ) : (
         <>
           <input className="input" value={text} autoCapitalize="none"
-            placeholder="제품코드·상품명 입력"
+            placeholder="ERP코드·상품명 입력"
             onChange={e => { setText(e.target.value); setOpen(true); }}
             onFocus={() => setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)} />

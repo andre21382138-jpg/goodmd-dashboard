@@ -156,7 +156,7 @@ export default function CwProductsPage() {
   return (
     <div>
       <div className="fbar">
-        <input className="finput" placeholder="제품코드·상품명 검색" value={q} onChange={e => setQ(e.target.value)} />
+        <input className="finput" placeholder="ERP코드·상품명 검색" value={q} onChange={e => setQ(e.target.value)} />
         <div className="fbar-right">
           <span className="fresult">제품 <b>{filtered.length}</b></span>
           <button className="btn btn-s" onClick={syncFromHq} disabled={importing}>
@@ -172,7 +172,7 @@ export default function CwProductsPage() {
             <thead>
               <tr>
                 <th style={{ width: 44 }}>NO</th>
-                <th>제품코드</th>
+                <th>ERP코드</th>
                 <th>상품명</th>
                 <th>출고코드</th>
                 <th>출고코드 상품명</th>
@@ -208,7 +208,7 @@ export default function CwProductsPage() {
           <div style={{ position: 'relative', background: '#fff', borderRadius: 12, width: 'min(440px, 94vw)', padding: '22px 22px', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}>
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{modal.id ? '제품 수정' : '제품 추가'}</div>
             <div className="form-group">
-              <label>제품코드 (ERP)</label>
+              <label>ERP코드</label>
               <input className="input" value={modal.erp_code} onChange={e => setModal({ ...modal, erp_code: e.target.value })} placeholder="예) 8809470003489_1" autoCapitalize="none" />
             </div>
             <div className="form-group">

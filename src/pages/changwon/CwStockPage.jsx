@@ -62,7 +62,7 @@ export default function CwStockPage() {
   return (
     <div>
       <div className="fbar">
-        <input className="finput" placeholder="제품코드·상품명 검색" value={q} onChange={e => setQ(e.target.value)} />
+        <input className="finput" placeholder="ERP코드·상품명 검색" value={q} onChange={e => setQ(e.target.value)} />
         <div className="fbar-right">
           <span className="fresult">제품 <b>{filtered.length}</b></span>
           <button className="btn btn-s" onClick={fetchAll}>↻ 새로고침</button>
@@ -75,7 +75,7 @@ export default function CwStockPage() {
             <thead>
               <tr>
                 <th style={{ width: 44 }}>NO</th>
-                <th>제품코드</th>
+                <th>ERP코드</th>
                 <th>상품명</th>
                 <th className="r" style={{ paddingLeft: 40 }}>현재고</th>
                 <th style={{ width: 60 }}>수정</th>
