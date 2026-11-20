@@ -583,15 +583,16 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
               </thead>
               <tbody>
                 {displayGroups.flatMap((g, gIdx) => {
-                  // 그룹 시각적 구분: 짝수 그룹 흰색, 홀수 그룹 매우 옅은 노랑
-                  const groupBg = gIdx % 2 === 0 ? '#fff' : '#fffdf5';
+                  // 그룹 구분은 상단 2px 경계선으로만 — 노랑/교대색 제거(흰색 통일)
+                  // 미승인 그룹은 행 전체를 동일한 회색으로 (일부 칸만 회색되는 문제 방지)
+                  const groupBg = (tab === 'pending' && !g.approved) ? '#eef0f4' : '#fff';
                   const rs = g.items.length;
                   const mergedStyle = { verticalAlign:'middle', background: groupBg };
                   const lineBorder = { borderBottom: '1px solid var(--border)' };
                   return g.items.map((it, iIdx) => (
-                    <tr key={it.id} style={{background: (tab==='pending' && !g.approved) ? '#fafafa' : groupBg, ...(iIdx === 0 ? {borderTop:'2px solid var(--border2)'} : {})}}>
+                    <tr key={it.id} style={{background: groupBg, ...(iIdx === 0 ? {borderTop:'2px solid var(--border2)'} : {})}}>
                       {iIdx === 0 && tab === 'pending' && (
-                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle, ...((!g.approved)?{background:'#fafafa'}:{})}}>
+                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
                           <input type="checkbox" checked={selectedKeys.has(g.key)}
                             disabled={!isApprover && !g.approved}
                             onChange={() => toggleSelect(g.key)}
@@ -600,13 +601,15 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                         </td>
                       )}
                       {iIdx === 0 && (
-                        <td rowSpan={rs} className="mono" style={{fontSize:11, ...mergedStyle}}>{g.sold_at}</td>
+                        <td rowSpan={rs} className="mono" style={{fontSize:11, whiteSpace:'nowrap', ...mergedStyle}}>{g.sold_at}</td>
                       )}
                       {iIdx === 0 && (
                         <td rowSpan={rs} style={{fontSize:11, ...mergedStyle}}>
-                          <div style={{display:'flex', flexDirection:'column', gap:2, alignItems:'flex-start'}}>
+                          <div style={{display:'flex', flexDirection:'column', gap:3, alignItems:'flex-start'}}>
                             <span className="badge badge-dept">{g.store_name}</span>
-                            <span className="badge badge-store">{g.branch_name}</span>
+                            {g.branch_name && g.branch_name !== g.store_name && (
+                              <span style={{fontSize:11, color:'var(--text3)', fontWeight:600, paddingLeft:11}}>{g.branch_name}</span>
+                            )}
                           </div>
                         </td>
                       )}
@@ -616,9 +619,9 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                             <input type="checkbox" checked={rejectSel.has(it.id)}
                               onChange={() => toggleRejectSel(it.id)}
                               title="반려할 상품 선택"
-                              style={{cursor:'pointer', width:15, height:15, accentColor:'#c62828'}}/>
+                              style={{cursor:'pointer', width:15, height:15, flexShrink:0, accentColor:'#c62828'}}/>
                           )}
-                          <span>{it.product?.name || '-'}</span>
+                          <span style={{minWidth:0}}>{it.product?.name || '-'}</span>
                         </div>
                       </td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontWeight:700, ...lineBorder}}>{it.quantity}</td>
@@ -653,7 +656,7 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
                         );
                       })()}
                       {iIdx === 0 && tab === 'pending' && (
-                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle, ...((!g.approved)?{background:'#fafafa'}:{})}}>
+                        <td rowSpan={rs} style={{textAlign:'center', ...mergedStyle}}>
                           {g.approved ? (
                             <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:4}}>
                               <span style={{fontSize:11, fontWeight:700, color:'#2e7d32', background:'#e8f5e9', border:'1px solid #a5d6a7', padding:'2px 8px', borderRadius:4}}>✅ 발송요청됨</span>
