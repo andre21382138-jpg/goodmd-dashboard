@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { HQ_MENUS, MANAGER_MENUS, ADMIN_MENUS } from '../lib/constants';
+import { HQ_MENUS, MANAGER_MENUS, ADMIN_MENUS, CHANGWON_MENUS } from '../lib/constants';
 import { toast } from '../lib/utils';
 
 function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
@@ -359,6 +359,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
   const isScm      = profile?.role === 'scm';
+  const isChangwon = profile?.role === 'changwon';
 
   // 본사 '매장 전환' — 매장 계정 목록
   const [switchModal, setSwitchModal] = useState(false);
@@ -433,7 +434,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
     <div className="sidebar">
       {/* 홈 버튼 */}
       <button
-        onClick={() => setPage('home')}
+        onClick={() => setPage(isChangwon ? 'cw_products' : 'home')}
         style={{
           display:'flex', alignItems:'center', gap:10, padding:'0 18px',
           background: page==='home' ? 'rgba(0,0,0,0.08)' : 'transparent',
@@ -450,6 +451,8 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
             <div style={{ fontSize:15, fontWeight:800, color:'var(--sidebar-text)', lineHeight:1.2, letterSpacing:-0.3 }}>
               (주)한국생활건강
             </div>
+          ) : isChangwon ? (
+            <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>창원지점 재고</div>
           ) : (
             <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 관리시스템</div>
           )}
@@ -478,6 +481,20 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
                 </button>
               );
             })}
+          </>
+        )}
+        {/* 창원지점 — 재고 수불장 전용 메뉴 */}
+        {isChangwon && (
+          <>
+            <div className="sidebar-section">창원지점</div>
+            {CHANGWON_MENUS.map(m => (
+              <button key={m.key}
+                className={`sidebar-item ${isOn(m.key)?'on':''}`}
+                onClick={() => setPage(m.key)}>
+                <span className="sidebar-item-icon">{m.icon}</span>
+                {m.label}
+              </button>
+            ))}
           </>
         )}
         {/* 본사 메뉴 (admin·hq 전용) */}
@@ -555,7 +572,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
             </button>
           </>
         )}
-        {!canSeeMain && !isManager && !isAdmin && (
+        {!canSeeMain && !isManager && !isAdmin && !isScm && !isChangwon && (
           <div style={{ padding:'12px 10px', fontSize:12, color:'rgba(0,0,0,0.5)', lineHeight:1.7 }}>
             접근 가능한 메뉴가 없습니다.
           </div>

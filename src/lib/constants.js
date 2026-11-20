@@ -111,6 +111,15 @@ export const ADMIN_MENUS = [
   { key: 'admin',  icon: '🔐', label: '사용자 관리' },
   { key: 'notice', icon: '📢', label: '공지 사항' },
 ];
+// 창원지점 재고 수불장 전용 메뉴 (role='changwon')
+export const CHANGWON_MENUS = [
+  { key: 'cw_products', icon: '📋', label: '제품현황' },
+  { key: 'cw_inbound',  icon: '📥', label: '입고입력' },
+  { key: 'cw_outbound', icon: '📤', label: '출고입력' },
+  { key: 'cw_stock',    icon: '📦', label: '재고현황' },
+];
+// 입고 구분 (수불장 기준)
+export const CHANGWON_INBOUND_TYPES = ['물류센터입고', '구매입고', '매장반품입고', '매장반품교환'];
 
 // ════════════════════════════════════════════════════════
 // 발주서 양식 상수

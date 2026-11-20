@@ -58,6 +58,10 @@ import AttendancePage from './pages/join/AttendancePage';
 import ConsentRenewPage from './pages/customer/ConsentRenewPage';
 import ConsentRenewMgrPage from './pages/customer/ConsentRenewMgrPage';
 import HelpPage from './pages/help/HelpPage';
+import CwProductsPage from './pages/changwon/CwProductsPage';
+import CwInboundPage from './pages/changwon/CwInboundPage';
+import CwOutboundPage from './pages/changwon/CwOutboundPage';
+import CwStockPage from './pages/changwon/CwStockPage';
 
 // ════════════════════════════════════════════════════════
 // GLOBAL CSS
@@ -669,6 +673,16 @@ export default function App() {
     }
   }, [profile?.role, page, SCM_ALLOWED_PAGES]);
 
+  // 창원지점 계정 — 재고 수불장 4개 메뉴만 접근 가능
+  const CHANGWON_ALLOWED_PAGES = useMemo(() => new Set([
+    'cw_products', 'cw_inbound', 'cw_outbound', 'cw_stock', 'help',
+  ]), []);
+  useEffect(() => {
+    if (profile?.role === 'changwon' && !CHANGWON_ALLOWED_PAGES.has(page)) {
+      setPage('cw_products');
+    }
+  }, [profile?.role, page, CHANGWON_ALLOWED_PAGES]);
+
   // 새 배포 자동 감지 — 5분마다 /build.json 확인. 다르면 상단 배너 안내(자동 reload 안 함, 사용자 안전 보호)
   useEffect(() => {
     let currentBuild = null;
@@ -760,6 +774,7 @@ export default function App() {
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
   const isScm      = profile?.role === 'scm';
+  const isChangwon = profile?.role === 'changwon';
   const canSeeMain = isAdmin || isHQ;
 
   const PAGE_TITLES = {
@@ -816,6 +831,10 @@ export default function App() {
     store_closure:   '휴점 등록',
     admin:          '사용자 관리',
     notice:         '공지 사항',
+    cw_products:    '제품현황',
+    cw_inbound:     '입고입력',
+    cw_outbound:    '출고입력',
+    cw_stock:       '재고현황',
   };
 
   if (authLoading) {
@@ -927,6 +946,10 @@ export default function App() {
             {page === 'upload_history' && canSeeMain && <UploadHistoryPage profile={profile} activeUploadId={activeUploadId} setActiveUploadId={setActiveUploadId} setPage={setPage} setParsed={setParsed} setFilename={setFilename}/>}
             {page === 'admin'          && (isAdmin || isHQ) && <AdminTab profile={profile}/>}
             {page === 'notice'         && (isAdmin || isHQ || isManager) && <NoticePage profile={profile}/>}
+            {page === 'cw_products'    && (isChangwon || isAdmin || isHQ) && <CwProductsPage/>}
+            {page === 'cw_inbound'     && (isChangwon || isAdmin || isHQ) && <CwInboundPage profile={profile}/>}
+            {page === 'cw_outbound'    && (isChangwon || isAdmin || isHQ) && <CwOutboundPage profile={profile}/>}
+            {page === 'cw_stock'       && (isChangwon || isAdmin || isHQ) && <CwStockPage/>}
           </div>
         </div>
       </div>
