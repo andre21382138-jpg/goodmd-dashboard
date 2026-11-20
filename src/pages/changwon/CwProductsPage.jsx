@@ -57,40 +57,91 @@ export default function CwProductsPage() {
     fetchRows();
   };
 
-  // 본사 상품관리(products) 판매중 상품을 제품현황으로 불러오기 (이미 있는 것은 건너뜀, 새 것만 추가)
-  const importFromHq = async () => {
+  // 본사 상품관리(products) 판매중 상품과 제품현황을 '동일'하게 동기화
+  //  ① 매칭 상품명을 본사 기준으로 통일  ② 본사 판매중에 없는 창원 전용 상품 삭제
+  //     (단, 현재고≠0 또는 입출고 이력이 있으면 보존)  ③ 누락된 본사 상품 추가
+  const syncFromHq = async () => {
     if (importing) return;
-    if (!window.confirm('본사 상품관리의 판매중 상품을 제품현황으로 불러옵니다.\n이미 있는 제품은 건너뛰고 새 제품만 추가됩니다 (기존 출고코드·현재고 유지).\n계속할까요?')) return;
+    if (!window.confirm('제품현황을 본사 판매중 상품과 동일하게 맞춥니다.\n\n· 상품명을 본사 기준으로 통일\n· 본사 판매중에 없는 창원 전용 상품은 삭제\n  (현재고·입출고 이력이 있는 상품은 안전하게 남깁니다)\n· 누락된 본사 상품 추가\n\n계속할까요?')) return;
     setImporting(true);
+    const norm = (s) => (s || '').trim();
+    const base = (s) => norm(s).split('_')[0];
+
+    // 1) 본사 판매중
     const { data: hq, error } = await supabase.from('products')
       .select('name, code, erp_code').eq('is_sales_stopped', false);
     if (error) { toast('본사 상품 조회 실패: ' + error.message, 'err'); setImporting(false); return; }
+    // 안전가드: 본사 조회 0건이면(권한 문제 등) 전부 삭제 사고 방지 — 중단
+    if (!hq || hq.length === 0) { toast('본사 상품을 불러오지 못했습니다(0건). 안전을 위해 중단합니다.', 'err'); setImporting(false); return; }
 
-    const existing = new Set();
-    rows.forEach(r => {
-      const e = (r.erp_code || '').trim();
-      if (e) { existing.add(e); existing.add(e.split('_')[0]); }
-    });
-    let maxSort = rows.reduce((mx, r) => Math.max(mx, r.sort_no || 0), 0);
-    const seen = new Set();
-    const toInsert = [];
-    for (const p of (hq || [])) {
-      const e = (p.erp_code || '').trim();
-      const c = (p.code || '').trim();
-      const base = e ? e.split('_')[0] : '';
-      if (!e && !c) continue;
-      if ((e && existing.has(e)) || (base && existing.has(base)) || (c && existing.has(c))) continue;
-      const dedup = e || c;
-      if (seen.has(dedup)) continue;
-      seen.add(dedup);
-      maxSort += 1;
-      toInsert.push({ erp_code: e || c || null, product_name: p.name || null, sort_no: maxSort });
+    // 2) 창원 제품 전체 + 3) 입출고 이력 보유 id
+    const [{ data: cw }, { data: inb }, { data: outb }] = await Promise.all([
+      supabase.from('cw_products').select('id, erp_code, product_name, opening_stock, sort_no'),
+      supabase.from('cw_inbound').select('product_id'),
+      supabase.from('cw_outbound').select('product_id'),
+    ]);
+    const hasHistory = new Set([...(inb || []), ...(outb || [])].map(r => r.product_id));
+
+    // 본사 상품 키 인덱스 (erp_code / base / code)
+    const hqByKey = new Map();
+    const hqId = (p) => norm(p.erp_code) || norm(p.code);
+    for (const p of hq) {
+      [norm(p.erp_code), base(p.erp_code), norm(p.code), base(p.code)].forEach(k => { if (k && !hqByKey.has(k)) hqByKey.set(k, p); });
     }
-    if (toInsert.length === 0) { toast('추가할 새 상품이 없습니다 (모두 이미 있음)', 'inf'); setImporting(false); return; }
-    const { error: e2 } = await supabase.from('cw_products').insert(toInsert);
+    const matchHq = (row) => {
+      const e = norm(row.erp_code);
+      return hqByKey.get(e) || hqByKey.get(base(e)) || null;
+    };
+
+    const renameUpdates = [];
+    const deleteIds = [];
+    const matchedHq = new Set();
+    let kept = 0;
+    for (const row of (cw || [])) {
+      const m = matchHq(row);
+      if (m) {
+        matchedHq.add(hqId(m));
+        if (norm(row.product_name) !== norm(m.name)) renameUpdates.push({ id: row.id, name: m.name });
+      } else {
+        const protectedRow = (row.opening_stock || 0) !== 0 || hasHistory.has(row.id);
+        if (protectedRow) kept++; else deleteIds.push(row.id);
+      }
+    }
+
+    // 누락된 본사 상품 추가
+    let maxSort = (cw || []).reduce((mx, r) => Math.max(mx, r.sort_no || 0), 0);
+    const seen = new Set();
+    const inserts = [];
+    for (const p of hq) {
+      const id = hqId(p);
+      if (!id || matchedHq.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      maxSort += 1;
+      inserts.push({ erp_code: norm(p.erp_code) || norm(p.code) || null, product_name: p.name || null, sort_no: maxSort });
+    }
+
+    // 실행
+    try {
+      for (const u of renameUpdates) {
+        const { error: eu } = await supabase.from('cw_products').update({ product_name: u.name }).eq('id', u.id);
+        if (eu) throw eu;
+      }
+      if (deleteIds.length) {
+        const { error: ed } = await supabase.from('cw_products').delete().in('id', deleteIds);
+        if (ed) throw ed;
+      }
+      if (inserts.length) {
+        const { error: ei } = await supabase.from('cw_products').insert(inserts);
+        if (ei) throw ei;
+      }
+    } catch (err) {
+      setImporting(false);
+      toast('동기화 중 오류: ' + (err.message || err), 'err');
+      fetchRows();
+      return;
+    }
     setImporting(false);
-    if (e2) { toast('불러오기 실패: ' + e2.message, 'err'); return; }
-    toast(`본사 상품 ${toInsert.length}개 추가 완료`, 'ok');
+    toast(`동기화 완료 — 추가 ${inserts.length} · 이름통일 ${renameUpdates.length} · 삭제 ${deleteIds.length} · 보존 ${kept}`, 'ok');
     fetchRows();
   };
 
@@ -108,8 +159,8 @@ export default function CwProductsPage() {
         <input className="finput" placeholder="제품코드·상품명 검색" value={q} onChange={e => setQ(e.target.value)} />
         <div className="fbar-right">
           <span className="fresult">제품 <b>{filtered.length}</b></span>
-          <button className="btn btn-s" onClick={importFromHq} disabled={importing}>
-            {importing ? '불러오는 중…' : '📥 본사 상품 불러오기'}
+          <button className="btn btn-s" onClick={syncFromHq} disabled={importing}>
+            {importing ? '동기화 중…' : '🔄 본사와 동기화'}
           </button>
           <button className="btn btn-p" onClick={openAdd}>➕ 제품 추가</button>
         </div>
