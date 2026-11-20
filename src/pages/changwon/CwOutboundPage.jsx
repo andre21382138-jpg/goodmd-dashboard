@@ -3,11 +3,11 @@ import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 
 const label = (p) => `${p.product_name || '(이름없음)'} [${p.erp_code || '-'}]`;
-const fmtDt = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const fmtDate = (s) => (s ? String(s).slice(0, 10).replace(/-/g, '.').slice(5) : '');
 
 export default function CwOutboundPage({ profile }) {
   const [products, setProducts] = useState([]);
@@ -16,6 +16,7 @@ export default function CwOutboundPage({ profile }) {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
 
+  const [date, setDate]         = useState(todayStr()); // 기록일(기본 오늘)
   const [pq, setPq]             = useState('');
   const [pid, setPid]           = useState('');
   const [storeId, setStoreId]   = useState('');
@@ -29,8 +30,8 @@ export default function CwOutboundPage({ profile }) {
     const [{ data: prods }, { data: st }, { data: outs }] = await Promise.all([
       supabase.from('cw_products').select('id, erp_code, product_name').eq('active', true).order('sort_no'),
       supabase.from('cw_stores').select('id, name').eq('active', true).order('sort_no'),
-      supabase.from('cw_outbound').select('id, qty, bonus, disposal, memo, created_at, product:cw_products(product_name, erp_code), store:cw_stores(name)')
-        .order('created_at', { ascending: false }).limit(50),
+      supabase.from('cw_outbound').select('id, qty, bonus, disposal, memo, entry_date, created_at, product:cw_products(product_name, erp_code), store:cw_stores(name)')
+        .order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(50),
     ]);
     setProducts(prods || []);
     setStores(st || []);
@@ -51,10 +52,11 @@ export default function CwOutboundPage({ profile }) {
     if (!storeId) { toast('매장을 선택하세요', 'err'); return; }
     const q = Number(qty) || 0, b = Number(bonus) || 0, d = Number(disposal) || 0;
     if (q + b + d <= 0) { toast('출고·증정·폐기 중 하나 이상 입력하세요', 'err'); return; }
+    if (!date) { toast('날짜를 선택하세요', 'err'); return; }
     setSaving(true);
     const { error } = await supabase.from('cw_outbound').insert({
       product_id: Number(pid), store_id: Number(storeId), qty: q, bonus: b, disposal: d,
-      memo: memo.trim() || null, created_by: profile?.id || null,
+      memo: memo.trim() || null, entry_date: date, created_by: profile?.id || null,
     });
     setSaving(false);
     if (error) { toast('저장 실패: ' + error.message, 'err'); return; }
@@ -75,6 +77,10 @@ export default function CwOutboundPage({ profile }) {
     <div>
       <div className="card">
         <div className="card-label">출고 등록</div>
+        <div className="form-group">
+          <label>날짜</label>
+          <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ maxWidth: 200 }} />
+        </div>
         <div className="form-group">
           <label>제품 검색</label>
           <input className="input" placeholder="제품코드·상품명으로 좁히기" value={pq} onChange={e => setPq(e.target.value)} autoCapitalize="none" />
@@ -122,7 +128,7 @@ export default function CwOutboundPage({ profile }) {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 90 }}>일시</th>
+                <th style={{ width: 70 }}>날짜</th>
                 <th>제품</th>
                 <th>매장</th>
                 <th className="r">출고</th>
@@ -139,7 +145,7 @@ export default function CwOutboundPage({ profile }) {
                 <tr><td colSpan={8} className="empty">출고 내역이 없습니다</td></tr>
               ) : recent.map(r => (
                 <tr key={r.id}>
-                  <td className="mono">{fmtDt(r.created_at)}</td>
+                  <td className="mono">{fmtDate(r.entry_date)}</td>
                   <td style={{ fontWeight: 600 }}>{r.product?.product_name || r.product?.erp_code || '-'}</td>
                   <td><span className="badge badge-store">{r.store?.name || '-'}</span></td>
                   <td className="r" style={{ color: 'var(--accent)' }}>{r.qty ? `-${r.qty.toLocaleString()}` : ''}</td>

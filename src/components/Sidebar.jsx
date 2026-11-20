@@ -434,7 +434,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
     <div className="sidebar">
       {/* 홈 버튼 */}
       <button
-        onClick={() => setPage(isChangwon ? 'cw_products' : 'home')}
+        onClick={() => setPage(isChangwon ? 'cw_home' : 'home')}
         style={{
           display:'flex', alignItems:'center', gap:10, padding:'0 18px',
           background: page==='home' ? 'rgba(0,0,0,0.08)' : 'transparent',

@@ -113,6 +113,7 @@ export const ADMIN_MENUS = [
 ];
 // 창원지점 재고 수불장 전용 메뉴 (role='changwon')
 export const CHANGWON_MENUS = [
+  { key: 'cw_home',     icon: '🏠', label: '대시보드' },
   { key: 'cw_products', icon: '📋', label: '제품현황' },
   { key: 'cw_inbound',  icon: '📥', label: '입고입력' },
   { key: 'cw_outbound', icon: '📤', label: '출고입력' },

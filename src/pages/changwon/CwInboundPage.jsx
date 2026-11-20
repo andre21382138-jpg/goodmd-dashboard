@@ -4,11 +4,11 @@ import { toast } from '../../lib/utils';
 import { CHANGWON_INBOUND_TYPES } from '../../lib/constants';
 
 const label = (p) => `${p.product_name || '(이름없음)'} [${p.erp_code || '-'}]`;
-const fmtDt = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const fmtDate = (s) => (s ? String(s).slice(0, 10).replace(/-/g, '.').slice(5) : '');
 
 export default function CwInboundPage({ profile }) {
   const [products, setProducts] = useState([]);
@@ -16,6 +16,7 @@ export default function CwInboundPage({ profile }) {
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
 
+  const [date, setDate]   = useState(todayStr()); // 기록일(기본 오늘)
   const [pq, setPq]       = useState('');        // 제품 검색
   const [pid, setPid]     = useState('');        // 선택된 제품 id
   const [type, setType]   = useState(CHANGWON_INBOUND_TYPES[0]);
@@ -26,8 +27,8 @@ export default function CwInboundPage({ profile }) {
     setLoading(true);
     const [{ data: prods }, { data: ins }] = await Promise.all([
       supabase.from('cw_products').select('id, erp_code, product_name').eq('active', true).order('sort_no'),
-      supabase.from('cw_inbound').select('id, qty, inbound_type, memo, created_at, product:cw_products(product_name, erp_code)')
-        .order('created_at', { ascending: false }).limit(50),
+      supabase.from('cw_inbound').select('id, qty, inbound_type, memo, entry_date, created_at, product:cw_products(product_name, erp_code)')
+        .order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(50),
     ]);
     setProducts(prods || []);
     setRecent(ins || []);
@@ -46,9 +47,11 @@ export default function CwInboundPage({ profile }) {
     if (!pid) { toast('제품을 선택하세요', 'err'); return; }
     const n = Number(qty);
     if (!Number.isFinite(n) || n === 0) { toast('입고 수량을 입력하세요', 'err'); return; }
+    if (!date) { toast('날짜를 선택하세요', 'err'); return; }
     setSaving(true);
     const { error } = await supabase.from('cw_inbound').insert({
-      product_id: Number(pid), qty: n, inbound_type: type, memo: memo.trim() || null, created_by: profile?.id || null,
+      product_id: Number(pid), qty: n, inbound_type: type, memo: memo.trim() || null,
+      entry_date: date, created_by: profile?.id || null,
     });
     setSaving(false);
     if (error) { toast('저장 실패: ' + error.message, 'err'); return; }
@@ -69,6 +72,10 @@ export default function CwInboundPage({ profile }) {
     <div>
       <div className="card">
         <div className="card-label">입고 등록</div>
+        <div className="form-group">
+          <label>날짜</label>
+          <input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ maxWidth: 200 }} />
+        </div>
         <div className="form-group">
           <label>제품 검색</label>
           <input className="input" placeholder="제품코드·상품명으로 좁히기" value={pq} onChange={e => setPq(e.target.value)} autoCapitalize="none" />
@@ -107,7 +114,7 @@ export default function CwInboundPage({ profile }) {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 90 }}>일시</th>
+                <th style={{ width: 70 }}>날짜</th>
                 <th>제품</th>
                 <th>구분</th>
                 <th className="r">수량</th>
@@ -122,7 +129,7 @@ export default function CwInboundPage({ profile }) {
                 <tr><td colSpan={6} className="empty">입고 내역이 없습니다</td></tr>
               ) : recent.map(r => (
                 <tr key={r.id}>
-                  <td className="mono">{fmtDt(r.created_at)}</td>
+                  <td className="mono">{fmtDate(r.entry_date)}</td>
                   <td style={{ fontWeight: 600 }}>{r.product?.product_name || r.product?.erp_code || '-'}</td>
                   <td><span className="badge badge-dept">{r.inbound_type}</span></td>
                   <td className="r" style={{ color: 'var(--success)' }}>+{r.qty.toLocaleString()}</td>

@@ -12,7 +12,7 @@ set role       = 'changwon',
     department = '창원지점',
     branch     = '창원지점',
     name       = coalesce(name, '박경원')
-where email = '여기에_이메일';   -- 예) 'cw001@kbh.kr'
+where email = 'kbh0025@kbh.kr';
 
 -- 확인용
--- select id, email, name, role, approved, department, branch from public.profiles where email = '여기에_이메일';
+-- select id, email, name, role, approved, department, branch from public.profiles where email = 'kbh0025@kbh.kr';

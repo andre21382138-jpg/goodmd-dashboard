@@ -58,6 +58,7 @@ import AttendancePage from './pages/join/AttendancePage';
 import ConsentRenewPage from './pages/customer/ConsentRenewPage';
 import ConsentRenewMgrPage from './pages/customer/ConsentRenewMgrPage';
 import HelpPage from './pages/help/HelpPage';
+import CwHomePage from './pages/changwon/CwHomePage';
 import CwProductsPage from './pages/changwon/CwProductsPage';
 import CwInboundPage from './pages/changwon/CwInboundPage';
 import CwOutboundPage from './pages/changwon/CwOutboundPage';
@@ -675,11 +676,11 @@ export default function App() {
 
   // 창원지점 계정 — 재고 수불장 4개 메뉴만 접근 가능
   const CHANGWON_ALLOWED_PAGES = useMemo(() => new Set([
-    'cw_products', 'cw_inbound', 'cw_outbound', 'cw_stock', 'help',
+    'cw_home', 'cw_products', 'cw_inbound', 'cw_outbound', 'cw_stock', 'help',
   ]), []);
   useEffect(() => {
     if (profile?.role === 'changwon' && !CHANGWON_ALLOWED_PAGES.has(page)) {
-      setPage('cw_products');
+      setPage('cw_home');
     }
   }, [profile?.role, page, CHANGWON_ALLOWED_PAGES]);
 
@@ -831,6 +832,7 @@ export default function App() {
     store_closure:   '휴점 등록',
     admin:          '사용자 관리',
     notice:         '공지 사항',
+    cw_home:        '창원지점 대시보드',
     cw_products:    '제품현황',
     cw_inbound:     '입고입력',
     cw_outbound:    '출고입력',
@@ -946,6 +948,7 @@ export default function App() {
             {page === 'upload_history' && canSeeMain && <UploadHistoryPage profile={profile} activeUploadId={activeUploadId} setActiveUploadId={setActiveUploadId} setPage={setPage} setParsed={setParsed} setFilename={setFilename}/>}
             {page === 'admin'          && (isAdmin || isHQ) && <AdminTab profile={profile}/>}
             {page === 'notice'         && (isAdmin || isHQ || isManager) && <NoticePage profile={profile}/>}
+            {page === 'cw_home'        && (isChangwon || isAdmin || isHQ) && <CwHomePage/>}
             {page === 'cw_products'    && (isChangwon || isAdmin || isHQ) && <CwProductsPage/>}
             {page === 'cw_inbound'     && (isChangwon || isAdmin || isHQ) && <CwInboundPage profile={profile}/>}
             {page === 'cw_outbound'    && (isChangwon || isAdmin || isHQ) && <CwOutboundPage profile={profile}/>}
