@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
+import ProductPicker from './ProductPicker';
 
-const label = (p) => `${p.product_name || '(이름없음)'} [${p.erp_code || '-'}]`;
 const todayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -17,7 +17,6 @@ export default function CwOutboundPage({ profile }) {
   const [saving, setSaving]     = useState(false);
 
   const [date, setDate]         = useState(todayStr()); // 기록일(기본 오늘)
-  const [pq, setPq]             = useState('');
   const [pid, setPid]           = useState('');
   const [storeId, setStoreId]   = useState('');
   const [qty, setQty]           = useState('');
@@ -40,12 +39,6 @@ export default function CwOutboundPage({ profile }) {
   }, []);
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const options = useMemo(() => {
-    const t = pq.trim().toLowerCase();
-    if (!t) return products;
-    return products.filter(p => `${p.erp_code || ''} ${p.product_name || ''}`.toLowerCase().includes(t));
-  }, [products, pq]);
-
   const save = async () => {
     if (saving) return;
     if (!pid) { toast('제품을 선택하세요', 'err'); return; }
@@ -61,7 +54,7 @@ export default function CwOutboundPage({ profile }) {
     setSaving(false);
     if (error) { toast('저장 실패: ' + error.message, 'err'); return; }
     toast('출고 등록 완료', 'ok');
-    setQty(''); setBonus(''); setDisposal(''); setMemo('');
+    setPid(''); setQty(''); setBonus(''); setDisposal(''); setMemo('');
     fetchAll();
   };
 
@@ -83,14 +76,7 @@ export default function CwOutboundPage({ profile }) {
         </div>
         <div className="form-group">
           <label>제품 검색</label>
-          <input className="input" placeholder="제품코드·상품명으로 좁히기" value={pq} onChange={e => setPq(e.target.value)} autoCapitalize="none" />
-        </div>
-        <div className="form-group">
-          <label>제품 선택 ({options.length})</label>
-          <select className="input" value={pid} onChange={e => setPid(e.target.value)}>
-            <option value="">— 제품을 선택하세요 —</option>
-            {options.map(p => <option key={p.id} value={p.id}>{label(p)}</option>)}
-          </select>
+          <ProductPicker products={products} value={pid} onChange={(id) => setPid(id)} />
         </div>
         <div className="form-group">
           <label>매장 선택</label>
