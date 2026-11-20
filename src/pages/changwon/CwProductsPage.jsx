@@ -10,6 +10,7 @@ export default function CwProductsPage() {
   const [q, setQ]             = useState('');
   const [modal, setModal]     = useState(null); // null | {id?, ...form}
   const [saving, setSaving]   = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -56,6 +57,43 @@ export default function CwProductsPage() {
     fetchRows();
   };
 
+  // 본사 상품관리(products) 판매중 상품을 제품현황으로 불러오기 (이미 있는 것은 건너뜀, 새 것만 추가)
+  const importFromHq = async () => {
+    if (importing) return;
+    if (!window.confirm('본사 상품관리의 판매중 상품을 제품현황으로 불러옵니다.\n이미 있는 제품은 건너뛰고 새 제품만 추가됩니다 (기존 출고코드·현재고 유지).\n계속할까요?')) return;
+    setImporting(true);
+    const { data: hq, error } = await supabase.from('products')
+      .select('name, code, erp_code').eq('is_sales_stopped', false);
+    if (error) { toast('본사 상품 조회 실패: ' + error.message, 'err'); setImporting(false); return; }
+
+    const existing = new Set();
+    rows.forEach(r => {
+      const e = (r.erp_code || '').trim();
+      if (e) { existing.add(e); existing.add(e.split('_')[0]); }
+    });
+    let maxSort = rows.reduce((mx, r) => Math.max(mx, r.sort_no || 0), 0);
+    const seen = new Set();
+    const toInsert = [];
+    for (const p of (hq || [])) {
+      const e = (p.erp_code || '').trim();
+      const c = (p.code || '').trim();
+      const base = e ? e.split('_')[0] : '';
+      if (!e && !c) continue;
+      if ((e && existing.has(e)) || (base && existing.has(base)) || (c && existing.has(c))) continue;
+      const dedup = e || c;
+      if (seen.has(dedup)) continue;
+      seen.add(dedup);
+      maxSort += 1;
+      toInsert.push({ erp_code: e || c || null, product_name: p.name || null, sort_no: maxSort });
+    }
+    if (toInsert.length === 0) { toast('추가할 새 상품이 없습니다 (모두 이미 있음)', 'inf'); setImporting(false); return; }
+    const { error: e2 } = await supabase.from('cw_products').insert(toInsert);
+    setImporting(false);
+    if (e2) { toast('불러오기 실패: ' + e2.message, 'err'); return; }
+    toast(`본사 상품 ${toInsert.length}개 추가 완료`, 'ok');
+    fetchRows();
+  };
+
   const remove = async (r) => {
     if (!window.confirm(`[${r.product_name || r.erp_code}] 제품을 삭제하시겠습니까?\n이 제품의 입고·출고 기록도 함께 삭제됩니다.`)) return;
     const { error } = await supabase.from('cw_products').delete().eq('id', r.id);
@@ -70,6 +108,9 @@ export default function CwProductsPage() {
         <input className="finput" placeholder="제품코드·상품명 검색" value={q} onChange={e => setQ(e.target.value)} />
         <div className="fbar-right">
           <span className="fresult">제품 <b>{filtered.length}</b></span>
+          <button className="btn btn-s" onClick={importFromHq} disabled={importing}>
+            {importing ? '불러오는 중…' : '📥 본사 상품 불러오기'}
+          </button>
           <button className="btn btn-p" onClick={openAdd}>➕ 제품 추가</button>
         </div>
       </div>
