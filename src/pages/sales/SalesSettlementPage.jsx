@@ -28,6 +28,7 @@ export default function SalesSettlementPage() {
   const [searched, setSearched] = useState(false);
   const [sortKey, setSortKey] = useState('net');   // 정렬 기준 컬럼 (기본: 실제매출)
   const [sortDir, setSortDir] = useState('desc');  // 'desc' 높은순 / 'asc' 낮은순
+  const [showCompare, setShowCompare] = useState(false); // 전월 동기간 비교 컬럼 표시 여부(기본 숨김)
 
   // 매출결산 탭 (점포별 손익 결산 — 월 단위)
   const [tab, setTab] = useState('settlement');    // settlement | closing
@@ -940,15 +941,21 @@ export default function SalesSettlementPage() {
         </div>
       </div>
 
-      <div className="card" style={{ padding:'16px 20px' }}>
+      <div className="card" style={{ padding:0, overflow:'hidden' }}>
         {loading ? <div className="empty"><span className="spinner"/></div>
         : !searched ? <div className="empty">기간·점포를 선택하고 조회하세요</div>
         : rows.length === 0 ? <div className="empty">해당 기간 매출이 없습니다</div>
         : (
           <>
-          <div style={{ marginBottom:10, fontSize:12, color:'var(--text2)' }}>
-            <b>{rows.length}</b>개 상품 · {storeScopeLabel} · 조회 <b>{fFrom} ~ {fTo}</b>
-            <span style={{ marginLeft:10, color:'#6a1b9a' }}>· 비교 <b>{prevFrom} ~ {prevTo}</b> {(cmpFrom && cmpTo) ? '(수동)' : '(전월동기 자동)'}</span>
+          <div style={{ padding:'11px 18px', borderBottom:'1px solid var(--border)', fontSize:12, color:'var(--text2)', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+            <span>
+              <b>{rows.length}</b>개 상품 · {storeScopeLabel} · 조회 <b>{fFrom} ~ {fTo}</b>
+              {showCompare && <span style={{ marginLeft:8, color:'var(--text3)' }}>· 비교 <b>{prevFrom} ~ {prevTo}</b> {(cmpFrom && cmpTo) ? '(수동)' : '(전월동기 자동)'}</span>}
+            </span>
+            <button type="button" onClick={() => setShowCompare(v => !v)}
+              style={{ marginLeft:'auto', display:'inline-flex', alignItems:'center', gap:5, height:28, padding:'0 12px', borderRadius:7, border:'1px solid var(--border2)', background: showCompare ? 'var(--accent)' : '#fff', color: showCompare ? '#fff' : 'var(--text2)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'var(--sans)' }}>
+              전월 비교 {showCompare ? '▾' : '▸'}
+            </button>
           </div>
           <div className="twrap">
             <table>
@@ -956,35 +963,37 @@ export default function SalesSettlementPage() {
                 <tr style={{ borderBottom:'1px solid var(--border)' }}>
                   <th colSpan={2}></th>
                   <th colSpan={9} style={{ textAlign:'center', ...grp }}>조회기간</th>
-                  <th colSpan={4} style={{ textAlign:'center', ...grp }}>전월 동기간</th>
-                  <th style={{ textAlign:'center', ...grp }}>전월증감</th>
+                  {showCompare && <th colSpan={4} style={{ textAlign:'center', ...grp }}>전월 동기간</th>}
+                  {showCompare && <th style={{ textAlign:'center', ...grp }}>전월증감</th>}
                 </tr>
                 <tr>
-                  <th>상품코드</th><th>상품명</th>
+                  <th style={{ paddingRight:4, width:1, whiteSpace:'nowrap' }}>상품코드</th><th style={{ paddingLeft:8 }}>상품명</th>
                   {th('원가', grp)}{th('판매가')}{sortTh('판매수량','qty')}{sortTh('총원가','costTotal')}{sortTh('매출액','gross')}{th('할인금액')}{sortTh('실제매출','net')}{sortTh('이익','profit')}{sortTh('원가비중','costPct')}
-                  {th('판매수량', grp)}{th('판매금액')}{th('할인금액')}{th('실제매출')}
-                  {th('실제매출', grp)}
+                  {showCompare && <>{th('판매수량', grp)}{th('판매금액')}{th('할인금액')}{th('실제매출')}</>}
+                  {showCompare && th('실제매출', grp)}
                 </tr>
               </thead>
               <tbody>
                 {sortedRows.map((r, i) => (
                   <tr key={i}>
-                    <td className="mono" style={{ fontSize:11, color:'var(--text3)' }}>{r.code || '-'}</td>
-                    <td style={{ fontSize:12, fontWeight:600 }}>{r.name}</td>
+                    <td className="mono" style={{ fontSize:11, color:'var(--text3)', paddingRight:4, whiteSpace:'nowrap' }}>{r.code || '-'}</td>
+                    <td style={{ fontSize:12, fontWeight:600, paddingLeft:8 }}>{r.name}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text3)', ...grp }}>{won(r.unitCost)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.listPrice)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{r.qty.toLocaleString()}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{won(r.costTotal)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.gross)}</td>
-                    <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--danger)' }}>{won(r.discount)}</td>
-                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)' }}>{won(r.net)}</td>
-                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color: r.profit < 0 ? 'var(--danger)' : '#2e7d32' }}>{won(r.profit)}</td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{won(r.discount)}</td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--text)' }}>{won(r.net)}</td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color: r.profit < 0 ? 'var(--danger)' : 'var(--text)' }}>{won(r.profit)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{r.costPct.toFixed(1)}%</td>
+                    {showCompare && <>
                     <td className="r" style={{ fontFamily:'var(--mono)', ...grp }}>{r.prevQty.toLocaleString()}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)' }}>{won(r.prevGross)}</td>
-                    <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--danger)' }}>{won(r.prevDiscount)}</td>
-                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#6a1b9a' }}>{won(r.prevNet)}</td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', color:'var(--text2)' }}>{won(r.prevDiscount)}</td>
+                    <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--text2)' }}>{won(r.prevNet)}</td>
                     <td className="r" style={{ fontFamily:'var(--mono)', ...grp }}>{diffCell(r.diffNet)}</td>
+                    </>}
                   </tr>
                 ))}
                 <tr style={{ background:'var(--bg3)', borderTop:'2px solid var(--border2)' }}>
@@ -993,15 +1002,17 @@ export default function SalesSettlementPage() {
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{totals.qty.toLocaleString()}</td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--text2)' }}>{won(totals.cost)}</td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(totals.gross)}</td>
-                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--danger)' }}>{won(totals.discount)}</td>
-                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--accent)', fontSize:14 }}>{won(totals.net)}</td>
-                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color: totals.profit < 0 ? 'var(--danger)' : '#2e7d32', fontSize:14 }}>{won(totals.profit)}</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--text2)' }}>{won(totals.discount)}</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--text)', fontSize:14 }}>{won(totals.net)}</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color: totals.profit < 0 ? 'var(--danger)' : 'var(--text)', fontSize:14 }}>{won(totals.profit)}</td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{totalCostPct.toFixed(1)}%</td>
+                  {showCompare && <>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, ...grp }}>{totals.pQty.toLocaleString()}</td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700 }}>{won(totals.pGross)}</td>
-                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--danger)' }}>{won(totals.pDiscount)}</td>
-                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'#6a1b9a' }}>{won(totals.pNet)}</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--text2)' }}>{won(totals.pDiscount)}</td>
+                  <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, color:'var(--text2)' }}>{won(totals.pNet)}</td>
                   <td className="r" style={{ fontFamily:'var(--mono)', fontWeight:700, ...grp }}>{diffCell(totalDiff)}</td>
+                  </>}
                 </tr>
               </tbody>
             </table>

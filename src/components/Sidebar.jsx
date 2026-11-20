@@ -361,26 +361,11 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
   const isScm      = profile?.role === 'scm';
   const isChangwon = profile?.role === 'changwon';
 
-  // 본사 '매장 전환' — 매장 계정 목록
-  const [switchModal, setSwitchModal] = useState(false);
-  const [storeList, setStoreList] = useState([]);
-  const [storeQuery, setStoreQuery] = useState('');
-  const openSwitch = async () => {
-    setSwitchModal(true); setStoreQuery('');
-    const { data } = await supabase.from('profiles')
-      .select('*')   // approved 등 전 컬럼 포함 (전환 프로필이 완전해야 승인 게이트 통과)
-      .eq('job_title', '매니저').eq('approved', true).not('department', 'is', null)
-      .order('department').order('branch');
-    setStoreList(data || []);
-  };
-  const filteredStores = (storeList || []).filter(s => {
-    const q = storeQuery.trim(); if (!q) return true;
-    return `${s.department || ''} ${s.branch || ''} ${s.name || ''}`.toLowerCase().includes(q.toLowerCase());
-  });
-  // 계정 없이 전환 가능한 '테스트매장' 합성 프로필 (created_by가 유효하도록 현재 계정 id 사용)
-  const testStoreProfile = { ...profile, id: profile?.id, name: '테스트매니저', display_name: '테스트매니저', department: '테스트매장', branch: '테스트점', job_title: '매니저', role: 'store', approved: true };
-  const showTestStore = (() => { const q = storeQuery.trim().toLowerCase(); return !q || '테스트매장 테스트점 테스트매니저 test'.includes(q); })();
+  // '매장 전환(보기)' 기능은 헤더의 StoreSwitcher 컴포넌트로 이동됨
   const canSeeMain = isAdmin || isHQ;
+  // 본사/관리자는 '매장' 메뉴 그룹을 접어둔다(헤더 클릭 시 펼침). 매니저는 주 메뉴이므로 기본 펼침.
+  const [storeOpen, setStoreOpen] = useState(!canSeeMain);
+  const storeMenuCount = MANAGER_MENUS.filter(m => !((isAdmin || isHQ) && m.key === 'claim_intake')).length;
   const [newPlanCount,  setNewPlanCount]  = useState(0);
   const [hasNewNotice,  setHasNewNotice]  = useState(false);
 
@@ -437,19 +422,20 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
         onClick={() => setPage(isChangwon ? 'cw_home' : 'home')}
         style={{
           display:'flex', alignItems:'center', gap:10, padding:'0 18px',
-          background: page==='home' ? 'rgba(0,0,0,0.08)' : 'transparent',
-          border:'none', borderBottom:'1px solid rgba(0,0,0,0.1)',
+          background: 'transparent',
+          border:'none',
           cursor:'pointer', width:'100%', textAlign:'left', transition:'background 120ms',
           height:'52px', flexShrink:0,
         }}
-        onMouseEnter={e => { if(page!=='home') e.currentTarget.style.background='rgba(0,0,0,0.05)'; }}
-        onMouseLeave={e => { if(page!=='home') e.currentTarget.style.background='transparent'; }}
+        onMouseEnter={e => { e.currentTarget.style.background='#f3f4fe'; }}
+        onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}
       >
         {!isAdmin && <span style={{ fontSize:22 }}>🏬</span>}
         <div style={{ width:'100%' }}>
           {isAdmin ? (
-            <div style={{ fontSize:15, fontWeight:800, color:'var(--sidebar-text)', lineHeight:1.2, letterSpacing:-0.3 }}>
-              (주)한국생활건강
+            <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+              <span style={{ width:30, height:30, borderRadius:8, background:'linear-gradient(135deg,#6366f1 0%,#4f46e5 100%)', color:'#fff', display:'grid', placeItems:'center', fontSize:14, fontWeight:800, letterSpacing:-0.5, flexShrink:0, boxShadow:'0 2px 8px rgba(79,70,229,0.35)' }}>P</span>
+              <span style={{ fontSize:16, fontWeight:800, color:'var(--sidebar-text)', letterSpacing:-0.3 }}>PALEO <span style={{ color:'var(--accent)' }}>POS</span></span>
             </div>
           ) : isChangwon ? (
             <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>창원지점 재고</div>
@@ -520,11 +506,21 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
             })}
           </>
         )}
-        {/* 매장 메뉴 (SCM 제외) */}
+        {/* 매장 메뉴 (SCM 제외) — 본사/관리자는 접기 토글, 매니저(매장전환 포함)는 항상 펼침 */}
         {!isScm && (isManager || isAdmin || isHQ) && (
           <>
-            <div className="sidebar-section" style={{marginTop: canSeeMain ? 8 : 0}}>매장</div>
-            {MANAGER_MENUS.filter(m => !((isAdmin || isHQ) && m.key === 'claim_intake')).map(m => {
+            {canSeeMain ? (
+              <button type="button" className="sidebar-section sidebar-grouptoggle"
+                onClick={() => setStoreOpen(o => !o)}
+                style={{ display:'flex', alignItems:'center', gap:7, width:'100%', background:'none', border:'none', cursor:'pointer', textAlign:'left', marginTop: 8 }}>
+                <span>매장</span>
+                <span style={{ fontSize:11, fontWeight:700, color:'var(--text3)' }}>{storeMenuCount}</span>
+                <span style={{ marginLeft:'auto', fontSize:12, lineHeight:1, color:'var(--text2)' }}>{storeOpen ? '▾' : '▸'}</span>
+              </button>
+            ) : (
+              <div className="sidebar-section">매장</div>
+            )}
+            {(!canSeeMain || storeOpen) && MANAGER_MENUS.filter(m => !((isAdmin || isHQ) && m.key === 'claim_intake')).map(m => {
               const hasSub = m.sub && m.sub.length > 0;
               const isActive = page===m.key || (hasSub && m.sub.some(s => page===s.key));
               const isOpen = flyoutKey === m.key;
@@ -602,71 +598,6 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
         </>
       )}
 
-      <div className="sidebar-bottom">
-        <button className={`sidebar-item ${page==='help'?'on':''}`} onClick={() => setPage('help')}
-          style={{marginBottom:6, width:'100%'}}>
-          <span className="sidebar-item-icon">❓</span>사용 안내
-        </button>
-        {impersonated && (
-          <div style={{margin:'6px 0', padding:'7px 10px', borderRadius:6, background:'#fff3e0', border:'1px solid #ffcc80', fontSize:11, color:'#e65100', fontWeight:700}}>
-            🔁 {impersonated.department} {impersonated.branch} 전환 중
-          </div>
-        )}
-        <div className="sidebar-user">
-          {isAdmin && <span className="admin-badge" style={{marginRight:6}}>ADMIN</span>}
-          {profile?.name && <strong style={{marginRight:4}}>{profile.name}</strong>}
-          {profile?.email}
-        </div>
-        {canImpersonate && (
-          <div style={{display:'flex', gap:6, marginBottom:6}}>
-            <button className="sidebar-logout" style={{flex:1, justifyContent:'center'}} onClick={openSwitch}>
-              <span>🏪</span> 매장 전환
-            </button>
-            {impersonated && (
-              <button className="sidebar-logout" style={{flex:1, justifyContent:'center', color:'#1565c0'}} onClick={onStopImpersonate}>
-                <span>↩️</span> 본사 복귀
-              </button>
-            )}
-          </div>
-        )}
-        <button className="sidebar-logout" onClick={onLogout}>
-          <span>🚪</span> 로그아웃
-        </button>
-      </div>
-
-      {switchModal && (
-        <div style={{position:'fixed', inset:0, zIndex:600, display:'flex', alignItems:'center', justifyContent:'center'}}>
-          <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,0.45)'}} onClick={() => setSwitchModal(false)}/>
-          <div style={{position:'relative', background:'#fff', borderRadius:12, width:'min(460px, 94vw)', maxHeight:'82vh', overflow:'auto', padding:'20px 22px', boxShadow:'0 8px 40px rgba(0,0,0,0.25)'}}>
-            <div style={{fontSize:16, fontWeight:700, marginBottom:4}}>🏪 매장 전환 (보기)</div>
-            <div style={{fontSize:12, color:'#666', marginBottom:12}}>선택한 매장 계정 화면으로 전환됩니다. 본사 복귀 전까지 유지됩니다.</div>
-            <input autoFocus value={storeQuery} onChange={e => setStoreQuery(e.target.value)} placeholder="점포·지점·이름 검색"
-              style={{width:'100%', height:38, padding:'0 10px', border:'1px solid #ddd', borderRadius:8, fontSize:13, outline:'none', marginBottom:10}}/>
-            <div style={{border:'1px solid #eee', borderRadius:8, maxHeight:360, overflowY:'auto'}}>
-              {showTestStore && (
-                <div onClick={() => { onStartImpersonate(testStoreProfile); setSwitchModal(false); }}
-                  style={{padding:'10px 12px', borderBottom:'1px solid #f2f2f2', cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', gap:8, background:'#f1f8e9'}}
-                  onMouseEnter={e => e.currentTarget.style.background='#dcedc8'} onMouseLeave={e => e.currentTarget.style.background='#f1f8e9'}>
-                  <span>🧪</span><strong>테스트매장</strong><span style={{color:'#888'}}>테스트점</span>
-                  <span style={{marginLeft:'auto', fontSize:11, color:'#7cb342', fontWeight:700}}>업데이트 테스트용</span>
-                </div>
-              )}
-              {filteredStores.length === 0 && !showTestStore ? <div style={{padding:'16px', textAlign:'center', color:'#999', fontSize:13}}>매장이 없습니다</div>
-                : filteredStores.map(s => (
-                  <div key={s.id} onClick={() => { onStartImpersonate(s); setSwitchModal(false); }}
-                    style={{padding:'10px 12px', borderBottom:'1px solid #f2f2f2', cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', gap:8}}
-                    onMouseEnter={e => e.currentTarget.style.background='#fffde7'} onMouseLeave={e => e.currentTarget.style.background='#fff'}>
-                    <strong>{s.department}</strong><span style={{color:'#888'}}>{s.branch}</span>
-                    {s.name && <span style={{marginLeft:'auto', fontSize:11, color:'#aaa'}}>{s.name}</span>}
-                  </div>
-                ))}
-            </div>
-            <div style={{textAlign:'right', marginTop:12}}>
-              <button type="button" onClick={() => setSwitchModal(false)} style={{height:36, padding:'0 16px', border:'1px solid #ddd', borderRadius:8, background:'#fff', fontSize:13, cursor:'pointer'}}>닫기</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
