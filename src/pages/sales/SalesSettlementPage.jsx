@@ -869,7 +869,7 @@ export default function SalesSettlementPage() {
   return (
     <div>
       <div style={{ display:'flex', gap:8, marginBottom:14 }}>
-        <button type="button" onClick={() => setTab('settlement')} style={tabBtn(tab === 'settlement')}>🧮 매출정산</button>
+        <button type="button" onClick={() => setTab('settlement')} style={tabBtn(tab === 'settlement')}>🧮 상품별 정산</button>
         <button type="button" onClick={() => setTab('expense')} style={tabBtn(tab === 'expense')}>💸 매장지출</button>
         <button type="button" onClick={() => setTab('closing')} style={tabBtn(tab === 'closing')}>📊 매출결산</button>
         <button type="button" onClick={() => setTab('stock')} style={tabBtn(tab === 'stock')}>📦 재고결산</button>
@@ -877,7 +877,7 @@ export default function SalesSettlementPage() {
 
       {tab === 'settlement' && (<>
       <div className="card">
-        <div className="card-label">🧮 매출정산 <span style={{ fontSize:12, fontWeight:400, color:'var(--text3)' }}>· 기간·점포별 상품단위 정산</span></div>
+        <div className="card-label">🧮 상품별 정산 <span style={{ fontSize:12, fontWeight:400, color:'var(--text3)' }}>· 기간·점포별 상품단위 정산</span></div>
         <div className="fbar" style={{ flexWrap:'wrap', gap:8 }}>
           <input type="date" className="fsel" value={fFrom} onChange={e => setFFrom(e.target.value)} />
           <span style={{ fontSize:12, color:'var(--text3)' }}>~</span>
