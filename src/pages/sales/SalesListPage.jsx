@@ -153,6 +153,7 @@ export default function SalesListPage({ setPage }) {
   const [showReturned, setShowReturned] = useState(false); // 완전반품 포함
   const [viewMode, setViewMode] = useState('store'); // 'store' | 'list' | 'product'
   const [drillStore, setDrillStore] = useState(null); // { store_name, branch_name } 상세보기 대상
+  const [drillDeliv, setDrillDeliv] = useState('all'); // 상세보기 출고방식 필터: all|instore|store|hq|kakao
   const [drillMember, setDrillMember] = useState(null); // { store_name, branch_name } 회원매출 날짜별 모달
   const [exporting, setExporting] = useState(false);
   const [aggSortBy, setAggSortBy] = useState('amt_desc'); // 'amt_desc' | 'qty_desc' | 'count_desc' | 'name'
@@ -557,6 +558,26 @@ export default function SalesListPage({ setPage }) {
       (s.branch_name || '-') === drillStore.branch_name
     );
   }, [filtered, drillStore]);
+
+  // 출고방식 분류 (카톡 우선 → 택배 → 매장판매)
+  const delivCat = (s) => {
+    if (s.payment === '카톡') return 'kakao';
+    if (s.delivery_type === 'store') return 'store';
+    if (s.delivery_type === 'hq') return 'hq';
+    return 'instore';
+  };
+  // 상세보기 출고방식별 건수
+  const drillDelivCounts = useMemo(() => {
+    const c = { all: drillStoreRows.length, instore: 0, store: 0, hq: 0, kakao: 0 };
+    for (const s of drillStoreRows) c[delivCat(s)] += 1;
+    return c;
+  }, [drillStoreRows]);
+  // 출고방식 필터 적용
+  const drillStoreRowsView = useMemo(() =>
+    drillDeliv === 'all' ? drillStoreRows : drillStoreRows.filter(s => delivCat(s) === drillDeliv),
+    [drillStoreRows, drillDeliv]);
+  // 매장 바뀌면 필터 초기화
+  useEffect(() => { setDrillDeliv('all'); }, [drillStore]);
 
   // 회원매출 날짜별 집계 — 선택 매장의 '회원(customer_id 있음)' 판매만 날짜별로
   const memberByDate = useMemo(() => {
@@ -1258,7 +1279,7 @@ export default function SalesListPage({ setPage }) {
             <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:14}}>
               <span className="badge badge-dept">{drillStore.store_name}</span>
               <span className="badge badge-store">{drillStore.branch_name}</span>
-              <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>판매 상세 — {drillStoreRows.length}건</span>
+              <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>판매 상세 — {drillStoreRowsView.length}건{drillDeliv !== 'all' && <span style={{color:'var(--text3)'}}> / 전체 {drillStoreRows.length}건</span>}</span>
               {drillStore.store_name === '대동백화점' && (
                 <button type="button" onClick={handleExportDrillDaily} disabled={exporting}
                   title="일자별 매출(날짜·총매출액) 엑셀 다운로드"
@@ -1271,6 +1292,35 @@ export default function SalesListPage({ setPage }) {
               <button type="button" onClick={() => setDrillStore(null)}
                 style={{marginLeft: drillStore.store_name === '대동백화점' ? 8 : 'auto', background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#999'}}>✕</button>
             </div>
+            {/* 출고방식 필터 */}
+            <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', marginBottom:12}}>
+              <span style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginRight:2}}>출고방식</span>
+              {[
+                { key:'all',     label:'전체',       c:'#455a64', bg:'#eceff1', bd:'#b0bec5' },
+                { key:'instore', label:'매장판매',   c:'#455a64', bg:'#eceff1', bd:'#b0bec5' },
+                { key:'store',   label:'택배(매장)', c:'#e65100', bg:'#fff3e0', bd:'#ffcc80' },
+                { key:'hq',      label:'택배(본사)', c:'#e65100', bg:'#fff3e0', bd:'#ffcc80' },
+                { key:'kakao',   label:'카톡',       c:'#3c1e1e', bg:'#fee500', bd:'#e6cf00' },
+              ].map(opt => {
+                const on = drillDeliv === opt.key;
+                const cnt = drillDelivCounts[opt.key];
+                return (
+                  <button key={opt.key} type="button" onClick={() => setDrillDeliv(opt.key)}
+                    disabled={opt.key !== 'all' && cnt === 0}
+                    style={{
+                      height:28, padding:'0 11px', borderRadius:14, fontSize:11.5, fontWeight:700,
+                      cursor: (opt.key !== 'all' && cnt === 0) ? 'default' : 'pointer',
+                      border: on ? `1.5px solid ${opt.c}` : `1px solid ${opt.bd}`,
+                      background: on ? opt.c : opt.bg,
+                      color: on ? '#fff' : opt.c,
+                      opacity: (opt.key !== 'all' && cnt === 0) ? 0.4 : 1,
+                      whiteSpace:'nowrap',
+                    }}>
+                    {opt.label} <span style={{fontFamily:'var(--mono)', opacity:0.85}}>{cnt}</span>
+                  </button>
+                );
+              })}
+            </div>
             <div className="twrap">
               <table>
                 <thead>
@@ -1281,9 +1331,9 @@ export default function SalesListPage({ setPage }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {drillStoreRows.length === 0
-                    ? <tr><td colSpan={10} className="empty">판매 내역이 없습니다</td></tr>
-                    : drillStoreRows.map(s => {
+                  {drillStoreRowsView.length === 0
+                    ? <tr><td colSpan={10} className="empty">{drillDeliv === 'all' ? '판매 내역이 없습니다' : '해당 출고방식 내역이 없습니다'}</td></tr>
+                    : drillStoreRowsView.map(s => {
                       const fully = isFullyReturned(s);
                       const partial = isPartialReturn(s);
                       const strikeStyle = fully ? { textDecoration:'line-through', color:'var(--text3)' } : {};

@@ -328,7 +328,7 @@ export default function NotificationCenter({ profile, setPage }) {
         )}
         {activeNotifs.length > 0 && (
           <button onClick={handleClearAll}
-            style={{alignSelf:'flex-end', background:'#fff', color:'var(--text2)', border:'1px solid var(--border2)', borderRadius:7, padding:'5px 12px', fontSize:11, cursor:'pointer', boxShadow:'0 2px 8px rgba(16,18,23,0.08)'}}>
+            style={{alignSelf:'flex-end', background:'linear-gradient(90deg,#334155,#475569)', color:'#fff', fontWeight:700, border:'none', borderRadius:7, padding:'6px 14px', fontSize:11, cursor:'pointer', boxShadow:'0 4px 12px rgba(30,41,59,0.26)'}}>
             모두 닫기
           </button>
         )}
