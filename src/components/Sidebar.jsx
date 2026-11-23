@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { HQ_MENUS, MANAGER_MENUS, ADMIN_MENUS, CHANGWON_MENUS } from '../lib/constants';
+import { HQ_MENUS, MANAGER_MENUS, CHANGWON_MENUS } from '../lib/constants';
 import { toast } from '../lib/utils';
 
 function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
@@ -367,7 +367,6 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
   const [storeOpen, setStoreOpen] = useState(!canSeeMain);
   const storeMenuCount = MANAGER_MENUS.filter(m => !((isAdmin || isHQ) && m.key === 'claim_intake')).length;
   const [newPlanCount,  setNewPlanCount]  = useState(0);
-  const [hasNewNotice,  setHasNewNotice]  = useState(false);
 
   useEffect(() => {
     if (!canSeeMain) return;
@@ -375,25 +374,6 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
       .then(({ count }) => setNewPlanCount(count || 0));
   }, [canSeeMain]);
 
-  // 새 공지 여부 확인 (담당자·매니저·관리자 모두)
-  useEffect(() => {
-    if (!profile?.id) return;
-    const storageKey = `notice_last_read_${profile.id}`;
-    supabase.from('notices').select('created_at').order('created_at', { ascending: false }).limit(1)
-      .then(({ data }) => {
-        if (!data || data.length === 0) return;
-        const latestAt = data[0].created_at;
-        const lastRead = localStorage.getItem(storageKey);
-        setHasNewNotice(!lastRead || latestAt > lastRead);
-      });
-  }, [profile?.id]);
-
-  const handleNoticeClick = () => {
-    const storageKey = `notice_last_read_${profile?.id}`;
-    localStorage.setItem(storageKey, new Date().toISOString());
-    setHasNewNotice(false);
-    setPage('notice');
-  };
   const [flyoutKey, setFlyoutKey] = useState(null);
   const [flyoutY,   setFlyoutY]   = useState(0);
 
@@ -427,7 +407,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
           cursor:'pointer', width:'100%', textAlign:'left', transition:'background 120ms',
           height:'52px', flexShrink:0,
         }}
-        onMouseEnter={e => { e.currentTarget.style.background='#f3f4fe'; }}
+        onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.06)'; }}
         onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}
       >
         {!isAdmin && <span style={{ fontSize:22 }}>🏬</span>}
@@ -536,38 +516,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
             })}
           </>
         )}
-        {/* 관리자 메뉴 (SCM 제외) */}
-        {!isScm && (isAdmin || isHQ) && (
-          <>
-            <div className="sidebar-section" style={{marginTop:8}}>관리자</div>
-            {isAdmin && ADMIN_MENUS.map(m => (
-              <button key={m.key} className={`sidebar-item ${page===m.key?'on':''}`}
-                onClick={() => m.key === 'notice' ? handleNoticeClick() : setPage(m.key)}>
-                <span className="sidebar-item-icon">{m.icon}</span>{m.label}
-                {m.key === 'notice' && hasNewNotice && (
-                  <span style={{marginLeft:'auto', background:'#e53935', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, letterSpacing:0.5}}>NEW</span>
-                )}
-              </button>
-            ))}
-            {!isAdmin && (
-              <button className={`sidebar-item ${page==='admin'?'on':''}`} onClick={() => setPage('admin')}>
-                <span className="sidebar-item-icon">🔐</span>사용자 관리
-              </button>
-            )}
-          </>
-        )}
-        {/* 공지사항 - 담당자/매니저 열람 (SCM 제외) */}
-        {!isScm && (isHQ || isManager) && (
-          <>
-            <div className="sidebar-section" style={{marginTop:8}}>공지</div>
-            <button className={`sidebar-item ${page==='notice'?'on':''}`} onClick={handleNoticeClick}>
-              <span className="sidebar-item-icon">📢</span>공지 사항
-              {hasNewNotice && (
-                <span style={{marginLeft:'auto', background:'#e53935', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, letterSpacing:0.5}}>NEW</span>
-              )}
-            </button>
-          </>
-        )}
+        {/* 관리자(사용자 관리)·공지 메뉴는 헤더 우측 HeaderNav로 이동됨 */}
         {!canSeeMain && !isManager && !isAdmin && !isScm && !isChangwon && (
           <div style={{ padding:'12px 10px', fontSize:12, color:'rgba(0,0,0,0.5)', lineHeight:1.7 }}>
             접근 가능한 메뉴가 없습니다.

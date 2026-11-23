@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import NotificationCenter from './components/NotificationCenter';
 import StoreSwitcher from './components/StoreSwitcher';
 import UserMenu from './components/UserMenu';
+import HeaderNav from './components/HeaderNav';
 import HomePage from './pages/home/HomePage';
 import CustomerQRPage from './pages/customer/CustomerQRPage';
 import CustomerDocPage from './pages/customer/CustomerDocPage';
@@ -344,11 +345,13 @@ const GLOBAL_CSS = `
     --radius:  9px;
   }
   /* 사이드바 — 밝은 배경 + 진한 글씨(다크 폐지), 하드 경계선 대신 소프트 섀도로 분리 */
-  .sidebar { background: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%); border-right: none; box-shadow: 1px 0 28px rgba(16,18,23,0.055); }
+  /* 사이드바 — 콜드 네이비(다크). 글씨/포인트는 아래에서 밝게 반전 */
+  .sidebar { background: linear-gradient(185deg, #14243f 0%, #0c1526 100%); border-right: none; box-shadow: 1px 0 30px rgba(0,0,0,0.26);
+    --sidebar-text: #f4f6fb; --text: #f4f6fb; --text2: rgba(240,243,250,0.92); --text3: rgba(240,243,250,0.6); --accent: #aab2ff; }
   .sidebar-logo { border-bottom: none; padding-bottom: 6px; }
   .sidebar-logo-text { color: var(--text); }
   .sidebar-logo-sub { color: var(--text3); }
-  .sidebar-section { color: var(--text); font-weight: 800; font-size: 13.5px; letter-spacing: -0.2px; text-transform: none; padding: 18px 10px 7px; }
+  .sidebar-section { color: var(--text3); font-weight: 700; font-size: 11px; letter-spacing: 0.6px; text-transform: none; padding: 20px 10px 7px 12px; }
   .sidebar-grouptoggle { border-radius: 7px; transition: background 120ms; }
   .sidebar-grouptoggle:hover { background: var(--bg3); color: var(--text2); }
   .sidebar-menu { scrollbar-color: rgba(0,0,0,0.18) transparent; }
@@ -437,6 +440,15 @@ const GLOBAL_CSS = `
   .t-ok  span:first-child { background: #16a34a; }
   .t-err span:first-child { background: #dc2626; }
   .t-inf span:first-child { background: #6b7280; }
+  /* 사이드바 다크 — 메뉴/호버/활성/서브/스크롤바 밝게 반전 */
+  .sidebar-item { color: #ffffff; font-weight: 600; }
+  .sidebar-item:hover, .sidebar-grouptoggle:hover { background: rgba(255,255,255,0.055); color: #fff; }
+  .sidebar-item.on { background: linear-gradient(90deg, rgba(150,158,255,0.15) 0%, rgba(150,158,255,0.012) 100%); color: #c6cbff; box-shadow: inset 3px 0 0 #7c84f0; }
+  .sidebar-sub { color: rgba(240,243,250,0.82); }
+  .sidebar-sub:hover { background: rgba(255,255,255,0.055); color: #fff; }
+  .sidebar-sub.on { background: rgba(150,158,255,0.12); color: #c6cbff; }
+  .sidebar-menu { scrollbar-color: rgba(255,255,255,0.22) transparent; }
+  .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
   /* ═══════════ THEME 끝 ═══════════ */
 `;
 
@@ -1017,6 +1029,10 @@ export default function App() {
               {canImpersonate && (
                 <StoreSwitcher realProfile={realProfile} impersonated={impersonated}
                   onStartImpersonate={startImpersonate} onStopImpersonate={stopImpersonate}/>
+              )}
+              {!isScm && !isChangwon && (
+                <HeaderNav profile={profile} page={page} setPage={setPage}
+                  isAdmin={isAdmin} isHQ={isHQ} isManager={isManager}/>
               )}
               <UserMenu profile={profile} isAdmin={isAdmin} onLogout={handleLogout} setPage={setPage} page={page}/>
             </div>

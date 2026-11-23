@@ -65,7 +65,6 @@ export const HQ_MENUS = [
   ]},
   { key: 'sales_view',     icon: '📋', label: '매출조회' },
   { key: 'sales_settlement', icon: '🧮', label: '매출확인' },
-  { key: 'settlement_report', icon: '📊', label: '결산 리포트' },
   { key: 'attendance_mgmt',icon: '🗓️', label: '근태관리' },
   { key: 'incentive',      icon: '💰', label: '급여관리' },
   { key: 'member_mgmt', icon: '👥', label: '고객관리', sub: [
@@ -77,6 +76,7 @@ export const HQ_MENUS = [
     { key: 'attend_qr_print',      icon: '🎁', label: '출석체크 QR 인쇄' },
     { key: 'attend_event_stats',   icon: '📊', label: '출석 이벤트 현황' },
   ]},
+  { key: 'settlement_report', icon: '📊', label: '결산 리포트' },
   { key: 'order_request_hq', icon: '📦', label: '매장 발주요청' },
   { key: 'store_returns_hq', icon: '↩️', label: '매장 반품신청' },
   { key: 'hq_delivery_request', icon: '📦', label: '고객 택배요청' },
