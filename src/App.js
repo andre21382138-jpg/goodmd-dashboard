@@ -4,6 +4,9 @@ import { useStyle, toast, Toasts } from './lib/utils';
 import NoticePage from './pages/notice/NoticePage';
 import Sidebar from './components/Sidebar';
 import NotificationCenter from './components/NotificationCenter';
+import StoreSwitcher from './components/StoreSwitcher';
+import UserMenu from './components/UserMenu';
+import HeaderNav from './components/HeaderNav';
 import HomePage from './pages/home/HomePage';
 import CustomerQRPage from './pages/customer/CustomerQRPage';
 import CustomerDocPage from './pages/customer/CustomerDocPage';
@@ -316,6 +319,137 @@ const GLOBAL_CSS = `
   .t-err { background: #fdecea; border-color: #ef9a9a; color: var(--danger); }
   .t-inf { background: #e3f2fd; border-color: #90caf9; color: var(--accent2); }
   @keyframes tIn { from { opacity:0; transform: translateX(10px); } to { opacity:1; transform: none; } }
+
+  /* ═══════════════════════════════════════════════════════════
+     THEME: 모던 뉴트럴 v2 (리뉴얼 미리보기 · 커밋 전)
+     되돌리려면 이 블록(이 주석부터 끝 주석까지)만 삭제하세요.
+     ─ 거의 무채색 · 포인트색은 포커스/선택에만 · 구분선 최소화 · 메뉴 아이콘 제거 · 표 정리
+     ═══════════════════════════════════════════════════════════ */
+  :root {
+    --bg:      #f6f7f9;
+    --bg2:     #ffffff;
+    --bg3:     #f3f4f6;
+    --border:  #ebedf1;
+    --border2: #e2e4e9;
+    --sidebar: #ffffff;
+    --sidebar-hover: #f1f2f5;
+    --sidebar-active: #eef0fe;
+    --sidebar-text: #1f242c;
+    --accent:  #4f46e5;
+    --accent2: #4f46e5;
+    --danger:  #dc2626;
+    --success: #16a34a;
+    --text:    #1a1d22;
+    --text2:   #4a5160;
+    --text3:   #8a909c;
+    --radius:  9px;
+  }
+  /* 사이드바 — 밝은 배경 + 진한 글씨(다크 폐지), 하드 경계선 대신 소프트 섀도로 분리 */
+  /* 사이드바 — 콜드 네이비(다크). 글씨/포인트는 아래에서 밝게 반전 */
+  .sidebar { background: linear-gradient(185deg, #14243f 0%, #0c1526 100%); border-right: none; box-shadow: 1px 0 30px rgba(0,0,0,0.26);
+    --sidebar-text: #f4f6fb; --text: #f4f6fb; --text2: rgba(240,243,250,0.92); --text3: rgba(240,243,250,0.6); --accent: #aab2ff; }
+  .sidebar-logo { border-bottom: none; padding-bottom: 6px; }
+  .sidebar-logo-text { color: var(--text); }
+  .sidebar-logo-sub { color: var(--text3); }
+  .sidebar-section { color: var(--text3); font-weight: 700; font-size: 11px; letter-spacing: 0.6px; text-transform: none; padding: 20px 10px 7px 12px; }
+  .sidebar-grouptoggle { border-radius: 7px; transition: background 120ms; }
+  .sidebar-grouptoggle:hover { background: var(--bg3); color: var(--text2); }
+  .sidebar-menu { scrollbar-color: rgba(0,0,0,0.18) transparent; }
+  .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.16); }
+  .sidebar-item-icon, .sidebar-sub-icon { display: none; }
+  .sidebar-item { color: var(--text2); font-weight: 500; padding-left: 22px; }
+  .sidebar-item:hover { background: var(--bg3); color: var(--text); }
+  .sidebar-item.on { background: linear-gradient(90deg, #eceefe 0%, #f4f5fe 100%); color: var(--accent); font-weight: 700; box-shadow: inset 3px 0 0 var(--accent); }
+  .sidebar-sub { color: var(--text2); padding-left: 34px; }
+  .sidebar-sub:hover { background: var(--bg3); color: var(--text); }
+  .sidebar-sub.on { background: #eef0fe; color: var(--accent); }
+  .sidebar-chevron { color: var(--text3); }
+  .sidebar-bottom { border-top: 1px solid var(--border); }
+  .sidebar-user { color: var(--text3); }
+  .sidebar-logout { color: var(--text2); }
+  .sidebar-logout:hover { background: var(--bg3); color: var(--text); }
+  .flyout-item:hover { background: var(--bg3) !important; }
+  /* 상단바 — 딱딱한 구분선 제거, 아주 옅은 소프트 섀도로만 분리 */
+  .content-header { border-bottom: none; box-shadow: none; }
+  /* 주요 버튼 — 단일 포인트색(인디고) + 은은한 그라데이션·그림자 */
+  .btn-p { background: linear-gradient(180deg, #5a51e8 0%, #4f46e5 100%); border-color: #4f46e5; color: #fff; box-shadow: 0 1px 2px rgba(79,70,229,0.35), 0 2px 8px rgba(79,70,229,0.2); }
+  .btn-p:hover:not(:disabled) { background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%); }
+  .btn-auth { background: var(--accent); color: #fff; }
+  .btn-auth:hover { background: #4338ca; }
+  .btn-load { background: var(--accent); color: #fff; }
+  .btn-load:hover { background: #4338ca; }
+  .card-label { text-transform: none; letter-spacing: .2px; font-weight: 700; }
+  .card-label::before { background: #d4d7dd; }
+  /* 텍스트 탈색 — 숫자·라벨은 무채색, 포인트색은 선택/포커스에만 */
+  .stat-l { text-transform: none; letter-spacing: 0; color: var(--text3); font-weight: 600; font-size: 11.5px; }
+  .stat-v { color: var(--text); font-weight: 700; }
+  .fresult { color: var(--text2); }
+  .fresult b { color: var(--text); }
+  .auth-logo-text { color: var(--text); }
+  .drop-main strong { color: var(--text); }
+  .drop-filename { background: #f1f2f4; border-color: #e2e4e9; color: var(--text2); }
+  .safety-num { color: var(--text); }
+  .wk-total { color: var(--text); }
+  .admin-badge { background: #eef0f2; border: 1px solid #e2e4e9; color: var(--text2); }
+  .wtab.on { background: #eceef1; border-color: #e2e4e9; color: var(--text); }
+  .tab.on, .auth-tab.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tab:hover:not(.on) { color: var(--text); }
+  .btn-dl { color: var(--text2); border-color: var(--border2); }
+  .btn-dl:hover { background: var(--bg3); }
+  .status-wait { background: #f4f5f7; color: #6b7280; }
+  /* 표 — 대문자/굵은 선 제거, 여백 확대, 무채색 헤더 */
+  thead tr { background: #f8f9fb; border-bottom: 1px solid rgba(16,18,23,0.1); }
+  th { text-transform: none; letter-spacing: 0.1px; font-weight: 700; color: var(--text2); font-size: 11.5px; padding: 12px 16px; }
+  th:hover { color: var(--text); }
+  td { padding: 13px 16px; border-bottom: 1px solid #e8eaee; }
+  /* 배지(점포/지점) — 또렷한 pill: 점포=연회색 채움 / 지점=외곽선 */
+  .badge { border-radius: 999px; padding: 3px 11px; font-weight: 600; font-size: 11.5px; }
+  .badge-dept  { background: #eceef3; color: var(--text); border: none; font-weight: 700; }
+  .badge-store { background: #fff; color: var(--text2); border: 1px solid rgba(16,18,23,0.12); font-weight: 600; }
+  tr:hover td { background: #f8f9fb; }
+  .user-table th { background: transparent; text-transform: none; color: var(--text); font-weight: 700; border-bottom: 1px solid var(--border2); }
+  .user-table tr:hover td { background: #f8f9fb; }
+  .history-table th { background: transparent; color: var(--text); font-weight: 700; }
+  .history-table tr:hover td { background: #f8f9fb; }
+  .active-row td { background: #f3f4f6 !important; }
+  .wk-cell.latest-col { background: #f3f4f6; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #f6f7f9; }
+  /* 배경 — 흰 카드와 대비가 보이도록 조금 더 또렷한 그레이 */
+  html, body, #root { background: #e9ebf1; }
+  body { background: linear-gradient(176deg, #edeff4 0%, #e3e6ee 100%); background-attachment: fixed; }
+  /* flex 자식이 넓은 표 때문에 페이지를 넓히지 않도록 — 표는 .twrap 안에서만 가로 스크롤 */
+  .content { min-width: 0; }
+  .twrap { max-width: 100%; }
+  /* 카드/표 — 하드 테두리 대신 부드러운 다층 그림자로 '떠 있는' 느낌 */
+  .card, .stat { border: 1px solid rgba(16,18,23,0.085); border-radius: 14px; box-shadow: 0 1px 3px rgba(16,18,23,0.035), 0 12px 30px rgba(16,18,23,0.05); }
+  /* 로그인 히어로 — 차분한 무채색 잉크 톤 */
+  .auth-hero { background: linear-gradient(140deg, #16181d 0%, #20242e 60%, #2b2f3a 100%); }
+  .auth-hero::before { background: radial-gradient(circle, rgba(180,188,208,0.12) 0%, transparent 60%); }
+  .auth-hero-eyebrow { color: #aeb4c2; }
+  .auth-hero-accent { color: #dfe3ec; }
+  .auth-hero-badge { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #dfe3ec; }
+  /* 토스트 알림 — 색 가득 채운 옛 스타일 → 다크 카드 + 작은 상태 아이콘 */
+  .toasts { bottom: 22px; right: 22px; gap: 9px; }
+  .toast { background: #fff; color: var(--text); border: 1px solid var(--border2);
+    border-radius: 12px; font-family: var(--sans); font-size: 13px; font-weight: 600;
+    padding: 12px 15px; min-width: 0; max-width: 340px; gap: 11px; align-items: center;
+    box-shadow: 0 8px 26px rgba(16,18,23,0.14); }
+  .toast span:first-child { width: 20px; height: 20px; border-radius: 50%; display: grid;
+    place-items: center; font-size: 11px; font-weight: 800; color: #fff; flex-shrink: 0; }
+  .t-ok, .t-err, .t-inf { background: #fff; border-color: var(--border2); color: var(--text); }
+  .t-ok  span:first-child { background: #16a34a; }
+  .t-err span:first-child { background: #dc2626; }
+  .t-inf span:first-child { background: #6b7280; }
+  /* 사이드바 다크 — 메뉴/호버/활성/서브/스크롤바 밝게 반전 */
+  .sidebar-item { color: #ffffff; font-weight: 600; }
+  .sidebar-item:hover, .sidebar-grouptoggle:hover { background: rgba(255,255,255,0.055); color: #fff; }
+  .sidebar-item.on { background: linear-gradient(90deg, rgba(150,158,255,0.15) 0%, rgba(150,158,255,0.012) 100%); color: #c6cbff; box-shadow: inset 3px 0 0 #7c84f0; }
+  .sidebar-sub { color: rgba(240,243,250,0.82); }
+  .sidebar-sub:hover { background: rgba(255,255,255,0.055); color: #fff; }
+  .sidebar-sub.on { background: rgba(150,158,255,0.12); color: #c6cbff; }
+  .sidebar-menu { scrollbar-color: rgba(255,255,255,0.22) transparent; }
+  .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
+  /* ═══════════ THEME 끝 ═══════════ */
 `;
 
 // ════════════════════════════════════════════════════════
@@ -883,14 +1017,25 @@ export default function App() {
         <div className="content">
           <div className="content-header">
             <div className="content-title">{PAGE_TITLES[page]}</div>
-            {isManager && profile?.department && (
-              <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#fff3e0', border:'1px solid #ffcc80', borderRadius:20, padding:'5px 12px', flexShrink:0 }}>
-                <div style={{ width:7, height:7, background:'var(--accent)', borderRadius:'50%', flexShrink:0 }}/>
-                <span style={{ fontSize:12, fontWeight:700, color:'#E65100' }}>{profile.department}</span>
-                <div style={{ width:1, height:12, background:'#ffcc80' }}/>
-                <span style={{ fontSize:12, fontWeight:700, color:'#bf360c' }}>{profile.branch}</span>
-              </div>
-            )}
+            <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+              {isManager && profile?.department && !canImpersonate && (
+                <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#eef0fe', border:'1px solid #c7cbf7', borderRadius:20, padding:'5px 12px', flexShrink:0 }}>
+                  <div style={{ width:7, height:7, background:'var(--accent)', borderRadius:'50%', flexShrink:0 }}/>
+                  <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{profile.department}</span>
+                  <div style={{ width:1, height:12, background:'#c7cbf7' }}/>
+                  <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{profile.branch}</span>
+                </div>
+              )}
+              {canImpersonate && (
+                <StoreSwitcher realProfile={realProfile} impersonated={impersonated}
+                  onStartImpersonate={startImpersonate} onStopImpersonate={stopImpersonate}/>
+              )}
+              {!isScm && !isChangwon && (
+                <HeaderNav profile={profile} page={page} setPage={setPage}
+                  isAdmin={isAdmin} isHQ={isHQ} isManager={isManager}/>
+              )}
+              <UserMenu profile={profile} isAdmin={isAdmin} onLogout={handleLogout} setPage={setPage} page={page}/>
+            </div>
           </div>
           <div className="content-body">
             {page === 'home'           && <HomePage profile={profile} setPage={setPage}/>}

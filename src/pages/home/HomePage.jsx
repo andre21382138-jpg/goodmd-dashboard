@@ -262,18 +262,18 @@ export default function HomePage({ profile, setPage }) {
 
   if (loading) return <div className="empty"><span className="spinner"/></div>;
 
-  const SummaryCard = ({title, icon, summary, color, extra}) => (
-    <div style={{background:'#fff', border:`2px solid ${color}20`, borderRadius:12, padding:'16px 20px', flex:1}}>
-      <div style={{fontSize:12, fontWeight:700, color, marginBottom:12, display:'flex', alignItems:'center', gap:6}}>
-        <span>{icon}</span>{title}
+  const SummaryCard = ({title, summary, accent, extra}) => (
+    <div style={{background:'#fff', border:'1px solid rgba(16,18,23,0.045)', borderRadius:14, padding:'18px 20px', flex:1, boxShadow:'0 1px 3px rgba(16,18,23,0.035), 0 12px 30px rgba(16,18,23,0.05)'}}>
+      <div style={{fontSize:12.5, fontWeight:600, color:'var(--text3)', marginBottom:12, display:'flex', alignItems:'center', gap:8}}>
+        <span style={{width:8, height:8, borderRadius:'50%', background:accent, flexShrink:0}}/>{title}
       </div>
-      <div style={{fontSize:24, fontWeight:700, color, fontFamily:'var(--mono)', marginBottom:8}}>
-        {summary.amt.toLocaleString()}원
+      <div style={{fontSize:26, fontWeight:800, color:'var(--text)', fontFamily:'var(--mono)', letterSpacing:'-0.5px', marginBottom:8}}>
+        {summary.amt.toLocaleString()}<span style={{fontSize:14, marginLeft:3, fontWeight:600, color:'var(--text3)'}}>원</span>
       </div>
-      <div style={{display:'flex', gap:12, fontSize:12, color:'var(--text2)'}}>
+      <div style={{display:'flex', gap:14, fontSize:12, color:'var(--text3)'}}>
         {extra || <>
-          <span>주문 : <b>{summary.count}</b>건</span>
-          <span>수량 : <b>{summary.qty}</b>개</span>
+          <span>주문 <b style={{color:'var(--text2)'}}>{summary.count}</b>건</span>
+          <span>수량 <b style={{color:'var(--text2)'}}>{summary.qty}</b>개</span>
         </>}
       </div>
     </div>
@@ -303,72 +303,59 @@ export default function HomePage({ profile, setPage }) {
       )}
 
       {/* 헤더 */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-        <div>
-          <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:4 }}>
-            {monthLabel} 누적 판매매출
-            {isManager && <span style={{ fontSize:13, fontWeight:500, color:'var(--text3)', marginLeft:8 }}>({profile?.branch})</span>}
-          </div>
-          <div style={{ fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)' }}>
-            {monthStart} ~ {rangeEndStr} ({rangeEndLabel})
-          </div>
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:20, fontWeight:700, color:'var(--text)', marginBottom:4 }}>
+          {monthLabel} 누적 판매매출
+          {isManager && <span style={{ fontSize:13, fontWeight:500, color:'var(--text3)', marginLeft:8 }}>({profile?.branch})</span>}
         </div>
-        {canSeeAll && (() => {
-          const diff = totalAmt - prevTotalAmt;
-          const diffPct = prevTotalAmt > 0 ? ((diff / prevTotalAmt) * 100).toFixed(1) : null;
-          const isUp = diff >= 0;
-          const diffColor = isUp ? '#1b5e20' : '#b71c1c';
-          return (
-            <div style={{ background:'#fff8f0', border:'2px solid #e65100', borderRadius:12, padding:'12px 20px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#bf360c', letterSpacing:1, textAlign:'center', marginBottom:10 }}>
-                통합 총 매출
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:0 }}>
-                {/* 당월 */}
-                <div style={{ textAlign:'center', padding:'0 18px' }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:'#6d4c41', marginBottom:5 }}>{month}월 (당월)</div>
-                  <div style={{ fontFamily:'var(--mono)', fontSize:20, fontWeight:800, color:'#bf360c', lineHeight:1 }}>
-                    {totalAmt.toLocaleString()}<span style={{ fontSize:12, marginLeft:2, fontWeight:600 }}>원</span>
+        <div style={{ fontSize:12, color:'var(--text3)', fontFamily:'var(--mono)' }}>
+          {monthStart} ~ {rangeEndStr} ({rangeEndLabel})
+        </div>
+      </div>
+
+      {/* 본사: 통합 총 매출 배너(전체폭) + 3개 매출 카드 */}
+      {canSeeAll && (() => {
+        const diff = totalAmt - prevTotalAmt;
+        const diffPct = prevTotalAmt > 0 ? ((diff / prevTotalAmt) * 100).toFixed(1) : null;
+        const isUp = diff >= 0;
+        const diffColor = isUp ? '#15803d' : '#b91c1c';
+        return (
+          <>
+            <div style={{ background:'linear-gradient(180deg, #ffffff 0%, #f7f8ff 100%)', border:'1px solid rgba(79,70,229,0.16)', borderRadius:14, padding:'16px 24px', marginBottom:12, boxShadow:'0 1px 3px rgba(16,18,23,0.04), 0 14px 34px rgba(79,70,229,0.08)' }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'var(--accent)', letterSpacing:1, marginBottom:13 }}>통합 총 매출</div>
+              <div style={{ display:'flex', alignItems:'stretch' }}>
+                <div style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
+                  <div style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>{month}월 (당월)</div>
+                  <div style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:800, color:'var(--text)', lineHeight:1 }}>
+                    {totalAmt.toLocaleString()}<span style={{ fontSize:13, marginLeft:2, fontWeight:600, color:'var(--text3)' }}>원</span>
                   </div>
                 </div>
-                {/* 세로 구분선 */}
-                <div style={{ width:1, background:'#ffcc80', alignSelf:'stretch', margin:'2px 0' }}/>
-                {/* 전월 동기 */}
-                <div style={{ textAlign:'center', padding:'0 18px' }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:'#6d4c41', marginBottom:5 }}>{prevMon}월 동기 (1~{String(prevMonthEndDay).padStart(2,'0')}일)</div>
-                  <div style={{ fontFamily:'var(--mono)', fontSize:20, fontWeight:700, color:'#4e342e', lineHeight:1 }}>
-                    {prevTotalAmt.toLocaleString()}<span style={{ fontSize:12, marginLeft:2, fontWeight:600 }}>원</span>
+                <div style={{ width:1, background:'var(--border)', alignSelf:'stretch', margin:'2px 0' }}/>
+                <div style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
+                  <div style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>{prevMon}월 동기 (1~{String(prevMonthEndDay).padStart(2,'0')}일)</div>
+                  <div style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color:'var(--text2)', lineHeight:1 }}>
+                    {prevTotalAmt.toLocaleString()}<span style={{ fontSize:13, marginLeft:2, fontWeight:600, color:'var(--text3)' }}>원</span>
                   </div>
                 </div>
-                {/* 세로 구분선 */}
-                <div style={{ width:1, background:'#ffcc80', alignSelf:'stretch', margin:'2px 0' }}/>
-                {/* 증감 */}
-                <div style={{ textAlign:'center', padding:'0 18px' }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:'#6d4c41', marginBottom:5 }}>증감</div>
-                  <div style={{ fontFamily:'var(--mono)', fontSize:20, fontWeight:800, color:diffColor, lineHeight:1 }}>
-                    {isUp ? '▲' : '▼'} {Math.abs(diff).toLocaleString()}<span style={{ fontSize:12, marginLeft:2, fontWeight:600 }}>원</span>
+                <div style={{ width:1, background:'var(--border)', alignSelf:'stretch', margin:'2px 0' }}/>
+                <div style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
+                  <div style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>증감</div>
+                  <div style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:800, color:diffColor, lineHeight:1 }}>
+                    {isUp ? '▲' : '▼'} {Math.abs(diff).toLocaleString()}<span style={{ fontSize:13, marginLeft:2, fontWeight:600 }}>원</span>
+                    {diffPct !== null && <span style={{ fontSize:12.5, fontWeight:700, marginLeft:8 }}>({isUp ? '+' : ''}{diffPct}%)</span>}
                   </div>
-                  {diffPct !== null && (
-                    <div style={{ fontSize:12, fontWeight:700, color:diffColor, marginTop:4 }}>
-                      ({isUp ? '+' : ''}{diffPct}%)
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
-          );
-        })()}
-      </div>
-
-      {/* 3개 매출 카드 (본사만) */}
-      {canSeeAll && (
-        <div style={{display:'flex', gap:12, marginBottom:20}}>
-          <SummaryCard title="매장 매출" icon="🏬" summary={storeSummary} color="#E65100"/>
-          <SummaryCard title="강좌 매출" icon="🎓" summary={lectureSummary} color="#1565C0"
-              extra={<><span>건수 : <b>{lectureSummary.count}</b>건</span><span>수량 : <b>{lectureSummary.qty}</b>개</span></>}/>
-          <SummaryCard title="특판 매출" icon="🤝" summary={bizSummary} color="#2E7D32"/>
-        </div>
-      )}
+            <div style={{display:'flex', gap:12, marginBottom:20}}>
+              <SummaryCard title="매장 매출" summary={storeSummary} accent="#4f46e5"/>
+              <SummaryCard title="강좌 매출" summary={lectureSummary} accent="#0891b2"
+                  extra={<><span>건수 <b style={{color:'var(--text2)'}}>{lectureSummary.count}</b>건</span><span>수량 <b style={{color:'var(--text2)'}}>{lectureSummary.qty}</b>개</span></>}/>
+              <SummaryCard title="특판 매출" summary={bizSummary} accent="#059669"/>
+            </div>
+          </>
+        );
+      })()}
 
       {/* 매니저: 기존 4개 요약 카드 */}
       {isManager && (
@@ -406,8 +393,8 @@ export default function HomePage({ profile, setPage }) {
 
       {/* 매장 매출 현황 (본사: 매장별 / 매니저: 일자별) */}
       {!isManager && (
-        <div className="card" style={{marginBottom:16}}>
-          <div className="card-label">🏬 매장별 당월 누적 판매매출</div>
+        <div className="card" style={{marginBottom:16, padding:0, overflow:'hidden'}}>
+          <div className="card-label" style={{padding:'15px 20px 13px', marginBottom:0}}>🏬 매장별 당월 누적 판매매출</div>
           {storeRows.length === 0 ? <div className="empty">이번 달 판매 데이터가 없습니다</div> : (
             <div className="twrap">
               <table>
@@ -425,11 +412,11 @@ export default function HomePage({ profile, setPage }) {
                         <td><span className="badge badge-store">{r.branch}</span></td>
                         <td className="r">{metricCell(`${r.count.toLocaleString()}건`, r.count, pv.count)}</td>
                         <td className="r">{metricCell(`${r.qty.toLocaleString()}개`, r.qty, pv.qty)}</td>
-                        <td className="r">{metricCell(`${r.amt.toLocaleString()}원`, r.amt, pv.amt, {money:true, valueStyle:{fontWeight:700, color:'var(--accent)'}})}</td>
+                        <td className="r">{metricCell(`${r.amt.toLocaleString()}원`, r.amt, pv.amt, {money:true, valueStyle:{fontWeight:700, color:'var(--text)'}})}</td>
                         <td>
                           <div style={{display:'flex',alignItems:'center',gap:6}}>
-                            <div style={{flex:1,height:6,background:'#f0f0f0',borderRadius:3,overflow:'hidden'}}>
-                              <div style={{width:`${pct}%`,height:'100%',background:'var(--sidebar)',borderRadius:3}}/>
+                            <div style={{flex:1,height:6,background:'#eceef3',borderRadius:3,overflow:'hidden'}}>
+                              <div style={{width:`${pct}%`,height:'100%',background:'linear-gradient(90deg,#6366f1,#4f46e5)',borderRadius:3}}/>
                             </div>
                             <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text2)',minWidth:36}}>{pct}%</span>
                           </div>
@@ -441,7 +428,7 @@ export default function HomePage({ profile, setPage }) {
                     <td colSpan={3} style={{padding:'9px 11px',fontWeight:700}}>합계</td>
                     <td className="r">{metricCell(`${storeSummary.count.toLocaleString()}건`, storeSummary.count, prevStoreTotal.count, {valueStyle:{fontWeight:700}})}</td>
                     <td className="r">{metricCell(`${storeSummary.qty.toLocaleString()}개`, storeSummary.qty, prevStoreTotal.qty, {valueStyle:{fontWeight:700}})}</td>
-                    <td className="r">{metricCell(`${storeSummary.amt.toLocaleString()}원`, storeSummary.amt, prevStoreTotal.amt, {money:true, valueStyle:{fontWeight:700, color:'var(--accent)', fontSize:14}})}</td>
+                    <td className="r">{metricCell(`${storeSummary.amt.toLocaleString()}원`, storeSummary.amt, prevStoreTotal.amt, {money:true, valueStyle:{fontWeight:700, color:'var(--text)', fontSize:14}})}</td>
                     <td/>
                   </tr>
                 </tbody>

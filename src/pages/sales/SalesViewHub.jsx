@@ -238,14 +238,18 @@ export default function SalesViewHub({ setPage }) {
       <div style={{display:'flex', gap:16, flexWrap:'wrap', marginTop:8, marginBottom:18}}>
         {items.map(item => (
           <button key={item.key} onClick={() => setPage(item.key)}
-            style={{flex:'1 1 200px', minWidth:200, background:'#fff', border:'2px solid var(--border)',
-              borderRadius:16, padding:'22px 20px', cursor:'pointer', textAlign:'left',
-              transition:'all 150ms', outline:'none', fontFamily:'var(--sans)' }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.boxShadow='0 4px 20px rgba(255,143,0,0.15)';}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.boxShadow='none';}}>
-            <div style={{fontSize:28, marginBottom:8}}>{item.icon}</div>
-            <div style={{fontSize:15, fontWeight:700, color:'var(--text)', marginBottom:4}}>{item.label}</div>
-            <div style={{fontSize:11, color:'var(--text3)'}}>{item.desc}</div>
+            style={{flex:'1 1 200px', minWidth:200, background:'#fff', border:'1px solid rgba(16,18,23,0.06)',
+              borderRadius:14, padding:'18px 20px', cursor:'pointer', textAlign:'left',
+              transition:'all 160ms ease', outline:'none', fontFamily:'var(--sans)',
+              boxShadow:'0 1px 3px rgba(16,18,23,0.035), 0 10px 24px rgba(16,18,23,0.05)',
+              display:'flex', alignItems:'center', gap:14}}
+            onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderColor='rgba(79,70,229,0.35)';e.currentTarget.style.boxShadow='0 8px 18px rgba(79,70,229,0.13), 0 16px 34px rgba(16,18,23,0.08)';}}
+            onMouseLeave={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.borderColor='rgba(16,18,23,0.06)';e.currentTarget.style.boxShadow='0 1px 3px rgba(16,18,23,0.035), 0 10px 24px rgba(16,18,23,0.05)';}}>
+            <div style={{flex:1, minWidth:0}}>
+              <div style={{fontSize:15, fontWeight:700, color:'var(--text)', marginBottom:3}}>{item.label}</div>
+              <div style={{fontSize:11.5, color:'var(--text3)'}}>{item.desc}</div>
+            </div>
+            <span style={{width:30, height:30, borderRadius:'50%', background:'#eef0fe', color:'var(--accent)', display:'grid', placeItems:'center', fontSize:15, fontWeight:800, flexShrink:0}}>→</span>
           </button>
         ))}
       </div>

@@ -4,11 +4,11 @@ import { supabase } from '../lib/supabase';
 const POLL_INTERVAL = 60000; // 1분 보조 폴링 (Realtime 보완용)
 
 const COLOR = {
-  blue:   { border:'#1565C0', light:'#e3f2fd' },
-  green:  { border:'#2e7d32', light:'#e8f5e9' },
-  red:    { border:'#c62828', light:'#ffebee' },
-  orange: { border:'#ef6c00', light:'#fff3e0' },
-  purple: { border:'#6a1b9a', light:'#f3e5f5' },
+  blue:   { dot:'#60a5fa' },
+  green:  { dot:'#34d399' },
+  red:    { dot:'#f87171' },
+  orange: { dot:'#fbbf24' },
+  purple: { dot:'#a78bfa' },
 };
 
 export default function NotificationCenter({ profile, setPage }) {
@@ -296,15 +296,15 @@ export default function NotificationCenter({ profile, setPage }) {
           const c = COLOR[n.color] || COLOR.blue;
           return (
             <div key={n.key} className="notif-card"
-              style={{background: c.light, borderRadius:10, boxShadow:`0 10px 30px rgba(0,0,0,0.28), 0 0 0 1px ${c.border}33`, border:`2px solid ${c.border}`, borderLeft:`7px solid ${c.border}`, padding:'12px 14px'}}>
-              <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
-                <span style={{fontSize:15}}>{n.icon}</span>
-                <strong style={{fontSize:13, flex:1, color:c.border}}>{n.title}</strong>
+              style={{background:'#fff', borderRadius:12, boxShadow:'0 10px 30px rgba(16,18,23,0.15)', border:'1px solid var(--border2)', borderLeft:`3px solid ${c.dot}`, padding:'13px 15px'}}>
+              <div style={{display:'flex', alignItems:'center', gap:9, marginBottom:6}}>
+                <span style={{width:8, height:8, borderRadius:'50%', background:c.dot, flexShrink:0}}/>
+                <strong style={{fontSize:13, flex:1, color:'var(--text)', fontWeight:700}}>{n.title}</strong>
                 <button onClick={() => handleClose(n)} aria-label="닫기"
-                  style={{background:'none', border:'none', cursor:'pointer', color:'#999', fontSize:16, lineHeight:1, padding:0}}>✕</button>
+                  style={{background:'none', border:'none', cursor:'pointer', color:'var(--text3)', fontSize:16, lineHeight:1, padding:0}}>✕</button>
               </div>
-              <div style={{fontSize:12, color:'var(--text2)', marginBottom:10, paddingLeft:23}}>{n.msg}</div>
-              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', paddingLeft:23}}>
+              <div style={{fontSize:12, color:'var(--text2)', marginBottom:11, paddingLeft:17, lineHeight:1.5}}>{n.msg}</div>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', paddingLeft:17}}>
                 <label style={{fontSize:11, color:'var(--text3)', cursor:'pointer', display:'flex', alignItems:'center', gap:5}}>
                   <input type="checkbox" checked={!!keepOpen[n.key]}
                     onChange={e => setKeepOpen(prev => ({...prev, [n.key]: e.target.checked}))}
@@ -312,7 +312,7 @@ export default function NotificationCenter({ profile, setPage }) {
                   다시 보지 않기
                 </label>
                 <button onClick={() => handleConfirm(n)}
-                  style={{padding:'5px 14px', background:c.border, color:'#fff', border:'none', borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer'}}>
+                  style={{padding:'6px 15px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:7, fontSize:11.5, fontWeight:700, cursor:'pointer'}}>
                   확인
                 </button>
               </div>
@@ -320,13 +320,13 @@ export default function NotificationCenter({ profile, setPage }) {
           );
         })}
         {activeNotifs.length > 3 && (
-          <div style={{textAlign:'center', fontSize:11, color:'var(--text3)', background:'rgba(255,255,255,0.95)', padding:'4px', borderRadius:4}}>
+          <div style={{textAlign:'center', fontSize:11, color:'var(--text2)', background:'#fff', border:'1px solid var(--border2)', padding:'6px', borderRadius:8}}>
             외 {activeNotifs.length - 3}건 — 🔔 클릭하여 전체 보기
           </div>
         )}
         {activeNotifs.length > 0 && (
           <button onClick={handleClearAll}
-            style={{alignSelf:'flex-end', background:'rgba(0,0,0,0.6)', color:'#fff', border:'none', borderRadius:4, padding:'4px 10px', fontSize:11, cursor:'pointer'}}>
+            style={{alignSelf:'flex-end', background:'#fff', color:'var(--text2)', border:'1px solid var(--border2)', borderRadius:7, padding:'5px 12px', fontSize:11, cursor:'pointer', boxShadow:'0 2px 8px rgba(16,18,23,0.08)'}}>
             모두 닫기
           </button>
         )}
@@ -335,8 +335,8 @@ export default function NotificationCenter({ profile, setPage }) {
       {/* 우측 하단 알림 종 */}
       <button onClick={() => setBellOpen(o => !o)} aria-label="알림"
         style={{position:'fixed', bottom:20, right:20, zIndex:9001,
-          width:48, height:48, borderRadius:'50%', border:'none', cursor:'pointer',
-          background:'#fff', boxShadow:'0 4px 16px rgba(0,0,0,0.18)',
+          width:48, height:48, borderRadius:'50%', border:'1px solid var(--border2)', cursor:'pointer',
+          background:'#fff', boxShadow:'0 6px 20px rgba(16,18,23,0.18)',
           fontSize:20, lineHeight:1, padding:0}}>
         🔔
         {allUnDismissed.length > 0 && (
@@ -366,14 +366,14 @@ export default function NotificationCenter({ profile, setPage }) {
                   const c = COLOR[n.color] || COLOR.blue;
                   return (
                     <div key={n.key} onClick={() => handleConfirm(n)}
-                      style={{padding:'12px 16px', borderBottom:'1px solid #f0f0f0', cursor:'pointer', borderLeft:`4px solid ${c.border}`, transition:'background 0.15s'}}
+                      style={{padding:'12px 16px', borderBottom:'1px solid #f0f0f0', cursor:'pointer', transition:'background 0.15s'}}
                       onMouseEnter={e => e.currentTarget.style.background='#fafafa'}
                       onMouseLeave={e => e.currentTarget.style.background='#fff'}>
                       <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:3}}>
-                        <span style={{fontSize:14}}>{n.icon}</span>
+                        <span style={{width:7, height:7, borderRadius:'50%', background:c.dot, flexShrink:0}}/>
                         <strong style={{fontSize:13, color:'var(--text)'}}>{n.title}</strong>
                       </div>
-                      <div style={{fontSize:11, color:'var(--text2)', paddingLeft:22}}>{n.msg}</div>
+                      <div style={{fontSize:11, color:'var(--text2)', paddingLeft:15}}>{n.msg}</div>
                     </div>
                   );
                 })
