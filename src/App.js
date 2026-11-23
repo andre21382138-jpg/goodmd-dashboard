@@ -469,30 +469,30 @@ function AuthScreen() {
       <div className="auth-hero">
         <img src="/logo-ksl.jpg" alt="한국스마트물류" className="auth-hero-logo"/>
         <div className="auth-hero-content">
-          <div className="auth-hero-eyebrow">3PL · INTEGRATED ORDER MANAGEMENT</div>
+          <div className="auth-hero-eyebrow">PALEO POS · 오프라인 매장 통합 관리</div>
           <h1 className="auth-hero-headline">
-            주문수집부터 발주까지<br/>
-            <span className="auth-hero-accent">한 곳에서 한 번에.</span>
+            판매 입력부터 매출 정산까지<br/>
+            <span className="auth-hero-accent">매장 운영을 한 곳에서.</span>
           </h1>
           <p className="auth-hero-desc">
-            온라인 주문수집과 자체 ERP 발주·재고관리를 통합한 3PL 솔루션.<br/>
-            고객사 맞춤 커스텀까지, <b>한국스마트물류</b>가 함께합니다.
+            오프라인 매장의 판매 입력, 고객 관리, 재고 관리, 매출 결산을 하나로 묶은 <b>포스(POS) 프로그램</b>.<br/>
+            매장 운영에 필요한 모든 기능을 한 화면에서 간편하게.
           </p>
           <div className="auth-hero-features">
             <div className="auth-hero-feature">
-              <div className="auth-hero-feature-icon">📦</div>
-              <div className="auth-hero-feature-title">주문수집</div>
-              <div className="auth-hero-feature-desc">오픈마켓 자동 연동</div>
+              <div className="auth-hero-feature-icon">🛒</div>
+              <div className="auth-hero-feature-title">판매 입력</div>
+              <div className="auth-hero-feature-desc">빠르고 간편한 판매 등록</div>
+            </div>
+            <div className="auth-hero-feature">
+              <div className="auth-hero-feature-icon">👥</div>
+              <div className="auth-hero-feature-title">고객 관리</div>
+              <div className="auth-hero-feature-desc">회원·적립·문자 관리</div>
             </div>
             <div className="auth-hero-feature">
               <div className="auth-hero-feature-icon">📊</div>
-              <div className="auth-hero-feature-title">결산·정산</div>
-              <div className="auth-hero-feature-desc">매출·수수료 자동화</div>
-            </div>
-            <div className="auth-hero-feature">
-              <div className="auth-hero-feature-icon">🚚</div>
-              <div className="auth-hero-feature-title">발주·물류</div>
-              <div className="auth-hero-feature-desc">재고 통합관리</div>
+              <div className="auth-hero-feature-title">재고·매출결산</div>
+              <div className="auth-hero-feature-desc">재고 현황·정산 자동화</div>
             </div>
           </div>
           <div className="auth-hero-badge">
