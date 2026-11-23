@@ -246,7 +246,7 @@ export default function HomePage({ profile, setPage }) {
     const d = (cur || 0) - (prev || 0);
     if (d === 0) return <span style={{color:'var(--text3)', fontSize:11, fontWeight:600}}>(–)</span>;
     const up = d > 0;
-    return <span style={{color: up ? '#2e7d32' : '#c62828', fontSize:11, fontWeight:700, whiteSpace:'nowrap'}}>({up ? '▲' : '▼'} {Math.abs(d).toLocaleString()})</span>;
+    return <span style={{color: up ? '#1565C0' : '#c62828', fontSize:11, fontWeight:700, whiteSpace:'nowrap'}}>({up ? '▲' : '▼'} {Math.abs(d).toLocaleString()})</span>;
   };
   // 값 + 증감을 각각 고정폭 칸으로 정렬 (단위·증감 괄호가 세로로 일정하게 정렬됨)
   const metricCell = (valueStr, cur, prev, opts = {}) => (
@@ -272,8 +272,8 @@ export default function HomePage({ profile, setPage }) {
       </div>
       <div style={{display:'flex', gap:14, fontSize:12, color:'var(--text3)'}}>
         {extra || <>
-          <span>주문 <b style={{color:'var(--text2)'}}>{summary.count}</b>건</span>
-          <span>수량 <b style={{color:'var(--text2)'}}>{summary.qty}</b>개</span>
+          <span>주문 <b style={{color:'var(--text2)'}}>{summary.count.toLocaleString()}</b>건</span>
+          <span>수량 <b style={{color:'var(--text2)'}}>{summary.qty.toLocaleString()}</b>개</span>
         </>}
       </div>
     </div>
@@ -318,7 +318,7 @@ export default function HomePage({ profile, setPage }) {
         const diff = totalAmt - prevTotalAmt;
         const diffPct = prevTotalAmt > 0 ? ((diff / prevTotalAmt) * 100).toFixed(1) : null;
         const isUp = diff >= 0;
-        const diffColor = isUp ? '#15803d' : '#b91c1c';
+        const diffColor = isUp ? '#1565C0' : '#b91c1c';
         return (
           <>
             <div style={{ background:'linear-gradient(180deg, #ffffff 0%, #f7f8ff 100%)', border:'1px solid rgba(79,70,229,0.16)', borderRadius:14, padding:'16px 24px', marginBottom:12, boxShadow:'0 1px 3px rgba(16,18,23,0.04), 0 14px 34px rgba(79,70,229,0.08)' }}>
@@ -350,7 +350,7 @@ export default function HomePage({ profile, setPage }) {
             <div style={{display:'flex', gap:12, marginBottom:20}}>
               <SummaryCard title="매장 매출" summary={storeSummary} accent="#4f46e5"/>
               <SummaryCard title="강좌 매출" summary={lectureSummary} accent="#0891b2"
-                  extra={<><span>건수 <b style={{color:'var(--text2)'}}>{lectureSummary.count}</b>건</span><span>수량 <b style={{color:'var(--text2)'}}>{lectureSummary.qty}</b>개</span></>}/>
+                  extra={<><span>건수 <b style={{color:'var(--text2)'}}>{lectureSummary.count.toLocaleString()}</b>건</span><span>수량 <b style={{color:'var(--text2)'}}>{lectureSummary.qty.toLocaleString()}</b>개</span></>}/>
               <SummaryCard title="특판 매출" summary={bizSummary} accent="#059669"/>
             </div>
           </>
@@ -399,7 +399,7 @@ export default function HomePage({ profile, setPage }) {
             <div className="twrap">
               <table>
                 <thead>
-                  <tr><th>순위</th><th>점포</th><th>지점</th><th className="r">판매건수</th><th className="r">판매수량</th><th className="r">매출금액</th><th style={{minWidth:100}}>비중</th></tr>
+                  <tr><th style={{textAlign:'center'}}>순위</th><th style={{textAlign:'center'}}>점포</th><th style={{textAlign:'center'}}>지점</th><th style={{textAlign:'center'}}>판매건수</th><th style={{textAlign:'center'}}>판매수량</th><th style={{textAlign:'center'}}>매출금액</th><th style={{textAlign:'center', minWidth:100}}>비중</th></tr>
                 </thead>
                 <tbody>
                   {storeRows.map((r,i) => {
