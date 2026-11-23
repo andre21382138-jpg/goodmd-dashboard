@@ -281,11 +281,34 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     } finally { setProcessing(null); }
   };
 
+  // ── 본사 담당자 — 선택(전체선택 포함) 그룹 일괄 발송요청(확인) ──
+  const handleApproveSelected = async () => {
+    const target = groups.filter(g => selectedKeys.has(g.key) && !g.approved);
+    if (target.length === 0) { toast('발송요청할 대기 요청을 선택해주세요', 'err'); return; }
+    const ids = target.flatMap(g => g.items.map(it => it.id));
+    if (!window.confirm(`선택한 ${target.length}건(${ids.length}개 상품)을 발송요청(확인)하시겠습니까?\n승인 후 SCM 담당자가 발송 처리할 수 있습니다.`)) return;
+    setProcessing('batch_approve');
+    try {
+      const { error } = await supabase.from('sales').update({
+        delivery_approved_at: new Date().toISOString(),
+        delivery_approved_by: profile.id,
+      }).in('id', ids);
+      if (error) throw error;
+      toast(`${target.length}건 발송요청 완료`, 'ok');
+      setSelectedKeys(new Set());
+      fetchData();
+    } catch (err) {
+      toast('발송요청 실패: ' + (err.message || err), 'err');
+    } finally { setProcessing(null); }
+  };
+
   // 승인(발송요청)된 그룹만 선택 가능. 단, 본사 담당자는 삭제 위해 미요청 건도 선택 가능
   const approvedGroups = groups.filter(g => g.approved);
   const selectableGroups = isApprover ? groups : approvedGroups;
   // SCM은 본사가 [발송요청]한 건만 목록에 표시 (발송대기 탭)
   const displayGroups = (isScm && tab === 'pending') ? approvedGroups : groups;
+  // 선택된 그룹 중 아직 발송요청 안 된(대기) 건 수 — 일괄 발송요청 버튼용
+  const selectedPendingCount = groups.filter(g => selectedKeys.has(g.key) && !g.approved).length;
   // 선택 토글
   const toggleSelect = (key) => {
     const g = groups.find(x => x.key === key);
@@ -514,6 +537,14 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
           </span>
           {tab === 'pending' && (
             <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+              {isApprover && (
+                <button type="button" onClick={handleApproveSelected}
+                  disabled={processing === 'batch_approve' || selectedPendingCount === 0}
+                  title="선택(또는 상단 전체선택)한 대기 요청을 한 번에 발송요청(확인)"
+                  style={{height:30, padding:'0 12px', border:'1px solid #6a1b9a', borderRadius:'var(--radius)', background: selectedPendingCount>0 ? '#6a1b9a' : '#f5f5f5', color: selectedPendingCount>0 ? '#fff' : 'var(--text3)', fontSize:12, fontWeight:700, cursor: selectedPendingCount>0 ? 'pointer' : 'not-allowed'}}>
+                  {processing === 'batch_approve' ? <span className="spinner"/> : `📤 선택 발송요청${selectedPendingCount>0 ? ` (${selectedPendingCount})` : ''}`}
+                </button>
+              )}
               <button type="button" onClick={handleExportSelected} disabled={groups.length === 0}
                 title="선택 건(없으면 전체)을 매장발주 양식(.xlsx)으로 다운로드"
                 style={{height:30, padding:'0 12px', border:'1px solid var(--accent)', borderRadius:'var(--radius)', background:'#fff3e0', color:'var(--accent)', fontSize:12, fontWeight:700, cursor:'pointer'}}>
