@@ -322,7 +322,7 @@ export default function NotificationCenter({ profile, setPage }) {
           );
         })}
         {activeNotifs.length > 3 && (
-          <div style={{textAlign:'center', fontSize:11, color:'var(--text2)', background:'#fff', border:'1px solid var(--border2)', padding:'6px', borderRadius:8}}>
+          <div style={{textAlign:'center', fontSize:11.5, fontWeight:700, color:'#fff', background:'linear-gradient(90deg,#4f46e5,#6366f1)', border:'none', padding:'8px 6px', borderRadius:8, boxShadow:'0 4px 12px rgba(79,70,229,0.28)'}}>
             외 {activeNotifs.length - 3}건 — 🔔 클릭하여 전체 보기
           </div>
         )}
