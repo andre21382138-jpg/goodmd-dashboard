@@ -298,16 +298,16 @@ function SidebarClockPanel({ profile, setPage }) {
       )}
       <div style={{ padding:'8px', borderBottom:'1px solid rgba(0,0,0,0.1)' }}>
         <div style={{ background:'#fff', borderRadius:8, border:'1px solid rgba(0,0,0,0.08)', padding:'10px 10px 8px' }}>
-          <div style={{ fontSize:10, fontWeight:700, color:'#888', textAlign:'center', marginBottom:8 }}>
+          <div style={{ fontSize:13, fontWeight:800, color:'#16181d', textAlign:'center', marginBottom:9, letterSpacing:-0.2 }}>
             {dateLabel()}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5, marginBottom:6 }}>
             <button
               onClick={() => setPopup('in')}
               disabled={saving || allIn}
-              style={{ height:32, border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor: allIn ? 'default' : 'pointer',
-                background: allIn ? '#f5f5f5' : '#2E7D32', color: allIn ? '#aaa' : '#fff' }}>
-              {allIn ? '✅ 출근' : '출근'}
+              style={{ height:32, border:'none', borderRadius:6, fontSize: allIn ? 11 : 12, fontWeight:700, cursor: allIn ? 'default' : 'pointer', whiteSpace:'nowrap',
+                background: allIn ? '#eef6ef' : '#2E7D32', color: allIn ? '#2E7D32' : '#fff' }}>
+              {allIn ? '✅ 출근체크완료' : '출근'}
             </button>
             <button
               onClick={() => setPopup('out')}
@@ -410,17 +410,15 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
         onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.06)'; }}
         onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}
       >
-        {!isAdmin && <span style={{ fontSize:22 }}>🏬</span>}
+        {isChangwon && <span style={{ fontSize:22 }}>🏬</span>}
         <div style={{ width:'100%' }}>
-          {isAdmin ? (
+          {isChangwon ? (
+            <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>창원지점 재고</div>
+          ) : (
             <div style={{ display:'flex', alignItems:'center', gap:9 }}>
               <span style={{ width:30, height:30, borderRadius:8, background:'linear-gradient(135deg,#6366f1 0%,#4f46e5 100%)', color:'#fff', display:'grid', placeItems:'center', fontSize:14, fontWeight:800, letterSpacing:-0.5, flexShrink:0, boxShadow:'0 2px 8px rgba(79,70,229,0.35)' }}>P</span>
               <span style={{ fontSize:16, fontWeight:800, color:'var(--sidebar-text)', letterSpacing:-0.3 }}>PALEO <span style={{ color:'var(--accent)' }}>POS</span></span>
             </div>
-          ) : isChangwon ? (
-            <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>창원지점 재고</div>
-          ) : (
-            <div style={{ fontFamily:'var(--mono)', fontSize:13, fontWeight:700, color:'var(--sidebar-text)', lineHeight:1.2 }}>백화점팀 관리시스템</div>
           )}
         </div>
       </button>
