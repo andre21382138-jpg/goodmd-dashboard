@@ -423,11 +423,27 @@ const GLOBAL_CSS = `
   /* 카드/표 — 하드 테두리 대신 부드러운 다층 그림자로 '떠 있는' 느낌 */
   .card, .stat { border: 1px solid rgba(16,18,23,0.085); border-radius: 14px; box-shadow: 0 1px 3px rgba(16,18,23,0.035), 0 12px 30px rgba(16,18,23,0.05); }
   /* 로그인 히어로 — 차분한 무채색 잉크 톤 */
-  .auth-hero { background: linear-gradient(140deg, #16181d 0%, #20242e 60%, #2b2f3a 100%); }
-  .auth-hero::before { background: radial-gradient(circle, rgba(180,188,208,0.12) 0%, transparent 60%); }
-  .auth-hero-eyebrow { color: #aeb4c2; }
-  .auth-hero-accent { color: #dfe3ec; }
-  .auth-hero-badge { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #dfe3ec; }
+  /* 로그인 히어로 — 딥 네이비·인디고 프리미엄 톤 (사이드바와 브랜드 통일) */
+  .auth-hero { background: linear-gradient(150deg, #0d1424 0%, #14233c 48%, #1c2b54 100%); }
+  .auth-hero::before { background: radial-gradient(circle, rgba(129,140,248,0.22) 0%, transparent 62%); }
+  .auth-hero::after { content: ''; position: absolute; left: -150px; top: -130px; width: 440px; height: 440px; background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 60%); pointer-events: none; z-index: 0; }
+  .auth-hero-brand { display: inline-flex; align-items: center; gap: 11px; align-self: flex-start; position: relative; z-index: 1; }
+  .auth-hero-brand-mark { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg,#6366f1 0%,#4f46e5 100%); color: #fff; display: grid; place-items: center; font-size: 19px; font-weight: 800; letter-spacing: -0.5px; box-shadow: 0 6px 20px rgba(79,70,229,0.45); }
+  .auth-hero-brand-text { font-size: 21px; font-weight: 800; letter-spacing: -0.4px; color: #fff; }
+  .auth-hero-brand-text span { color: #aab2ff; }
+  .auth-hero-eyebrow { color: #aab2ff; opacity: 0.95; letter-spacing: 2.5px; }
+  .auth-hero-headline { letter-spacing: -1.2px; }
+  .auth-hero-accent { background: linear-gradient(90deg,#c6cbff 0%,#8f97f5 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .auth-hero-desc { color: #c3c9da; opacity: 1; max-width: 720px; }
+  .auth-hero-desc b { color: #eceefe; }
+  .auth-hero-kw { color: #ffd24d; font-weight: 700; }
+  .auth-hero-feature { background: linear-gradient(160deg, rgba(255,255,255,0.075) 0%, rgba(255,255,255,0.025) 100%); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 10px 30px rgba(0,0,0,0.22); transition: transform 140ms ease, border-color 140ms ease; }
+  .auth-hero-feature:hover { transform: translateY(-3px); border-color: rgba(129,140,248,0.45); }
+  .auth-hero-feature-icon { font-size: 23px; width: 40px; height: 40px; border-radius: 10px; background: rgba(129,140,248,0.14); display: grid; place-items: center; margin-bottom: 12px; }
+  .auth-hero-feature-title { color: #fff; font-weight: 700; }
+  .auth-hero-feature-desc { color: rgba(240,243,250,0.6); }
+  .auth-hero-badge { background: rgba(129,140,248,0.14); border: 1px solid rgba(129,140,248,0.42); color: #c6cbff; }
+  .auth-hero-footer { color: rgba(240,243,250,0.4); }
   /* 토스트 알림 — 색 가득 채운 옛 스타일 → 다크 카드 + 작은 상태 아이콘 */
   .toasts { bottom: 22px; right: 22px; gap: 9px; }
   .toast { background: #fff; color: var(--text); border: 1px solid var(--border2);
@@ -467,7 +483,10 @@ function AuthScreen() {
     <div className="auth-wrap">
       {/* LEFT: 서비스 소개 hero */}
       <div className="auth-hero">
-        <img src="/logo-ksl.jpg" alt="한국스마트물류" className="auth-hero-logo"/>
+        <div className="auth-hero-brand">
+          <span className="auth-hero-brand-mark">P</span>
+          <span className="auth-hero-brand-text">PALEO <span>POS</span></span>
+        </div>
         <div className="auth-hero-content">
           <div className="auth-hero-eyebrow">PALEO POS · 오프라인 매장 통합 관리</div>
           <h1 className="auth-hero-headline">
@@ -475,7 +494,7 @@ function AuthScreen() {
             <span className="auth-hero-accent">매장 운영을 한 곳에서.</span>
           </h1>
           <p className="auth-hero-desc">
-            오프라인 매장의 판매 입력, 고객 관리, 재고 관리, 매출 결산을 하나로 묶은 <b>포스(POS) 프로그램</b>.<br/>
+            오프라인 매장의 <span className="auth-hero-kw">판매 입력·고객 관리·재고 관리·매출 결산</span>을 하나로 묶은 <b>포스(POS) 프로그램</b>.<br/>
             매장 운영에 필요한 모든 기능을 한 화면에서 간편하게.
           </p>
           <div className="auth-hero-features">
@@ -494,9 +513,6 @@ function AuthScreen() {
               <div className="auth-hero-feature-title">재고·매출결산</div>
               <div className="auth-hero-feature-desc">재고 현황·정산 자동화</div>
             </div>
-          </div>
-          <div className="auth-hero-badge">
-            ⭐ 고객사 맞춤 커스텀 지원
           </div>
         </div>
         <div className="auth-hero-footer">
