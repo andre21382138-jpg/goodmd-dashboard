@@ -4,11 +4,11 @@ import { supabase } from '../lib/supabase';
 const POLL_INTERVAL = 60000; // 1분 보조 폴링 (Realtime 보완용)
 
 const COLOR = {
-  blue:   { dot:'#60a5fa' },
-  green:  { dot:'#34d399' },
-  red:    { dot:'#f87171' },
-  orange: { dot:'#fbbf24' },
-  purple: { dot:'#a78bfa' },
+  blue:   { dot:'#60a5fa', side:'linear-gradient(160deg,#60a5fa,#3b82f6)' },
+  green:  { dot:'#34d399', side:'linear-gradient(160deg,#34d399,#10b981)' },
+  red:    { dot:'#f87171', side:'linear-gradient(160deg,#f87171,#ef4444)' },
+  orange: { dot:'#fbbf24', side:'linear-gradient(160deg,#fbbf24,#f59e0b)' },
+  purple: { dot:'#a78bfa', side:'linear-gradient(160deg,#a78bfa,#8b5cf6)' },
 };
 
 export default function NotificationCenter({ profile, setPage }) {
@@ -296,25 +296,27 @@ export default function NotificationCenter({ profile, setPage }) {
           const c = COLOR[n.color] || COLOR.blue;
           return (
             <div key={n.key} className="notif-card"
-              style={{background:'#fff', borderRadius:12, boxShadow:'0 10px 30px rgba(16,18,23,0.15)', border:'1px solid var(--border2)', borderLeft:`3px solid ${c.dot}`, padding:'13px 15px'}}>
-              <div style={{display:'flex', alignItems:'center', gap:9, marginBottom:6}}>
-                <span style={{width:8, height:8, borderRadius:'50%', background:c.dot, flexShrink:0}}/>
-                <strong style={{fontSize:13, flex:1, color:'var(--text)', fontWeight:700}}>{n.title}</strong>
-                <button onClick={() => handleClose(n)} aria-label="닫기"
-                  style={{background:'none', border:'none', cursor:'pointer', color:'var(--text3)', fontSize:16, lineHeight:1, padding:0}}>✕</button>
-              </div>
-              <div style={{fontSize:12, color:'var(--text2)', marginBottom:11, paddingLeft:17, lineHeight:1.5}}>{n.msg}</div>
-              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', paddingLeft:17}}>
-                <label style={{fontSize:11, color:'var(--text3)', cursor:'pointer', display:'flex', alignItems:'center', gap:5}}>
-                  <input type="checkbox" checked={!!keepOpen[n.key]}
-                    onChange={e => setKeepOpen(prev => ({...prev, [n.key]: e.target.checked}))}
-                    style={{cursor:'pointer', margin:0}}/>
-                  다시 보지 않기
-                </label>
-                <button onClick={() => handleConfirm(n)}
-                  style={{padding:'6px 15px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:7, fontSize:11.5, fontWeight:700, cursor:'pointer'}}>
-                  확인
-                </button>
+              style={{display:'flex', background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 12px 32px rgba(16,18,23,0.18)', border:'1px solid rgba(16,18,23,0.06)'}}>
+              <div style={{width:52, flexShrink:0, background:c.side, display:'grid', placeItems:'center', fontSize:22}}>{n.icon}</div>
+              <div style={{flex:1, minWidth:0, padding:'13px 15px'}}>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:5}}>
+                  <strong style={{fontSize:13, flex:1, color:'var(--text)', fontWeight:700, minWidth:0}}>{n.title}</strong>
+                  <button onClick={() => handleClose(n)} aria-label="닫기"
+                    style={{background:'none', border:'none', cursor:'pointer', color:'var(--text3)', fontSize:16, lineHeight:1, padding:0, flexShrink:0}}>✕</button>
+                </div>
+                <div style={{fontSize:12, color:'var(--text2)', marginBottom:11, lineHeight:1.5}}>{n.msg}</div>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                  <label style={{fontSize:11, color:'var(--text3)', cursor:'pointer', display:'flex', alignItems:'center', gap:5}}>
+                    <input type="checkbox" checked={!!keepOpen[n.key]}
+                      onChange={e => setKeepOpen(prev => ({...prev, [n.key]: e.target.checked}))}
+                      style={{cursor:'pointer', margin:0}}/>
+                    다시 보지 않기
+                  </label>
+                  <button onClick={() => handleConfirm(n)}
+                    style={{padding:'6px 15px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:7, fontSize:11.5, fontWeight:700, cursor:'pointer'}}>
+                    확인
+                  </button>
+                </div>
               </div>
             </div>
           );
