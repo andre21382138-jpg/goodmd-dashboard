@@ -576,6 +576,8 @@ export default function SalesListPage({ setPage }) {
   const drillStoreRowsView = useMemo(() =>
     drillDeliv === 'all' ? drillStoreRows : drillStoreRows.filter(s => delivCat(s) === drillDeliv),
     [drillStoreRows, drillDeliv]);
+  // 선택한 출고방식의 매출 합계
+  const drillViewTotal = useMemo(() => drillStoreRowsView.reduce((s, r) => s + effAmt(r), 0), [drillStoreRowsView]);
   // 매장 바뀌면 필터 초기화
   useEffect(() => { setDrillDeliv('all'); }, [drillStore]);
 
@@ -1280,6 +1282,9 @@ export default function SalesListPage({ setPage }) {
               <span className="badge badge-dept">{drillStore.store_name}</span>
               <span className="badge badge-store">{drillStore.branch_name}</span>
               <span style={{fontSize:13, color:'var(--text2)', fontWeight:600}}>판매 상세 — {drillStoreRowsView.length}건{drillDeliv !== 'all' && <span style={{color:'var(--text3)'}}> / 전체 {drillStoreRows.length}건</span>}</span>
+              <span style={{fontSize:13, fontWeight:700, color:'#1565C0', fontFamily:'var(--mono)', background:'#e3f2fd', border:'1px solid #90caf9', borderRadius:6, padding:'2px 10px'}}>
+                {drillDeliv === 'all' ? '합계' : {instore:'매장판매', store:'택배(매장)', hq:'택배(본사)', kakao:'카톡'}[drillDeliv]} {drillViewTotal.toLocaleString()}원
+              </span>
               {drillStore.store_name === '대동백화점' && (
                 <button type="button" onClick={handleExportDrillDaily} disabled={exporting}
                   title="일자별 매출(날짜·총매출액) 엑셀 다운로드"
