@@ -210,7 +210,7 @@ export default function SalesInputPage({ profile }) {
     // 당일(로컬 0시 이후) 입력한 판매 전체 — created_at 기준
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
     const { data } = await supabase.from('sales')
-      .select('*, brand:brands(name), product:products(name), customer:customers(name,phone)')
+      .select('*, brand:brands(name), product:products(name), customer:customers!customer_id(name,phone)')
       .eq('created_by', profile.id)
       .gte('created_at', startOfToday.toISOString())
       .order('created_at', { ascending: false })

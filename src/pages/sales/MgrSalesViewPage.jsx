@@ -290,7 +290,7 @@ export default function MgrSalesViewPage({ profile }) {
     setLoading(true);
     setExpandedDate(null);
     const { data, error } = await supabase.from('sales')
-      .select('*, brand:brands(name), product:products(name,code), customer:customers(name,phone)')
+      .select('*, brand:brands(name), product:products(name,code), customer:customers!customer_id(name,phone)')
       .neq('payment', '구매이력')
       .eq('store_name', storeName)
       .eq('branch_name', branchName)

@@ -187,7 +187,7 @@ export default function SalesListPage({ setPage }) {
     let lastError = null;
     while (start < CAP) {
       let q = supabase.from('sales')
-        .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch), customer:customers(name)')
+        .select('*, delivery_type, delivery_status, brand:brands(name), product:products(name), seller:profiles(name,department,branch), customer:customers!customer_id(name)')
         .neq('payment', '구매이력')
         .order('sold_at', { ascending: false })
         .order('id',      { ascending: false });

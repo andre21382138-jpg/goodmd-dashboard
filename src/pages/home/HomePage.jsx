@@ -84,7 +84,7 @@ export default function HomePage({ profile, setPage }) {
       };
       // 1. 매장 매출
       const selectCols = isManager
-        ? '*, brand:brands(name), product:products(name,code), customer:customers(name,phone)'
+        ? '*, brand:brands(name), product:products(name,code), customer:customers!customer_id(name,phone)'
         : 'store_name, branch_name, quantity, price, returned_qty, payment';
       const storeData = await pageAll((start) => {
         let q = supabase.from('sales')
