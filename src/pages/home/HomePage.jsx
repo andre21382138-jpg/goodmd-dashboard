@@ -32,6 +32,8 @@ export default function HomePage({ profile, setPage }) {
   const [bizRows,        setBizRows]        = useState([]);
   const [prevTotalAmt,   setPrevTotalAmt]   = useState(0);
   const [prevStoreMap,   setPrevStoreMap]   = useState({}); // 전월 동기간 매장별 {count,qty,amt}
+  const [prevLectureSum, setPrevLectureSum] = useState(0);  // 전월 동기간 강좌 매출합
+  const [prevBizSum,     setPrevBizSum]     = useState(0);  // 전월 동기간 특판 매출합
   const [prevMonthsSales,setPrevMonthsSales]= useState([]); // 매니저용 최근 3개월
   const [loading,        setLoading]        = useState(true);
   const [showBanner,     setShowBanner]     = useState(false);
@@ -219,6 +221,8 @@ export default function HomePage({ profile, setPage }) {
         const prevLect    = (prevLecture ||[]).reduce((s,r)=>s+Math.round(r.price*r.quantity), 0);
         const prevBizAmt  = (prevBiz     ||[]).reduce((s,r)=>s+Math.round(r.supply_price*r.quantity), 0);
         setPrevTotalAmt(prevStore + prevLect + prevBizAmt);
+        setPrevLectureSum(prevLect);
+        setPrevBizSum(prevBizAmt);
 
         // 전월 동기간 매장별 집계 (매장별 표는 강좌매출 제외 기준 → 당월 storeRows와 동일)
         const pMap = {};
@@ -248,6 +252,19 @@ export default function HomePage({ profile, setPage }) {
     const up = d > 0;
     return <span style={{color: up ? '#1565C0' : '#c62828', fontSize:11, fontWeight:700, whiteSpace:'nowrap'}}>({up ? '▲' : '▼'} {Math.abs(d).toLocaleString()})</span>;
   };
+  // 카드용 전월 동기간 증감 (증가 파랑 / 감소 빨강)
+  const cardDelta = (cur, prev) => {
+    const d = (cur || 0) - (prev || 0);
+    if (d === 0) return <span style={{fontSize:12, fontWeight:600, color:'var(--text3)', whiteSpace:'nowrap'}}>전월동기 (–)</span>;
+    const up = d > 0;
+    const pct = prev > 0 ? ((d / prev) * 100).toFixed(1) : null;
+    return (
+      <span style={{fontSize:12.5, fontWeight:700, color: up ? '#1565C0' : '#c62828', whiteSpace:'nowrap'}}>
+        {up ? '▲' : '▼'} {Math.abs(d).toLocaleString()}원
+        {pct !== null && <span style={{fontSize:11, marginLeft:3, fontWeight:600}}>({up ? '+' : ''}{pct}%)</span>}
+      </span>
+    );
+  };
   // 값 + 증감을 각각 고정폭 칸으로 정렬 (단위·증감 괄호가 세로로 일정하게 정렬됨)
   const metricCell = (valueStr, cur, prev, opts = {}) => (
     <div style={{display:'flex', alignItems:'baseline', justifyContent:'flex-end', gap:8, whiteSpace:'nowrap'}}>
@@ -262,13 +279,16 @@ export default function HomePage({ profile, setPage }) {
 
   if (loading) return <div className="empty"><span className="spinner"/></div>;
 
-  const SummaryCard = ({title, summary, accent, extra}) => (
+  const SummaryCard = ({title, summary, accent, extra, prevAmt}) => (
     <div style={{background:'#fff', border:'1px solid rgba(16,18,23,0.045)', borderRadius:14, padding:'18px 20px', flex:1, boxShadow:'0 1px 3px rgba(16,18,23,0.035), 0 12px 30px rgba(16,18,23,0.05)'}}>
       <div style={{fontSize:12.5, fontWeight:600, color:'var(--text3)', marginBottom:12, display:'flex', alignItems:'center', gap:8}}>
         <span style={{width:8, height:8, borderRadius:'50%', background:accent, flexShrink:0}}/>{title}
       </div>
-      <div style={{fontSize:26, fontWeight:800, color:'var(--text)', fontFamily:'var(--mono)', letterSpacing:'-0.5px', marginBottom:8}}>
-        {summary.amt.toLocaleString()}<span style={{fontSize:14, marginLeft:3, fontWeight:600, color:'var(--text3)'}}>원</span>
+      <div style={{display:'flex', alignItems:'baseline', gap:10, flexWrap:'wrap', marginBottom:8}}>
+        <span style={{fontSize:26, fontWeight:800, color:'var(--text)', fontFamily:'var(--mono)', letterSpacing:'-0.5px'}}>
+          {summary.amt.toLocaleString()}<span style={{fontSize:14, marginLeft:3, fontWeight:600, color:'var(--text3)'}}>원</span>
+        </span>
+        {prevAmt !== undefined && cardDelta(summary.amt, prevAmt)}
       </div>
       <div style={{display:'flex', gap:14, fontSize:12, color:'var(--text3)'}}>
         {extra || <>
@@ -348,10 +368,10 @@ export default function HomePage({ profile, setPage }) {
               </div>
             </div>
             <div style={{display:'flex', gap:12, marginBottom:20}}>
-              <SummaryCard title="매장 매출" summary={storeSummary} accent="#4f46e5"/>
-              <SummaryCard title="강좌 매출" summary={lectureSummary} accent="#0891b2"
+              <SummaryCard title="매장 매출" summary={storeSummary} accent="#4f46e5" prevAmt={prevStoreTotal.amt}/>
+              <SummaryCard title="강좌 매출" summary={lectureSummary} accent="#0891b2" prevAmt={prevLectureSum}
                   extra={<><span>건수 <b style={{color:'var(--text2)'}}>{lectureSummary.count.toLocaleString()}</b>건</span><span>수량 <b style={{color:'var(--text2)'}}>{lectureSummary.qty.toLocaleString()}</b>개</span></>}/>
-              <SummaryCard title="특판 매출" summary={bizSummary} accent="#059669"/>
+              <SummaryCard title="특판 매출" summary={bizSummary} accent="#059669" prevAmt={prevBizSum}/>
             </div>
           </>
         );
