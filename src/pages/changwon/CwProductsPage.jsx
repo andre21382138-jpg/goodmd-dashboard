@@ -177,7 +177,7 @@ export default function CwProductsPage() {
                 <th>상품명</th>
                 <th>출고코드</th>
                 <th>출고코드 상품명</th>
-                <th className="r" style={{ width: 90 }}>공급가</th>
+                <th className="r" style={{ width: 110 }}>공급가<span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}> (VAT별도)</span></th>
                 <th style={{ width: 110 }}>관리</th>
               </tr>
             </thead>
