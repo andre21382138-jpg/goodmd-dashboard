@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
 
-const EMPTY = { erp_code: '', product_name: '', out_code: '', out_name: '' };
+const EMPTY = { erp_code: '', product_name: '', out_code: '', out_name: '', supply_price: '' };
 
 export default function CwProductsPage() {
   const [rows, setRows]       = useState([]);
@@ -30,7 +30,7 @@ export default function CwProductsPage() {
 
   const openAdd  = () => setModal({ ...EMPTY });
   const openEdit = (r) => setModal({ id: r.id, erp_code: r.erp_code || '', product_name: r.product_name || '',
-    out_code: r.out_code || '', out_name: r.out_name || '' });
+    out_code: r.out_code || '', out_name: r.out_name || '', supply_price: r.supply_price ?? '' });
 
   const save = async () => {
     if (saving) return;
@@ -42,6 +42,7 @@ export default function CwProductsPage() {
       product_name: m.product_name.trim() || null,
       out_code: m.out_code.trim() || null,
       out_name: m.out_name.trim() || null,
+      supply_price: (m.supply_price === '' || m.supply_price == null) ? null : Number(m.supply_price),
     };
     let error;
     if (m.id) {
@@ -176,14 +177,15 @@ export default function CwProductsPage() {
                 <th>상품명</th>
                 <th>출고코드</th>
                 <th>출고코드 상품명</th>
+                <th className="r" style={{ width: 90 }}>공급가</th>
                 <th style={{ width: 110 }}>관리</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="empty"><span className="spinner" /></td></tr>
+                <tr><td colSpan={7} className="empty"><span className="spinner" /></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="empty">제품이 없습니다</td></tr>
+                <tr><td colSpan={7} className="empty">제품이 없습니다</td></tr>
               ) : filtered.map(r => (
                 <tr key={r.id}>
                   <td style={{ color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{r.sort_no}</td>
@@ -191,6 +193,7 @@ export default function CwProductsPage() {
                   <td style={{ fontWeight: 600 }}>{r.product_name || <span style={{ color: 'var(--text3)' }}>(이름 없음)</span>}</td>
                   <td className="mono">{r.out_code || ''}</td>
                   <td style={{ color: 'var(--text2)' }}>{r.out_name || ''}</td>
+                  <td className="r" style={{ fontFamily: 'var(--mono)' }}>{r.supply_price != null ? r.supply_price.toLocaleString() : ''}</td>
                   <td style={{ display: 'flex', gap: 4 }}>
                     <button className="btn btn-s" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => openEdit(r)}>수정</button>
                     <button className="btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => remove(r)}>삭제</button>
@@ -222,6 +225,10 @@ export default function CwProductsPage() {
             <div className="form-group">
               <label>출고코드 상품명 (선택)</label>
               <input className="input" value={modal.out_name} onChange={e => setModal({ ...modal, out_name: e.target.value })} placeholder="출고코드 상품명" />
+            </div>
+            <div className="form-group">
+              <label>공급가 (VAT별도, 선택)</label>
+              <input className="input" type="number" value={modal.supply_price} onChange={e => setModal({ ...modal, supply_price: e.target.value })} placeholder="예) 10101" />
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <button className="btn btn-s" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setModal(null)}>취소</button>
