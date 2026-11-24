@@ -196,9 +196,34 @@ function MonthlyReport() {
       ) : (
         <>
           <div style={{ marginTop: 14, fontWeight: 800, fontSize: 15 }}>
-            {year}년 {month}월 결산
+            {year}년 {month}월 결산 — 전체 합계
             {cappedTo && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', marginLeft: 8 }}>(1일~{cappedTo.slice(5)}, 당월 어제까지)</span>}
           </div>
+          {totals && (
+            <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+              {[
+                { label: '매출', value: won(totals.revenue), unit: '원', accent: '#4f46e5' },
+                { label: '판매건수', value: totals.count.toLocaleString(), unit: '건', accent: '#0891b2' },
+                { label: '판매수량', value: totals.qty.toLocaleString(), unit: '개', accent: '#0891b2' },
+                { label: '원가', value: won(totals.cost), unit: '원', accent: '#b45309' },
+                { label: '지출', value: won(totals.expense), unit: '원', accent: '#b45309' },
+                { label: '매장인건비', value: won(totals.labor), unit: '원', accent: '#be185d' },
+              ].map((c) => (
+                <div key={c.label} style={{
+                  background: 'linear-gradient(180deg, #ffffff 0%, #f7f8ff 100%)',
+                  border: '1px solid rgba(79,70,229,0.16)', borderRadius: 14, padding: '14px 16px',
+                  boxShadow: '0 1px 3px rgba(16,18,23,0.04), 0 14px 34px rgba(79,70,229,0.08)',
+                }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text3)' }}>{c.label}</div>
+                  <div style={{ marginTop: 6, fontSize: 21, fontWeight: 800, color: c.accent, fontFamily: 'var(--mono)', lineHeight: 1.1 }}>
+                    {c.value}<span style={{ fontSize: 12, marginLeft: 2, fontWeight: 600, color: 'var(--text3)' }}>{c.unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ marginTop: 18, fontWeight: 800, fontSize: 15 }}>매장별</div>
           <div className="twrap" style={{ marginTop: 10 }}>
             <table>
               <thead>
@@ -213,17 +238,6 @@ function MonthlyReport() {
                 </tr>
               </thead>
               <tbody>
-                {totals && (
-                  <tr style={{ background: 'var(--bg3, #eef1f6)', fontWeight: 800 }}>
-                    <td style={{ fontWeight: 800 }}>전체 합계</td>
-                    <td className="r">{won(totals.revenue)}</td>
-                    <td className="r">{totals.count.toLocaleString()}</td>
-                    <td className="r">{totals.qty.toLocaleString()}</td>
-                    <td className="r">{won(totals.cost)}</td>
-                    <td className="r">{won(totals.expense)}</td>
-                    <td className="r">{won(totals.labor)}</td>
-                  </tr>
-                )}
                 {rows.length === 0 ? (
                   <tr><td colSpan={7} className="empty">해당 월 데이터가 없습니다</td></tr>
                 ) : rows.map((r) => (
