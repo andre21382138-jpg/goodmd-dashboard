@@ -177,7 +177,7 @@ export default function CwProductsPage() {
                 <th>상품명</th>
                 <th>출고코드</th>
                 <th>출고코드 상품명</th>
-                <th className="r" style={{ width: 110 }}>공급가<span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}> (VAT별도)</span></th>
+                <th style={{ width: 110 }}>공급가<span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 11 }}> (VAT별도)</span></th>
                 <th style={{ width: 120, whiteSpace: 'nowrap' }}>관리</th>
               </tr>
             </thead>
@@ -193,7 +193,7 @@ export default function CwProductsPage() {
                   <td style={{ fontWeight: 600 }}>{r.product_name || <span style={{ color: 'var(--text3)' }}>(이름 없음)</span>}</td>
                   <td className="mono">{r.out_code || ''}</td>
                   <td style={{ color: 'var(--text2)' }}>{r.out_name || ''}</td>
-                  <td className="r" style={{ fontFamily: 'var(--mono)' }}>{r.supply_price != null ? r.supply_price.toLocaleString() : ''}</td>
+                  <td style={{ fontFamily: 'var(--mono)' }}>{r.supply_price != null ? r.supply_price.toLocaleString() : ''}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'inline-flex', gap: 4 }}>
                       <button className="btn btn-s" style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap', flexShrink: 0 }} onClick={() => openEdit(r)}>수정</button>
