@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { toast } from '../../lib/utils';
-import { STORE_MAP } from '../../lib/constants';
+import { STORE_MAP, STORE_NAMES } from '../../lib/constants';
+import { computeMonthlyLaborByBranch } from '../../lib/laborCost';
 
 // 결산 리포트 집계 대상 — 원본 업무보고서와 동일하게 정식 백화점 7개 체인만 (그린푸드·특판 제외)
 const REPORT_CHAINS = ['롯데백화점', '갤러리아백화점', 'AK백화점', '현대백화점', '신세계백화점', '농협_SHOP', '대동백화점'];
@@ -34,17 +35,251 @@ export default function SettlementReportPage() {
         <button className={tab === 'weekly' ? 'btn btn-p' : 'btn-ghost'} onClick={() => setTab('weekly')}>주간</button>
         <button className={tab === 'monthly' ? 'btn btn-p' : 'btn-ghost'} onClick={() => setTab('monthly')}>월간</button>
       </div>
-      {tab === 'weekly' ? <WeeklyReport /> : <MonthlyPlaceholder />}
+      {tab === 'weekly' ? <WeeklyReport /> : <MonthlyReport />}
     </div>
   );
 }
 
-function MonthlyPlaceholder() {
+// ════════════════════════════════════════════════════════════════
+// 월간 결산 리포트 — 월 선택 + 매장(점포) 다중선택 → 점포별 손익
+//   컬럼: 매장명 · 매출 · 판매건수 · 판매수량 · 원가 · 지출 · 인건비 · 손익
+//   · 매출 = price × quantity (반품 음수·증정/시식 0 자동), 구매이력·테스트매장 제외
+//   · 원가 = 판매원가 + 증정원가 + 시식원가
+//   · 지출 = store_expenses 월 합계,  인건비 = 급여관리와 동일 자동집계
+//   · 손익 = 매출 − 원가 − 지출 − 인건비
+//   · 당월 선택 시 '어제까지' 집계 (오늘 미완료분 제외) — 주간 리포트와 동일 규칙
+// ════════════════════════════════════════════════════════════════
+function MonthlyReport() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const SELECTABLE = useMemo(() => STORE_NAMES.filter((s) => s !== '테스트매장'), []);
+  const curYear = now.getFullYear();
+  const YEARS = useMemo(() => [curYear, curYear - 1, curYear - 2], [curYear]);
+
+  const [year, setYear] = useState(curYear);
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [sel, setSel] = useState(() => new Set(SELECTABLE));
+  const [rows, setRows] = useState([]);
+  const [totals, setTotals] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [cappedTo, setCappedTo] = useState(null);
+
+  const allOn = sel.size === SELECTABLE.length;
+  const toggleAll = () => setSel(allOn ? new Set() : new Set(SELECTABLE));
+  const toggle = (s) => setSel((prev) => {
+    const n = new Set(prev);
+    n.has(s) ? n.delete(s) : n.add(s);
+    return n;
+  });
+
+  const pageAll = async (build) => {
+    const acc = []; let start = 0; const PAGE = 1000;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, error } = await build(start, start + PAGE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      acc.push(...data);
+      if (data.length < PAGE) break;
+      start += PAGE;
+    }
+    return acc;
+  };
+
+  const fetchSales = (from, to, stores) => pageAll((s, e) =>
+    supabase.from('sales')
+      .select('store_name, quantity, price, payment, unit_cost, product:products(cost)')
+      .neq('payment', '구매이력')
+      .in('store_name', stores)
+      .gte('sold_at', from).lte('sold_at', to)
+      .order('id').range(s, e));
+
+  const fetchExpenses = (from, to, stores) => pageAll((s, e) =>
+    supabase.from('store_expenses')
+      .select('store_name, amount')
+      .in('store_name', stores)
+      .gte('expense_date', from).lte('expense_date', to)
+      .order('id').range(s, e));
+
+  const fetchBiz = (from, to) => pageAll((s, e) =>
+    supabase.from('biz_sales')
+      .select('quantity, supply_price, product:products(cost)')
+      .gte('sold_at', from).lte('sold_at', to)
+      .order('id').range(s, e));
+
+  const search = useCallback(async () => {
+    if (sel.size === 0) { toast('조회할 매장을 선택하세요', 'err'); return; }
+    setLoading(true);
+    try {
+      const stores = [...sel];
+      const from = `${year}-${pad(month)}-01`;
+      const fullTo = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
+      const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      const yestKst = new Date(Date.now() + 9 * 3600 * 1000 - 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const isCur = `${year}-${pad(month)}` === todayKst.slice(0, 7);
+      const to = isCur ? (yestKst < from ? from : yestKst) : fullTo;
+      setCappedTo(isCur ? to : null);
+
+      const retailStores = stores.filter((s) => s !== '특판');
+      const [sales, expenses, labor, biz] = await Promise.all([
+        retailStores.length ? fetchSales(from, to, retailStores) : Promise.resolve([]),
+        retailStores.length ? fetchExpenses(from, to, retailStores) : Promise.resolve([]),
+        computeMonthlyLaborByBranch({ year, month, endDate: isCur ? to : null }),
+        sel.has('특판') ? fetchBiz(from, to) : Promise.resolve([]),
+      ]);
+
+      const map = new Map();
+      const ensure = (store) => {
+        if (!map.has(store)) map.set(store, { store, revenue: 0, count: 0, qty: 0, cost: 0, expense: 0, labor: 0 });
+        return map.get(store);
+      };
+      for (const s of stores) ensure(s); // 선택 매장은 데이터 없어도 0행으로 노출
+
+      for (const r of sales) {
+        const g = ensure(r.store_name || '(미지정)');
+        const q = Number(r.quantity) || 0;
+        const price = Number(r.price) || 0;
+        const cost = (r.unit_cost != null ? Number(r.unit_cost) : Number(r.product?.cost)) || 0;
+        const isReturn = r.payment === '반품' || price < 0;
+        const netQty = isReturn ? -q : q;
+        g.revenue += price * q;                 // 반품 음수 · 증정/시식 0 자동
+        if (r.payment === '증정' || r.payment === '시식') {
+          g.cost += cost * q;                   // 증정/시식 원가는 판매수량/건수에서 제외
+        } else {
+          g.cost += cost * netQty;              // 판매원가 (반품은 음수 차감)
+          g.qty += netQty;                      // 순 판매수량
+          if (!isReturn) g.count += 1;          // 실판매 건수
+        }
+      }
+      if (sel.has('특판')) {
+        for (const b of biz) {
+          const g = ensure('특판');
+          const q = Number(b.quantity) || 0;
+          g.revenue += (Number(b.supply_price) || 0) * q;
+          g.cost += (Number(b.product?.cost) || 0) * q;
+          g.qty += q; g.count += 1;
+        }
+      }
+      for (const e of expenses) {
+        if (map.has(e.store_name)) map.get(e.store_name).expense += e.amount || 0;
+      }
+      for (const [key, info] of labor.byBranch.entries()) {
+        const dept = key.split('|')[0];
+        if (sel.has(dept)) ensure(dept).labor += info.labor;
+      }
+
+      const rank = (s) => { const i = STORE_NAMES.indexOf(s); return i === -1 ? 999 : i; };
+      const list = [...map.values()]
+        .map((g) => ({ ...g, profit: g.revenue - g.cost - g.expense - g.labor }))
+        .sort((a, b) => rank(a.store) - rank(b.store) || a.store.localeCompare(b.store, 'ko'));
+      const sum = (k) => list.reduce((s, r) => s + r[k], 0);
+      setRows(list);
+      setTotals({
+        revenue: sum('revenue'), count: sum('count'), qty: sum('qty'),
+        cost: sum('cost'), expense: sum('expense'), labor: sum('labor'), profit: sum('profit'),
+      });
+      setSearched(true);
+    } catch (err) {
+      toast('조회 실패: ' + (err.message || err), 'err');
+    }
+    setLoading(false);
+  }, [sel, year, month]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const profitStyle = (v) => ({ fontWeight: 800, color: v < 0 ? '#c62828' : '#1565C0' });
+
   return (
-    <div className="card" style={{ padding: 40 }}>
-      <div className="empty" style={{ lineHeight: 1.8 }}>
-        📅 월간 결산 리포트는 <b>구현 예정</b>입니다.
+    <div className="card" style={{ padding: '16px 20px' }}>
+      {/* 1) 월 선택 + 조회 */}
+      <div className="fbar" style={{ flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+        <select className="input" value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ width: 100 }}>
+          {YEARS.map((y) => <option key={y} value={y}>{y}년</option>)}
+        </select>
+        <select className="input" value={month} onChange={(e) => setMonth(Number(e.target.value))} style={{ width: 80 }}>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}월</option>)}
+        </select>
+        <button className="btn btn-p" onClick={search} disabled={loading} style={{ minWidth: 90 }}>
+          {loading ? '조회중…' : '조회'}
+        </button>
       </div>
+
+      {/* 2) 매장 선택 & 전체선택 */}
+      <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg2, #f7f7f9)', borderRadius: 8, border: '1px solid var(--border)' }}>
+        <div className="fbar" style={{ flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 800, cursor: 'pointer', color: 'var(--accent, #1565C0)' }}>
+            <input type="checkbox" checked={allOn} onChange={toggleAll} />전체선택
+          </label>
+          <span style={{ color: 'var(--text3)', fontSize: 12 }}>|</span>
+          {SELECTABLE.map((s) => (
+            <label key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={sel.has(s)} onChange={() => toggle(s)} />{s}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* 3) 결과 */}
+      {loading ? (
+        <div className="empty" style={{ marginTop: 16 }}><span className="spinner" /></div>
+      ) : !searched ? (
+        <div className="empty" style={{ marginTop: 16, lineHeight: 1.8 }}>
+          월과 매장을 선택한 뒤 <b>조회</b>를 눌러주세요.
+        </div>
+      ) : (
+        <>
+          <div style={{ marginTop: 14, fontWeight: 800, fontSize: 15 }}>
+            {year}년 {month}월 결산
+            {cappedTo && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)', marginLeft: 8 }}>(1일~{cappedTo.slice(5)}, 당월 어제까지)</span>}
+          </div>
+          <div className="twrap" style={{ marginTop: 10 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>매장명</th>
+                  <th className="r">매출</th>
+                  <th className="r">판매건수</th>
+                  <th className="r">판매수량</th>
+                  <th className="r">원가</th>
+                  <th className="r">지출</th>
+                  <th className="r">인건비</th>
+                  <th className="r">손익</th>
+                </tr>
+              </thead>
+              <tbody>
+                {totals && (
+                  <tr style={{ background: 'var(--bg3, #eef1f6)', fontWeight: 800 }}>
+                    <td style={{ fontWeight: 800 }}>전체 합계</td>
+                    <td className="r">{won(totals.revenue)}</td>
+                    <td className="r">{totals.count.toLocaleString()}</td>
+                    <td className="r">{totals.qty.toLocaleString()}</td>
+                    <td className="r">{won(totals.cost)}</td>
+                    <td className="r">{won(totals.expense)}</td>
+                    <td className="r">{won(totals.labor)}</td>
+                    <td className="r" style={profitStyle(totals.profit)}>{won(totals.profit)}</td>
+                  </tr>
+                )}
+                {rows.map((r) => (
+                  <tr key={r.store}>
+                    <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{r.store}</td>
+                    <td className="r">{won(r.revenue)}</td>
+                    <td className="r">{r.count.toLocaleString()}</td>
+                    <td className="r">{r.qty.toLocaleString()}</td>
+                    <td className="r">{won(r.cost)}</td>
+                    <td className="r">{won(r.expense)}</td>
+                    <td className="r">{won(r.labor)}</td>
+                    <td className="r" style={profitStyle(r.profit)}>{won(r.profit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)', lineHeight: 1.7 }}>
+            · 매출 = 단가 × 수량 (구매이력·테스트매장 제외, 반품은 음수 반영). 증정·시식은 매출 0, 판매건수·수량 제외(원가는 반영).<br />
+            · 원가 = 판매원가 + 증정·시식 원가. 지출 = 매장 월 지출 합계. 인건비 = 급여관리 자동집계(회원가입 인센티브 포함).<br />
+            · <b>손익 = 매출 − 원가 − 지출 − 인건비</b>. 특판은 매출·원가만 집계(지출·인건비 없음).
+          </div>
+        </>
+      )}
     </div>
   );
 }
