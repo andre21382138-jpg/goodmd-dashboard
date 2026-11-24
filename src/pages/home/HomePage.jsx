@@ -491,11 +491,13 @@ export default function HomePage({ profile, setPage }) {
                   {dailyRows.map(r => {
                     const open = expandedDate === r.date;
                     const items = dailyDetails[r.date] || [];
+                    const dow = ['일','월','화','수','목','금','토'][new Date(r.date).getDay()];
+                    const isWeekend = dow === '일' || dow === '토';
                     return (
                     <React.Fragment key={r.date}>
                       <tr style={{cursor:'pointer', background: open ? '#fff8e1' : 'transparent'}}
                         onClick={() => setExpandedDate(open ? null : r.date)}>
-                        <td className="mono" style={{fontWeight:700}}>{r.date}</td>
+                        <td className="mono" style={{fontWeight:700, color: isWeekend ? 'var(--danger)' : undefined}}>{r.date} ({dow})</td>
                         <td className="r">{r.count.toLocaleString()}건</td>
                         <td className="r">{r.qty.toLocaleString()}개</td>
                         <td className="r" style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--accent)'}}>{r.amt.toLocaleString()}원</td>
