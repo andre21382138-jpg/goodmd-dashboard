@@ -34,6 +34,7 @@ export default function HomePage({ profile, setPage }) {
   const [prevStoreMap,   setPrevStoreMap]   = useState({}); // 전월 동기간 매장별 {count,qty,amt}
   const [prevLectureSum, setPrevLectureSum] = useState(0);  // 전월 동기간 강좌 매출합
   const [prevBizSum,     setPrevBizSum]     = useState(0);  // 전월 동기간 특판 매출합
+  const [prevMgrAmt,     setPrevMgrAmt]     = useState(0);  // 매니저: 전월 동기간 자기매장 매출합
   const [prevMonthsSales,setPrevMonthsSales]= useState([]); // 매니저용 최근 3개월
   const [loading,        setLoading]        = useState(true);
   const [showBanner,     setShowBanner]     = useState(false);
@@ -161,6 +162,15 @@ export default function HomePage({ profile, setPage }) {
             monthAmt.set(key, monthAmt.get(key) + Math.round((r.price||0) * eff));
           }
           setPrevMonthsSales(months.map(m => ({ label: m.label, amt: monthAmt.get(m.key) || 0 })));
+
+          // 매니저: 전월 동기간(1~어제) 자기 매장 매출합 — 증감 비교용
+          const { data: prevSameData } = await supabase.from('sales')
+            .select('quantity, price, returned_qty')
+            .neq('payment', '구매이력')
+            .eq('store_name', profile.department).eq('branch_name', profile.branch)
+            .gte('sold_at', prevMonthStart).lte('sold_at', prevMonthEnd);
+          setPrevMgrAmt((prevSameData || []).reduce((s, r) =>
+            s + Math.round((r.price || 0) * Math.max(0, (r.quantity || 0) - (r.returned_qty || 0))), 0));
         }
       }
 
@@ -381,13 +391,16 @@ export default function HomePage({ profile, setPage }) {
       {isManager && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:12 }}>
           {[
-            { label:'총 매출금액', value: storeSummary.amt.toLocaleString()+'원', big:true },
+            { label:'총 매출금액', value: storeSummary.amt.toLocaleString()+'원', big:true, delta: cardDelta(storeSummary.amt, prevMgrAmt) },
             { label:'판매 건수',   value: storeSummary.count.toLocaleString()+'건' },
             { label:'판매 수량',   value: storeSummary.qty.toLocaleString()+'개' },
           ].map(s => (
             <div key={s.label} style={{ background:'#fff', border: s.big?'2px solid var(--sidebar)':'1px solid var(--border)', borderRadius:'var(--radius)', padding:'16px 20px' }}>
               <div style={{ fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:8 }}>{s.label}</div>
-              <div style={{ fontSize: s.big?26:22, fontWeight:700, color: s.big?'var(--accent)':'var(--text)', fontFamily:'var(--mono)', lineHeight:1 }}>{s.value}</div>
+              <div style={{ display:'flex', alignItems:'baseline', gap:10, flexWrap:'wrap' }}>
+                <span style={{ fontSize: s.big?26:22, fontWeight:700, color: s.big?'var(--accent)':'var(--text)', fontFamily:'var(--mono)', lineHeight:1 }}>{s.value}</span>
+                {s.delta}
+              </div>
             </div>
           ))}
         </div>
