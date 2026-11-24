@@ -1041,7 +1041,7 @@ export default function SalesListPage({ setPage }) {
                       <td className="mono" style={strikeStyle}>{head.sold_at}</td>
                       <td><span className="badge badge-dept" style={allFully?{opacity:0.5}:{}}>{head.store_name}</span></td>
                       <td><span className="badge badge-store" style={allFully?{opacity:0.5}:{}}>{head.branch_name}</span></td>
-                      <td style={{fontSize:12, ...strikeStyle}}>{head.seller?.name || '-'}</td>
+                      <td style={{fontSize:12, ...strikeStyle}}>{head.seller_name || head.seller?.name || '-'}</td>
                       <td style={{fontSize:12, ...strikeStyle}}>{head.customer?.name || '-'}</td>
                       <td style={strikeStyle}>
                         {head.product?.name || '-'}
@@ -1348,7 +1348,7 @@ export default function SalesListPage({ setPage }) {
                           {s.sold_at}
                           {s.created_at && <span style={{marginLeft:6, color:'var(--text3)'}}>{new Date(s.created_at).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', hour12:false})}</span>}
                         </td>
-                        <td style={{fontSize:12, whiteSpace:'nowrap', ...strikeStyle}}>{s.seller?.name || '-'}</td>
+                        <td style={{fontSize:12, whiteSpace:'nowrap', ...strikeStyle}}>{s.seller_name || s.seller?.name || '-'}</td>
                         <td style={{whiteSpace:'nowrap', ...strikeStyle}}>{s.brand?.name || '-'}</td>
                         <td style={strikeStyle}>
                           {s.product?.name || '-'}

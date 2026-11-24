@@ -446,6 +446,7 @@ export default function SalesInputPage({ profile }) {
           brand_id: Number(l.brandId), product_id: Number(l.productId),
           quantity: Number(l.quantity), price: Number(String(l.price).replace(/,/g,'')),
           payment: l.payment || '카드', memo: memo.trim() || null, created_by: profile.id,
+          seller_name: profile.name || null,   // 판매 시점 담당자 이름 스냅샷 (이후 담당자 변경에도 과거 불변)
           customer_id: customerId, points_earned: linePoints,
           points_used: pointsUsedLine,
           unit_cost: unitCostSnap,   // 판매 시점 원가 스냅샷
