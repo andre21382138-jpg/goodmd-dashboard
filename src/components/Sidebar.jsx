@@ -297,8 +297,8 @@ function SidebarClockPanel({ profile, setPage }) {
         </div>
       )}
       <div style={{ padding:'8px', borderBottom:'1px solid rgba(0,0,0,0.1)' }}>
-        <div style={{ background:'#fff', borderRadius:8, border:'1px solid rgba(0,0,0,0.08)', padding:'10px 10px 8px' }}>
-          <div style={{ fontSize:13, fontWeight:800, color:'#16181d', textAlign:'center', marginBottom:9, letterSpacing:-0.2 }}>
+        <div style={{ background:'#fff', borderRadius:12, border:'1px solid rgba(0,0,0,0.05)', padding:'12px 11px 11px', boxShadow:'0 12px 28px rgba(0,0,0,0.32)' }}>
+          <div style={{ fontSize:13, fontWeight:800, color:'#15233c', textAlign:'left', marginBottom:11, letterSpacing:-0.2, borderLeft:'3px solid #16a34a', paddingLeft:9 }}>
             {dateLabel()}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5, marginBottom:6 }}>
@@ -318,7 +318,7 @@ function SidebarClockPanel({ profile, setPage }) {
             </button>
           </div>
           {/* 근무자별 현황 — 등록된 매니저 + 오늘 체크된 기타근무자 */}
-          <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
             {(() => {
               const regularNames = new Set(members.map(m => m.name));
               const customRecs = Object.values(todayMap).filter(r => r && !regularNames.has(r.manager_name));
@@ -327,21 +327,21 @@ function SidebarClockPanel({ profile, setPage }) {
                   {members.map(m => {
                     const rec = todayMap[m.name];
                     return (
-                      <div key={m.name} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontFamily:'var(--mono)' }}>
-                        <span style={{ fontWeight:700, color:'#666', minWidth:40 }}>{m.display_name || m.name}</span>
-                        {rec?.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>✓ 출근</span>}
-                        {rec?.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>✓ 퇴근</span>}
-                        {!rec && isClosedToday && <span style={{ color:'#6a1b9a', fontWeight:700 }}>🏪 휴점</span>}
-                        {!rec && !isClosedToday && <span style={{ color:'#ccc' }}>미체크</span>}
+                      <div key={m.name} style={{ display:'flex', alignItems:'center', gap:7, fontSize:12.5 }}>
+                        <span style={{ fontWeight:700, color:'#334155', minWidth:46 }}>{m.display_name || m.name}</span>
+                        {rec?.clock_in  && <span style={{ color:'#15803d', fontWeight:800 }}>✓ 출근</span>}
+                        {rec?.clock_out && <span style={{ color:'var(--accent)', fontWeight:800 }}>✓ 퇴근</span>}
+                        {!rec && isClosedToday && <span style={{ color:'#7c3aed', fontWeight:800 }}>🏪 휴점</span>}
+                        {!rec && !isClosedToday && <span style={{ color:'#d97706', fontWeight:700 }}>● 미체크</span>}
                       </div>
                     );
                   })}
                   {customRecs.map(r => (
-                    <div key={r.id} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, fontFamily:'var(--mono)' }}>
-                      <span style={{ fontWeight:700, color:'#888', minWidth:40 }}>{r.manager_name}</span>
-                      <span style={{ fontSize:8, color:'#888' }}>(기타)</span>
-                      {r.clock_in  && <span style={{ color:'#2E7D32', fontWeight:700 }}>✓ 출근</span>}
-                      {r.clock_out && <span style={{ color:'var(--accent)', fontWeight:700 }}>✓ 퇴근</span>}
+                    <div key={r.id} style={{ display:'flex', alignItems:'center', gap:7, fontSize:12.5 }}>
+                      <span style={{ fontWeight:700, color:'#475569', minWidth:46 }}>{r.manager_name}</span>
+                      <span style={{ fontSize:10, color:'#94a3b8' }}>(기타)</span>
+                      {r.clock_in  && <span style={{ color:'#15803d', fontWeight:800 }}>✓ 출근</span>}
+                      {r.clock_out && <span style={{ color:'var(--accent)', fontWeight:800 }}>✓ 퇴근</span>}
                     </div>
                   ))}
                 </>
