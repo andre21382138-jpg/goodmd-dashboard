@@ -111,19 +111,38 @@ export const getGrade = (total) =>
 // 같은 회원 여러 건은 순차(await)로 호출해야 정확히 누적된다.
 export async function reverseSaleEffects(sale) {
   if (!sale) return;
-  if (sale.customer_id) {
+  const buyerId    = sale.customer_id || null;
+  const pointsUsed = Number(sale.points_used) || 0;
+  // 포인트 주인: row에 저장돼 있으면 그 회원, 없으면(과거건) 구매회원으로 간주
+  const ptOwnerId  = sale.points_customer_id || buyerId || null;
+  const sameOwner  = ptOwnerId && buyerId && String(ptOwnerId) === String(buyerId);
+
+  // 구매회원: 적립 취소 + 누적액/수량/등급 원복 (포인트 주인=구매회원이면 사용분도 함께 복구)
+  if (buyerId) {
     const { data: cust } = await supabase.from('customers')
-      .select('total_points, used_points, total_purchase, purchase_qty').eq('id', sale.customer_id).single();
+      .select('total_points, used_points, total_purchase, purchase_qty').eq('id', buyerId).single();
     if (cust) {
       const lineAmt  = (Number(sale.price) || 0) * (Number(sale.quantity) || 0);
       const newPurch = Math.max(0, (cust.total_purchase || 0) - lineAmt);
       await supabase.from('customers').update({
-        total_points:   Math.max(0, (cust.total_points || 0) - (sale.points_earned || 0) + (sale.points_used || 0)),
-        used_points:    Math.max(0, (cust.used_points || 0) - (sale.points_used || 0)),
+        total_points:   Math.max(0, (cust.total_points || 0) - (sale.points_earned || 0) + (sameOwner ? pointsUsed : 0)),
+        used_points:    Math.max(0, (cust.used_points || 0) - (sameOwner ? pointsUsed : 0)),
         total_purchase: newPurch,
         grade:          getGrade(newPurch).grade,
         purchase_qty:   Math.max(0, (cust.purchase_qty || 0) - (Number(sale.quantity) || 0)),  // 구매수량 원복
-      }).eq('id', sale.customer_id);
+      }).eq('id', buyerId);
+    }
+  }
+
+  // 포인트 주인이 구매회원과 다르거나 구매회원이 없으면(비구매회원 적립금 사용) 사용분 별도 복구
+  if (pointsUsed > 0 && ptOwnerId && !sameOwner) {
+    const { data: po } = await supabase.from('customers')
+      .select('total_points, used_points').eq('id', ptOwnerId).single();
+    if (po) {
+      await supabase.from('customers').update({
+        total_points: (po.total_points || 0) + pointsUsed,
+        used_points:  Math.max(0, (po.used_points || 0) - pointsUsed),
+      }).eq('id', ptOwnerId);
     }
   }
   const code = sale.product?.code || sale.product_code;

@@ -476,6 +476,8 @@ export default function SalesInputPage({ profile }) {
           seller_name: (activeMgrMap[`${storeName}|${branchName}`] || profile.name) || null,
           customer_id: customerId, points_earned: linePoints,
           points_used: pointsUsedLine,
+          // 포인트 사용 주인(구매회원과 다를 수 있음) — 삭제 시 정확한 회원에게 복구하기 위해 저장
+          points_customer_id: pointsUsedLine > 0 ? (l.pointCustomer?.id || null) : null,
           unit_cost: unitCostSnap,   // 판매 시점 원가 스냅샷
           // 대동백화점 현금결제만 발행 유무 저장(발행=true/미발행=false), 그 외 null
           cash_receipt: (isDaedong && l.payment === '현금') ? (l.cashReceipt === '발행') : null,
@@ -587,7 +589,7 @@ export default function SalesInputPage({ profile }) {
     try {
       // 1) 원복에 필요한 정보 조회
       const { data: sale, error: selErr } = await supabase.from('sales')
-        .select('id, customer_id, sold_at, points_earned, points_used, price, quantity, product_id, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .select('id, customer_id, points_customer_id, sold_at, points_earned, points_used, price, quantity, product_id, store_name, branch_name, delivery_type, payment, product:products(code)')
         .eq('id', id).single();
       if (selErr || !sale) { toast('내역을 찾을 수 없습니다', 'err'); return; }
 

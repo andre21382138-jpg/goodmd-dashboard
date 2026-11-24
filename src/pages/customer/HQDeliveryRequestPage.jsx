@@ -333,7 +333,7 @@ export default function HQDeliveryRequestPage({ profile, view = 'customer' }) {
     try {
       // 원복용 상세 조회 (삭제 전)
       const { data: details } = await supabase.from('sales')
-        .select('id, customer_id, sold_at, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
+        .select('id, customer_id, points_customer_id, sold_at, points_earned, points_used, price, quantity, store_name, branch_name, delivery_type, payment, product:products(code)')
         .in('id', ids);
       const { data: del, error } = await supabase.from('sales').delete().in('id', ids).select('id');
       if (error) throw error;
