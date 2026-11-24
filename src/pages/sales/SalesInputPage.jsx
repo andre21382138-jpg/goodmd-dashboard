@@ -220,6 +220,32 @@ export default function SalesInputPage({ profile }) {
 
   useEffect(() => { fetchRecent(); }, [fetchRecent]);
 
+  // 판매 담당자 스냅샷용 — 각 매장의 현재 재직 매니저 이름 맵 (dept|branch → 이름)
+  //  · 매니저 교체(퇴사+추가)만으로 신규 매출 담당자가 자동 갱신되도록, 로그인 계정 이름 대신 재직 매니저 이름을 스냅샷
+  const [activeMgrMap, setActiveMgrMap] = useState({});
+  useEffect(() => {
+    (async () => {
+      let q = supabase.from('store_members')
+        .select('name, display_name, hire_date, store:profiles!store_account_id(department, branch)')
+        .eq('job_title', '매니저').is('resigned_at', null);
+      if (isStoreMgr) q = q.eq('store_account_id', profile.id);
+      const { data } = await q;
+      const map = {};
+      (data || []).forEach(m => {
+        const dept = m.store?.department, br = m.store?.branch;
+        if (!dept || !br) return;
+        const key = `${dept}|${br}`;
+        // 동일 매장에 복수 매니저면 입사일 늦은 사람 우선
+        if (!map[key] || (m.hire_date || '') > (map[key]._hire || '')) {
+          map[key] = { name: m.display_name || m.name, _hire: m.hire_date || '' };
+        }
+      });
+      const flat = {};
+      Object.keys(map).forEach(k => { flat[k] = map[k].name; });
+      setActiveMgrMap(flat);
+    })();
+  }, [isStoreMgr, profile.id]);
+
   // 라인 업데이트 헬퍼
   const updateLine = (id, field, value) => {
     setLines(prev => prev.map(l => {
@@ -446,7 +472,8 @@ export default function SalesInputPage({ profile }) {
           brand_id: Number(l.brandId), product_id: Number(l.productId),
           quantity: Number(l.quantity), price: Number(String(l.price).replace(/,/g,'')),
           payment: l.payment || '카드', memo: memo.trim() || null, created_by: profile.id,
-          seller_name: profile.name || null,   // 판매 시점 담당자 이름 스냅샷 (이후 담당자 변경에도 과거 불변)
+          // 판매 시점 담당자 이름 스냅샷 — 현재 재직 매니저 우선(없으면 로그인 계정). 이후 담당자 변경에도 과거 불변
+          seller_name: (activeMgrMap[`${storeName}|${branchName}`] || profile.name) || null,
           customer_id: customerId, points_earned: linePoints,
           points_used: pointsUsedLine,
           unit_cost: unitCostSnap,   // 판매 시점 원가 스냅샷
