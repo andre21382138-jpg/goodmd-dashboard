@@ -33,7 +33,7 @@ export default function CwOutboundPage({ profile }) {
         .order('entry_date', { ascending: false }).order('created_at', { ascending: false }).limit(50),
     ]);
     setProducts(prods || []);
-    setStores(st || []);
+    setStores((st || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')));  // 매장 가나다순
     setRecent(outs || []);
     setLoading(false);
   }, []);
