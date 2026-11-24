@@ -290,7 +290,7 @@ export default function HomePage({ profile, setPage }) {
   if (loading) return <div className="empty"><span className="spinner"/></div>;
 
   const SummaryCard = ({title, summary, accent, extra, prevAmt}) => (
-    <div style={{background:'#fff', border:'1px solid rgba(16,18,23,0.045)', borderRadius:14, padding:'18px 20px', flex:1, boxShadow:'0 1px 3px rgba(16,18,23,0.035), 0 12px 30px rgba(16,18,23,0.05)'}}>
+    <div style={{background:'linear-gradient(180deg, #ffffff 0%, #f7f8ff 100%)', border:'1px solid rgba(79,70,229,0.16)', borderRadius:14, padding:'18px 20px', flex:1, boxShadow:'0 1px 3px rgba(16,18,23,0.04), 0 14px 34px rgba(79,70,229,0.08)'}}>
       <div style={{fontSize:12.5, fontWeight:600, color:'var(--text3)', marginBottom:12, display:'flex', alignItems:'center', gap:8}}>
         <span style={{width:8, height:8, borderRadius:'50%', background:accent, flexShrink:0}}/>{title}
       </div>
@@ -395,7 +395,7 @@ export default function HomePage({ profile, setPage }) {
             { label:'판매 건수',   value: storeSummary.count.toLocaleString()+'건' },
             { label:'판매 수량',   value: storeSummary.qty.toLocaleString()+'개' },
           ].map(s => (
-            <div key={s.label} style={{ background:'#fff', border: s.big?'2px solid var(--sidebar)':'1px solid var(--border)', borderRadius:'var(--radius)', padding:'16px 20px' }}>
+            <div key={s.label} style={{ background:'linear-gradient(180deg, #ffffff 0%, #f7f8ff 100%)', border: s.big?'1.5px solid rgba(79,70,229,0.30)':'1px solid rgba(79,70,229,0.16)', borderRadius:14, padding:'16px 20px', boxShadow:'0 1px 3px rgba(16,18,23,0.04), 0 14px 34px rgba(79,70,229,0.08)' }}>
               <div style={{ fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:8 }}>{s.label}</div>
               <div style={{ display:'flex', alignItems:'baseline', gap:10, flexWrap:'wrap' }}>
                 <span style={{ fontSize: s.big?26:22, fontWeight:700, color: s.big?'var(--accent)':'var(--text)', fontFamily:'var(--mono)', lineHeight:1 }}>{s.value}</span>
