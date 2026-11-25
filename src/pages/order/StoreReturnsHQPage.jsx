@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { toast, uniq } from '../../lib/utils';
 import { STORE_NAMES } from '../../lib/constants';
@@ -8,6 +9,7 @@ import { STORE_NAMES } from '../../lib/constants';
 //  날짜/매장/품목으로 조회하고 [확인] 처리.
 const REASON_LABEL = { '파손': '제품 파손', '유통기한': '유통기한 임박/만료', '본사요청': '본사 요청', '기타': '기타' };
 const REASON_COLOR = { '파손': '#c62828', '유통기한': '#e65100', '본사요청': '#1565C0', '기타': '#455a64' };
+const STATUS_LABEL = { pending: '대기', confirmed: '확인완료', completed: '반품완료', cancelled: '취소완료' };
 
 export default function StoreReturnsHQPage({ profile }) {
   const today = new Date();
@@ -115,6 +117,31 @@ export default function StoreReturnsHQPage({ profile }) {
 
   const dt = (iso) => iso ? new Date(iso).toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
 
+  const exportExcel = () => {
+    if (visible.length === 0) { toast('내보낼 내역이 없습니다', 'err'); return; }
+    const rows = visible.map(r => ({
+      '신청일시': dt(r.created_at),
+      '매장': r.store_name || '',
+      '지점': r.branch_name || '',
+      '상품명': r.product_name || '',
+      '코드': r.product_code || '',
+      '수량': Number(r.quantity) || 0,
+      '사유': REASON_LABEL[r.reason] || r.reason || '',
+      '메모': r.memo || '',
+      '상태': STATUS_LABEL[r.status] || r.status || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch:16 },{ wch:12 },{ wch:12 },{ wch:30 },{ wch:16 },{ wch:7 },{ wch:14 },{ wch:24 },{ wch:10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '매장반품신청');
+    const storeLabel = fStore ? `_${fStore}` : '';
+    const statusLabel = fStatus !== 'all' ? `_${STATUS_LABEL[fStatus] || fStatus}` : '';
+    const d = new Date();
+    const ymd = `${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    XLSX.writeFile(wb, `매장반품신청${storeLabel}${statusLabel}_${ymd}.xlsx`);
+    toast(`${rows.length}건 다운로드`, 'ok');
+  };
+
   return (
     <>
       <div className="card">
@@ -141,6 +168,8 @@ export default function StoreReturnsHQPage({ profile }) {
               {pendingCnt > 0 && <> · 대기 <b style={{ color: 'var(--accent)' }}>{pendingCnt}</b></>}
             </span>
             <button className="btn btn-s" onClick={fetchData} disabled={loading}>{loading ? <span className="spinner" /> : '🔄 새로고침'}</button>
+            <button className="btn btn-s" onClick={exportExcel} disabled={loading || visible.length === 0}
+              style={{ border: '1px solid #2e7d32', background: '#e8f5e9', color: '#2e7d32', fontWeight: 700 }}>📥 엑셀 다운로드</button>
           </div>
         </div>
       </div>
