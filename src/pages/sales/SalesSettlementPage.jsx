@@ -957,7 +957,7 @@ export default function SalesSettlementPage() {
               전월 비교 {showCompare ? '▾' : '▸'}
             </button>
           </div>
-          <div className="twrap">
+          <div className={showCompare ? 'twrap dense' : 'twrap'}>
             <table>
               <thead>
                 <tr style={{ borderBottom:'1px solid var(--border)' }}>

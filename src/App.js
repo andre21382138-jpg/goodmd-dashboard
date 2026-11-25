@@ -402,6 +402,9 @@ const GLOBAL_CSS = `
   th { text-transform: none; letter-spacing: 0.1px; font-weight: 700; color: var(--text2); font-size: 11.5px; padding: 12px 16px; }
   th:hover { color: var(--text); }
   td { padding: 13px 16px; border-bottom: 1px solid #e8eaee; }
+  /* 촘촘 모드 — 열이 많은 표(상품별정산 전월비교 등)에서 여백·폰트 축소로 가로폭 절약 */
+  .twrap.dense th { padding: 9px 7px; font-size: 11px; }
+  .twrap.dense td { padding: 9px 7px; font-size: 12px; }
   /* 배지(점포/지점) — 또렷한 pill: 점포=연회색 채움 / 지점=외곽선 */
   .badge { border-radius: 999px; padding: 3px 11px; font-weight: 600; font-size: 11.5px; }
   .badge-dept  { background: #eceef3; color: var(--text); border: none; font-weight: 700; }
