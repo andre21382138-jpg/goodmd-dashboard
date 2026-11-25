@@ -941,7 +941,7 @@ export default function SalesSettlementPage() {
         </div>
       </div>
 
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
+      <div className="card" style={{ padding:0 }}>
         {loading ? <div className="empty"><span className="spinner"/></div>
         : !searched ? <div className="empty">기간·점포를 선택하고 조회하세요</div>
         : rows.length === 0 ? <div className="empty">해당 기간 매출이 없습니다</div>
