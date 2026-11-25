@@ -392,7 +392,7 @@ export default function ProductMgmtPage({ subPage }) {
           {loading ? <div className="empty"><span className="spinner"/></div> : (
             <div className="twrap">
               <table>
-                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th style={{width:100, textAlign:'center'}}>등록일</th><th className="r">원가</th><th className="r">판매가</th><th style={{width:100, textAlign:'center'}}>수정</th><th style={{width:90, textAlign:'center'}}>판매상태</th><th></th></tr></thead>
+                <thead><tr><th>상품코드</th><th>ERP코드</th><th>브랜드</th><th>상품명</th><th style={{width:100, textAlign:'center'}}>등록일</th><th className="r">원가</th><th className="r">판매가</th><th style={{width:100, textAlign:'center'}}>수정</th><th style={{width:96, textAlign:'center'}}>판매상태</th><th style={{width:64, textAlign:'center'}}>삭제</th></tr></thead>
                 <tbody>
                   {filteredProducts.length === 0
                     ? <tr><td colSpan={10} className="empty">등록된 상품이 없습니다</td></tr>
@@ -435,14 +435,14 @@ export default function ProductMgmtPage({ subPage }) {
                           <td style={{textAlign:'center'}}>
                             <button type="button" onClick={() => toggleSalesStop(p)}
                               title={p.is_sales_stopped ? '판매재개' : '판매중지'}
-                              style={{height:26, padding:'0 10px', fontSize:11, fontWeight:700, border:'1px solid', borderRadius:'var(--radius)', cursor:'pointer',
+                              style={{height:26, padding:'0 10px', fontSize:11, fontWeight:700, whiteSpace:'nowrap', border:'1px solid', borderRadius:'var(--radius)', cursor:'pointer',
                                 borderColor: p.is_sales_stopped ? 'var(--success)' : 'var(--danger)',
                                 background:  p.is_sales_stopped ? '#e8f5e9' : '#ffebee',
                                 color:       p.is_sales_stopped ? 'var(--success)' : 'var(--danger)'}}>
                               {p.is_sales_stopped ? '판매재개' : '판매중지'}
                             </button>
                           </td>
-                          <td><button className="btn-danger" onClick={() => deleteProduct(p.id)}>삭제</button></td>
+                          <td style={{textAlign:'center'}}><button className="btn-danger" style={{padding:'4px 10px', fontSize:11, whiteSpace:'nowrap'}} onClick={() => deleteProduct(p.id)}>삭제</button></td>
                         </tr>
                       );
                     })
