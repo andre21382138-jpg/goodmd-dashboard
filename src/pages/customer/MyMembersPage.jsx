@@ -27,6 +27,7 @@ function consentStatus(c) {
 
 export default function MyMembersPage({ profile }) {
   const [members,  setMembers]  = useState([]);
+  const [salesAgg, setSalesAgg] = useState({}); // 집계컬럼 0인데 판매가 있는 회원 보정값 {custId:{cnt,qty,amt}}
   const [loading,  setLoading]  = useState(true);
   const [selected, setSelected] = useState(null);
   const [purchases,setPurchases]= useState([]);
@@ -57,6 +58,27 @@ export default function MyMembersPage({ profile }) {
     }
     setMembers(all);
     setLoading(false);
+
+    // 무음 집계실패 보정: 집계컬럼이 0인데 실제 sales가 있는 회원은 sales에서 직접 계산(상세 모달과 동일 기준)
+    const zeroIds = all.filter(m => (m.purchase_count || 0) === 0 && (m.total_purchase || 0) === 0).map(m => m.id);
+    if (zeroIds.length) {
+      const agg = {};
+      const CH = 200;
+      for (let i = 0; i < zeroIds.length; i += CH) {
+        const slice = zeroIds.slice(i, i + CH);
+        const { data: sData } = await supabase.from('sales')
+          .select('customer_id, price, quantity, returned_qty')
+          .in('customer_id', slice);
+        for (const s of (sData || [])) {
+          const eff = Math.max(0, (s.quantity || 0) - (s.returned_qty || 0));
+          const a = agg[s.customer_id] || (agg[s.customer_id] = { cnt: 0, qty: 0, amt: 0 });
+          a.cnt += 1; a.qty += eff; a.amt += (s.price || 0) * eff;
+        }
+      }
+      setSalesAgg(agg);
+    } else {
+      setSalesAgg({});
+    }
   }, [profile.department, profile.branch]);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
@@ -173,13 +195,17 @@ export default function MyMembersPage({ profile }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {pageMembers.map(m => (
+                  {pageMembers.map(m => {
+                    const ov = salesAgg[m.id]; // 집계컬럼 0 보정값(있으면 sales 기준)
+                    const dispCnt = ov ? ov.cnt : (m.purchase_count || 0);
+                    const dispAmt = ov ? ov.amt : (m.total_purchase || 0);
+                    return (
                     <tr key={m.id} style={{cursor:'pointer'}} onClick={() => handleSelect(m)}>
                       <td><strong style={{fontSize:13}}>{m.name}</strong></td>
                       <td><GradeBadge grade={m.grade || '패밀리'}/></td>
                       <td className="mono" style={{fontSize:12}}>{m.phone}</td>
-                      <td className="r" style={{fontFamily:'var(--mono)', fontSize:12}}>{(m.purchase_count||0).toLocaleString()}건</td>
-                      <td className="r" style={{fontFamily:'var(--mono)', fontSize:12, fontWeight:600}}>{(m.total_purchase||0).toLocaleString()}원</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontSize:12}}>{dispCnt.toLocaleString()}건</td>
+                      <td className="r" style={{fontFamily:'var(--mono)', fontSize:12, fontWeight:600}}>{dispAmt.toLocaleString()}원</td>
                       <td className="r" style={{fontFamily:'var(--mono)', fontSize:12, color:(m.total_points||0)>0?'var(--success)':'var(--text3)', fontWeight:700}}>{(m.total_points||0).toLocaleString()}원</td>
                       <td className="mono" style={{fontSize:11, color:'var(--text3)'}}>{m.joined_at}</td>
                       <td style={{fontSize:12}}>
@@ -206,7 +232,8 @@ export default function MyMembersPage({ profile }) {
                         })()}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
