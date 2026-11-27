@@ -354,7 +354,7 @@ function SidebarClockPanel({ profile, setPage }) {
   );
 }
 
-export default function Sidebar({ page, setPage, profile, onLogout, canImpersonate, impersonated, onStartImpersonate, onStopImpersonate }) {
+export default function Sidebar({ page, setPage, profile, onLogout, canImpersonate, impersonated, onStartImpersonate, onStopImpersonate, navOpen, onNavClose }) {
   const isAdmin    = profile?.role === 'admin';
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
@@ -388,6 +388,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
     } else {
       setFlyoutKey(null);
       setPage(m.key);
+      onNavClose?.();
     }
   };
 
@@ -396,10 +397,10 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
   const flyoutItems  = flyoutParent?.sub || [];
 
   return (
-    <div className="sidebar">
+    <div className={"sidebar" + (navOpen ? " open" : "")}>
       {/* 홈 버튼 */}
       <button
-        onClick={() => setPage(isChangwon ? 'cw_home' : 'home')}
+        onClick={() => { setPage(isChangwon ? 'cw_home' : 'home'); onNavClose?.(); }}
         style={{
           display:'flex', alignItems:'center', gap:10, padding:'0 18px',
           background: 'transparent',
@@ -454,7 +455,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
             {CHANGWON_MENUS.map(m => (
               <button key={m.key}
                 className={`sidebar-item ${isOn(m.key)?'on':''}`}
-                onClick={() => setPage(m.key)}>
+                onClick={() => { setPage(m.key); onNavClose?.(); }}>
                 <span className="sidebar-item-icon">{m.icon}</span>
                 {m.label}
               </button>
@@ -534,7 +535,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
             {flyoutItems.map(s => (
               <button key={s.key}
                 className="flyout-item"
-                onClick={() => { setPage(s.key); setFlyoutKey(null); }}
+                onClick={() => { setPage(s.key); setFlyoutKey(null); onNavClose?.(); }}
                 style={{background: page===s.key ? '#e8f5e9' : '#fff',
                   color: page===s.key ? '#E65100' : '#1a1a1a',
                   fontWeight: page===s.key ? 700 : 500}}>

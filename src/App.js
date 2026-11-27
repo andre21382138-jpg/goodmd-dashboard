@@ -469,6 +469,20 @@ const GLOBAL_CSS = `
   .sidebar-menu { scrollbar-color: rgba(255,255,255,0.22) transparent; }
   .sidebar-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
   /* ═══════════ THEME 끝 ═══════════ */
+
+  /* ── 모바일 대응(드로어) — 768px 이하에서만 사이드바를 오프캔버스로 ── */
+  .nav-toggle { display: none; background: none; border: none; font-size: 22px; line-height: 1; color: var(--text); cursor: pointer; padding: 4px 8px; margin-left: -6px; flex-shrink: 0; }
+  .nav-overlay { display: none; }
+  @media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); transition: transform 220ms ease; box-shadow: 2px 0 24px rgba(0,0,0,0.28); }
+    .sidebar.open { transform: translateX(0); }
+    .content { margin-left: 0; }
+    .content-header { padding: 0 12px; gap: 8px; }
+    .content-title { font-size: 15px; }
+    .content-body { padding: 16px 14px; }
+    .nav-toggle { display: block; }
+    .nav-overlay { display: block; position: fixed; inset: 0; z-index: 99; background: rgba(0,0,0,0.42); }
+  }
 `;
 
 // ════════════════════════════════════════════════════════
@@ -774,6 +788,7 @@ export default function App() {
   const [impersonated, setImpersonated] = useState(() => { try { const v = localStorage.getItem('gmd_impersonate'); return v ? JSON.parse(v) : null; } catch { return null; } });
   const [authLoading, setAL]    = useState(true);
   const [page, setPage]         = useState('home');
+  const [navOpen, setNavOpen]   = useState(false); // 모바일 사이드바(드로어) 열림 상태
   const [parsed, setParsed]     = useState(null);
   const [filename, setFilename] = useState('');
   const [activeUploadId, setActiveId] = useState(
@@ -1032,9 +1047,13 @@ export default function App() {
       <div className="app-layout" style={hasUpdate ? {paddingTop:54} : undefined}>
         <Sidebar page={page} setPage={setPage} profile={profile} onLogout={handleLogout}
           canImpersonate={canImpersonate} impersonated={canImpersonate ? impersonated : null}
-          onStartImpersonate={startImpersonate} onStopImpersonate={stopImpersonate}/>
+          onStartImpersonate={startImpersonate} onStopImpersonate={stopImpersonate}
+          navOpen={navOpen} onNavClose={() => setNavOpen(false)}/>
+        {/* 모바일 드로어 배경(오버레이) — 탭하면 닫힘 */}
+        {navOpen && <div className="nav-overlay" onClick={() => setNavOpen(false)}/>}
         <div className="content">
           <div className="content-header">
+            <button className="nav-toggle" aria-label="메뉴" onClick={() => setNavOpen(o => !o)}>☰</button>
             <div className="content-title">{PAGE_TITLES[page]}</div>
             <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
               {isManager && profile?.department && !canImpersonate && (
