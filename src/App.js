@@ -473,15 +473,19 @@ const GLOBAL_CSS = `
   /* ── 모바일 대응(드로어) — 768px 이하에서만 사이드바를 오프캔버스로 ── */
   .nav-toggle { display: none; background: none; border: none; font-size: 22px; line-height: 1; color: var(--text); cursor: pointer; padding: 4px 8px; margin-left: -6px; flex-shrink: 0; }
   .nav-overlay { display: none; }
+  .header-wide { display: flex; align-items: center; gap: 10px; }
+  .drawer-actions { display: none; }
   @media (max-width: 768px) {
     .sidebar { transform: translateX(-100%); transition: transform 220ms ease; box-shadow: 2px 0 24px rgba(0,0,0,0.28); }
     .sidebar.open { transform: translateX(0); }
     .content { margin-left: 0; }
     .content-header { padding: 0 12px; gap: 8px; }
-    .content-title { font-size: 15px; }
+    .content-title { font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .content-body { padding: 16px 14px; }
     .nav-toggle { display: block; }
     .nav-overlay { display: block; position: fixed; inset: 0; z-index: 99; background: rgba(0,0,0,0.42); }
+    .header-wide { display: none; }
+    .drawer-actions { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 4px; }
   }
 `;
 
@@ -1048,7 +1052,7 @@ export default function App() {
         <Sidebar page={page} setPage={setPage} profile={profile} onLogout={handleLogout}
           canImpersonate={canImpersonate} impersonated={canImpersonate ? impersonated : null}
           onStartImpersonate={startImpersonate} onStopImpersonate={stopImpersonate}
-          navOpen={navOpen} onNavClose={() => setNavOpen(false)}/>
+          navOpen={navOpen} onNavClose={() => setNavOpen(false)} realProfile={realProfile}/>
         {/* 모바일 드로어 배경(오버레이) — 탭하면 닫힘 */}
         {navOpen && <div className="nav-overlay" onClick={() => setNavOpen(false)}/>}
         <div className="content">
@@ -1056,22 +1060,25 @@ export default function App() {
             <button className="nav-toggle" aria-label="메뉴" onClick={() => setNavOpen(o => !o)}>☰</button>
             <div className="content-title">{PAGE_TITLES[page]}</div>
             <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-              {isManager && profile?.department && !canImpersonate && (
-                <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#eef0fe', border:'1px solid #c7cbf7', borderRadius:20, padding:'5px 12px', flexShrink:0 }}>
-                  <div style={{ width:7, height:7, background:'var(--accent)', borderRadius:'50%', flexShrink:0 }}/>
-                  <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{profile.department}</span>
-                  <div style={{ width:1, height:12, background:'#c7cbf7' }}/>
-                  <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{profile.branch}</span>
-                </div>
-              )}
-              {canImpersonate && (
-                <StoreSwitcher realProfile={realProfile} impersonated={impersonated}
-                  onStartImpersonate={startImpersonate} onStopImpersonate={stopImpersonate}/>
-              )}
-              {!isScm && !isChangwon && (
-                <HeaderNav profile={profile} page={page} setPage={setPage}
-                  isAdmin={isAdmin} isHQ={isHQ} isManager={isManager}/>
-              )}
+              {/* 넓은 액션 묶음 — 모바일에서는 숨기고 사이드바 드로어로 이동(.header-wide) */}
+              <div className="header-wide">
+                {isManager && profile?.department && !canImpersonate && (
+                  <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#eef0fe', border:'1px solid #c7cbf7', borderRadius:20, padding:'5px 12px', flexShrink:0 }}>
+                    <div style={{ width:7, height:7, background:'var(--accent)', borderRadius:'50%', flexShrink:0 }}/>
+                    <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{profile.department}</span>
+                    <div style={{ width:1, height:12, background:'#c7cbf7' }}/>
+                    <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{profile.branch}</span>
+                  </div>
+                )}
+                {canImpersonate && (
+                  <StoreSwitcher realProfile={realProfile} impersonated={impersonated}
+                    onStartImpersonate={startImpersonate} onStopImpersonate={stopImpersonate}/>
+                )}
+                {!isScm && !isChangwon && (
+                  <HeaderNav profile={profile} page={page} setPage={setPage}
+                    isAdmin={isAdmin} isHQ={isHQ} isManager={isManager}/>
+                )}
+              </div>
               <UserMenu profile={profile} isAdmin={isAdmin} onLogout={handleLogout} setPage={setPage} page={page}/>
             </div>
           </div>

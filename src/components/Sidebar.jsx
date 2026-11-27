@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { HQ_MENUS, MANAGER_MENUS, CHANGWON_MENUS } from '../lib/constants';
 import { toast } from '../lib/utils';
+import StoreSwitcher from './StoreSwitcher';
+import HeaderNav from './HeaderNav';
 
 function ClockModal({ type, members, todayMap, onConfirm, onClose }) {
   const [selMember, setSelMember] = useState(null);
@@ -354,7 +356,7 @@ function SidebarClockPanel({ profile, setPage }) {
   );
 }
 
-export default function Sidebar({ page, setPage, profile, onLogout, canImpersonate, impersonated, onStartImpersonate, onStopImpersonate, navOpen, onNavClose }) {
+export default function Sidebar({ page, setPage, profile, onLogout, canImpersonate, impersonated, onStartImpersonate, onStopImpersonate, navOpen, onNavClose, realProfile }) {
   const isAdmin    = profile?.role === 'admin';
   const isHQ       = profile?.job_title === '담당자';
   const isManager  = profile?.job_title === '매니저';
@@ -426,6 +428,20 @@ export default function Sidebar({ page, setPage, profile, onLogout, canImpersona
 
       {/* 출퇴근 카드 (매니저 전용) */}
       {isManager && <SidebarClockPanel profile={profile} setPage={setPage}/>}
+
+      {/* 모바일 전용 — 헤더의 넓은 액션(매장전환·사용자관리·공지)을 드로어로 이동 */}
+      <div className="drawer-actions">
+        {canImpersonate && (
+          <StoreSwitcher realProfile={realProfile} impersonated={impersonated}
+            onStartImpersonate={(sp) => { onStartImpersonate(sp); onNavClose?.(); }}
+            onStopImpersonate={() => { onStopImpersonate(); onNavClose?.(); }}/>
+        )}
+        {!isScm && !isChangwon && (
+          <HeaderNav profile={profile} page={page}
+            setPage={(p) => { setPage(p); onNavClose?.(); }}
+            isAdmin={isAdmin} isHQ={isHQ} isManager={isManager}/>
+        )}
+      </div>
 
       <div className="sidebar-menu">
         {/* SCM 담당자 — 택배요청 + 재고관리 메뉴 */}
