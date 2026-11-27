@@ -278,28 +278,28 @@ export default function SalesViewHub({ setPage }) {
       </div>
 
       {/* 총 매출액 카드 */}
-      <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:12, marginBottom:14}}>
-        <div style={{background:'#fff', border:'2px solid var(--sidebar)', borderRadius:'var(--radius)', padding:'16px 20px'}}>
+      <div className="salehub-cards" style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:12, marginBottom:14}}>
+        <div className="salehub-card" style={{background:'#fff', border:'2px solid var(--sidebar)', borderRadius:'var(--radius)', padding:'16px 20px', minWidth:0}}>
           <div style={{fontSize:11, fontWeight:700, color:'var(--text3)', marginBottom:6}}>총 매출액</div>
-          <div style={{fontSize:24, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)'}}>
+          <div className="salehub-amt-lg" style={{fontSize:24, fontWeight:700, color:'var(--text)', fontFamily:'var(--mono)'}}>
             {grandTotal.toLocaleString()}원
           </div>
           <div style={{fontSize:11, color:'var(--text3)', marginTop:4, fontFamily:'var(--mono)'}}>
             {appliedFrom} ~ {appliedTo}
           </div>
         </div>
-        <div style={{background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px'}}>
+        <div className="salehub-card" style={{background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', minWidth:0}}>
           <div style={{fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:6}}>🏬 매장매출</div>
-          <div style={{fontSize:16, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>
+          <div className="salehub-amt" style={{fontSize:16, fontWeight:700, color:'var(--accent)', fontFamily:'var(--mono)'}}>
             {storeTotal.toLocaleString()}원
           </div>
           <div style={{fontSize:11, color:'#6a1b9a', marginTop:6, fontWeight:600}}>
             🎓 그 중 강좌매출 <b style={{fontFamily:'var(--mono)'}}>{lectureTotal.toLocaleString()}</b>원
           </div>
         </div>
-        <div style={{background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px'}}>
+        <div className="salehub-card" style={{background:'#fff', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'14px 16px', minWidth:0}}>
           <div style={{fontSize:11, fontWeight:600, color:'var(--text3)', marginBottom:6}}>🤝 특판매출</div>
-          <div style={{fontSize:16, fontWeight:700, color:'#1565C0', fontFamily:'var(--mono)'}}>
+          <div className="salehub-amt" style={{fontSize:16, fontWeight:700, color:'#1565C0', fontFamily:'var(--mono)'}}>
             {bizTotal.toLocaleString()}원
           </div>
         </div>

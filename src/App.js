@@ -501,6 +501,11 @@ const GLOBAL_CSS = `
     .settle-tab { flex: 1; min-width: 0; height: auto !important; padding: 8px 4px !important; flex-direction: column !important; gap: 3px !important; font-size: 12px !important; line-height: 1.25; }
     .settle-tab .tab-ico { font-size: 17px; }
     .settle-tab .tab-lbl { word-break: keep-all; text-align: center; }
+    /* 매출조회 요약 3카드 — 모바일에서 폰트 축소·트랙 minmax(0)로 화면 안에 작게 배치 */
+    .salehub-cards { grid-template-columns: minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) !important; gap: 7px !important; }
+    .salehub-card { padding: 11px 9px !important; }
+    .salehub-amt { font-size: 12.5px !important; }
+    .salehub-amt-lg { font-size: 17px !important; }
   }
 `;
 
