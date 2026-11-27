@@ -351,33 +351,33 @@ export default function HomePage({ profile, setPage }) {
         const diffColor = isUp ? '#1565C0' : '#b91c1c';
         return (
           <>
-            <div style={{ background:'linear-gradient(180deg, #ffffff 0%, #f7f8ff 100%)', border:'1px solid rgba(79,70,229,0.16)', borderRadius:14, padding:'16px 24px', marginBottom:12, boxShadow:'0 1px 3px rgba(16,18,23,0.04), 0 14px 34px rgba(79,70,229,0.08)' }}>
+            <div className="ts-banner" style={{ background:'linear-gradient(180deg, #ffffff 0%, #f7f8ff 100%)', border:'1px solid rgba(79,70,229,0.16)', borderRadius:14, padding:'16px 24px', marginBottom:12, boxShadow:'0 1px 3px rgba(16,18,23,0.04), 0 14px 34px rgba(79,70,229,0.08)' }}>
               <div style={{ fontSize:11, fontWeight:700, color:'var(--accent)', letterSpacing:1, marginBottom:13 }}>통합 총 매출</div>
-              <div style={{ display:'flex', alignItems:'stretch' }}>
-                <div style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
-                  <div style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>{month}월 (당월)</div>
-                  <div style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:800, color:'var(--text)', lineHeight:1 }}>
+              <div className="ts-row" style={{ display:'flex', alignItems:'stretch' }}>
+                <div className="ts-col" style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
+                  <div className="ts-label" style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>{month}월 (당월)</div>
+                  <div className="ts-num" style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:800, color:'var(--text)', lineHeight:1 }}>
                     {totalAmt.toLocaleString()}<span style={{ fontSize:13, marginLeft:2, fontWeight:600, color:'var(--text3)' }}>원</span>
                   </div>
                 </div>
-                <div style={{ width:1, background:'var(--border)', alignSelf:'stretch', margin:'2px 0' }}/>
-                <div style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
-                  <div style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>{prevMon}월 동기 (1~{String(prevMonthEndDay).padStart(2,'0')}일)</div>
-                  <div style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color:'var(--text2)', lineHeight:1 }}>
+                <div className="ts-div" style={{ width:1, background:'var(--border)', alignSelf:'stretch', margin:'2px 0' }}/>
+                <div className="ts-col" style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
+                  <div className="ts-label" style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>{prevMon}월 동기 (1~{String(prevMonthEndDay).padStart(2,'0')}일)</div>
+                  <div className="ts-num" style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:700, color:'var(--text2)', lineHeight:1 }}>
                     {prevTotalAmt.toLocaleString()}<span style={{ fontSize:13, marginLeft:2, fontWeight:600, color:'var(--text3)' }}>원</span>
                   </div>
                 </div>
-                <div style={{ width:1, background:'var(--border)', alignSelf:'stretch', margin:'2px 0' }}/>
-                <div style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
-                  <div style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>증감</div>
-                  <div style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:800, color:diffColor, lineHeight:1 }}>
+                <div className="ts-div" style={{ width:1, background:'var(--border)', alignSelf:'stretch', margin:'2px 0' }}/>
+                <div className="ts-col" style={{ flex:1, textAlign:'center', padding:'0 16px' }}>
+                  <div className="ts-label" style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', marginBottom:7 }}>증감</div>
+                  <div className="ts-num" style={{ fontFamily:'var(--mono)', fontSize:22, fontWeight:800, color:diffColor, lineHeight:1 }}>
                     {isUp ? '▲' : '▼'} {Math.abs(diff).toLocaleString()}<span style={{ fontSize:13, marginLeft:2, fontWeight:600 }}>원</span>
                     {diffPct !== null && <span style={{ fontSize:12.5, fontWeight:700, marginLeft:8 }}>({isUp ? '+' : ''}{diffPct}%)</span>}
                   </div>
                 </div>
               </div>
             </div>
-            <div style={{display:'flex', gap:12, marginBottom:20}}>
+            <div className="summary-row" style={{display:'flex', gap:12, marginBottom:20}}>
               <SummaryCard title="매장 매출" summary={storeSummary} accent="#4f46e5" prevAmt={prevStoreTotal.amt}/>
               <SummaryCard title="강좌 매출" summary={lectureSummary} accent="#0891b2" prevAmt={prevLectureSum}
                   extra={<><span>건수 <b style={{color:'var(--text2)'}}>{lectureSummary.count.toLocaleString()}</b>건</span><span>수량 <b style={{color:'var(--text2)'}}>{lectureSummary.qty.toLocaleString()}</b>개</span></>}/>

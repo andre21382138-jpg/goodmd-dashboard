@@ -486,6 +486,16 @@ const GLOBAL_CSS = `
     .nav-overlay { display: block; position: fixed; inset: 0; z-index: 99; background: rgba(0,0,0,0.42); }
     .header-wide { display: none; }
     .drawer-actions { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 4px; }
+    /* 홈 '통합 총 매출' 배너 — 모바일에서 3칸 가로→세로 스택(라벨 왼쪽·값 오른쪽) */
+    .ts-banner { padding: 14px 16px !important; }
+    .ts-row { flex-direction: column; gap: 0; }
+    .ts-div { display: none; }
+    .ts-col { padding: 9px 0 !important; text-align: left !important; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); }
+    .ts-col:last-child { border-bottom: none; }
+    .ts-label { margin-bottom: 0 !important; flex-shrink: 0; }
+    .ts-num { font-size: 17px !important; text-align: right; }
+    /* 홈 매출 요약 3카드 — 모바일에서 세로 스택(폭 확보로 금액 줄바꿈 방지) */
+    .summary-row { flex-direction: column; }
   }
 `;
 
