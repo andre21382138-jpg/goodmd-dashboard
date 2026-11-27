@@ -661,6 +661,7 @@ export default function SalesSettlementPage() {
     return <span style={{ color: up ? '#1b5e20' : '#c62828', fontWeight:700 }}>{up ? '▲' : '▼'} {won(Math.abs(v))}</span>;
   };
   const tabBtn = (on) => ({ height:40, padding:'0 22px', borderRadius:'var(--radius)', border:'2px solid', cursor:'pointer', fontSize:14, fontWeight:700,
+    display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6,
     borderColor: on ? 'var(--accent)' : 'var(--border)', background: on ? 'var(--accent)' : '#fff', color: on ? '#fff' : 'var(--text2)' });
   const pctOf = (n, d) => (d ? (n / d) * 100 : 0);
   const pctStr = (v) => `${v.toFixed(1)}%`;
@@ -868,11 +869,11 @@ export default function SalesSettlementPage() {
 
   return (
     <div>
-      <div style={{ display:'flex', gap:8, marginBottom:14 }}>
-        <button type="button" onClick={() => setTab('settlement')} style={tabBtn(tab === 'settlement')}>🧮 상품별 정산</button>
-        <button type="button" onClick={() => setTab('expense')} style={tabBtn(tab === 'expense')}>💸 매장지출</button>
-        <button type="button" onClick={() => setTab('closing')} style={tabBtn(tab === 'closing')}>📊 매출결산</button>
-        <button type="button" onClick={() => setTab('stock')} style={tabBtn(tab === 'stock')}>📦 재고결산</button>
+      <div className="settle-tabs" style={{ display:'flex', gap:8, marginBottom:14 }}>
+        <button type="button" className="settle-tab" onClick={() => setTab('settlement')} style={tabBtn(tab === 'settlement')}><span className="tab-ico">🧮</span><span className="tab-lbl">상품별 정산</span></button>
+        <button type="button" className="settle-tab" onClick={() => setTab('expense')} style={tabBtn(tab === 'expense')}><span className="tab-ico">💸</span><span className="tab-lbl">매장지출</span></button>
+        <button type="button" className="settle-tab" onClick={() => setTab('closing')} style={tabBtn(tab === 'closing')}><span className="tab-ico">📊</span><span className="tab-lbl">매출결산</span></button>
+        <button type="button" className="settle-tab" onClick={() => setTab('stock')} style={tabBtn(tab === 'stock')}><span className="tab-ico">📦</span><span className="tab-lbl">재고결산</span></button>
       </div>
 
       {tab === 'settlement' && (<>

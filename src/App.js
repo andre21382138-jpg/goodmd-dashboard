@@ -496,6 +496,11 @@ const GLOBAL_CSS = `
     .ts-num { font-size: 17px !important; text-align: right; }
     /* 홈 매출 요약 3카드 — 모바일에서 세로 스택(폭 확보로 금액 줄바꿈 방지) */
     .summary-row { flex-direction: column; }
+    /* 매출확인 탭바 — 모바일에서 아이콘 위·라벨 아래, 음절 중간 깨짐 방지(keep-all) */
+    .settle-tabs { gap: 6px !important; }
+    .settle-tab { flex: 1; min-width: 0; height: auto !important; padding: 8px 4px !important; flex-direction: column !important; gap: 3px !important; font-size: 12px !important; line-height: 1.25; }
+    .settle-tab .tab-ico { font-size: 17px; }
+    .settle-tab .tab-lbl { word-break: keep-all; text-align: center; }
   }
 `;
 
