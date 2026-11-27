@@ -288,10 +288,12 @@ export default function NotificationCenter({ profile, setPage }) {
           to   { transform: translateX(0); opacity: 1; }
         }
         .notif-card { animation: notif-slide-in 0.28s ease-out; }
+        /* 모바일에서는 자동 토스트 더미가 화면을 덮으므로 숨기고, 종(🔔) 탭으로 확인 */
+        @media (max-width: 768px) { .notif-stack { display: none !important; } }
       `}</style>
 
       {/* 우측 하단 팝업 (최대 3개) */}
-      <div style={{position:'fixed', bottom:80, right:20, zIndex:9000, display:'flex', flexDirection:'column', gap:10, maxWidth:340, width:'calc(100vw - 40px)'}}>
+      <div className="notif-stack" style={{position:'fixed', bottom:80, right:20, zIndex:9000, display:'flex', flexDirection:'column', gap:10, maxWidth:340, width:'calc(100vw - 40px)'}}>
         {activeNotifs.slice(0, 3).map(n => {
           const c = COLOR[n.color] || COLOR.blue;
           return (
